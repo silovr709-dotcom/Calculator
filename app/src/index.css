@@ -183,6 +183,12 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .chip:hover { border-color: #2e5d43; color: #2e5d43; }
 .chip.active { background: #2e5d43; border-color: #2e5d43; color: #fff; font-weight: 600; }
 .item-select .sel-info { color: #2e5d43; }
+.multi-rows { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.extra-row { border: 1px dashed #c8d4cd; border-radius: 8px; padding: 6px 10px 8px; background: #fbfdfc; }
+.extra-row-head { display: flex; justify-content: space-between; align-items: center; }
+.extra-row .item-select { margin: 4px 0; }
+.btn.add { border: 1px dashed #2e5d43; color: #2e5d43; background: #fff; align-self: flex-start; font-weight: 600; }
+.btn.add:hover { background: #eef5f0; }
 .item-select select optgroup { font-style: normal; font-weight: 700; color: #55685d; }
 .tpl-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); gap: 12px; }
 
