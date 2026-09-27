@@ -8,8 +8,25 @@ import { exportClientXlsx } from '../lib/exporters';
  * Клиентская версия: только наименование, количество, стоимость (с наценкой) и итог.
  * Себестоимость, закупочные цены, наценки и служебные данные не выводятся.
  */
-export default function ClientView({ project }: { project: Project }) {
+export interface ClientModuleGroup {
+  id: string;
+  title: string;      // «Нижний шкаф 800»
+  sub: string;        // размеры и т.п.
+  qty: number;
+  lineIds: string[];  // строки этого модуля в project.lines
+  composition: string[]; // состав для мелкого шрифта
+}
+
+export default function ClientView({ project, moduleGroups }: { project: Project; moduleGroups?: ClientModuleGroup[] }) {
   const { lineCalcs, totals } = useMemo(() => calcTotals(project.lines, project.settings), [project]);
+  const groups = moduleGroups ?? [];
+  const groupedIds = new Set(groups.flatMap((g) => g.lineIds));
+  const extraLines = project.lines.filter((l) => !groupedIds.has(l.id));
+  const groupSum = (g: ClientModuleGroup) => {
+    let s = 0; let any = false;
+    for (const id of g.lineIds) { const c = lineCalcs.get(id); if (c?.clientSum != null) { s += c.clientSum; any = true; } }
+    return any ? s : null;
+  };
 
   return (
     <div className="client-view">
@@ -49,11 +66,26 @@ export default function ClientView({ project }: { project: Project }) {
             <tr><th>№</th><th>Наименование</th><th className="num">Кол-во</th><th>Ед.</th><th className="num">Стоимость</th></tr>
           </thead>
           <tbody>
-            {project.lines.map((l, idx) => {
+            {groups.map((g, idx) => (
+              <tr key={g.id}>
+                <td>{idx + 1}</td>
+                <td>
+                  <b>{g.title}</b>{g.sub && <span className="muted"> · {g.sub}</span>}
+                  {g.composition.length > 0 && <div className="cd-comp">{g.composition.join(' · ')}</div>}
+                </td>
+                <td className="num">{g.qty}</td>
+                <td>шт</td>
+                <td className="num">{groupSum(g) != null ? fmtMoney(groupSum(g)) : '—'}</td>
+              </tr>
+            ))}
+            {groups.length > 0 && extraLines.length > 0 && (
+              <tr className="cd-section"><td colSpan={5}>Дополнительно</td></tr>
+            )}
+            {extraLines.map((l, idx) => {
               const c = lineCalcs.get(l.id);
               return (
                 <tr key={l.id}>
-                  <td>{idx + 1}</td>
+                  <td>{groups.length + idx + 1}</td>
                   <td>{l.name}</td>
                   <td className="num">{l.qty}</td>
                   <td>{l.unit ?? ''}</td>

@@ -30,10 +30,11 @@ export default function ProjectEditor(props: {
   const [editMeta, setEditMeta] = useState(false);
 
   // строки из модулей («Позиции кухни») + ручные строки — единый расчёт
-  const moduleLines = useMemo(
-    () => (project.modules ?? []).flatMap((m) => moduleToLines(m, project.moduleDefaults ?? {}, pricebook)),
+  const moduleGroups = useMemo(
+    () => (project.modules ?? []).map((m) => ({ module: m, lines: moduleToLines(m, project.moduleDefaults ?? {}, pricebook) })),
     [project.modules, project.moduleDefaults, pricebook],
   );
+  const moduleLines = useMemo(() => moduleGroups.flatMap((g) => g.lines), [moduleGroups]);
   const combinedLines = useMemo(() => [...moduleLines, ...project.lines], [moduleLines, project.lines]);
   const { lineCalcs, totals } = useMemo(() => calcTotals(combinedLines, project.settings), [combinedLines, project.settings]);
   const moduleCriticals = useMemo(
@@ -139,7 +140,17 @@ export default function ProjectEditor(props: {
       {tab === 'client' && (
         <>
           {moduleCriticals > 0 && <div className="warn-box">⛔ Расчёт неполный: в «Позициях кухни» есть {moduleCriticals} незаполненных обязательных параметров — эти строки не входят в цену.</div>}
-          <ClientView project={outProject} />
+          <ClientView
+            project={outProject}
+            moduleGroups={moduleGroups.map(({ module: m, lines }) => ({
+              id: m.id,
+              title: m.name,
+              sub: m.widthMm && m.heightMm ? `${m.widthMm}×${m.heightMm}${m.depthMm ? `×${m.depthMm}` : ''} мм` : '',
+              qty: m.qty,
+              lineIds: lines.map((l) => l.id),
+              composition: lines.map((l) => `${l.name.slice(0, 40)}${l.qty !== 1 ? ` × ${l.qty}` : ''}`),
+            }))}
+          />
         </>
       )}
 
