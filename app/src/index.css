@@ -289,3 +289,6 @@ table.modules tr.sel-row { background: #eef5f0; }
 .mod-tpl-row { margin: 10px 0 0; }
 .cd-comp { font-size: 10.5px; color: #777; margin-top: 2px; }
 .cd-section td { font-weight: 700; background: #f4f7f5; font-size: 12px; }
+input.qty.cell { width: 52px; text-align: right; font-size: 12px; padding: 3px 5px; }
+td.dims { white-space: nowrap; color: #7d938a; }
+input.dim { width: 54px; font-size: 11.5px; padding: 3px 4px; text-align: center; margin: 0 1px; }

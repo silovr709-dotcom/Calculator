@@ -125,10 +125,20 @@ export default function ModulesPanel(props: {
                 <tr key={m.id} className={`${selId === m.id ? 'sel-row' : ''} ${c.level === 'error' ? 'has-warn' : ''}`} onClick={() => setSelId(m.id === selId ? null : m.id)}>
                   <td className="muted">{idx + 1}</td>
                   <td><b>{m.name}</b><div className="muted small">{m.type}</div></td>
-                  <td className="small">{m.widthMm && m.heightMm ? `${m.widthMm}×${m.heightMm}${m.depthMm ? `×${m.depthMm}` : ''}` : <span className="warn">не заданы</span>}</td>
-                  <td className="num">{m.qty}</td>
-                  <td className="num">{m.facades || '—'}</td>
-                  <td className="num">{m.drawers || '—'}</td>
+                  <td className="small dims" onClick={(e) => e.stopPropagation()}>
+                    <input className="dim" type="number" placeholder="Ш" value={m.widthMm ?? ''} onChange={(e) => updMod(m.id, { widthMm: Number(e.target.value) || null })} />×
+                    <input className="dim" type="number" placeholder="В" value={m.heightMm ?? ''} onChange={(e) => updMod(m.id, { heightMm: Number(e.target.value) || null })} />×
+                    <input className="dim" type="number" placeholder="Г" value={m.depthMm ?? ''} onChange={(e) => updMod(m.id, { depthMm: Number(e.target.value) || null })} />
+                  </td>
+                  <td className="num" onClick={(e) => e.stopPropagation()}>
+                    <input className="qty cell" type="number" min={0} value={m.qty} onChange={(e) => updMod(m.id, { qty: Number(e.target.value) || 0 })} />
+                  </td>
+                  <td className="num" onClick={(e) => e.stopPropagation()}>
+                    <input className="qty cell" type="number" min={0} value={m.facades} onChange={(e) => updMod(m.id, { facades: Number(e.target.value) || 0 })} />
+                  </td>
+                  <td className="num" onClick={(e) => e.stopPropagation()}>
+                    <input className="qty cell" type="number" min={0} value={m.drawers} onChange={(e) => updMod(m.id, { drawers: Number(e.target.value) || 0 })} />
+                  </td>
                   <td className="small">{chosen.length}/{filled.length} выбрано{c.level === 'error' ? <span className="warn"> · не хватает данных</span> : c.level === 'warn' ? ' · подтвердите' : ''}</td>
                   <td className="num">{fmtMoney(costs.get(m.id) ?? 0)}</td>
                   <td>{statusDot(c.level)}</td>
