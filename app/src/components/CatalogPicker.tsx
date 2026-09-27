@@ -9,8 +9,17 @@ export default function CatalogPicker(props: {
   pricebook: Pricebook;
   onAdd: (item: PriceItem, qty: number, params: LineParams) => void;
   onClose: () => void;
+  /** Режим выбора одной позиции (для слотов модуля): без количества/параметров */
+  pickOnly?: boolean;
+  /** Ограничение пула (напр. только петли) */
+  poolFilter?: (i: PriceItem) => boolean;
+  title?: string;
 }) {
   const { pricebook } = props;
+  const poolItems = useMemo(
+    () => (props.poolFilter ? pricebook.items.filter(props.poolFilter) : pricebook.items),
+    [pricebook, props.poolFilter],
+  );
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<string>('');
   const [sub, setSub] = useState<string>('');
@@ -31,7 +40,7 @@ export default function CatalogPicker(props: {
     return () => window.removeEventListener('keydown', onKey);
   }, [props]);
 
-  const cats = useMemo(() => [...new Set(pricebook.items.map((i) => i.category))].sort(), [pricebook]);
+  const cats = useMemo(() => [...new Set(poolItems.map((i) => i.category))].sort(), [poolItems]);
   // категории по разделам, чтобы выпадашка читалась
   const catGroups = useMemo(() => {
     const FURN = new Set(['Петли', 'Фурнитура', 'Фурнитура BLUM (доп. лист)', 'Системы выдвижения', 'Подъёмные механизмы', 'Посудосушители', 'Бутылочницы и карго', 'Внутреннее наполнение']);
@@ -46,14 +55,14 @@ export default function CatalogPicker(props: {
     return order.map((o) => [o, m.get(o)!] as const).filter(([, list]) => list.length > 0);
   }, [cats]);
   const subs = useMemo(
-    () => cat ? [...new Set(pricebook.items.filter((i) => i.category === cat).map((i) => i.subcategory ?? ''))].filter(Boolean).sort() : [],
-    [pricebook, cat],
+    () => cat ? [...new Set(poolItems.filter((i) => i.category === cat).map((i) => i.subcategory ?? ''))].filter(Boolean).sort() : [],
+    [poolItems, cat],
   );
-  const units = useMemo(() => [...new Set(pricebook.items.map((i) => i.unit ?? ''))].filter(Boolean).sort(), [pricebook]);
+  const units = useMemo(() => [...new Set(poolItems.map((i) => i.unit ?? ''))].filter(Boolean).sort(), [poolItems]);
 
   const results = useMemo(() => {
     const terms = norm(q).split(/\s+/).filter(Boolean);
-    let list = pricebook.items;
+    let list = poolItems;
     if (cat) list = list.filter((i) => i.category === cat);
     if (sub) list = list.filter((i) => (i.subcategory ?? '') === sub);
     if (unitF) list = list.filter((i) => (i.unit ?? '') === unitF);
@@ -65,7 +74,7 @@ export default function CatalogPicker(props: {
       });
     }
     return list.slice(0, 400);
-  }, [pricebook, q, cat, sub, unitF, onlyPriced]);
+  }, [poolItems, q, cat, sub, unitF, onlyPriced]);
 
   // группировка результатов заголовками «Категория — Подкатегория», чтобы не теряться в списке
   const grouped = useMemo(() => {
@@ -118,6 +127,7 @@ export default function CatalogPicker(props: {
   return (
     <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
       <div className="modal wide">
+        {props.title && <div className="picker-title">{props.title}</div>}
         <div className="picker">
           <div className="picker-left">
             <input
@@ -195,7 +205,7 @@ export default function CatalogPicker(props: {
                 {sel.priceKind === 'unavailable' && <div className="warn-box">Позиция помечена в прайсе как временно недоступная / выведенная.</div>}
                 {sel.priceKind === 'percent' && <div className="note">Процентная надбавка: после добавления укажите в таблице базовую позицию, к которой она применяется.</div>}
 
-                <div className="param-grid">
+                {!props.pickOnly && <div className="param-grid">
                   {sel.priceBasis === 'm2' && (
                     <>
                       <label>Ширина, мм<input type="number" value={w} onChange={(e) => setW(e.target.value)} placeholder="напр. 396" /></label>
@@ -230,9 +240,9 @@ export default function CatalogPicker(props: {
                   {(sel.priceBasis === 'unit' || sel.priceBasis === 'percent_of_base' || sel.priceBasis == null) && (
                     <label>Количество ({sel.unit ?? 'шт'})<input autoFocus type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value) || 1)} onKeyDown={(e) => { if (e.key === 'Enter') doAdd(); }} /></label>
                   )}
-                </div>
+                </div>}
 
-                <div className="preview">
+                {!props.pickOnly && <div className="preview">
                   {preview && (
                     <>
                       <div>Расчётное кол-во: <b>{new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 4 }).format(preview.qtyEff)}</b> {sel.unit ?? ''}</div>
@@ -240,10 +250,10 @@ export default function CatalogPicker(props: {
                       <div className="preview-sum">Сумма: <b>{preview.sum != null ? fmtMoney(Math.round(preview.sum * 100) / 100) : '—'}</b></div>
                     </>
                   )}
-                </div>
+                </div>}
                 <div className="modal-actions">
                   <button className="btn ghost" onClick={props.onClose}>Отмена (Esc)</button>
-                  <button className="btn primary" onClick={doAdd}>Добавить в расчёт (Enter)</button>
+                  <button className="btn primary" onClick={doAdd}>{props.pickOnly ? 'Выбрать эту позицию' : 'Добавить в расчёт (Enter)'}</button>
                 </div>
               </>
             )}

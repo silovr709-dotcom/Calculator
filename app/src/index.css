@@ -234,3 +234,38 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
   .page { padding: 14px; }
   .grid2, .grid3, .grid4 { grid-template-columns: 1fr; }
 }
+
+/* ---- Позиции кухни (модули) ---- */
+.defaults-card { border-left: 3px solid #2e5d43; }
+.defaults-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 8px; }
+.def-slot { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: #fbfdfc; }
+.def-label { font-size: 11px; font-weight: 700; color: #55685d; margin-bottom: 3px; }
+.def-value { font-size: 12px; font-weight: 600; }
+.def-value.none { color: #b3552e; font-weight: 700; }
+.def-actions { margin-top: 6px; display: flex; gap: 6px; }
+table.modules tr { cursor: pointer; }
+table.modules tr.sel-row { background: #eef5f0; }
+.dot { font-size: 15px; }
+.dot.ok { color: #2f9e57; }
+.dot.warn { color: #d99a06; }
+.dot.err { color: #cc3b2e; }
+.mod-editor { border-left: 3px solid #7d938a; }
+.mod-editor h4 { margin: 14px 0 4px; font-size: 12.5px; color: #33443a; }
+.slot-list { display: flex; flex-direction: column; gap: 6px; }
+.slot-row { display: grid; grid-template-columns: 220px 1fr auto; gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: #fbfdfc; }
+.slot-label { font-size: 12px; font-weight: 700; color: #55685d; }
+.slot-value { font-size: 12.5px; }
+.slot-value.none { color: #b3552e; font-weight: 700; }
+.slot-actions { display: flex; gap: 6px; }
+.badge { font-size: 10px; border-radius: 999px; padding: 2px 8px; margin-left: 8px; font-weight: 700; vertical-align: 1px; }
+.badge.def { background: #e3ecf7; color: #2d5a8e; }
+.badge.man { background: #f3e8d7; color: #8e5f19; }
+.problems { margin: 6px 0; padding-left: 18px; font-size: 13px; }
+.problems li { margin: 3px 0; }
+.problems li.crit { color: #cc3b2e; }
+.link { background: none; border: none; padding: 0; color: #2e5d43; font-weight: 700; cursor: pointer; text-decoration: underline; font-size: inherit; }
+.ok-box { background: #e6f4ea; color: #226b41; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.picker-title { padding: 10px 16px 0; font-weight: 700; color: #2e5d43; }
+.dropdown-menu.static { display: block; position: absolute; }
+.self-end { align-self: end; }
+@media (max-width: 900px) { .defaults-grid { grid-template-columns: 1fr; } .slot-row { grid-template-columns: 1fr; } }

@@ -121,9 +121,54 @@ export interface Project {
   pricebookName: string;
   lines: ProjectLine[];
   settings: ProjectSettings;
+  // «Расчёт проекта»: структурированные позиции кухни (модули) и параметры по умолчанию
+  modules?: KitchenModule[];
+  moduleDefaults?: ModuleDefaults;
   createdAt: string;
   updatedAt: string;
 }
+
+// ---------- Модули («Расчёт проекта») ----------
+
+/** Слоты комплектации модуля. Значение слота — конкретная позиция прайса Висма. */
+export type SlotKey = 'body' | 'facade' | 'hinge' | 'drawerSys' | 'lift' | 'handle' | 'shelf';
+
+/**
+ * Выбор в слоте:
+ * mode='default' — берётся из настроек проекта (меняется вместе с ними);
+ * mode='manual'  — задано вручную для этой позиции (сохраняется даже при смене настроек проекта).
+ * itemId=null при mode='manual' означает «явно ничего не использовать».
+ */
+export interface SlotChoice {
+  mode: 'default' | 'manual';
+  itemId: string | null;
+}
+
+export interface KitchenModule {
+  id: string;
+  type: string;            // «Нижний шкаф», «Пенал», … или собственный тип
+  name: string;            // подпись, напр. «Низ 800 под мойку»
+  qty: number;
+  // объективные размеры (задаёт пользователь)
+  widthMm: number | null;
+  heightMm: number | null;
+  depthMm: number | null;
+  // конструкция (задаёт пользователь; система ничего не додумывает)
+  facades: number;
+  drawers: number;
+  shelves: number;
+  hinges: number;          // петель на модуль, всего
+  handles: number;         // ручек на модуль
+  lifts: number;           // подъёмных механизмов на модуль
+  // размер одного фасада (для расчёта площади м²)
+  facadeWmm: number | null;
+  facadeHmm: number | null;
+  slots: Record<SlotKey, SlotChoice>;
+  note?: string;
+}
+
+/** Настройки проекта по умолчанию: itemId позиции прайса на каждый слот (null = не задано) */
+export type ModuleDefaults = Partial<Record<SlotKey, string | null>>;
 
 export interface Template {
   id: string;

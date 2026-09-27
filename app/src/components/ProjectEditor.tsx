@@ -4,6 +4,8 @@ import { SUMMARY_GROUPS } from '../types';
 import { calcTotals, lineFromItem } from '../lib/engine';
 import { fmtMoney, fmtNum, fmtDate } from '../lib/format';
 import CatalogPicker from './CatalogPicker';
+import ModulesPanel from './ModulesPanel';
+import { checkModule, moduleToLines } from '../lib/modules';
 import SettingsPanel from './SettingsPanel';
 import ClientView from './ClientView';
 import { exportInternalXlsx, exportClientXlsx, exportInternalCsv, exportProjectJson } from '../lib/exporters';
@@ -18,11 +20,24 @@ export default function ProjectEditor(props: {
   onSaveTemplate: (name: string) => void;
 }) {
   const { project, pricebook } = props;
-  const [tab, setTab] = useState<'lines' | 'settings' | 'client'>('lines');
+  const [tab, setTab] = useState<'modules' | 'lines' | 'settings' | 'client'>(
+    () => ((project.modules?.length ?? 0) > 0 || project.lines.length === 0 ? 'modules' : 'lines'),
+  );
   const [showPicker, setShowPicker] = useState(false);
   const [editMeta, setEditMeta] = useState(false);
 
-  const { lineCalcs, totals } = useMemo(() => calcTotals(project.lines, project.settings), [project]);
+  // строки из модулей («Позиции кухни») + ручные строки — единый расчёт
+  const moduleLines = useMemo(
+    () => (project.modules ?? []).flatMap((m) => moduleToLines(m, project.moduleDefaults ?? {}, pricebook)),
+    [project.modules, project.moduleDefaults, pricebook],
+  );
+  const combinedLines = useMemo(() => [...moduleLines, ...project.lines], [moduleLines, project.lines]);
+  const { lineCalcs, totals } = useMemo(() => calcTotals(combinedLines, project.settings), [combinedLines, project.settings]);
+  const moduleCriticals = useMemo(
+    () => (project.modules ?? []).reduce((n, m) => n + checkModule(m, project.moduleDefaults ?? {}, pricebook).errors.length, 0),
+    [project.modules, project.moduleDefaults, pricebook],
+  );
+  const outProject = useMemo(() => ({ ...project, lines: combinedLines }), [project, combinedLines]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -73,9 +88,9 @@ export default function ProjectEditor(props: {
           <div className="dropdown">
             <button className="btn ghost">Экспорт ▾</button>
             <div className="dropdown-menu">
-              <button onClick={() => exportInternalXlsx(project)}>Excel — внутренний расчёт</button>
-              <button onClick={() => exportClientXlsx(project)}>Excel — коммерческое предложение</button>
-              <button onClick={() => exportInternalCsv(project)}>CSV — внутренний расчёт</button>
+              <button onClick={() => exportInternalXlsx(outProject)}>Excel — внутренний расчёт</button>
+              <button onClick={() => exportClientXlsx(outProject)}>Excel — коммерческое предложение</button>
+              <button onClick={() => exportInternalCsv(outProject)}>CSV — внутренний расчёт</button>
               <button onClick={() => exportProjectJson(project)}>Файл проекта (.json)</button>
             </div>
           </div>
@@ -99,7 +114,10 @@ export default function ProjectEditor(props: {
       )}
 
       <div className="tabs">
-        <button className={tab === 'lines' ? 'active' : ''} onClick={() => setTab('lines')}>Расчёт (внутренний)</button>
+        <button className={tab === 'modules' ? 'active' : ''} onClick={() => setTab('modules')}>
+          Позиции кухни{(project.modules?.length ?? 0) > 0 ? ` (${project.modules!.length})` : ''}{moduleCriticals > 0 ? ' ⛔' : ''}
+        </button>
+        <button className={tab === 'lines' ? 'active' : ''} onClick={() => setTab('lines')}>Доп. позиции и строки</button>
         <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>Настройки проекта</button>
         <button className={tab === 'client' ? 'active' : ''} onClick={() => setTab('client')}>Клиентская версия</button>
       </div>
@@ -112,7 +130,21 @@ export default function ProjectEditor(props: {
         />
       )}
 
-      {tab === 'client' && <ClientView project={project} />}
+      {tab === 'client' && (
+        <>
+          {moduleCriticals > 0 && <div className="warn-box">⛔ Расчёт неполный: в «Позициях кухни» есть {moduleCriticals} незаполненных обязательных параметров — эти строки не входят в цену.</div>}
+          <ClientView project={outProject} />
+        </>
+      )}
+
+      {tab === 'modules' && (
+        <div className="editor-grid">
+          <div className="lines-col">
+            <ModulesPanel project={project} pricebook={pricebook} onChange={props.onChange} />
+          </div>
+          <TotalsAside totals={totals} project={project} />
+        </div>
+      )}
 
       {tab === 'lines' && (
         <div className="editor-grid">
@@ -121,6 +153,9 @@ export default function ProjectEditor(props: {
               <button className="btn primary" onClick={() => setShowPicker(true)}>+ Добавить элемент (Ctrl+K)</button>
               {totals.unpricedCount > 0 && <span className="warn">⚠ строк без цены: {totals.unpricedCount}</span>}
             </div>
+            {moduleLines.length > 0 && (
+              <div className="note">В итог также входят {moduleLines.length} строк из «Позиций кухни» (модулей). Здесь — дополнительные позиции: столешницы, мойки, цоколь, электрика и любые другие элементы прайса.</div>
+            )}
             {project.lines.length === 0 ? (
               <div className="empty">Позиции ещё не добавлены. Нажмите «Добавить элемент» — откроется каталог с поиском по {pricebook.meta.itemCount} позициям прайса.</div>
             ) : (
@@ -149,27 +184,7 @@ export default function ProjectEditor(props: {
             )}
           </div>
 
-          <aside className="totals-col">
-            <div className="totals-card">
-              <h3>Итог</h3>
-              {SUMMARY_GROUPS.filter((g) => totals.byGroup[g].cost !== 0).map((g) => (
-                <div className="t-row" key={g}><span>{g}</span><span>{fmtMoney(totals.byGroup[g].cost)}</span></div>
-              ))}
-              {totals.emalAdjustment?.applied && (
-                <div className="t-row warn"><span>Эмаль &lt; 1 м² (+30%, правило прайса, {fmtNum(totals.emalAdjustment.area)} м²)</span><span>{fmtMoney(totals.emalAdjustment.amount)}</span></div>
-              )}
-              {totals.extraTotal !== 0 && (
-                <div className="t-row"><span>Доп. расходы (сборка/доставка/прочее)</span><span>{fmtMoney(totals.extraTotal)}</span></div>
-              )}
-              <div className="t-row total"><span>ИТОГО СЕБЕСТОИМОСТЬ</span><span>{fmtMoney(totals.cost)}</span></div>
-              <div className="t-row"><span>Наценка</span><span>{fmtMoney(totals.markupRub)}{totals.markupPct != null && <em> ({fmtNum(totals.markupPct, 1)}%)</em>}</span></div>
-              <div className="t-row client"><span>ЦЕНА ДЛЯ КЛИЕНТА</span><span>{fmtMoney(totals.client)}</span></div>
-              <div className="t-row"><span>Маржинальность</span><span>{totals.marginPct != null ? `${fmtNum(totals.marginPct, 1)}%` : '—'}</span></div>
-              {project.settings.markupBasePct == null && Object.keys(project.settings.markupByGroup).length === 0 && (
-                <div className="note">Наценка не задана — цена клиента равна себестоимости. Задайте её во вкладке «Настройки проекта».</div>
-              )}
-            </div>
-          </aside>
+          <TotalsAside totals={totals} project={project} />
         </div>
       )}
 
@@ -246,5 +261,32 @@ function GroupRows(props: {
         );
       })}
     </>
+  );
+}
+
+function TotalsAside(props: { totals: ReturnType<typeof calcTotals>['totals']; project: Project }) {
+  const { totals, project } = props;
+  return (
+    <aside className="totals-col">
+      <div className="totals-card">
+        <h3>Итог</h3>
+        {SUMMARY_GROUPS.filter((g) => totals.byGroup[g].cost !== 0).map((g) => (
+          <div className="t-row" key={g}><span>{g}</span><span>{fmtMoney(totals.byGroup[g].cost)}</span></div>
+        ))}
+        {totals.emalAdjustment?.applied && (
+          <div className="t-row warn"><span>Эмаль &lt; 1 м² (+30%, правило прайса, {fmtNum(totals.emalAdjustment.area)} м²)</span><span>{fmtMoney(totals.emalAdjustment.amount)}</span></div>
+        )}
+        {totals.extraTotal !== 0 && (
+          <div className="t-row"><span>Доп. расходы (сборка/доставка/прочее)</span><span>{fmtMoney(totals.extraTotal)}</span></div>
+        )}
+        <div className="t-row total"><span>ИТОГО СЕБЕСТОИМОСТЬ</span><span>{fmtMoney(totals.cost)}</span></div>
+        <div className="t-row"><span>Наценка</span><span>{fmtMoney(totals.markupRub)}{totals.markupPct != null && <em> ({fmtNum(totals.markupPct, 1)}%)</em>}</span></div>
+        <div className="t-row client"><span>ЦЕНА ДЛЯ КЛИЕНТА</span><span>{fmtMoney(totals.client)}</span></div>
+        <div className="t-row"><span>Маржинальность</span><span>{totals.marginPct != null ? `${fmtNum(totals.marginPct, 1)}%` : '—'}</span></div>
+        {project.settings.markupBasePct == null && Object.keys(project.settings.markupByGroup).length === 0 && (
+          <div className="note">Наценка не задана — цена клиента равна себестоимости. Задайте её во вкладке «Настройки проекта».</div>
+        )}
+      </div>
+    </aside>
   );
 }
