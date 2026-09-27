@@ -79,6 +79,64 @@ export interface ModuleCheck {
   warnings: string[]; // требуют подтверждения, но не блокируют
 }
 
+/**
+ * Извлечение ожидаемого количества ящиков из наименования корпуса.
+ * Примеры:
+ * - «с ящиком», «и ящиком», «с 1 ящиком», «с 1-м ящиком», «с ящ.» → 1
+ * - «с 2-мя ящиками», «с 2мя ящиками», «с 2 ящиками», «с ящиками» → 2
+ * - «с 3-мя ящиками», «с 3мя ящиками», «с 3 ящиками» → 3
+ * - «с 4-мя ящиками», «с 4мя ящиками», «с 4 ящиками» → 4
+ */
+export function parseBodyDrawers(name: string): number | null {
+  const s = name.toLowerCase();
+
+  // Числовое указание: «с 2-мя ящиками», «с 3-мя ящиками», «с 1 ящиком», «под ДШ с 1 ящиком», «2мя ящиками»
+  const numMatch = s.match(/(?:с\s+)?(\d+)\s*(?:-?[а-я]+)?\s*ящ(?:ик(?:ами|а|ом)?|\.?)/i);
+  if (numMatch) {
+    return parseInt(numMatch[1], 10);
+  }
+
+  // Словесные формы
+  if (/(?:с\s+)?двумя\s*ящик/i.test(s)) return 2;
+  if (/(?:с\s+)?тремя\s*ящик/i.test(s)) return 3;
+  if (/(?:с\s+)?четырьмя\s*ящик/i.test(s)) return 4;
+  if (/(?:с\s+)?одним\s*ящик/i.test(s)) return 1;
+
+  // «с ящиками» без числа (например, «Стол напольный 2-х дверный с ящиками»)
+  if (/с\s+ящиками/i.test(s)) return 2;
+
+  // «с ящиком», «и ящиком», «с ящ.»
+  if (/(?:с|и)\s+ящиком|с\s+ящ(?:\.|\s|$)/i.test(s)) return 1;
+
+  return null;
+}
+
+/**
+ * Извлечение ожидаемого количества дверей/фасадов из наименования корпуса.
+ * Примеры:
+ * - «1-но дверный», «1-дверный», «1-ой дверкой», «однодверный» → 1
+ * - «2-х дверный», «2х дверный», «2-мя дверками», «2мя дверками», «двухдверный» → 2
+ * - «3-х дверный», «3-мя дверками», «трехдверный» → 3
+ * - «4-х дверный», «4мя дверками», «четырехдверный» → 4
+ */
+export function parseBodyDoors(name: string): number | null {
+  const s = name.toLowerCase();
+
+  // Числовое указание: «1-но дверный», «2-х дверный», «2мя дверками», «1ой дверкой», «4мя дверками»
+  const numMatch = s.match(/(\d+)\s*(?:-?[а-я]+)?\s*(?:дверн[а-я]*|дверк[а-я]*)/i);
+  if (numMatch) {
+    return parseInt(numMatch[1], 10);
+  }
+
+  // Словесные формы
+  if (/однодверн|(?:с\s+)?одной\s*двер/i.test(s)) return 1;
+  if (/двухдверн|двудверн|(?:с\s+)?двумя\s*двер/i.test(s)) return 2;
+  if (/трехдверн|трёхдверн|(?:с\s+)?тремя\s*двер/i.test(s)) return 3;
+  if (/четырехдверн|четырёхдверн|(?:с\s+)?четырьмя\s*двер/i.test(s)) return 4;
+
+  return null;
+}
+
 /** Сколько единиц слота нужно на ОДИН модуль (0 = слот не требуется) */
 export function slotNeed(m: KitchenModule, key: SlotKey): number {
   switch (key) {
@@ -101,7 +159,21 @@ export function checkModule(m: KitchenModule, defaults: ModuleDefaults, priceboo
   if (!m.widthMm || !m.heightMm) warnings.push('Не указаны размеры модуля (Ш×В)');
 
   const body = r('body');
-  if (!body.item) errors.push('Не выбран корпус (каркас из прайса)');
+  if (!body.item) {
+    errors.push('Не выбран корпус (каркас из прайса)');
+  } else {
+    // Сверка названия корпуса с конструкцией модуля: ящики
+    const expectedDrawers = parseBodyDrawers(body.item.name);
+    if (expectedDrawers !== null && m.drawers < expectedDrawers) {
+      warnings.push(`Корпус по названию — с ${expectedDrawers} ящик${expectedDrawers === 1 ? 'ом' : 'ами'}, а в конструкции указано ${m.drawers}. Если нужны системы выдвижения — укажите количество ящиков; если нет — подтвердите`);
+    }
+
+    // Сверка названия корпуса с конструкцией модуля: фасады / двери
+    const expectedDoors = parseBodyDoors(body.item.name);
+    if (expectedDoors !== null && m.facades < expectedDoors) {
+      warnings.push('Фасады в цену каркаса не входят — укажите количество, либо подтвердите');
+    }
+  }
 
   if (m.facades > 0) {
     const f = r('facade');

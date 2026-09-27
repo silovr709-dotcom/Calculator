@@ -5,19 +5,26 @@ import {
   loadProjects, saveProjects, loadTemplates, saveTemplates,
   loadStoredPricebooks, saveStoredPricebooks, uid,
 } from './lib/storage';
+import {
+  loadSyncConfig, saveSyncConfig, performFullSync, parseIncomingHash,
+  pushToCloud,
+} from './lib/sync';
+import type { SyncConfig, SyncStatus } from './lib/sync';
 import { todayISO } from './lib/format';
 import Dashboard from './components/Dashboard';
 import ProjectEditor from './components/ProjectEditor';
 import SettingsPanel from './components/SettingsPanel';
 import PricebookView from './components/PricebookView';
 import QuickCalc from './components/QuickCalc';
+import SyncPanel from './components/SyncPanel';
 
 type View =
   | { kind: 'dashboard' }
   | { kind: 'project'; id: string }
   | { kind: 'quick' }
   | { kind: 'settings' }
-  | { kind: 'pricebook' };
+  | { kind: 'pricebook' }
+  | { kind: 'sync' };
 
 export default function App() {
   const [builtin, setBuiltin] = useState<Pricebook | null>(null);
@@ -29,12 +36,84 @@ export default function App() {
   const [activePricebookId, setActivePricebookId] = useState<string>(() => localStorage.getItem('recept.activePb') ?? 'visma-2026');
   const [view, setView] = useState<View>({ kind: 'dashboard' });
   const [savedFlash, setSavedFlash] = useState(false);
+  const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig());
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => (loadSyncConfig().enabled ? 'synced' : 'idle'));
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}data/pricebook-visma-2026.json`)
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((pb: Pricebook) => setBuiltin(pb))
       .catch((e) => setLoadError(String(e)));
+  }, []);
+
+  // Обработка URL-хэша при старте (сканирование QR-кода на телефоне)
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash) return;
+    const parsed = parseIncomingHash(hash);
+    if (!parsed) return;
+
+    if (parsed.type === 'sync') {
+      const cfg: SyncConfig = {
+        ...loadSyncConfig(),
+        enabled: true,
+        roomCode: parsed.roomCode,
+        secretKey: parsed.secretKey,
+      };
+      saveSyncConfig(cfg);
+      setSyncConfig(cfg);
+      setSyncStatus('syncing');
+      performFullSync(cfg).then((res) => {
+        setSyncStatus(res.status);
+        if (res.merged) {
+          setProjects(res.merged.projects);
+          setTemplates(res.merged.templates);
+          setGlobalSettings(res.merged.settings);
+          alert('📱 Устройство успешно подключено к синхронизации! Проекты загружены.');
+        }
+      });
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    } else if (parsed.type === 'import') {
+      const p = parsed.project;
+      p.id = uid('prj');
+      p.updatedAt = new Date().toISOString();
+      const next = [p, ...loadProjects()];
+      saveProjects(next);
+      setProjects(next);
+      setView({ kind: 'project', id: p.id });
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      alert(`📱 Проект «${p.name}» успешно импортирован на это устройство!`);
+    }
+  }, []);
+
+  // Первоначальная и фоновая периодическая синхронизация
+  useEffect(() => {
+    const cfg = loadSyncConfig();
+    if (!cfg.enabled) return;
+
+    const doSync = async () => {
+      setSyncStatus('syncing');
+      const res = await performFullSync(loadSyncConfig());
+      setSyncStatus(res.status);
+      if (res.merged) {
+        setProjects(res.merged.projects);
+        setTemplates(res.merged.templates);
+        setGlobalSettings(res.merged.settings);
+      }
+    };
+
+    doSync();
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') doSync();
+    }, 25000);
+
+    const onFocus = () => doSync();
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
   }, []);
 
   const pricebooks = useMemo<Pricebook[]>(
@@ -46,17 +125,35 @@ export default function App() {
   const persistProjects = useCallback((next: Project[]) => {
     setProjects(next);
     if (!saveProjects(next)) alert('Не удалось сохранить: закончилось место локального хранилища. Экспортируйте старые проекты в файл и удалите их.');
-    else { setSavedFlash(true); setTimeout(() => setSavedFlash(false), 1200); }
+    else {
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 1200);
+      const cfg = loadSyncConfig();
+      if (cfg.enabled) {
+        pushToCloud(cfg, { projects: next, templates: loadTemplates(), settings: loadGlobalSettings() })
+          .then((r) => setSyncStatus(r.ok ? 'synced' : 'offline'));
+      }
+    }
   }, []);
 
   const persistTemplates = useCallback((next: Template[]) => {
     setTemplates(next);
     saveTemplates(next);
+    const cfg = loadSyncConfig();
+    if (cfg.enabled) {
+      pushToCloud(cfg, { projects: loadProjects(), templates: next, settings: loadGlobalSettings() })
+        .then((r) => setSyncStatus(r.ok ? 'synced' : 'offline'));
+    }
   }, []);
 
   const persistSettings = useCallback((s: ProjectSettings) => {
     setGlobalSettings(s);
     saveGlobalSettings(s);
+    const cfg = loadSyncConfig();
+    if (cfg.enabled) {
+      pushToCloud(cfg, { projects: loadProjects(), templates: loadTemplates(), settings: s })
+        .then((r) => setSyncStatus(r.ok ? 'synced' : 'offline'));
+    }
   }, []);
 
   const persistStoredPricebooks = useCallback((next: Pricebook[]) => {
@@ -148,6 +245,12 @@ export default function App() {
           <button className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>Быстрый расчёт</button>
           <button className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => setView({ kind: 'pricebook' })}>Прайс и версии</button>
           <button className={view.kind === 'settings' ? 'active' : ''} onClick={() => setView({ kind: 'settings' })}>Настройки</button>
+          <button className={view.kind === 'sync' ? 'active' : ''} onClick={() => setView({ kind: 'sync' })}>
+            📱 Синхронизация
+            {syncConfig.enabled && (
+              <span className={`nav-sync-badge ${syncStatus}`} title={`Синхронизация: ${syncStatus === 'synced' ? 'в сети' : syncStatus === 'syncing' ? 'обновление...' : 'офлайн'}`} />
+            )}
+          </button>
         </nav>
         <div className="sidebar-foot">
           <div className="pb-badge" title={activePricebook.meta.sourceFile}>
@@ -168,7 +271,23 @@ export default function App() {
             onDelete={deleteProject}
             onImport={importProject}
             onQuick={() => setView({ kind: 'quick' })}
+            onOpenSync={() => setView({ kind: 'sync' })}
             pricebookLabel={`${activePricebook.meta.name} · импорт ${activePricebook.meta.importedAt.slice(0, 10)}`}
+          />
+        )}
+        {view.kind === 'sync' && (
+          <SyncPanel
+            projects={projects}
+            templates={templates}
+            settings={globalSettings}
+            syncStatus={syncStatus}
+            onSetSyncStatus={setSyncStatus}
+            onSyncUpdated={(data) => {
+              setProjects(data.projects);
+              setTemplates(data.templates);
+              setGlobalSettings(data.settings);
+              setSyncConfig(loadSyncConfig());
+            }}
           />
         )}
         {view.kind === 'project' && current && (

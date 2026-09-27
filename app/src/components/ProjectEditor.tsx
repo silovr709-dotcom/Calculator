@@ -10,6 +10,8 @@ import { checkModule, moduleToLines } from '../lib/modules';
 import SettingsPanel from './SettingsPanel';
 import ClientView from './ClientView';
 import { exportInternalXlsx, exportClientXlsx, exportInternalCsv, exportProjectJson } from '../lib/exporters';
+import QRCode from 'qrcode';
+import { makeProjectShareUrl } from '../lib/sync';
 
 export default function ProjectEditor(props: {
   project: Project;
@@ -28,6 +30,17 @@ export default function ProjectEditor(props: {
   );
   const [showPicker, setShowPicker] = useState(false);
   const [editMeta, setEditMeta] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrUrl, setQrUrl] = useState('');
+
+  useEffect(() => {
+    if (showQrModal) {
+      const url = makeProjectShareUrl(project);
+      QRCode.toDataURL(url, { width: 260, margin: 2, color: { dark: '#10231f', light: '#ffffff' } })
+        .then((u) => setQrUrl(u))
+        .catch(() => {});
+    }
+  }, [showQrModal, project]);
 
   // строки из модулей («Позиции кухни») + ручные строки — единый расчёт
   const moduleGroups = useMemo(
@@ -96,8 +109,10 @@ export default function ProjectEditor(props: {
               <button onClick={() => exportClientXlsx(outProject)}>Excel — коммерческое предложение</button>
               <button onClick={() => exportInternalCsv(outProject)}>CSV — внутренний расчёт</button>
               <button onClick={() => exportProjectJson(project)}>Файл проекта (.json)</button>
+              <button onClick={() => setShowQrModal(true)}>📱 Открыть на телефоне (QR-код)</button>
             </div>
           </div>
+          <button className="btn ghost" title="Открыть этот проект на телефоне" onClick={() => setShowQrModal(true)}>📱 На телефон</button>
           <button className="btn ghost" onClick={props.onDuplicate}>Дублировать</button>
           <button className="btn ghost" onClick={() => { const n = prompt('Название шаблона:', project.name); if (n) props.onSaveTemplate(n); }}>В шаблон</button>
           <button className="btn danger ghost" onClick={props.onDelete}>Удалить</button>
@@ -113,6 +128,27 @@ export default function ProjectEditor(props: {
             <label>Дата<input type="date" value={project.date} onChange={(e) => props.onChange({ ...project, date: e.target.value })} /></label>
             <label>Комментарий<textarea rows={2} value={project.comment} onChange={(e) => props.onChange({ ...project, comment: e.target.value })} /></label>
             <div className="modal-actions"><button className="btn primary" onClick={() => setEditMeta(false)}>Готово</button></div>
+          </div>
+        </div>
+      )}
+
+      {showQrModal && (
+        <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowQrModal(false); }}>
+          <div className="modal narrow" style={{ textAlign: 'center' }}>
+            <h2>📱 Открыть проект на смартфоне</h2>
+            <div className="muted small" style={{ marginBottom: 16 }}>
+              Наведите камеру смартфона на QR-код — проект «<b>{project.name}</b>» мгновенно откроется в калькуляторе на телефоне.
+            </div>
+            {qrUrl ? (
+              <div className="qr-container">
+                <img src={qrUrl} alt="QR-код проекта" className="qr-image" style={{ width: 240, height: 240 }} />
+              </div>
+            ) : (
+              <div className="pad muted">Генерация QR-кода…</div>
+            )}
+            <div className="modal-actions" style={{ justifyContent: 'center', marginTop: 18 }}>
+              <button className="btn primary" onClick={() => setShowQrModal(false)}>Закрыть</button>
+            </div>
           </div>
         </div>
       )}

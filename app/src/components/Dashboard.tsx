@@ -19,6 +19,7 @@ export default function Dashboard(props: {
   onDelete: (id: string) => void;
   onImport: (f: File) => void;
   onQuick: () => void;
+  onOpenSync?: () => void;
 }) {
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ name: '', client: '', date: todayISO(), comment: '' });
@@ -58,6 +59,7 @@ export default function Dashboard(props: {
           </div>
           <input ref={backupRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) doRestore(f); e.target.value = ''; }} />
           <input ref={fileRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) props.onImport(f); e.target.value = ''; }} />
+          {props.onOpenSync && <button className="btn ghost" title="Синхронизация с телефоном и другими устройствами" onClick={props.onOpenSync}>📱 Синхронизация</button>}
           <button className="btn ghost" onClick={props.onQuick}>Быстрый расчёт</button>
           <button className="btn primary" onClick={() => setShowNew(true)}>+ Новый расчёт</button>
         </div>
