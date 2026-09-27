@@ -11,33 +11,96 @@ import { fmtMoney, todayISO } from '../lib/format';
  * 2) Шаблоны — сохранённые наборы позиций из прошлых проектов.
  */
 
+/** Кнопка-фильтр по типу материала (напр. «Плёнка ПВХ», «Эмаль») */
+type Chip = { label: string; pred: (i: PriceItem) => boolean };
+
 function ItemSelect(props: {
   items: PriceItem[];
   value: string | null;
   onChange: (id: string | null) => void;
   placeholder: string;
+  /** Кнопки-типы над списком: сначала выбираешь тип материала, потом позицию */
+  chips?: Chip[];
 }) {
   const [q, setQ] = useState('');
+  const [chip, setChip] = useState(-1); // -1 = все типы
   const norm = (s: string) => s.toLowerCase().replace(/ё/g, 'е');
+
   const filtered = useMemo(() => {
-    const terms = norm(q).split(/\s+/).filter(Boolean);
     let list = props.items;
-    if (terms.length) list = list.filter((i) => terms.every((t) => norm(`${i.name} ${i.article ?? ''} ${i.subcategory ?? ''}`).includes(t)));
-    return list.slice(0, 120);
-  }, [props.items, q]);
+    if (props.chips && chip >= 0) list = list.filter(props.chips[chip].pred);
+    const terms = norm(q).split(/\s+/).filter(Boolean);
+    if (terms.length) list = list.filter((i) => terms.every((t) => norm(`${i.name} ${i.article ?? ''} ${i.subcategory ?? ''} ${i.category}`).includes(t)));
+    return list.slice(0, 300);
+  }, [props.items, props.chips, chip, q]);
+
+  // группировка списка: «Категория → Подкатегория» как заголовки внутри выпадашки
+  const grouped = useMemo(() => {
+    const m = new Map<string, PriceItem[]>();
+    for (const i of filtered) {
+      const key = i.subcategory ? `${shortCat(i.category)} — ${i.subcategory}` : shortCat(i.category);
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(i);
+    }
+    return [...m.entries()];
+  }, [filtered]);
+
+  const selected = props.items.find((i) => i.id === props.value) ?? null;
+  const selectedVisible = selected && filtered.some((i) => i.id === selected.id);
+
+  const optLabel = (i: PriceItem) => {
+    const th = i.attrs?.['толщина'];
+    const bits = [i.name.slice(0, 70)];
+    if (th && !i.name.includes(th)) bits.push(th);
+    bits.push(i.price != null ? `${i.price} ₽${i.unit ? `/${i.unit}` : ''}` : 'нет цены');
+    return bits.join(' · ');
+  };
+
   return (
     <div className="item-select">
+      {props.chips && (
+        <div className="chips">
+          <button type="button" className={chip === -1 ? 'chip active' : 'chip'} onClick={() => setChip(-1)}>Все</button>
+          {props.chips.map((c, idx) => (
+            <button type="button" key={c.label} className={chip === idx ? 'chip active' : 'chip'} onClick={() => setChip(idx)}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`поиск: ${props.placeholder}`} />
       <select value={props.value ?? ''} onChange={(e) => props.onChange(e.target.value || null)}>
         <option value="">— не добавлять —</option>
-        {filtered.map((i) => (
-          <option key={i.id} value={i.id}>
-            {i.name.slice(0, 80)} · {i.price != null ? `${i.price} ₽` : 'нет цены'}{i.unit ? ` / ${i.unit}` : ''}
-          </option>
+        {selected && !selectedVisible && (
+          <optgroup label="Выбрано сейчас">
+            <option value={selected.id}>{optLabel(selected)}</option>
+          </optgroup>
+        )}
+        {grouped.map(([g, items]) => (
+          <optgroup key={g} label={g}>
+            {items.map((i) => (
+              <option key={i.id} value={i.id}>{optLabel(i)}</option>
+            ))}
+          </optgroup>
         ))}
       </select>
+      {selected && (
+        <div className="muted small sel-info">
+          ✓ {selected.subcategory ? `${shortCat(selected.category)} — ${selected.subcategory}: ` : ''}{selected.name.slice(0, 60)}
+          {selected.attrs?.['толщина'] && !selected.name.includes(selected.attrs['толщина']) ? ` · ${selected.attrs['толщина']}` : ''}
+        </div>
+      )}
     </div>
   );
+}
+
+/** Убирает служебный префикс категории для компактных заголовков групп */
+function shortCat(c: string): string {
+  return c
+    .replace('Фасады: ', '')
+    .replace('Столешницы: ', '')
+    .replace('Фурнитура BLUM (доп. лист)', 'BLUM (доп. лист)')
+    .replace('Корпуса: ', '');
 }
 
 export default function QuickCalc(props: {
@@ -172,7 +235,17 @@ export default function QuickCalc(props: {
 
             <section className="card">
               <h3>2. Фасады</h3>
-              <ItemSelect items={priced((i) => i.category.startsWith('Фасады') && i.priceBasis === 'm2')} value={facade} onChange={setFacade} placeholder="МДФ / пластик / эмаль / TSS / стекло (кв.м)" />
+              <div className="muted small">Сначала выберите тип материала, затем конкретную позицию (категория декора и толщина видны в списке).</div>
+              <ItemSelect
+                items={priced((i) => i.category.startsWith('Фасады') && i.priceBasis === 'm2')}
+                chips={[
+                  { label: 'Плёнка ПВХ (МДФ)', pred: (i) => i.category === 'Фасады: МДФ (ПВХ плёнка)' },
+                  { label: 'Эмаль', pred: (i) => i.category === 'Фасады: Эмаль' },
+                  { label: 'Пластик (HPL)', pred: (i) => i.category === 'Фасады: Пластик (HPL)' },
+                  { label: 'TSS плита', pred: (i) => i.category === 'Фасады: TSS плита' },
+                  { label: 'Стекло и зеркала', pred: (i) => i.category === 'Фасады: Стекло и зеркала' },
+                ]}
+                value={facade} onChange={setFacade} placeholder="категория декора, толщина…" />
               <div className="grid2">
                 <label>Высота фасадов низа, мм<input type="number" value={facadeHLow} onChange={(e) => setFacadeHLow(Number(e.target.value) || 0)} /></label>
                 <label>Высота фасадов верха, мм<input type="number" value={facadeHUp} onChange={(e) => setFacadeHUp(Number(e.target.value) || 0)} /></label>
@@ -182,16 +255,37 @@ export default function QuickCalc(props: {
 
             <section className="card">
               <h3>3. Фурнитура</h3>
-              <ItemSelect items={priced((i) => i.category === 'Петли' || (i.category.includes('BLUM') && i.subcategory === 'Петли Blum'))} value={hinge} onChange={setHinge} placeholder="петля" />
+              <ItemSelect
+                items={priced((i) => i.category === 'Петли' || (i.category.includes('BLUM') && i.subcategory === 'Петли Blum'))}
+                chips={[
+                  { label: 'Обычные (Боярд и др.)', pred: (i) => i.category === 'Петли' },
+                  { label: 'Blum', pred: (i) => i.category.includes('BLUM') },
+                ]}
+                value={hinge} onChange={setHinge} placeholder="петля" />
               <label className="inline">Петель на фасад <input className="qty" type="number" value={hingePerDoor} onChange={(e) => setHingePerDoor(Number(e.target.value) || 0)} /> (фасадов: {doors})</label>
-              <ItemSelect items={priced((i) => i.category === 'Системы выдвижения' || (i.category.includes('BLUM') && i.subcategory === 'Ящики и направляющие Blum'))} value={drawer} onChange={setDrawer} placeholder="ящик / направляющие" />
+              <ItemSelect
+                items={priced((i) => i.category === 'Системы выдвижения' || (i.category.includes('BLUM') && i.subcategory === 'Ящики и направляющие Blum'))}
+                chips={[
+                  { label: 'Обычные', pred: (i) => i.category === 'Системы выдвижения' },
+                  { label: 'Blum', pred: (i) => i.category.includes('BLUM') },
+                ]}
+                value={drawer} onChange={setDrawer} placeholder="ящик / направляющие" />
               <label className="inline">Ящиков, шт <input className="qty" type="number" value={drawerQty} onChange={(e) => setDrawerQty(Number(e.target.value) || 0)} /></label>
               <ItemSelect items={priced((i) => i.category === 'Посудосушители')} value={dryer} onChange={setDryer} placeholder="посудосушитель" />
             </section>
 
             <section className="card">
               <h3>4. Столешница</h3>
-              <ItemSelect items={priced((i) => i.category.startsWith('Столешницы'))} value={worktop} onChange={setWorktop} placeholder="МС / СОЮЗ / компакт" />
+              <ItemSelect
+                items={priced((i) => i.category.startsWith('Столешницы'))}
+                chips={[
+                  { label: 'Мир Столешниц', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' },
+                  { label: 'СОЮЗ', pred: (i) => i.category === 'Столешницы: СОЮЗ (постформинг)' },
+                  { label: 'Компакт Slotex', pred: (i) => i.category === 'Столешницы: компакт-плита Slotex' },
+                  { label: 'Компакт Arkobaleno', pred: (i) => i.category === 'Столешницы: компакт-плита Arkobaleno' },
+                  { label: 'Комплектующие', pred: (i) => i.category === 'Столешницы: комплектующие' },
+                ]}
+                value={worktop} onChange={setWorktop} placeholder="категория декора, размер…" />
               <label className="inline">Длина столешницы, мм <input className="qty wide" type="number" value={worktopLen} onChange={(e) => setWorktopLen(Number(e.target.value) || 0)} /></label>
             </section>
 

@@ -175,6 +175,15 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 /* ---------- quick calc ---------- */
 .item-select { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
 .item-select input { font-size: 12px; padding: 6px 9px; }
+.item-select .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font-size: 12px; padding: 4px 11px; border-radius: 999px; cursor: pointer;
+  border: 1px solid #c8d4cd; background: #fff; color: #33443a; line-height: 1.4;
+}
+.chip:hover { border-color: #2e5d43; color: #2e5d43; }
+.chip.active { background: #2e5d43; border-color: #2e5d43; color: #fff; font-weight: 600; }
+.item-select .sel-info { color: #2e5d43; }
+.item-select select optgroup { font-style: normal; font-weight: 700; color: #55685d; }
 .tpl-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); gap: 12px; }
 
 /* ---------- client view ---------- */
