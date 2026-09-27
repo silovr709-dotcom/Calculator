@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
-import type { Project } from '../types';
+import type { Pricebook, Project } from '../types';
 import { calcTotals } from '../lib/engine';
+import { moduleToLines } from '../lib/modules';
 import { fmtMoney, fmtDate, todayISO } from '../lib/format';
 
 const STATUS_LABEL: Record<Project['status'], string> = {
@@ -9,6 +10,7 @@ const STATUS_LABEL: Record<Project['status'], string> = {
 
 export default function Dashboard(props: {
   projects: Project[];
+  pricebooks: Pricebook[];
   pricebookLabel: string;
   onOpen: (id: string) => void;
   onCreate: (d: { name: string; client: string; date: string; comment: string }) => void;
@@ -73,13 +75,16 @@ export default function Dashboard(props: {
           </thead>
           <tbody>
             {props.projects.map((p) => {
-              const { totals } = calcTotals(p.lines, p.settings);
+              // строки из модулей («Позиции кухни») входят в итог наравне с ручными строками
+              const pb = props.pricebooks.find((x) => x.meta.id === p.pricebookId) ?? props.pricebooks[0];
+              const modLines = pb ? (p.modules ?? []).flatMap((m) => moduleToLines(m, p.moduleDefaults ?? {}, pb)) : [];
+              const { totals } = calcTotals([...modLines, ...p.lines], p.settings);
               return (
                 <tr key={p.id} className="row-click" onClick={() => props.onOpen(p.id)}>
                   <td><b>{p.name}</b>{p.comment && <div className="muted small">{p.comment}</div>}</td>
                   <td>{p.client || '—'}</td>
                   <td>{fmtDate(p.date)}</td>
-                  <td>{p.lines.length}</td>
+                  <td>{(p.modules?.length ?? 0) > 0 ? `${p.modules!.length} мод. + ${p.lines.length}` : p.lines.length}</td>
                   <td>{fmtMoney(totals.cost)}</td>
                   <td><b>{fmtMoney(totals.client)}</b></td>
                   <td><span className={`status s-${p.status}`}>{STATUS_LABEL[p.status]}</span></td>

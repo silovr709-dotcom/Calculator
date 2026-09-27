@@ -158,6 +158,7 @@ export default function App() {
       <main className="main">
         {view.kind === 'dashboard' && (
           <Dashboard
+            pricebooks={pricebooks}
             projects={projects}
             onOpen={(id) => setView({ kind: 'project', id })}
             onCreate={createProject}
