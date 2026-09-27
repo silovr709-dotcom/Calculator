@@ -4,9 +4,12 @@ import { MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, modulesSummary, mod
 import { calcTotals } from '../lib/engine';
 import { fmtMoney, fmtNum } from '../lib/format';
 import CatalogPicker from './CatalogPicker';
+import KitchenSketch from './KitchenSketch';
 
 const DEFAULT_SLOTS: SlotKey[] = ['facade', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'];
 const ALL_SLOTS: SlotKey[] = ['body', 'facade', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'];
+const EMPTY_MODULES: KitchenModule[] = [];
+const EMPTY_DEFAULTS: ModuleDefaults = {};
 
 export default function ModulesPanel(props: {
   project: Project;
@@ -14,11 +17,16 @@ export default function ModulesPanel(props: {
   onChange: (p: Project) => void;
   templates?: Template[];
   onSaveModuleTemplate?: (name: string, module: KitchenModule) => void;
+  /** Модуль, который нужно открыть по клику с эскиза. */
+  focusModuleId?: string | null;
 }) {
   const { project, pricebook } = props;
-  const mods = project.modules ?? [];
-  const defaults: ModuleDefaults = project.moduleDefaults ?? {};
-  const [selId, setSelId] = useState<string | null>(null);
+  const mods = project.modules ?? EMPTY_MODULES;
+  const defaults: ModuleDefaults = project.moduleDefaults ?? EMPTY_DEFAULTS;
+  // Панель монтируется при переходе с вкладки эскиза, поэтому значение focusModuleId
+  // можно безопасно использовать как начальное состояние без каскадного эффекта.
+  const [selId, setSelId] = useState<string | null>(() => props.focusModuleId ?? null);
+  const [showSketch, setShowSketch] = useState(() => Boolean(props.focusModuleId));
   const [addOpen, setAddOpen] = useState(false);
   // выбор в каталоге: для настроек проекта или для слота конкретного модуля
   const [pick, setPick] = useState<{ slot: SlotKey; moduleId: string | null } | null>(null);
@@ -105,8 +113,26 @@ export default function ModulesPanel(props: {
             </div>
           )}
         </div>
+        <button className="btn ghost" onClick={() => setShowSketch((value) => !value)}>🎨 {showSketch ? 'Скрыть эскиз ▲' : 'Показать эскиз ▼'}</button>
         {allProblems.some((p) => p.critical) && <span className="warn">⛔ есть позиции с неполными данными — см. проверку внизу</span>}
       </div>
+
+      {showSketch && (
+        <KitchenSketch
+          mode="compact"
+          modules={mods}
+          settings={project.sketch}
+          onSelectModule={setSelId}
+          onReorder={(id, direction) => {
+            const from = mods.findIndex((module) => module.id === id);
+            const to = from + direction;
+            if (from < 0 || to < 0 || to >= mods.length) return;
+            const next = [...mods];
+            [next[from], next[to]] = [next[to], next[from]];
+            setMods(next);
+          }}
+        />
+      )}
 
       {/* Таблица позиций */}
       {mods.length === 0 ? (

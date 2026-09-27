@@ -119,6 +119,15 @@ export interface ProjectPhoto {
   showToClient: boolean; // включать в клиентскую версию (КП)
 }
 
+/** Внешний вид и включение автоматически построенного эскиза кухни. */
+export type KitchenSketchStyleId = 'white-oak' | 'graphite-marble' | 'cashmere-stone' | 'scandi-wotan' | 'emerald-gold';
+
+export interface KitchenSketchSettings {
+  styleId?: KitchenSketchStyleId;
+  /** false — не выводить эскиз в клиентском КП; отсутствие поля = выводить */
+  showInClient?: boolean;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -134,6 +143,8 @@ export interface Project {
   modules?: KitchenModule[];
   moduleDefaults?: ModuleDefaults;
   photos?: ProjectPhoto[];
+  /** Настройки эскиза. Необязательное поле сохраняет совместимость со старыми проектами. */
+  sketch?: KitchenSketchSettings;
   createdAt: string;
   updatedAt: string;
 }
