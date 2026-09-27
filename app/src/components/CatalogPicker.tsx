@@ -73,7 +73,7 @@ export default function CatalogPicker(props: {
         return terms.every((t) => hay.includes(t));
       });
     }
-    return list.slice(0, 400);
+    return list;
   }, [poolItems, q, cat, sub, unitF, onlyPriced]);
 
   // группировка результатов заголовками «Категория — Подкатегория», чтобы не теряться в списке
@@ -187,7 +187,7 @@ export default function CatalogPicker(props: {
                 </div>
               ))}
               {results.length === 0 && <div className="empty small">Ничего не найдено. Уточните запрос или снимите фильтры.</div>}
-              {results.length === 400 && <div className="muted small pad">Показаны первые 400 результатов — уточните поиск.</div>}
+              {results.length > 500 && <div className="muted small pad">Найдено много позиций ({results.length}). Используйте поиск и фильтры, чтобы быстрее найти нужную.</div>}
             </div>
           </div>
           <div className="picker-right">
