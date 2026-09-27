@@ -16,12 +16,18 @@ function read<T>(key: string, fallback: T): T {
     return fallback;
   }
 }
+let quotaWarned = false;
 function write(key: string, value: unknown): boolean {
   try {
     localStorage.setItem(key, JSON.stringify(value));
     return true;
   } catch {
-    return false; // квота
+    // квота localStorage исчерпана — данные этого сохранения НЕ записаны
+    if (!quotaWarned) {
+      quotaWarned = true;
+      alert('Хранилище браузера переполнено — последнее изменение НЕ сохранено.\n\nЧаще всего это из-за большого количества фото в проектах: удалите лишние фото или выгрузите проект в файл (.json) через Экспорт.');
+    }
+    return false;
   }
 }
 

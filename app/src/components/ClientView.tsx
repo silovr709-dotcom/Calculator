@@ -36,6 +36,14 @@ export default function ClientView({ project }: { project: Project }) {
           </div>
         </div>
 
+        {(project.photos ?? []).some((p) => p.showToClient) && (
+          <div className="cd-photos">
+            {(project.photos ?? []).filter((p) => p.showToClient).map((p) => (
+              <figure key={p.id}><img src={p.dataUrl} alt={p.name} /><figcaption>{p.name}</figcaption></figure>
+            ))}
+          </div>
+        )}
+
         <table className="table client-table">
           <thead>
             <tr><th>№</th><th>Наименование</th><th className="num">Кол-во</th><th>Ед.</th><th className="num">Стоимость</th></tr>

@@ -5,6 +5,7 @@ import { calcTotals, lineFromItem } from '../lib/engine';
 import { fmtMoney, fmtNum, fmtDate } from '../lib/format';
 import CatalogPicker from './CatalogPicker';
 import ModulesPanel from './ModulesPanel';
+import PhotosPanel from './PhotosPanel';
 import { checkModule, moduleToLines } from '../lib/modules';
 import SettingsPanel from './SettingsPanel';
 import ClientView from './ClientView';
@@ -20,7 +21,7 @@ export default function ProjectEditor(props: {
   onSaveTemplate: (name: string) => void;
 }) {
   const { project, pricebook } = props;
-  const [tab, setTab] = useState<'modules' | 'lines' | 'settings' | 'client'>(
+  const [tab, setTab] = useState<'modules' | 'lines' | 'photos' | 'settings' | 'client'>(
     () => ((project.modules?.length ?? 0) > 0 || project.lines.length === 0 ? 'modules' : 'lines'),
   );
   const [showPicker, setShowPicker] = useState(false);
@@ -118,9 +119,12 @@ export default function ProjectEditor(props: {
           Позиции кухни{(project.modules?.length ?? 0) > 0 ? ` (${project.modules!.length})` : ''}{moduleCriticals > 0 ? ' ⛔' : ''}
         </button>
         <button className={tab === 'lines' ? 'active' : ''} onClick={() => setTab('lines')}>Доп. позиции и строки</button>
+        <button className={tab === 'photos' ? 'active' : ''} onClick={() => setTab('photos')}>Фото{(project.photos?.length ?? 0) > 0 ? ` (${project.photos!.length})` : ''}</button>
         <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>Настройки проекта</button>
         <button className={tab === 'client' ? 'active' : ''} onClick={() => setTab('client')}>Клиентская версия</button>
       </div>
+
+      {tab === 'photos' && <PhotosPanel project={project} onChange={props.onChange} />}
 
       {tab === 'settings' && (
         <SettingsPanel

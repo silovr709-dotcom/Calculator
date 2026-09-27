@@ -110,6 +110,15 @@ export interface ProjectSettings {
   deliveryCost: number | null;
 }
 
+/** Фото/эскиз проекта (хранится в самом проекте, сжимается при загрузке) */
+export interface ProjectPhoto {
+  id: string;
+  name: string;
+  dataUrl: string; // сжатый JPEG (data:image/jpeg;base64,...)
+  addedAt: string;
+  showToClient: boolean; // включать в клиентскую версию (КП)
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -124,6 +133,7 @@ export interface Project {
   // «Расчёт проекта»: структурированные позиции кухни (модули) и параметры по умолчанию
   modules?: KitchenModule[];
   moduleDefaults?: ModuleDefaults;
+  photos?: ProjectPhoto[];
   createdAt: string;
   updatedAt: string;
 }
