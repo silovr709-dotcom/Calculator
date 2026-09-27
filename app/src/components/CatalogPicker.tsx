@@ -32,6 +32,19 @@ export default function CatalogPicker(props: {
   }, [props]);
 
   const cats = useMemo(() => [...new Set(pricebook.items.map((i) => i.category))].sort(), [pricebook]);
+  // категории по разделам, чтобы выпадашка читалась
+  const catGroups = useMemo(() => {
+    const FURN = new Set(['Петли', 'Фурнитура', 'Фурнитура BLUM (доп. лист)', 'Системы выдвижения', 'Подъёмные механизмы', 'Посудосушители', 'Бутылочницы и карго', 'Внутреннее наполнение']);
+    const groupOf = (c: string) =>
+      c.startsWith('Корпуса') || c === 'Доп. комплектация каркасов' ? 'Корпуса' :
+      c.startsWith('Фасады') ? 'Фасады' :
+      c.startsWith('Столешницы') ? 'Столешницы' :
+      FURN.has(c) ? 'Фурнитура и механизмы' : 'Прочее';
+    const order = ['Корпуса', 'Фасады', 'Столешницы', 'Фурнитура и механизмы', 'Прочее'];
+    const m = new Map<string, string[]>(order.map((o) => [o, []]));
+    for (const c of cats) m.get(groupOf(c))!.push(c);
+    return order.map((o) => [o, m.get(o)!] as const).filter(([, list]) => list.length > 0);
+  }, [cats]);
   const subs = useMemo(
     () => cat ? [...new Set(pricebook.items.filter((i) => i.category === cat).map((i) => i.subcategory ?? ''))].filter(Boolean).sort() : [],
     [pricebook, cat],
@@ -53,6 +66,22 @@ export default function CatalogPicker(props: {
     }
     return list.slice(0, 400);
   }, [pricebook, q, cat, sub, unitF, onlyPriced]);
+
+  // группировка результатов заголовками «Категория — Подкатегория», чтобы не теряться в списке
+  const grouped = useMemo(() => {
+    const sorted = [...results].sort((a, b) =>
+      a.category === b.category
+        ? (a.subcategory ?? '').localeCompare(b.subcategory ?? '', 'ru')
+        : a.category.localeCompare(b.category, 'ru'));
+    const out: { header: string; items: PriceItem[] }[] = [];
+    for (const it of sorted) {
+      const header = it.subcategory ? `${it.category} — ${it.subcategory}` : it.category;
+      const last = out[out.length - 1];
+      if (last && last.header === header) last.items.push(it);
+      else out.push({ header, items: [it] });
+    }
+    return out;
+  }, [results]);
 
   const select = (it: PriceItem) => {
     setSel(it); setQty(1); setW(''); setH(''); setArea(''); setLen(''); setNeedLen('');
@@ -101,7 +130,11 @@ export default function CatalogPicker(props: {
             <div className="filters">
               <select value={cat} onChange={(e) => { setCat(e.target.value); setSub(''); }}>
                 <option value="">Все категории</option>
-                {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+                {catGroups.map(([g, list]) => (
+                  <optgroup key={g} label={g}>
+                    {list.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </optgroup>
+                ))}
               </select>
               {subs.length > 0 && (
                 <select value={sub} onChange={(e) => setSub(e.target.value)}>
@@ -116,21 +149,31 @@ export default function CatalogPicker(props: {
               <label className="chk"><input type="checkbox" checked={onlyPriced} onChange={(e) => setOnlyPriced(e.target.checked)} /> только с ценой</label>
             </div>
             <div className="results">
-              {results.map((it) => (
-                <div key={it.id} className={`result ${sel?.id === it.id ? 'sel' : ''}`} onClick={() => select(it)} onDoubleClick={() => { select(it); }}>
-                  <div className="r-name">{it.name}</div>
-                  <div className="r-meta">
-                    <span>{it.category}{it.subcategory ? ` · ${it.subcategory}` : ''}</span>
-                    {it.article && <span className="r-art">{it.article}</span>}
-                  </div>
-                  <div className="r-price">
-                    {it.priceKind === 'fixed' && <b>{fmtMoney(it.price)}</b>}
-                    {it.priceKind === 'percent' && <b>+{it.price}%</b>}
-                    {it.priceKind === 'surcharge' && <b>+{fmtMoney(it.price)}</b>}
-                    {it.priceKind === 'unavailable' && <span className="warn">недоступно</span>}
-                    {(it.priceKind === 'text' || it.priceKind === 'empty') && <span className="warn">нет цены</span>}
-                    <span className="r-unit">{it.unit ?? ''}</span>
-                  </div>
+              {grouped.map((g) => (
+                <div key={g.header}>
+                  <div className="r-group">{g.header} <span className="r-count">{g.items.length}</span></div>
+                  {g.items.map((it) => {
+                    const th = it.attrs?.['толщина'];
+                    return (
+                      <div key={it.id} className={`result ${sel?.id === it.id ? 'sel' : ''}`} onClick={() => select(it)} onDoubleClick={() => { select(it); }}>
+                        <div className="r-name">{it.name}{th && !it.name.includes(th) ? <span className="r-attr"> · {th}</span> : null}</div>
+                        <div className="r-meta">
+                          {it.article && <span className="r-art">{it.article}</span>}
+                          {Object.entries(it.attrs ?? {}).filter(([k]) => k !== 'толщина' && k !== 'изделие').slice(0, 2).map(([k, v]) => (
+                            <span key={k}>{k}: {String(v).slice(0, 30)}</span>
+                          ))}
+                        </div>
+                        <div className="r-price">
+                          {it.priceKind === 'fixed' && <b>{fmtMoney(it.price)}</b>}
+                          {it.priceKind === 'percent' && <b>+{it.price}%</b>}
+                          {it.priceKind === 'surcharge' && <b>+{fmtMoney(it.price)}</b>}
+                          {it.priceKind === 'unavailable' && <span className="warn">недоступно</span>}
+                          {(it.priceKind === 'text' || it.priceKind === 'empty') && <span className="warn">нет цены</span>}
+                          <span className="r-unit">{it.unit ?? ''}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               ))}
               {results.length === 0 && <div className="empty small">Ничего не найдено. Уточните запрос или снимите фильтры.</div>}
