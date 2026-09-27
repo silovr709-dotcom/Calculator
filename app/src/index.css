@@ -96,6 +96,8 @@ label.chk, label.chk-row { flex-direction: row; align-items: center; gap: 6px; w
 label.chk input, label.chk-row input { width: auto; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
 .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.card h4 { margin: 12px 0 2px; font-size: 13px; color: #33443a; }
 .note { background: #eef6f4; border-radius: 8px; padding: 8px 10px; font-size: 12px; color: #14544c; margin: 8px 0; }
 .warn { color: var(--warn); }
 .warn-box { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: 12px; margin: 8px 0; }
@@ -223,5 +225,5 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
   .sidebar nav { flex-direction: row; flex-wrap: wrap; }
   .sidebar-foot { display: none; }
   .page { padding: 14px; }
-  .grid2, .grid3 { grid-template-columns: 1fr; }
+  .grid2, .grid3, .grid4 { grid-template-columns: 1fr; }
 }

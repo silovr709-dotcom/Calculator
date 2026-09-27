@@ -2,13 +2,14 @@ import { useMemo, useState } from 'react';
 import type { Pricebook, PriceItem, ProjectLine, Template } from '../types';
 import { lineFromItem, calcTotals, sheetsFromLength, sheetLengthOf, unitIsHalfSheetAllowed } from '../lib/engine';
 import { defaultSettings, uid } from '../lib/storage';
-import { fmtMoney, todayISO } from '../lib/format';
+import { fmtMoney, fmtNum, todayISO } from '../lib/format';
 
 /**
  * Быстрый расчёт. Два инструмента:
  * 1) Конструктор — собирает кухню из РЕАЛЬНЫХ позиций прайса по прозрачным правилам
  *    комплектации (все правила видимы и редактируемы, цены только из прайса).
  * 2) Шаблоны — сохранённые наборы позиций из прошлых проектов.
+ * Все разделы — списки: любых позиций можно добавить сколько угодно строк.
  */
 
 /** Кнопка-фильтр по типу материала (напр. «Плёнка ПВХ», «Эмаль») */
@@ -70,7 +71,7 @@ function ItemSelect(props: {
       )}
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`поиск: ${props.placeholder}`} />
       <select value={props.value ?? ''} onChange={(e) => props.onChange(e.target.value || null)}>
-        <option value="">— не добавлять —</option>
+        <option value="">— не выбрано —</option>
         {selected && !selectedVisible && (
           <optgroup label="Выбрано сейчас">
             <option value={selected.id}>{optLabel(selected)}</option>
@@ -94,9 +95,28 @@ function ItemSelect(props: {
   );
 }
 
-/** Строка «позиция + количество» для мульти-списков (можно добавлять сколько угодно) */
-type ExtraRow = { uid: string; itemId: string | null; qty: number };
+/** Строка «позиция + параметры + количество» для мульти-списков */
+type ExtraRow = { uid: string; itemId: string | null; qty: number; widthMm?: number; heightMm?: number; lengthMm?: number };
 const newRow = (qty = 1): ExtraRow => ({ uid: uid('row'), itemId: null, qty });
+
+/** Построение строки проекта из строки конструктора (учитывает базис цены позиции) */
+function rowToLine(r: ExtraRow, item: PriceItem | null, pbId: string): ProjectLine | null {
+  if (!item) return null;
+  if (item.priceBasis === 'm2') {
+    if (r.qty <= 0 || !r.widthMm || !r.heightMm) return null; // без размеров площадь не считаем
+    return lineFromItem(item, pbId, r.qty, { widthMm: r.widthMm, heightMm: r.heightMm });
+  }
+  if (item.priceBasis === 'sheet') {
+    if (r.lengthMm && r.lengthMm > 0) {
+      const slen = sheetLengthOf(item);
+      const qty = sheetsFromLength(r.lengthMm, slen, unitIsHalfSheetAllowed(item.unit));
+      return { ...lineFromItem(item, pbId, qty), note: `подбор из длины ${r.lengthMm} мм (хлыст ${slen} мм)` };
+    }
+    return r.qty > 0 ? lineFromItem(item, pbId, r.qty) : null;
+  }
+  if (r.qty <= 0) return null;
+  return lineFromItem(item, pbId, r.qty);
+}
 
 function MultiRows(props: {
   pool: PriceItem[];
@@ -110,23 +130,65 @@ function MultiRows(props: {
 }) {
   const upd = (u: string, patch: Partial<ExtraRow>) =>
     props.onChange(props.rows.map((r) => (r.uid === u ? { ...r, ...patch } : r)));
+  const byId = (id: string | null) => props.pool.find((i) => i.id === id) ?? null;
+
   return (
     <div className="multi-rows">
-      {props.rows.map((r, idx) => (
-        <div className="extra-row" key={r.uid}>
-          <div className="extra-row-head">
-            <span className="muted small">{props.placeholder} #{idx + 1}</span>
-            <button type="button" className="btn tiny danger" title="Убрать строку"
-              onClick={() => props.onChange(props.rows.filter((x) => x.uid !== r.uid))}>✕</button>
+      {props.rows.map((r, idx) => {
+        const it = byId(r.itemId);
+        const basis = it?.priceBasis;
+        const slen = it && basis === 'sheet' ? sheetLengthOf(it) : 0;
+        const sheets = it && basis === 'sheet' && r.lengthMm ? sheetsFromLength(r.lengthMm, slen, unitIsHalfSheetAllowed(it.unit)) : 0;
+        const area = basis === 'm2' && r.widthMm && r.heightMm ? (r.widthMm / 1000) * (r.heightMm / 1000) * r.qty : 0;
+        return (
+          <div className="extra-row" key={r.uid}>
+            <div className="extra-row-head">
+              <span className="muted small">{props.placeholder} #{idx + 1}</span>
+              <button type="button" className="btn tiny danger" title="Убрать строку"
+                onClick={() => props.onChange(props.rows.filter((x) => x.uid !== r.uid))}>✕</button>
+            </div>
+            <ItemSelect items={props.pool} chips={props.chips} value={r.itemId}
+              onChange={(id) => upd(r.uid, { itemId: id })} placeholder={props.placeholder} />
+
+            {basis === 'm2' && (
+              <>
+                <div className="grid3">
+                  <label>Ширина, мм<input type="number" min={0} value={r.widthMm ?? ''} placeholder="напр. 596"
+                    onChange={(e) => upd(r.uid, { widthMm: Number(e.target.value) || undefined })} /></label>
+                  <label>Высота, мм<input type="number" min={0} value={r.heightMm ?? ''} placeholder="напр. 716"
+                    onChange={(e) => upd(r.uid, { heightMm: Number(e.target.value) || undefined })} /></label>
+                  <label>Кол-во, шт<input type="number" min={0} value={r.qty}
+                    onChange={(e) => upd(r.uid, { qty: Number(e.target.value) || 0 })} /></label>
+                </div>
+                {area > 0
+                  ? <div className="muted small">→ площадь {fmtNum(area)} м²</div>
+                  : <div className="warn small">Укажите ширину и высоту — цена этой позиции за м²</div>}
+              </>
+            )}
+
+            {basis === 'sheet' && (
+              <>
+                <label className="inline">Нужная длина, мм{' '}
+                  <input className="qty wide" type="number" min={0} value={r.lengthMm ?? ''} placeholder={`хлыст ${slen}`}
+                    onChange={(e) => upd(r.uid, { lengthMm: Number(e.target.value) || undefined })} />
+                </label>
+                {r.lengthMm
+                  ? <div className="muted small">→ {fmtNum(sheets)} хлыста ({slen} мм{unitIsHalfSheetAllowed(it!.unit) ? ', можно по 0,5' : ', только целиком'})</div>
+                  : <label className="inline">или хлыстов вручную{' '}
+                      <input className="qty" type="number" min={0} step="0.5" value={r.qty}
+                        onChange={(e) => upd(r.uid, { qty: Number(e.target.value) || 0 })} /></label>}
+              </>
+            )}
+
+            {basis !== 'm2' && basis !== 'sheet' && (
+              <label className="inline">{props.qtyLabel ?? 'Кол-во'}{it?.unit ? ` (${it.unit})` : ''}{' '}
+                <input className="qty" type="number" min={0} step="any" value={r.qty}
+                  onChange={(e) => upd(r.uid, { qty: Number(e.target.value) || 0 })} />
+              </label>
+            )}
           </div>
-          <ItemSelect items={props.pool} chips={props.chips} value={r.itemId}
-            onChange={(id) => upd(r.uid, { itemId: id })} placeholder={props.placeholder} />
-          <label className="inline">{props.qtyLabel ?? 'Кол-во'}{' '}
-            <input className="qty" type="number" min={0} step="any" value={r.qty}
-              onChange={(e) => upd(r.uid, { qty: Number(e.target.value) || 0 })} />
-          </label>
-        </div>
-      ))}
+        );
+      })}
       <button type="button" className="btn tiny add" onClick={() => props.onChange([...props.rows, newRow(props.defaultQty ?? 1)])}>
         ＋ {props.addLabel}
       </button>
@@ -143,6 +205,25 @@ function shortCat(c: string): string {
     .replace('Корпуса: ', '');
 }
 
+const FACADE_CHIPS: Chip[] = [
+  { label: 'Плёнка ПВХ (МДФ)', pred: (i) => i.category === 'Фасады: МДФ (ПВХ плёнка)' },
+  { label: 'Эмаль', pred: (i) => i.category === 'Фасады: Эмаль' },
+  { label: 'Пластик (HPL)', pred: (i) => i.category === 'Фасады: Пластик (HPL)' },
+  { label: 'TSS плита', pred: (i) => i.category === 'Фасады: TSS плита' },
+  { label: 'Стекло и зеркала', pred: (i) => i.category === 'Фасады: Стекло и зеркала' },
+];
+const WORKTOP_CHIPS: Chip[] = [
+  { label: 'Мир Столешниц', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' },
+  { label: 'СОЮЗ', pred: (i) => i.category === 'Столешницы: СОЮЗ (постформинг)' },
+  { label: 'Компакт Slotex', pred: (i) => i.category === 'Столешницы: компакт-плита Slotex' },
+  { label: 'Компакт Arkobaleno', pred: (i) => i.category === 'Столешницы: компакт-плита Arkobaleno' },
+  { label: 'Комплектующие', pred: (i) => i.category === 'Столешницы: комплектующие' },
+];
+const BLUM_CHIPS = (sub: string, plain: string): Chip[] => [
+  { label: plain, pred: (i) => !i.category.includes('BLUM') },
+  { label: 'Blum', pred: (i) => i.category.includes('BLUM') && i.subcategory === sub },
+];
+
 export default function QuickCalc(props: {
   pricebook: Pricebook;
   templates: Template[];
@@ -152,68 +233,49 @@ export default function QuickCalc(props: {
   const { pricebook } = props;
   const [tab, setTab] = useState<'ctor' | 'templates'>('ctor');
 
-  // ---- параметры конструктора (правила комплектации — видимые, редактируемые) ----
+  // ---- подсказка по количеству модулей (не ограничивает выбор) ----
   const [lowLen, setLowLen] = useState(2400);
   const [lowModW, setLowModW] = useState(600);
   const [upLen, setUpLen] = useState(2400);
   const [upModW, setUpModW] = useState(600);
-  const [lowBase, setLowBase] = useState<string | null>(null);
-  const [upBase, setUpBase] = useState<string | null>(null);
-  const [facade, setFacade] = useState<string | null>(null);
-  const [facadeHLow, setFacadeHLow] = useState(716);
-  const [facadeHUp, setFacadeHUp] = useState(716);
-  const [hinge, setHinge] = useState<string | null>(null);
-  const [hingePerDoor, setHingePerDoor] = useState(2);
+  const lowModsHint = Math.max(0, Math.ceil(lowLen / Math.max(lowModW, 1)));
+  const upModsHint = Math.max(0, Math.ceil(upLen / Math.max(upModW, 1)));
+
+  // ---- мульти-списки всех разделов ----
+  const [lowRows, setLowRows] = useState<ExtraRow[]>([]);
+  const [upRows, setUpRows] = useState<ExtraRow[]>([]);
+  const [facadeRows, setFacadeRows] = useState<ExtraRow[]>([]);
+  const [hingeRows, setHingeRows] = useState<ExtraRow[]>([]);
   const [drawerRows, setDrawerRows] = useState<ExtraRow[]>([]);
-  const [worktop, setWorktop] = useState<string | null>(null);
-  const [worktopLen, setWorktopLen] = useState(2400);
+  const [dryerRows, setDryerRows] = useState<ExtraRow[]>([]);
+  const [worktopRows, setWorktopRows] = useState<ExtraRow[]>([]);
   const [legRows, setLegRows] = useState<ExtraRow[]>([]);
   const [plinthRows, setPlinthRows] = useState<ExtraRow[]>([]);
-  const [dryer, setDryer] = useState<string | null>(null);
-  const [sink, setSink] = useState<string | null>(null);
-  const [mixer, setMixer] = useState<string | null>(null);
   const [handleRows, setHandleRows] = useState<ExtraRow[]>([]);
+  const [sinkRows, setSinkRows] = useState<ExtraRow[]>([]);
   const [extraRows, setExtraRows] = useState<ExtraRow[]>([]);
 
   const byId = (id: string | null) => pricebook.items.find((i) => i.id === id) ?? null;
   const priced = (pred: (i: PriceItem) => boolean) => pricebook.items.filter((i) => i.priceKind === 'fixed' && pred(i));
 
-  const lowMods = Math.max(0, Math.ceil(lowLen / Math.max(lowModW, 1)));
-  const upMods = Math.max(0, Math.ceil(upLen / Math.max(upModW, 1)));
-  const doors = lowMods + upMods;
+  // число модулей/фасадов из реально добавленных строк (для подсказок по петлям и ручкам)
+  const modulesTotal = [...lowRows, ...upRows].reduce((s, r) => s + (r.itemId && r.qty > 0 ? r.qty : 0), 0);
+  const facadesTotal = facadeRows.reduce((s, r) => s + (r.itemId && r.qty > 0 ? r.qty : 0), 0);
+
+  const allRowGroups = [lowRows, upRows, facadeRows, hingeRows, drawerRows, dryerRows, worktopRows, legRows, plinthRows, handleRows, sinkRows, extraRows];
 
   const lines = useMemo<ProjectLine[]>(() => {
     const out: ProjectLine[] = [];
     const pbId = pricebook.meta.id;
-    const lb = byId(lowBase); if (lb && lowMods > 0) out.push(lineFromItem(lb, pbId, lowMods));
-    const ub = byId(upBase); if (ub && upMods > 0) out.push(lineFromItem(ub, pbId, upMods));
-    const f = byId(facade);
-    if (f) {
-      if (lowLen > 0) out.push({ ...lineFromItem(f, pbId, 1, { widthMm: lowLen, heightMm: facadeHLow }), note: 'фасады нижнего ряда (площадь: длина × высота)' });
-      if (upLen > 0) out.push({ ...lineFromItem(f, pbId, 1, { widthMm: upLen, heightMm: facadeHUp }), note: 'фасады верхнего ряда' });
-    }
-    const hg = byId(hinge); if (hg && doors > 0 && hingePerDoor > 0) out.push({ ...lineFromItem(hg, pbId, doors * hingePerDoor), note: `${doors} фасадов × ${hingePerDoor} петли` });
-    const wt = byId(worktop);
-    if (wt && worktopLen > 0) {
-      const slen = sheetLengthOf(wt);
-      const qty = wt.priceBasis === 'sheet' ? sheetsFromLength(worktopLen, slen, unitIsHalfSheetAllowed(wt.unit)) : 1;
-      out.push({ ...lineFromItem(wt, pbId, qty), note: `подбор из длины ${worktopLen} мм (хлыст ${slen} мм)` });
-    }
-    const dy = byId(dryer); if (dy) out.push(lineFromItem(dy, pbId, 1));
-    const sk = byId(sink); if (sk) out.push(lineFromItem(sk, pbId, 1));
-    const mx = byId(mixer); if (mx) out.push(lineFromItem(mx, pbId, 1));
-    // мульти-списки: ящики, опоры, цоколь/плинтус, ручки, дополнительные позиции
-    for (const rows of [drawerRows, legRows, plinthRows, handleRows, extraRows]) {
+    for (const rows of allRowGroups) {
       for (const r of rows) {
-        const it = byId(r.itemId);
-        if (it && r.qty > 0) out.push(lineFromItem(it, pbId, r.qty));
+        const line = rowToLine(r, byId(r.itemId), pbId);
+        if (line) out.push(line);
       }
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pricebook, lowBase, upBase, facade, hinge, worktop, dryer, sink, mixer,
-      drawerRows, legRows, plinthRows, handleRows, extraRows,
-      lowLen, upLen, lowModW, upModW, facadeHLow, facadeHUp, hingePerDoor, worktopLen]);
+  }, [pricebook, lowRows, upRows, facadeRows, hingeRows, drawerRows, dryerRows, worktopRows, legRows, plinthRows, handleRows, sinkRows, extraRows]);
 
   const { totals } = useMemo(() => calcTotals(lines, defaultSettings()), [lines]);
 
@@ -227,7 +289,7 @@ export default function QuickCalc(props: {
       <header className="page-head">
         <div>
           <h1>Быстрый расчёт</h1>
-          <div className="muted">Ориентировочная стоимость из реальных позиций прайса. Правила комплектации видимы и редактируемы.</div>
+          <div className="muted">Ориентировочная стоимость из реальных позиций прайса. В каждом разделе можно добавить сколько угодно разных позиций.</div>
         </div>
       </header>
       <div className="tabs">
@@ -260,90 +322,77 @@ export default function QuickCalc(props: {
           <div className="lines-col">
             <section className="card">
               <h3>1. Корпуса</h3>
-              <div className="grid2">
-                <label>Нижний ряд, длина мм<input type="number" value={lowLen} onChange={(e) => setLowLen(Number(e.target.value) || 0)} /></label>
-                <label>Ширина модуля, мм<input type="number" value={lowModW} onChange={(e) => setLowModW(Number(e.target.value) || 1)} /></label>
+              <div className="muted small">Подсказка по количеству (не ограничивает выбор):</div>
+              <div className="grid4">
+                <label>Низ: длина, мм<input type="number" value={lowLen} onChange={(e) => setLowLen(Number(e.target.value) || 0)} /></label>
+                <label>ширина модуля<input type="number" value={lowModW} onChange={(e) => setLowModW(Number(e.target.value) || 1)} /></label>
+                <label>Верх: длина, мм<input type="number" value={upLen} onChange={(e) => setUpLen(Number(e.target.value) || 0)} /></label>
+                <label>ширина модуля<input type="number" value={upModW} onChange={(e) => setUpModW(Number(e.target.value) || 1)} /></label>
               </div>
-              <div className="muted small">→ {lowMods} нижних модулей</div>
-              <ItemSelect items={priced((i) => i.category === 'Корпуса: столы и пеналы')} value={lowBase} onChange={setLowBase} placeholder="напр. 2-х дверный 600" />
-              <div className="grid2">
-                <label>Верхний ряд, длина мм<input type="number" value={upLen} onChange={(e) => setUpLen(Number(e.target.value) || 0)} /></label>
-                <label>Ширина модуля, мм<input type="number" value={upModW} onChange={(e) => setUpModW(Number(e.target.value) || 1)} /></label>
-              </div>
-              <div className="muted small">→ {upMods} верхних модулей</div>
-              <ItemSelect items={priced((i) => i.category === 'Корпуса: шкафы навесные')} value={upBase} onChange={setUpBase} placeholder="напр. 2-х дверный Н=720 600" />
+              <div className="muted small">→ примерно {lowModsHint} нижних и {upModsHint} верхних модулей</div>
+              <h4>Нижний ряд (столы, пеналы)</h4>
+              <MultiRows pool={priced((i) => i.category === 'Корпуса: столы и пеналы')}
+                placeholder="стол / пенал" addLabel="Добавить корпус (низ)" qtyLabel="Модулей, шт"
+                rows={lowRows} onChange={setLowRows} />
+              <h4>Верхний ряд (навесные)</h4>
+              <MultiRows pool={priced((i) => i.category === 'Корпуса: шкафы навесные')}
+                placeholder="шкаф навесной" addLabel="Добавить корпус (верх)" qtyLabel="Модулей, шт"
+                rows={upRows} onChange={setUpRows} />
             </section>
 
             <section className="card">
               <h3>2. Фасады</h3>
-              <div className="muted small">Сначала выберите тип материала, затем конкретную позицию (категория декора и толщина видны в списке).</div>
-              <ItemSelect
-                items={priced((i) => i.category.startsWith('Фасады') && i.priceBasis === 'm2')}
-                chips={[
-                  { label: 'Плёнка ПВХ (МДФ)', pred: (i) => i.category === 'Фасады: МДФ (ПВХ плёнка)' },
-                  { label: 'Эмаль', pred: (i) => i.category === 'Фасады: Эмаль' },
-                  { label: 'Пластик (HPL)', pred: (i) => i.category === 'Фасады: Пластик (HPL)' },
-                  { label: 'TSS плита', pred: (i) => i.category === 'Фасады: TSS плита' },
-                  { label: 'Стекло и зеркала', pred: (i) => i.category === 'Фасады: Стекло и зеркала' },
-                ]}
-                value={facade} onChange={setFacade} placeholder="категория декора, толщина…" />
-              <div className="grid2">
-                <label>Высота фасадов низа, мм<input type="number" value={facadeHLow} onChange={(e) => setFacadeHLow(Number(e.target.value) || 0)} /></label>
-                <label>Высота фасадов верха, мм<input type="number" value={facadeHUp} onChange={(e) => setFacadeHUp(Number(e.target.value) || 0)} /></label>
-              </div>
-              <div className="muted small">Площадь = длина ряда × высота фасадов. Для точного расчёта по каждому фасаду используйте «Подробный расчёт».</div>
+              <div className="muted small">Каждая строка — свой материал и размер: например, низ в плёнке 716×596 × 4 шт, верх в эмали 916×446 × 3 шт. Цена за м², площадь считается из размеров.</div>
+              <MultiRows pool={priced((i) => i.category.startsWith('Фасады') && i.priceBasis === 'm2')}
+                chips={FACADE_CHIPS}
+                placeholder="фасад (тип материала → категория декора, толщина)" addLabel="Добавить фасады"
+                rows={facadeRows} onChange={setFacadeRows} />
             </section>
 
             <section className="card">
               <h3>3. Фурнитура</h3>
-              <ItemSelect
-                items={priced((i) => i.category === 'Петли' || (i.category.includes('BLUM') && i.subcategory === 'Петли Blum'))}
-                chips={[
-                  { label: 'Обычные (Боярд и др.)', pred: (i) => i.category === 'Петли' },
-                  { label: 'Blum', pred: (i) => i.category.includes('BLUM') },
-                ]}
-                value={hinge} onChange={setHinge} placeholder="петля" />
-              <label className="inline">Петель на фасад <input className="qty" type="number" value={hingePerDoor} onChange={(e) => setHingePerDoor(Number(e.target.value) || 0)} /> (фасадов: {doors})</label>
-              <MultiRows
-                pool={priced((i) => i.category === 'Системы выдвижения' || (i.category.includes('BLUM') && i.subcategory === 'Ящики и направляющие Blum'))}
-                chips={[
-                  { label: 'Обычные', pred: (i) => i.category === 'Системы выдвижения' },
-                  { label: 'Blum', pred: (i) => i.category.includes('BLUM') },
-                ]}
+              <div className="muted small">Фасадов добавлено: {facadesTotal || '—'} {facadesTotal ? `(обычно 2 петли на распашной фасад → ${facadesTotal * 2} петель)` : ''}</div>
+              <MultiRows pool={priced((i) => i.category === 'Петли' || (i.category.includes('BLUM') && i.subcategory === 'Петли Blum'))}
+                chips={BLUM_CHIPS('Петли Blum', 'Обычные (Боярд и др.)')}
+                placeholder="петля" addLabel="Добавить петли" qtyLabel="Петель, шт" defaultQty={facadesTotal * 2 || 2}
+                rows={hingeRows} onChange={setHingeRows} />
+              <MultiRows pool={priced((i) => i.category === 'Системы выдвижения' || (i.category.includes('BLUM') && i.subcategory === 'Ящики и направляющие Blum'))}
+                chips={BLUM_CHIPS('Ящики и направляющие Blum', 'Обычные')}
                 placeholder="ящик / направляющие" addLabel="Добавить ящики" qtyLabel="Ящиков, шт"
                 rows={drawerRows} onChange={setDrawerRows} />
-              <ItemSelect items={priced((i) => i.category === 'Посудосушители')} value={dryer} onChange={setDryer} placeholder="посудосушитель" />
+              <MultiRows pool={priced((i) => i.category === 'Посудосушители')}
+                placeholder="посудосушитель" addLabel="Добавить посудосушитель"
+                rows={dryerRows} onChange={setDryerRows} />
             </section>
 
             <section className="card">
-              <h3>4. Столешница</h3>
-              <ItemSelect
-                items={priced((i) => i.category.startsWith('Столешницы'))}
-                chips={[
-                  { label: 'Мир Столешниц', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' },
-                  { label: 'СОЮЗ', pred: (i) => i.category === 'Столешницы: СОЮЗ (постформинг)' },
-                  { label: 'Компакт Slotex', pred: (i) => i.category === 'Столешницы: компакт-плита Slotex' },
-                  { label: 'Компакт Arkobaleno', pred: (i) => i.category === 'Столешницы: компакт-плита Arkobaleno' },
-                  { label: 'Комплектующие', pred: (i) => i.category === 'Столешницы: комплектующие' },
-                ]}
-                value={worktop} onChange={setWorktop} placeholder="категория декора, размер…" />
-              <label className="inline">Длина столешницы, мм <input className="qty wide" type="number" value={worktopLen} onChange={(e) => setWorktopLen(Number(e.target.value) || 0)} /></label>
+              <h3>4. Столешницы</h3>
+              <div className="muted small">Можно несколько строк — например, разные декоры на разные участки. Хлысты подбираются из нужной длины по правилам прайса.</div>
+              <MultiRows pool={priced((i) => i.category.startsWith('Столешницы'))}
+                chips={WORKTOP_CHIPS}
+                placeholder="столешница / комплектующие" addLabel="Добавить столешницу"
+                rows={worktopRows} onChange={setWorktopRows} />
             </section>
 
             <section className="card">
               <h3>5. Опоры, цоколь, ручки, мойка</h3>
-              <div className="muted small">Каждой позиции можно добавить несколько строк — например, опоры h100 и h120, цоколь и плинтус одновременно. Подсказка: нижних модулей {lowMods}, обычно 4 опоры на модуль → {lowMods * 4} опор.</div>
+              <div className="muted small">Подсказка: модулей {modulesTotal || '—'}{modulesTotal ? `, обычно 4 опоры на модуль → ${modulesTotal * 4} опор` : ''}.</div>
               <MultiRows pool={priced((i) => i.category === 'Опоры и ножки')}
-                placeholder="опора / ножка" addLabel="Добавить опоры" qtyLabel="Опор, шт" defaultQty={lowMods * 4 || 4}
+                placeholder="опора / ножка" addLabel="Добавить опоры" qtyLabel="Опор, шт" defaultQty={modulesTotal * 4 || 4}
                 rows={legRows} onChange={setLegRows} />
               <MultiRows pool={priced((i) => i.category === 'Цоколь и длинномеры')}
                 placeholder="цоколь / плинтус / профиль" addLabel="Добавить цоколь или плинтус"
                 rows={plinthRows} onChange={setPlinthRows} />
               <MultiRows pool={priced((i) => i.category === 'Ручки')}
-                placeholder="ручка" addLabel="Добавить ручки" qtyLabel="Ручек, шт" defaultQty={doors || 1}
+                placeholder="ручка" addLabel="Добавить ручки" qtyLabel="Ручек, шт" defaultQty={facadesTotal || 1}
                 rows={handleRows} onChange={setHandleRows} />
-              <ItemSelect items={priced((i) => i.category === 'Мойки')} value={sink} onChange={setSink} placeholder="мойка" />
-              <ItemSelect items={priced((i) => i.category === 'Смесители')} value={mixer} onChange={setMixer} placeholder="смеситель" />
+              <MultiRows pool={priced((i) => i.category === 'Мойки' || i.category === 'Смесители')}
+                chips={[
+                  { label: 'Мойки', pred: (i) => i.category === 'Мойки' },
+                  { label: 'Смесители', pred: (i) => i.category === 'Смесители' },
+                ]}
+                placeholder="мойка / смеситель" addLabel="Добавить мойку или смеситель"
+                rows={sinkRows} onChange={setSinkRows} />
             </section>
 
             <section className="card">
@@ -366,11 +415,11 @@ export default function QuickCalc(props: {
           <aside className="totals-col">
             <div className="totals-card">
               <h3>Ориентировочно</h3>
-              {lines.length === 0 ? <div className="muted small">Выберите позиции слева.</div> : (
+              {lines.length === 0 ? <div className="muted small">Добавьте позиции слева.</div> : (
                 <>
                   {lines.map((l) => {
                     const c = calcTotals([l], defaultSettings()).totals.cost;
-                    return <div className="t-row small" key={l.id}><span>{l.name.slice(0, 44)}… × {l.qty}</span><span>{fmtMoney(c)}</span></div>;
+                    return <div className="t-row small" key={l.id}><span>{l.name.slice(0, 44)}… × {fmtNum(l.qty)}</span><span>{fmtMoney(c)}</span></div>;
                   })}
                   <div className="t-row total"><span>Себестоимость (без наценки)</span><span>{fmtMoney(totals.cost)}</span></div>
                   <div className="note">Наценка и цена клиента появятся в проекте согласно вашим настройкам.</div>
