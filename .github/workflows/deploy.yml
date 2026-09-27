@@ -34,6 +34,9 @@ jobs:
         with:
           path: app/dist
   deploy:
+    # Ветка Arena нужна для проверки сборки PR, но среда github-pages разрешена
+    # только main. Публикация выполняется после merge отдельным запуском main.
+    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     environment:

@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Project } from '../types';
 import { calcTotals } from '../lib/engine';
 import { fmtMoney, fmtDate } from '../lib/format';
 import { exportClientXlsx } from '../lib/exporters';
+import KitchenSketch from './KitchenSketch';
 
 /**
  * Клиентская версия: только наименование, количество, стоимость (с наценкой) и итог.
@@ -17,8 +18,13 @@ export interface ClientModuleGroup {
   composition: string[]; // состав для мелкого шрифта
 }
 
-export default function ClientView({ project, moduleGroups }: { project: Project; moduleGroups?: ClientModuleGroup[] }) {
+export default function ClientView({ project, moduleGroups, onSketchVisibilityChange }: {
+  project: Project;
+  moduleGroups?: ClientModuleGroup[];
+  onSketchVisibilityChange?: (showInClient: boolean) => void;
+}) {
   const { lineCalcs, totals } = useMemo(() => calcTotals(project.lines, project.settings), [project]);
+  const [showSketch, setShowSketch] = useState(project.sketch?.showInClient !== false);
   const groups = moduleGroups ?? [];
   const groupedIds = new Set(groups.flatMap((g) => g.lineIds));
   const extraLines = project.lines.filter((l) => !groupedIds.has(l.id));
@@ -34,7 +40,8 @@ export default function ClientView({ project, moduleGroups }: { project: Project
         <div className="muted small">
           Клиент видит только этот документ: без себестоимости, наценок и внутренних данных.
         </div>
-        <div>
+        <div className="client-toolbar-actions">
+          {(project.modules?.length ?? 0) > 0 && <label className="client-sketch-toggle"><input type="checkbox" checked={showSketch} onChange={(event) => { const visible = event.target.checked; setShowSketch(visible); onSketchVisibilityChange?.(visible); }} /> Эскиз кухни</label>}
           <button className="btn ghost" onClick={() => exportClientXlsx(project)}>Excel для клиента</button>
           <button className="btn primary" onClick={() => window.print()}>Печать / PDF</button>
         </div>
@@ -59,6 +66,10 @@ export default function ClientView({ project, moduleGroups }: { project: Project
               <figure key={p.id}><img src={p.dataUrl} alt={p.name} /><figcaption>{p.name}</figcaption></figure>
             ))}
           </div>
+        )}
+
+        {showSketch && (project.modules?.length ?? 0) > 0 && (
+          <KitchenSketch mode="client" modules={project.modules ?? []} settings={project.sketch} />
         )}
 
         <table className="table client-table">

@@ -5,6 +5,7 @@ import { calcTotals, lineFromItem } from '../lib/engine';
 import { fmtMoney, fmtNum, fmtDate } from '../lib/format';
 import CatalogPicker from './CatalogPicker';
 import ModulesPanel from './ModulesPanel';
+import KitchenSketch from './KitchenSketch';
 import PhotosPanel from './PhotosPanel';
 import { checkModule, moduleToLines } from '../lib/modules';
 import SettingsPanel from './SettingsPanel';
@@ -25,9 +26,10 @@ export default function ProjectEditor(props: {
   onSaveModuleTemplate?: (name: string, module: KitchenModule) => void;
 }) {
   const { project, pricebook } = props;
-  const [tab, setTab] = useState<'modules' | 'lines' | 'photos' | 'settings' | 'client'>(
+  const [tab, setTab] = useState<'modules' | 'sketch' | 'lines' | 'photos' | 'settings' | 'client'>(
     () => ((project.modules?.length ?? 0) > 0 || project.lines.length === 0 ? 'modules' : 'lines'),
   );
+  const [focusModuleId, setFocusModuleId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [editMeta, setEditMeta] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
@@ -78,6 +80,14 @@ export default function ProjectEditor(props: {
   };
 
   const groupsInUse = SUMMARY_GROUPS.filter((g) => project.lines.some((l) => l.group === g));
+  const reorderModule = (id: string, direction: -1 | 1) => {
+    const modules = [...(project.modules ?? [])];
+    const from = modules.findIndex((module) => module.id === id);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= modules.length) return;
+    [modules[from], modules[to]] = [modules[to], modules[from]];
+    props.onChange({ ...project, modules });
+  };
 
   return (
     <div className="page project">
@@ -157,6 +167,7 @@ export default function ProjectEditor(props: {
         <button className={tab === 'modules' ? 'active' : ''} onClick={() => setTab('modules')}>
           Позиции кухни{(project.modules?.length ?? 0) > 0 ? ` (${project.modules!.length})` : ''}{moduleCriticals > 0 ? ' ⛔' : ''}
         </button>
+        <button className={tab === 'sketch' ? 'active' : ''} onClick={() => setTab('sketch')}>🎨 Эскиз кухни</button>
         <button className={tab === 'lines' ? 'active' : ''} onClick={() => setTab('lines')}>Доп. позиции и строки</button>
         <button className={tab === 'photos' ? 'active' : ''} onClick={() => setTab('photos')}>Фото{(project.photos?.length ?? 0) > 0 ? ` (${project.photos!.length})` : ''}</button>
         <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>Настройки проекта</button>
@@ -164,6 +175,16 @@ export default function ProjectEditor(props: {
       </div>
 
       {tab === 'photos' && <PhotosPanel project={project} onChange={props.onChange} />}
+
+      {tab === 'sketch' && (
+        <KitchenSketch
+          modules={project.modules ?? []}
+          settings={project.sketch}
+          onSettingsChange={(sketch) => props.onChange({ ...project, sketch })}
+          onSelectModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
+          onReorder={reorderModule}
+        />
+      )}
 
       {tab === 'settings' && (
         <SettingsPanel
@@ -178,6 +199,7 @@ export default function ProjectEditor(props: {
           {moduleCriticals > 0 && <div className="warn-box">⛔ Расчёт неполный: в «Позициях кухни» есть {moduleCriticals} незаполненных обязательных параметров — эти строки не входят в цену.</div>}
           <ClientView
             project={outProject}
+            onSketchVisibilityChange={(showInClient) => props.onChange({ ...project, sketch: { ...project.sketch, showInClient } })}
             moduleGroups={moduleGroups.map(({ module: m, lines }) => ({
               id: m.id,
               title: m.name,
@@ -193,7 +215,7 @@ export default function ProjectEditor(props: {
       {tab === 'modules' && (
         <div className="editor-grid">
           <div className="lines-col">
-            <ModulesPanel project={project} pricebook={pricebook} onChange={props.onChange} templates={props.templates} onSaveModuleTemplate={props.onSaveModuleTemplate} />
+            <ModulesPanel project={project} pricebook={pricebook} onChange={props.onChange} templates={props.templates} onSaveModuleTemplate={props.onSaveModuleTemplate} focusModuleId={focusModuleId} />
           </div>
           <TotalsAside totals={totals} project={project} />
         </div>
