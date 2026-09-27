@@ -69,7 +69,7 @@ export default function App() {
     localStorage.setItem('recept.activePb', id);
   }, []);
 
-  const createProject = useCallback((data: { name: string; client: string; date: string; comment: string }, lines: Project['lines'] = []) => {
+  const createProject = useCallback((data: { name: string; client: string; date: string; comment: string }, lines: Project['lines'] = [], modules?: Project['modules'], moduleDefaults?: Project['moduleDefaults']) => {
     if (!activePricebook) return;
     const p: Project = {
       id: uid('prj'),
@@ -81,6 +81,8 @@ export default function App() {
       pricebookId: activePricebook.meta.id,
       pricebookName: `${activePricebook.meta.name} (импорт ${activePricebook.meta.importedAt.slice(0, 10)})`,
       lines,
+      modules: modules ?? [],
+      moduleDefaults: moduleDefaults ?? {},
       settings: JSON.parse(JSON.stringify(globalSettings)),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -178,8 +180,12 @@ export default function App() {
             onBack={() => setView({ kind: 'dashboard' })}
             onDuplicate={() => duplicateProject(current.id)}
             onDelete={() => deleteProject(current.id)}
+            templates={templates}
+            onSaveModuleTemplate={(name, module) => {
+              persistTemplates([{ id: uid('tpl'), name, comment: 'Шаблон модуля', lines: [], modules: [JSON.parse(JSON.stringify(module))], createdAt: new Date().toISOString() }, ...templates]);
+            }}
             onSaveTemplate={(name) => {
-              persistTemplates([{ id: uid('tpl'), name, comment: '', lines: JSON.parse(JSON.stringify(current.lines)), createdAt: new Date().toISOString() }, ...templates]);
+              persistTemplates([{ id: uid('tpl'), name, comment: '', lines: JSON.parse(JSON.stringify(current.lines)), modules: JSON.parse(JSON.stringify(current.modules ?? [])), moduleDefaults: JSON.parse(JSON.stringify(current.moduleDefaults ?? {})), createdAt: new Date().toISOString() }, ...templates]);
             }}
           />
         )}

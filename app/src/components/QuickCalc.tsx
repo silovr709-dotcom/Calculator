@@ -228,7 +228,7 @@ export default function QuickCalc(props: {
   pricebook: Pricebook;
   templates: Template[];
   onDeleteTemplate: (id: string) => void;
-  onCreateProject: (d: { name: string; client: string; date: string; comment: string }, lines: ProjectLine[]) => void;
+  onCreateProject: (d: { name: string; client: string; date: string; comment: string }, lines: ProjectLine[], modules?: Template['modules'], moduleDefaults?: Template['moduleDefaults']) => void;
 }) {
   const { pricebook } = props;
   const [tab, setTab] = useState<'ctor' | 'templates'>('ctor');
@@ -279,9 +279,9 @@ export default function QuickCalc(props: {
 
   const { totals } = useMemo(() => calcTotals(lines, defaultSettings()), [lines]);
 
-  const create = (lns: ProjectLine[], name: string) => {
+  const create = (lns: ProjectLine[], name: string, modules?: Template['modules'], moduleDefaults?: Template['moduleDefaults']) => {
     props.onCreateProject({ name, client: '', date: todayISO(), comment: 'Создано из быстрого расчёта' },
-      JSON.parse(JSON.stringify(lns)));
+      JSON.parse(JSON.stringify(lns)), modules ? JSON.parse(JSON.stringify(modules)) : undefined, moduleDefaults ? JSON.parse(JSON.stringify(moduleDefaults)) : undefined);
   };
 
   return (
@@ -306,9 +306,9 @@ export default function QuickCalc(props: {
             const tt = calcTotals(t.lines, defaultSettings()).totals;
             return (
               <div className="tpl-row" key={t.id}>
-                <div><b>{t.name}</b><div className="muted small">{t.lines.length} позиций · себестоимость {fmtMoney(tt.cost)}</div></div>
+                <div><b>{t.name}</b><div className="muted small">{(t.modules?.length ?? 0) > 0 ? `${t.modules!.length} модулей + ` : ''}{t.lines.length} строк · себестоимость строк {fmtMoney(tt.cost)}</div></div>
                 <div>
-                  <button className="btn primary" onClick={() => create(t.lines, `${t.name} — новый расчёт`)}>Создать проект</button>
+                  <button className="btn primary" onClick={() => create(t.lines, `${t.name} — новый расчёт`, t.modules, t.moduleDefaults)}>Создать проект</button>
                   <button className="btn tiny danger" onClick={() => props.onDeleteTemplate(t.id)}>✕</button>
                 </div>
               </div>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Pricebook, Project, ProjectLine, PriceItem, LineParams } from '../types';
+import type { Pricebook, Project, ProjectLine, PriceItem, LineParams, Template, KitchenModule } from '../types';
 import { SUMMARY_GROUPS } from '../types';
 import { calcTotals, lineFromItem } from '../lib/engine';
 import { fmtMoney, fmtNum, fmtDate } from '../lib/format';
@@ -19,6 +19,8 @@ export default function ProjectEditor(props: {
   onDuplicate: () => void;
   onDelete: () => void;
   onSaveTemplate: (name: string) => void;
+  templates?: Template[];
+  onSaveModuleTemplate?: (name: string, module: KitchenModule) => void;
 }) {
   const { project, pricebook } = props;
   const [tab, setTab] = useState<'modules' | 'lines' | 'photos' | 'settings' | 'client'>(
@@ -144,7 +146,7 @@ export default function ProjectEditor(props: {
       {tab === 'modules' && (
         <div className="editor-grid">
           <div className="lines-col">
-            <ModulesPanel project={project} pricebook={pricebook} onChange={props.onChange} />
+            <ModulesPanel project={project} pricebook={pricebook} onChange={props.onChange} templates={props.templates} onSaveModuleTemplate={props.onSaveModuleTemplate} />
           </div>
           <TotalsAside totals={totals} project={project} />
         </div>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { KitchenModule, ModuleDefaults, Pricebook, Project, SlotKey } from '../types';
+import type { KitchenModule, ModuleDefaults, Pricebook, Project, SlotKey, Template } from '../types';
 import { MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, modulesSummary, moduleToLines, newModule, resolveSlot, slotNeed } from '../lib/modules';
 import { calcTotals } from '../lib/engine';
 import { fmtMoney, fmtNum } from '../lib/format';
@@ -12,6 +12,8 @@ export default function ModulesPanel(props: {
   project: Project;
   pricebook: Pricebook;
   onChange: (p: Project) => void;
+  templates?: Template[];
+  onSaveModuleTemplate?: (name: string, module: KitchenModule) => void;
 }) {
   const { project, pricebook } = props;
   const mods = project.modules ?? [];
@@ -39,6 +41,16 @@ export default function ModulesPanel(props: {
     setSelId(m.id);
     setAddOpen(false);
   };
+
+  /** Вставка модулей из шаблона: новые id, слоты и надбавки копируются как есть */
+  const insertFromTemplate = (t: Template) => {
+    const copies: KitchenModule[] = (t.modules ?? []).map((x) => ({ ...JSON.parse(JSON.stringify(x)), id: newModule(x.type).id }));
+    if (!copies.length) return;
+    setMods([...mods, ...copies]);
+    setSelId(copies[0].id);
+    setAddOpen(false);
+  };
+  const moduleTemplates = (props.templates ?? []).filter((t) => (t.modules?.length ?? 0) > 0);
 
   const itemName = (id: string | null | undefined) => {
     if (!id) return null;
@@ -86,6 +98,10 @@ export default function ModulesPanel(props: {
             <div className="dropdown-menu static">
               {MODULE_TYPES.map((t) => <button key={t} onClick={() => addModule(t)}>{t}</button>)}
               <button onClick={() => { const t = prompt('Название собственного типа позиции:'); if (t?.trim()) addModule(t.trim()); }}>Свой тип…</button>
+              {moduleTemplates.length > 0 && <div className="menu-sep">Из шаблона:</div>}
+              {moduleTemplates.map((t) => (
+                <button key={t.id} onClick={() => insertFromTemplate(t)}>⧉ {t.name} ({t.modules!.length} мод.)</button>
+              ))}
             </div>
           )}
         </div>
@@ -198,6 +214,13 @@ export default function ModulesPanel(props: {
               );
             })}
           </div>
+          {props.onSaveModuleTemplate && (
+            <div className="mod-tpl-row">
+              <button className="btn tiny ghost" onClick={() => { const n = prompt('Название шаблона модуля:', sel.name); if (n?.trim()) props.onSaveModuleTemplate!(n.trim(), sel); }}>
+                ☆ Сохранить этот модуль как шаблон
+              </button>
+            </div>
+          )}
           <h4>Нестандарт / процентные надбавки (от суммы корпуса — правило прайса)</h4>
           <div className="slot-list">
             {(sel.surcharges ?? []).map((sid) => {

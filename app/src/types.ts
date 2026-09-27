@@ -187,6 +187,9 @@ export interface Template {
   name: string;
   comment: string;
   lines: ProjectLine[];
+  /** Модули «Позиций кухни» (типовой шкаф или целая кухня) */
+  modules?: KitchenModule[];
+  moduleDefaults?: ModuleDefaults;
   createdAt: string;
 }
 
