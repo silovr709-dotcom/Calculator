@@ -3,6 +3,7 @@ import type { Pricebook, Project } from '../types';
 import { calcTotals } from '../lib/engine';
 import { moduleToLines } from '../lib/modules';
 import { fmtMoney, fmtDate, todayISO } from '../lib/format';
+import { downloadFile, makeBackup, restoreBackup } from '../lib/storage';
 
 const STATUS_LABEL: Record<Project['status'], string> = {
   draft: 'Черновик', sent: 'Отправлен', approved: 'Согласован', archived: 'Архив',
@@ -22,6 +23,22 @@ export default function Dashboard(props: {
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ name: '', client: '', date: todayISO(), comment: '' });
   const fileRef = useRef<HTMLInputElement>(null);
+  const backupRef = useRef<HTMLInputElement>(null);
+
+  const doBackup = () => {
+    const b = makeBackup();
+    downloadFile(`recept-backup-${b.exportedAt.slice(0, 10)}.json`, JSON.stringify(b), 'application/json');
+  };
+  const doRestore = async (f: File) => {
+    if (!confirm('Восстановление ЗАМЕНИТ все текущие проекты, шаблоны, настройки и загруженные версии прайса данными из копии. Продолжить?')) return;
+    try {
+      const msg = restoreBackup(await f.text());
+      alert(msg);
+      location.reload();
+    } catch (e) {
+      alert(`Ошибка восстановления: ${(e as Error).message}`);
+    }
+  };
 
   return (
     <div className="page">
@@ -31,7 +48,15 @@ export default function Dashboard(props: {
           <div className="muted">Активный прайс: {props.pricebookLabel}</div>
         </div>
         <div className="actions">
-          <button className="btn ghost" onClick={() => fileRef.current?.click()}>Импорт проекта</button>
+          <div className="dropdown">
+            <button className="btn ghost">Данные ▾</button>
+            <div className="dropdown-menu">
+              <button onClick={doBackup}>⭳ Резервная копия всего (файл .json)</button>
+              <button onClick={() => backupRef.current?.click()}>⭱ Восстановить из копии…</button>
+              <button onClick={() => fileRef.current?.click()}>Импорт одного проекта…</button>
+            </div>
+          </div>
+          <input ref={backupRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) doRestore(f); e.target.value = ''; }} />
           <input ref={fileRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) props.onImport(f); e.target.value = ''; }} />
           <button className="btn ghost" onClick={props.onQuick}>Быстрый расчёт</button>
           <button className="btn primary" onClick={() => setShowNew(true)}>+ Новый расчёт</button>

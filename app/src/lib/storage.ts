@@ -68,3 +68,42 @@ export function downloadFile(filename: string, content: string | Blob, mime = 'a
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
+
+// ---------- Резервная копия всех данных ----------
+
+export interface Backup {
+  kind: 'recept-backup';
+  version: 1;
+  exportedAt: string;
+  projects: Project[];
+  settings: ProjectSettings;
+  templates: Template[];
+  pricebooks: Pricebook[]; // загруженные версии прайса (встроенный не нужен)
+}
+
+export function makeBackup(): Backup {
+  return {
+    kind: 'recept-backup',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    projects: loadProjects(),
+    settings: loadGlobalSettings(),
+    templates: loadTemplates(),
+    pricebooks: loadStoredPricebooks(),
+  };
+}
+
+/** Восстановление из копии. Возвращает описание или бросает ошибку с понятным текстом. */
+export function restoreBackup(raw: string): string {
+  let b: Backup;
+  try { b = JSON.parse(raw); } catch { throw new Error('Файл не является корректным JSON.'); }
+  if (b?.kind !== 'recept-backup' || !Array.isArray(b.projects)) {
+    throw new Error('Это не файл резервной копии РЕцепта (ожидается kind=recept-backup).');
+  }
+  const okP = saveProjects(b.projects);
+  const okS = saveGlobalSettings(b.settings ?? defaultSettings());
+  const okT = saveTemplates(b.templates ?? []);
+  const okB = saveStoredPricebooks(b.pricebooks ?? []);
+  if (!okP || !okS || !okT || !okB) throw new Error('Не хватило места в хранилище браузера — данные восстановлены не полностью.');
+  return `Восстановлено: проектов ${b.projects.length}, шаблонов ${(b.templates ?? []).length}, версий прайса ${(b.pricebooks ?? []).length} (копия от ${b.exportedAt.slice(0, 10)})`;
+}
