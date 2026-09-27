@@ -174,6 +174,8 @@ export interface KitchenModule {
   facadeWmm: number | null;
   facadeHmm: number | null;
   slots: Record<SlotKey, SlotChoice>;
+  /** Процентные надбавки прайса (нестандарт +10/30/50%…), считаются от суммы корпуса */
+  surcharges?: string[];
   note?: string;
 }
 

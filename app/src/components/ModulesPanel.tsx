@@ -20,6 +20,7 @@ export default function ModulesPanel(props: {
   const [addOpen, setAddOpen] = useState(false);
   // выбор в каталоге: для настроек проекта или для слота конкретного модуля
   const [pick, setPick] = useState<{ slot: SlotKey; moduleId: string | null } | null>(null);
+  const [pickSurcharge, setPickSurcharge] = useState(false);
 
   const setMods = (m: KitchenModule[]) => props.onChange({ ...project, modules: m });
   const updMod = (id: string, patch: Partial<KitchenModule>) => setMods(mods.map((m) => (m.id === id ? { ...m, ...patch } : m)));
@@ -197,6 +198,24 @@ export default function ModulesPanel(props: {
               );
             })}
           </div>
+          <h4>Нестандарт / процентные надбавки (от суммы корпуса — правило прайса)</h4>
+          <div className="slot-list">
+            {(sel.surcharges ?? []).map((sid) => {
+              const it = pricebook.items.find((i) => i.id === sid);
+              return (
+                <div className="slot-row" key={sid}>
+                  <div className="slot-label">Надбавка</div>
+                  <div className={it ? 'slot-value' : 'slot-value none'}>
+                    {it ? <>{it.name.slice(0, 70)} — <b>+{it.price}%</b></> : '⚠ позиция не найдена в прайсе'}
+                  </div>
+                  <div className="slot-actions">
+                    <button className="btn tiny danger" onClick={() => updMod(sel.id, { surcharges: (sel.surcharges ?? []).filter((x) => x !== sid) })}>✕</button>
+                  </div>
+                </div>
+              );
+            })}
+            <button className="btn tiny add" onClick={() => setPickSurcharge(true)}>＋ Добавить надбавку (+10/30/50%…)</button>
+          </div>
           {(checks.get(sel.id)!.errors.length > 0 || checks.get(sel.id)!.warnings.length > 0) && (
             <div className="warn-box">
               {checks.get(sel.id)!.errors.map((e, i) => <div key={i}>⛔ {e}</div>)}
@@ -228,6 +247,20 @@ export default function ModulesPanel(props: {
             Сводка: модулей {summary.modules} · фасадов {summary.facades} · ящиков {summary.drawers} · петель {summary.hinges} · ручек {summary.handles} · подъёмников {summary.lifts}
           </div>
         </section>
+      )}
+
+      {pickSurcharge && sel && (
+        <CatalogPicker
+          pricebook={pricebook}
+          pickOnly
+          poolFilter={(i) => i.priceKind === 'percent'}
+          title={`Процентная надбавка — для позиции «${sel.name}» (считается от суммы корпуса)`}
+          onAdd={(item) => {
+            updMod(sel.id, { surcharges: [...(sel.surcharges ?? []), item.id] });
+            setPickSurcharge(false);
+          }}
+          onClose={() => setPickSurcharge(false)}
+        />
       )}
 
       {pick && (

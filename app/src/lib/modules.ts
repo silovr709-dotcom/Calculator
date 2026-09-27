@@ -117,6 +117,14 @@ export function checkModule(m: KitchenModule, defaults: ModuleDefaults, priceboo
     warnings.push('Есть фасады, но не задано ни петель, ни подъёмников, ни ящиков — укажите, на чём открываются');
   if (m.facades > 0 && m.handles === 0)
     warnings.push('Ручки не заданы (0) — подтвердите, если открывание без ручек');
+  if ((m.surcharges?.length ?? 0) > 0) {
+    if (!body.item) errors.push('Заданы процентные надбавки, но не выбран корпус (база для процента)');
+    for (const sid of m.surcharges ?? []) {
+      const it = pricebook.items.find((i) => i.id === sid);
+      if (!it) errors.push('Надбавка: позиция не найдена в прайсе');
+      else if (it.priceKind !== 'percent') errors.push(`«${it.name.slice(0, 40)}» — не процентная позиция`);
+    }
+  }
 
   // выбранные позиции без цены
   (['body', 'facade', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'] as SlotKey[]).forEach((k) => {
@@ -142,7 +150,18 @@ export function moduleToLines(m: KitchenModule, defaults: ModuleDefaults, priceb
 
   const r = (k: SlotKey) => resolveSlot(m, k, defaults, pricebook).item;
 
-  push(r('body'), m.qty);
+  const body = r('body');
+  push(body, m.qty);
+  const bodyLine = out.length > 0 && body ? out[0] : null;
+  // процентные надбавки (нестандарт) — от суммы корпуса, правило прайса
+  for (const sid of m.surcharges ?? []) {
+    const it = pricebook.items.find((i) => i.id === sid);
+    if (!it || it.priceKind !== 'percent' || !bodyLine) continue;
+    const line = lineFromItem(it, pbId, 1);
+    line.baseLineId = bodyLine.id;
+    line.note = `${tag} — от корпуса`;
+    out.push(line);
+  }
   if (m.facades > 0 && m.facadeWmm && m.facadeHmm) {
     push(r('facade'), m.facades * m.qty, { widthMm: m.facadeWmm, heightMm: m.facadeHmm }, `${m.facades} фасада ${m.facadeWmm}×${m.facadeHmm} мм`);
   }

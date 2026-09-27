@@ -72,3 +72,24 @@ describe('модуль → строки расчёта', () => {
     expect(lines.some((l) => l.itemId === unav.id)).toBe(false);
   });
 });
+
+describe('процентные надбавки модуля', () => {
+  it('нестандарт +10% считается от суммы корпуса', () => {
+    const pct = pb.items.find((i) => i.priceKind === 'percent' && i.price === 10)!;
+    const m = newModule('Нижний шкаф');
+    m.slots.body = { mode: 'manual', itemId: corpus224.id };
+    m.surcharges = [pct.id];
+    const lines = moduleToLines(m, {}, pb);
+    expect(lines).toHaveLength(2);
+    const { totals } = calcTotals(lines, defaultSettings());
+    expect(totals.cost).toBeCloseTo(3300 + 330, 2); // руками: 3300 × 10% = 330
+  });
+
+  it('надбавка без корпуса — критическая ошибка, ничего не считается', () => {
+    const pct = pb.items.find((i) => i.priceKind === 'percent' && i.price === 10)!;
+    const m = newModule('Нижний шкаф');
+    m.surcharges = [pct.id];
+    expect(moduleToLines(m, {}, pb)).toHaveLength(0);
+    expect(checkModule(m, {}, pb).errors.join(' ')).toMatch(/корпус/i);
+  });
+});
