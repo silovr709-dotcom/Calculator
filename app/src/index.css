@@ -292,3 +292,51 @@ table.modules tr.sel-row { background: #eef5f0; }
 input.qty.cell { width: 52px; text-align: right; font-size: 12px; padding: 3px 5px; }
 td.dims { white-space: nowrap; color: #7d938a; }
 input.dim { width: 54px; font-size: 11.5px; padding: 3px 4px; text-align: center; margin: 0 1px; }
+
+/* ---- Синхронизация между устройствами ---- */
+.sync-active-box { display: flex; flex-direction: column; gap: 16px; }
+.pin-banner {
+  background: #eef7f4; border: 2px dashed var(--accent); border-radius: 10px;
+  padding: 14px 18px; display: flex; justify-content: space-between; align-items: center;
+}
+.pin-label { font-size: 14px; font-weight: 600; color: #10231f; }
+.pin-code {
+  font-size: 26px; font-weight: 900; letter-spacing: 4px; color: var(--accent);
+  background: #fff; padding: 4px 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.qr-container {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  background: #fff; padding: 18px; border-radius: 10px; border: 1px solid var(--line);
+}
+.qr-image {
+  border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.06); max-width: 100%;
+}
+.qr-hint { margin-top: 10px; font-size: 13px; color: var(--muted); max-width: 380px; }
+.sync-url-box { display: flex; gap: 8px; width: 100%; }
+.sync-url-input {
+  flex: 1; font-size: 12px; background: #f4f6f8; border: 1px solid var(--line);
+  padding: 6px 10px; border-radius: 6px; color: var(--muted);
+}
+.sync-status-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding-top: 12px; border-top: 1px solid var(--line); flex-wrap: wrap;
+}
+.hr-text {
+  text-align: center; position: relative; margin: 16px 0;
+}
+.hr-text::before {
+  content: ""; position: absolute; top: 50%; left: 0; right: 0;
+  height: 1px; background: var(--line); z-index: 1;
+}
+.hr-text span {
+  position: relative; z-index: 2; background: var(--panel); padding: 0 12px;
+  font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 1px;
+}
+.nav-sync-badge {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 6px;
+}
+.nav-sync-badge.synced { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, .8); }
+.nav-sync-badge.syncing { background: #eab308; animation: pulse 1.2s infinite; }
+.nav-sync-badge.offline { background: #94a3b8; }
+@keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+
