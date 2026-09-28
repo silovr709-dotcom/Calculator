@@ -40,7 +40,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment:
-      name: github-pages
+      # Отдельное окружение без правила «только main», чтобы рабочую Arena-ветку
+      # можно было открыть по публичной ссылке до слияния.
+      name: github-pages-preview
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
