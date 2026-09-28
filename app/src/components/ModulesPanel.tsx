@@ -94,6 +94,12 @@ export default function ModulesPanel(props: {
     const outdated = module.facadeSpecStatus === 'outdated' || (body ? isTechnicalFacadeSpecOutdated(module, body) : false);
     return Boolean(body && inference && (empty || outdated));
   }).length, [mods, defaults, pricebook]);
+  const pendingHingeModuleCount = useMemo(() => mods.filter((module) => {
+    if (module.hingeSpecStatus === 'manual') return false;
+    const body = resolveSlot(module, 'body', defaults, pricebook).item;
+    const inference = body ? inferHingeSpec(module, body) : null;
+    return Boolean(body && inference && (module.hingeSpecStatus === 'outdated' || module.hinges !== inference.hinges));
+  }).length, [mods, defaults, pricebook]);
 
   const addModule = (type: string) => {
     const m = newModule(type);
@@ -200,6 +206,15 @@ export default function ModulesPanel(props: {
           });
           setMods(next);
         }}>+ Подставить фасады по техничке ({pendingFacadeModuleCount})</button>}
+        {pendingHingeModuleCount > 0 && <button className="btn ghost" onClick={() => {
+          const next = mods.map((module) => {
+            if (module.hingeSpecStatus === 'manual') return module;
+            const body = resolveSlot(module, 'body', defaults, pricebook).item;
+            const inference = body ? inferHingeSpec(module, body) : null;
+            return inference ? { ...module, hinges: inference.hinges, hingeSpecStatus: 'applied' as const } : module;
+          });
+          setMods(next);
+        }}>+ Подставить петли по техничке ({pendingHingeModuleCount})</button>}
         {allProblems.some((p) => p.critical) && <span className="warn">⛔ есть позиции с неполными данными — см. проверку внизу</span>}
       </div>
 
