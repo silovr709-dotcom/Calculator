@@ -216,6 +216,7 @@ export default function ProjectEditor(props: {
         <ProjectCheckCenter
           project={project}
           pricebook={pricebook}
+          onChange={props.onChange}
           onSelectModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
           onSelectLine={(id) => { setFocusLineId(id); setTab('lines'); window.setTimeout(() => document.getElementById(`project-line-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0); }}
         />
