@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import type { KitchenModule, ModuleDefaults, Pricebook, Project, SlotKey, Template } from '../types';
+import type { KitchenModule, KitchenWall, ModuleDefaults, Pricebook, Project, SlotKey, Template } from '../types';
 import { MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, modulesSummary, moduleToLines, newModule, resolveSlot, slotNeed } from '../lib/modules';
 import { calcTotals } from '../lib/engine';
 import { fmtMoney, fmtNum } from '../lib/format';
+import { LAYOUT_SHAPES, WALL_LABELS, WALL_SHORT_LABELS, layoutWalls, moduleWall, normalizeLayoutShape } from '../lib/kitchenSketch';
 import CatalogPicker from './CatalogPicker';
 import KitchenSketch from './KitchenSketch';
 
@@ -31,6 +32,10 @@ export default function ModulesPanel(props: {
   // выбор в каталоге: для настроек проекта или для слота конкретного модуля
   const [pick, setPick] = useState<{ slot: SlotKey; moduleId: string | null } | null>(null);
   const [pickSurcharge, setPickSurcharge] = useState(false);
+
+  const shape = normalizeLayoutShape(project.sketch?.shape);
+  const walls = layoutWalls(shape);
+  const shapeName = LAYOUT_SHAPES.find((item) => item.id === shape)?.name ?? 'Прямая';
 
   const setMods = (m: KitchenModule[]) => props.onChange({ ...project, modules: m });
   const updMod = (id: string, patch: Partial<KitchenModule>) => setMods(mods.map((m) => (m.id === id ? { ...m, ...patch } : m)));
@@ -122,6 +127,7 @@ export default function ModulesPanel(props: {
           mode="compact"
           modules={mods}
           settings={project.sketch}
+          onSettingsChange={(sketch) => props.onChange({ ...project, sketch })}
           onSelectModule={setSelId}
           onReorder={(id, direction) => {
             const from = mods.findIndex((module) => module.id === id);
@@ -150,7 +156,7 @@ export default function ModulesPanel(props: {
               return (
                 <tr key={m.id} className={`${selId === m.id ? 'sel-row' : ''} ${c.level === 'error' ? 'has-warn' : ''}`} onClick={() => setSelId(m.id === selId ? null : m.id)}>
                   <td className="muted">{idx + 1}</td>
-                  <td><b>{m.name}</b><div className="muted small">{m.type}</div></td>
+                  <td><b>{m.name}</b><div className="muted small">{m.type}{walls.length > 1 ? ` · ${WALL_SHORT_LABELS[moduleWall(m, shape)].toLocaleLowerCase('ru')} стена` : ''}</div></td>
                   <td className="small dims" onClick={(e) => e.stopPropagation()}>
                     <input className="dim" type="number" placeholder="Ш" value={m.widthMm ?? ''} onChange={(e) => updMod(m.id, { widthMm: Number(e.target.value) || null })} />×
                     <input className="dim" type="number" placeholder="В" value={m.heightMm ?? ''} onChange={(e) => updMod(m.id, { heightMm: Number(e.target.value) || null })} />×
@@ -189,6 +195,13 @@ export default function ModulesPanel(props: {
               <datalist id="mod-types">{MODULE_TYPES.map((t) => <option key={t} value={t} />)}</datalist></label>
             <label>Количество<input type="number" min={1} value={sel.qty} onChange={(e) => updMod(sel.id, { qty: Number(e.target.value) || 0 })} /></label>
             <label>Заметка<input value={sel.note ?? ''} onChange={(e) => updMod(sel.id, { note: e.target.value })} /></label>
+            <label>Стена в эскизе
+              <select value={moduleWall(sel, shape)} disabled={walls.length < 2}
+                onChange={(e) => updMod(sel.id, { wall: e.target.value as KitchenWall })}>
+                {walls.map((wall) => <option key={wall} value={wall}>{WALL_LABELS[wall]}</option>)}
+              </select>
+              <span className="muted small">Планировка: {shapeName}{walls.length < 2 ? ' — доступна только задняя стена' : ''}</span>
+            </label>
           </div>
           <h4>Размеры модуля, мм</h4>
           <div className="grid3">
