@@ -11,6 +11,7 @@ import KitchenSketch from './KitchenSketch';
 import WallPlanner from './WallPlanner';
 import BulkEditPanel from './BulkEditPanel';
 import { fillFromAbove } from '../lib/bulkEdit';
+import { KITCHEN_SETS, modulesFromKitchenSet } from '../lib/kitchenSets';
 
 const DEFAULT_SLOTS: SlotKey[] = ['facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf', 'legs'];
 /** Предупреждение → слот, который можно сразу открыть кнопкой-действием. */
@@ -147,10 +148,27 @@ export default function ModulesPanel(props: {
   const filteredPresets = MODULE_PRESETS.filter((preset) => matchAdd(preset.label));
   const filteredTypes = MODULE_TYPES.filter((type) => matchAdd(type));
   const filteredTemplates = moduleTemplates.filter((tpl) => matchAdd(tpl.name));
+  const filteredSets = KITCHEN_SETS.filter((set) => matchAdd(set.name));
   const addFirstMatch = () => {
     if (filteredPresets[0]) addPreset(filteredPresets[0]);
     else if (filteredTypes[0]) addModule(filteredTypes[0]);
+    else if (filteredSets[0]) applyKitchenSet(filteredSets[0]);
     else if (filteredTemplates[0]) insertFromTemplate(filteredTemplates[0]);
+  };
+
+  /** Готовый комплект кухни: добавляет модули и выставляет планировку эскиза. */
+  const applyKitchenSet = (set: (typeof KITCHEN_SETS)[number]) => {
+    const copies = modulesFromKitchenSet(set);
+    if (!copies.length) return;
+    props.onChange({
+      ...project,
+      modules: [...mods, ...copies],
+      sketch: { ...(project.sketch ?? {}), shape: set.shape },
+    });
+    setSelId(copies[0].id);
+    setAddOpen(false);
+    setAddQ('');
+    showToast(`Комплект «${set.name}»: добавлено позиций — ${copies.length}. Корпуса и материалы задайте слотами или «✨ Применить все рекомендации».`);
   };
 
   /** Ctrl+D: скопировать высоту/глубину/опоры/материалы с позиции НАД первой выбранной. */
@@ -265,11 +283,15 @@ export default function ModulesPanel(props: {
               {(addTerms.length === 0 || matchAdd('Свой тип')) && <button onClick={() => { const custom = prompt('Название собственного типа позиции:'); if (custom?.trim()) addModule(custom.trim()); }}>Свой тип…</button>}
               {filteredPresets.length > 0 && <div className="menu-sep">Быстрая конструкция:</div>}
               {filteredPresets.map((preset) => <button key={preset.id} onClick={() => addPreset(preset)}>⚡ {preset.label}</button>)}
+              {filteredSets.length > 0 && <div className="menu-sep">Готовые комплекты:</div>}
+              {filteredSets.map((set) => (
+                <button key={set.id} title={set.description} onClick={() => applyKitchenSet(set)}>🏠 {set.name} ({set.modules.length} поз.)</button>
+              ))}
               {filteredTemplates.length > 0 && <div className="menu-sep">Из шаблона:</div>}
               {filteredTemplates.map((tpl) => (
                 <button key={tpl.id} onClick={() => insertFromTemplate(tpl)}>⧉ {tpl.name} ({tpl.modules!.length} мод.)</button>
               ))}
-              {filteredTypes.length + filteredPresets.length + filteredTemplates.length === 0 && <div className="menu-sep">Ничего не найдено по «{addQ}»</div>}
+              {filteredTypes.length + filteredPresets.length + filteredTemplates.length + filteredSets.length === 0 && <div className="menu-sep">Ничего не найдено по «{addQ}»</div>}
               <div className="menu-sep muted">Меню остаётся открытым — добавляйте позиции серией.</div>
             </div>
           )}
