@@ -1,4 +1,4 @@
-import type { MeasurementPhotoCalibration, Project, ProjectPhoto } from '../types';
+import type { KitchenSketchSettings, KitchenWall, MeasurementData, MeasurementPhotoCalibration, Project, ProjectPhoto } from '../types';
 import { layoutWalls, WALL_LABELS } from './kitchenSketch';
 import { uid } from './storage';
 
@@ -32,9 +32,16 @@ export function calibratedPhotoLengthMm(
   return Math.max(1, Math.round((measured / reference) * calibration.lengthMm));
 }
 
-export function emptyMeasurement(project: Project): import('../types').MeasurementData {
+export function emptyMeasurement(project: Project): MeasurementData {
   const walls = layoutWalls(project.sketch?.shape).map((wall) => ({ id: uid('wall'), name: WALL_LABELS[wall], lengthMm: project.sketch?.wallLengthsMm?.[wall] ?? null }));
   return { roomHeightMm: project.sketch?.roomHeightMm ?? null, walls, openings: [], communications: [], photos: [], notes: '', updatedAt: new Date().toISOString() };
+}
+
+/** Готовит явное перенесение замеренных стен в планировку, не меняя модули и строки расчёта. */
+export function sketchFromMeasurement(data: MeasurementData, current?: KitchenSketchSettings): KitchenSketchSettings {
+  const walls = layoutWalls(current?.shape);
+  const wallLengthsMm = Object.fromEntries(walls.map((wall: KitchenWall, index) => [wall, data.walls[index]?.lengthMm ?? null])) as Partial<Record<KitchenWall, number | null>>;
+  return { ...current, wallLengthsMm, roomHeightMm: data.roomHeightMm };
 }
 
 /** Нормализует старые фотографии, у которых раньше не было поля разметки. */
