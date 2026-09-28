@@ -26,6 +26,8 @@ const mdf16 = pb.items.find((i) => i.group === 'mdf_pvh' && i.attrs['катег�
   && i.attrs['толщина'] === '16мм' && i.name.includes('Квадратный метр'))!; // 3600/м²
 const hinge = byName('Петля Боярд с дов. 90°');          // 170
 const emal = pb.items.find((i) => i.group === 'emal' && i.priceBasis === 'm2' && i.price === 13500)!;
+const glass = pb.items.find((i) => i.category === 'Фасады: Стекло и зеркала' && i.subcategory === 'Стекло' && i.priceKind === 'fixed')!;
+const aluminiumFrame = pb.items.find((i) => i.subcategory === 'Алюм. рамка F1-10')!;
 
 describe('быстрые конструкции', () => {
   it('заполняют только конструкцию и не выбирают корпус или материалы', () => {
@@ -37,6 +39,28 @@ describe('быстрые конструкции', () => {
     expect(module.slots.body.itemId).toBeNull();
     expect(module.slots.facade.itemId).toBeNull();
     expect(module.widthMm).toBeNull();
+  });
+});
+
+describe('стекло и алюминиевая рамка', () => {
+  it('считает рамку отдельной строкой по площади каждого стеклянного фасада', () => {
+    const m = newModule('Верхний шкаф');
+    m.facades = 1; m.facadeWmm = 600; m.facadeHmm = 700;
+    m.slots.facade = { mode: 'manual', itemId: glass.id };
+    m.slots.frame = { mode: 'manual', itemId: aluminiumFrame.id };
+    const lines = moduleToLines(m, {}, pb);
+    expect(lines).toHaveLength(2);
+    expect(lines.map((line) => line.name)).toEqual([glass.name, aluminiumFrame.name]);
+    expect(lines[1].params).toEqual({ widthMm: 600, heightMm: 700 });
+    expect(calcTotals(lines, defaultSettings()).totals.cost).toBeCloseTo(0.42 * (glass.price! + aluminiumFrame.price!), 2);
+  });
+
+  it('не разрешает алюминиевую рамку для не-стеклянного фасада', () => {
+    const m = newModule('Верхний шкаф');
+    m.facades = 1; m.facadeWmm = 600; m.facadeHmm = 700;
+    m.slots.facade = { mode: 'manual', itemId: mdf16.id };
+    m.slots.frame = { mode: 'manual', itemId: aluminiumFrame.id };
+    expect(checkModule(m, {}, pb).errors.join(' ')).toMatch(/рамка.*стекла|стеклу.*зеркалу/i);
   });
 });
 

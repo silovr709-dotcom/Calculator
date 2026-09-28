@@ -486,6 +486,9 @@ refs["souz_decors"] = souz_decors
 ws = wb["Стекло+ал рамка"]
 rows = list(ws.iter_rows(values_only=True))
 sub = "Стекло"
+# Добавляем рамки после основных строк листа, чтобы появление новых позиций
+# не меняло исторические id всех последующих позиций прайса.
+frame_surcharges = []
 for ri, row in enumerate(rows, 1):
     if ri == 1: continue
     name = clean(row[0]) if len(row) > 0 else ""
@@ -494,6 +497,14 @@ for ri, row in enumerate(rows, 1):
     unit = clean(row[3]) if len(row) > 3 else ""
     if not name: continue
     low = name.lower()
+    # В исходном листе доплата за алюминиевую рамку записана отдельной строкой
+    # без цены в колонке C: «к стоимости выбранного стекла/зеркала + 6000
+    # руб/кв.м.». Это не текстовая заметка, а самостоятельная фиксированная
+    # позиция за м², которую можно выбрать дополнительно к стеклу.
+    frame_surcharge = re.search(r"\+\s*(\d+)\s*руб\s*/\s*(?:кв\.?\s*м|м2|м²)", low)
+    if price is None and frame_surcharge:
+        frame_surcharges.append((ri, sub, float(frame_surcharge.group(1))))
+        continue
     if price is None and not size and not unit:
         # заголовок секции
         if "зеркал" in low: sub = "Зеркала"
@@ -645,6 +656,15 @@ except Exception as e:
 # --------------------------------------------------------- Титульный (правила)
 ws = wb["Титульный"]
 notes["Титульный"] = [clean(r[0]) for r in ws.iter_rows(values_only=True) if r and r[0] and clean(r[0])]
+
+# Новые дополнительные позиции добавляем после всех исторических строк, чтобы
+# их появление не меняло id уже используемых позиций в старых проектах.
+for ri, frame_subcategory, frame_price in frame_surcharges:
+    add_item("Стекло+ал рамка", ri, "Фасады: Стекло и зеркала", frame_subcategory,
+             f"{frame_subcategory} — доплата к выбранному стеклу/зеркалу", "м2", frame_price,
+             price_basis="m2",
+             attrs={"тип рамки": frame_subcategory, "расчёт": "доплата к стеклу/зеркалу за м²"},
+             note="Цена исходного прайса указана как доплата к выбранному стеклу/зеркалу.", group="glass")
 
 # ------------------------------------------------------------- пост-проверки
 # дубли артикулов (только числовые арт. каркасов)

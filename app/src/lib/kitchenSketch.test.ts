@@ -12,7 +12,7 @@ function module(type: string, patch: Partial<KitchenModule> = {}): KitchenModule
     facades: 0, drawers: 0, shelves: 0, hinges: 0, handles: 0, lifts: 0,
     facadeWmm: null, facadeHmm: null,
     slots: {
-      body: { mode: 'manual', itemId: null }, facade: { mode: 'default', itemId: null },
+      body: { mode: 'manual', itemId: null }, facade: { mode: 'default', itemId: null }, frame: { mode: 'default', itemId: null },
       hinge: { mode: 'default', itemId: null }, drawerSys: { mode: 'default', itemId: null },
       lift: { mode: 'default', itemId: null }, handle: { mode: 'default', itemId: null }, shelf: { mode: 'default', itemId: null },
     },

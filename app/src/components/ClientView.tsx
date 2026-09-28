@@ -18,6 +18,7 @@ export interface ClientModuleGroup {
 
 function clientLineTitle(line: ProjectLine): string {
   const category = line.category.toLocaleLowerCase('ru-RU');
+  if (line.name.toLocaleLowerCase('ru-RU').startsWith('алюм. рамка')) return `Рамка фасада — ${line.name}`;
   if (category.startsWith('фасады')) return `Фасады — ${line.name}`;
   if (category.includes('петл')) return `Петли — ${line.name}`;
   if (category.includes('системы выдвижения') || /\b(?:тпо|тчо|нпв)\b/iu.test(line.name)) return `ТПО / система ящиков — ${line.name}`;

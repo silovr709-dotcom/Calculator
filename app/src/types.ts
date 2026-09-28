@@ -285,7 +285,7 @@ export interface Project {
 // ---------- Модули («Расчёт проекта») ----------
 
 /** Слоты комплектации модуля. Значение слота — конкретная позиция прайса Висма. */
-export type SlotKey = 'body' | 'facade' | 'hinge' | 'drawerSys' | 'lift' | 'handle' | 'shelf';
+export type SlotKey = 'body' | 'facade' | 'frame' | 'hinge' | 'drawerSys' | 'lift' | 'handle' | 'shelf';
 
 /**
  * Выбор в слоте:

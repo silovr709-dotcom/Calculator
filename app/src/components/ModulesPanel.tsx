@@ -11,8 +11,8 @@ import KitchenSketch from './KitchenSketch';
 import WallPlanner from './WallPlanner';
 import BulkEditPanel from './BulkEditPanel';
 
-const DEFAULT_SLOTS: SlotKey[] = ['facade', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'];
-const ALL_SLOTS: SlotKey[] = ['body', 'facade', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'];
+const DEFAULT_SLOTS: SlotKey[] = ['facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'];
+const ALL_SLOTS: SlotKey[] = ['body', 'facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'];
 const EMPTY_MODULES: KitchenModule[] = [];
 const EMPTY_DEFAULTS: ModuleDefaults = {};
 

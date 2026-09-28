@@ -41,6 +41,7 @@ export const MODULE_PRESETS: ModulePreset[] = [
 export const SLOT_LABELS: Record<SlotKey, string> = {
   body: 'Корпус (каркас из прайса)',
   facade: 'Фасады (материал, цена за м²)',
+  frame: 'Алюминиевая рамка фасада (доплата за м²)',
   hinge: 'Петли (модель)',
   drawerSys: 'Система ящиков',
   lift: 'Подъёмный механизм',
@@ -52,6 +53,7 @@ export const SLOT_LABELS: Record<SlotKey, string> = {
 export const SLOT_POOLS: Record<SlotKey, (i: PriceItem) => boolean> = {
   body: (i) => i.category.startsWith('Корпуса'),
   facade: (i) => i.category.startsWith('Фасады') && i.priceBasis === 'm2',
+  frame: (i) => i.category === 'Фасады: Стекло и зеркала' && Boolean(i.subcategory?.startsWith('Алюм. рамка')) && i.priceBasis === 'm2',
   hinge: (i) => i.category === 'Петли' || (i.category.includes('BLUM') && i.subcategory === 'Петли Blum'),
   drawerSys: (i) => i.category === 'Системы выдвижения' || (i.category.includes('BLUM') && i.subcategory === 'Ящики и направляющие Blum'),
   lift: (i) => i.category === 'Подъёмные механизмы' || (i.category.includes('BLUM') && i.subcategory === 'Aventos'),
@@ -62,6 +64,7 @@ export const SLOT_POOLS: Record<SlotKey, (i: PriceItem) => boolean> = {
 const defaultSlots = (): Record<SlotKey, SlotChoice> => ({
   body: { mode: 'manual', itemId: null }, // корпус всегда индивидуален — из настроек не наследуется
   facade: { mode: 'default', itemId: null },
+  frame: { mode: 'default', itemId: null },
   hinge: { mode: 'default', itemId: null },
   drawerSys: { mode: 'default', itemId: null },
   lift: { mode: 'default', itemId: null },
@@ -226,6 +229,7 @@ export function slotNeed(m: KitchenModule, key: SlotKey): number {
   switch (key) {
     case 'body': return 1;
     case 'facade': return m.facades;
+    case 'frame': return m.facades;
     case 'hinge': return m.hinges;
     case 'drawerSys': return m.drawers;
     case 'lift': return m.lifts;
@@ -276,6 +280,8 @@ export function checkModule(m: KitchenModule, defaults: ModuleDefaults, priceboo
       if (m.facadeParts.length !== m.facades) errors.push(`Размеров фасадов указано ${m.facadeParts.length}, а фасадов в конструкции ${m.facades}`);
       if (m.facadeParts.some((part) => part.widthMm <= 0 || part.heightMm <= 0)) errors.push('В размерах фасадов есть нулевые или отрицательные значения');
     } else if (!m.facadeWmm || !m.facadeHmm) errors.push('Не указан размер фасада (Ш×В, мм) — цена материала за м²');
+    const frame = r('frame').item;
+    if (frame && (!f.item || f.item.category !== 'Фасады: Стекло и зеркала')) errors.push('Алюминиевая рамка выбрана, но материал фасада не относится к стеклу/зеркалу');
   }
   if (m.drawers > 0 && !r('drawerSys').item) errors.push('Указаны ящики, но система выдвижения не выбрана');
   if (m.hinges > 0 && !r('hinge').item) errors.push('Указано количество петель, но модель петли не выбрана');
@@ -296,7 +302,7 @@ export function checkModule(m: KitchenModule, defaults: ModuleDefaults, priceboo
   }
 
   // выбранные позиции без цены
-  (['body', 'facade', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'] as SlotKey[]).forEach((k) => {
+  (['body', 'facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'] as SlotKey[]).forEach((k) => {
     if (slotNeed(m, k) <= 0 && k !== 'body') return;
     const { item } = r(k);
     if (item && item.priceKind !== 'fixed') errors.push(`«${item.name.slice(0, 40)}»: в прайсе нет фиксированной цены (${item.priceKind === 'unavailable' ? 'временно недоступна' : 'цена не число'})`);
@@ -341,10 +347,15 @@ export function moduleToLines(m: KitchenModule, defaults: ModuleDefaults, priceb
   }
   if (m.facadeParts?.length) {
     for (const [index, part] of m.facadeParts.entries()) {
-      push(r('facade'), m.qty, { widthMm: part.widthMm, heightMm: part.heightMm }, `${part.kind === 'drawer' ? 'Фасад ящика' : 'Фасад двери'} ${index + 1}: ${part.widthMm}×${part.heightMm} мм`);
+      const dimensions = { widthMm: part.widthMm, heightMm: part.heightMm };
+      const detail = `${part.kind === 'drawer' ? 'Фасад ящика' : 'Фасад двери'} ${index + 1}: ${part.widthMm}×${part.heightMm} мм`;
+      push(r('facade'), m.qty, dimensions, detail);
+      push(r('frame'), m.qty, dimensions, `Рамка фасада ${index + 1}: ${part.widthMm}×${part.heightMm} мм`);
     }
   } else if (m.facades > 0 && m.facadeWmm && m.facadeHmm) {
-    push(r('facade'), m.facades * m.qty, { widthMm: m.facadeWmm, heightMm: m.facadeHmm }, `${m.facades} фасада ${m.facadeWmm}×${m.facadeHmm} мм`);
+    const dimensions = { widthMm: m.facadeWmm, heightMm: m.facadeHmm };
+    push(r('facade'), m.facades * m.qty, dimensions, `${m.facades} фасада ${m.facadeWmm}×${m.facadeHmm} мм`);
+    push(r('frame'), m.facades * m.qty, dimensions, `${m.facades} алюминиевые рамки ${m.facadeWmm}×${m.facadeHmm} мм`);
   }
   push(r('hinge'), m.hinges * m.qty, undefined, `${m.hinges} петли`);
   push(r('drawerSys'), m.drawers * m.qty, undefined, `${m.drawers} ящика`);

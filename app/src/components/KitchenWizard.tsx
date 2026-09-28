@@ -16,7 +16,7 @@ const STEPS: { id: WizardStepId; label: string; hint: string }[] = [
   { id: 'total', label: 'Итог', hint: 'Стоимость и следующий шаг' },
 ];
 
-const MATERIAL_SLOTS: SlotKey[] = ['facade', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'];
+const MATERIAL_SLOTS: SlotKey[] = ['facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'];
 
 export default function KitchenWizard(props: {
   project: Project;

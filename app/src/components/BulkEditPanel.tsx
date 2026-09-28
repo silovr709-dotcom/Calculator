@@ -4,7 +4,7 @@ import { SLOT_LABELS, SLOT_POOLS } from '../lib/modules';
 import { applyBulkModuleEdits, copyModuleValues, type BulkModulePatch } from '../lib/bulkEdit';
 import CatalogPicker from './CatalogPicker';
 
-const SLOTS: SlotKey[] = ['facade', 'hinge', 'handle', 'drawerSys', 'lift'];
+const SLOTS: SlotKey[] = ['facade', 'frame', 'hinge', 'handle', 'drawerSys', 'lift'];
 type Draft = { widthMm: string; heightMm: string; depthMm: string; wall: KitchenWall; slots: Partial<Record<SlotKey, string | null>> };
 
 export default function BulkEditPanel(props: { modules: KitchenModule[]; selectedIds: string[]; pricebook: Pricebook; onApply: (modules: KitchenModule[]) => void; onClose: () => void }) {

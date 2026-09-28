@@ -5,7 +5,7 @@ import { calculateVariant, createVariant, VARIANT_PRESETS } from '../lib/variant
 import { fmtMoney } from '../lib/format';
 import CatalogPicker from './CatalogPicker';
 
-const VARIANT_SLOTS: SlotKey[] = ['facade', 'hinge', 'drawerSys', 'handle'];
+const VARIANT_SLOTS: SlotKey[] = ['facade', 'frame', 'hinge', 'drawerSys', 'handle'];
 
 export default function VariantsPanel(props: { project: Project; pricebook: Pricebook; onChange: (project: Project) => void }) {
   const { project, pricebook } = props;
