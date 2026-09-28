@@ -35,6 +35,23 @@ describe('обязательный состав кухни', () => {
     expect(result.missing).toHaveLength(0);
   });
 
+  it('подтверждённое отсутствие зафиксировано и не считается недостающим', () => {
+    const result = checkKitchenChecklist([], ['baseboard', 'wallPanel']);
+    expect(result.missing.map((item) => item.key)).toEqual(['plinth', 'worktop']);
+    expect(result.items.find((item) => item.key === 'baseboard')?.confirmed).toBe(true);
+    expect(result.items.find((item) => item.key === 'wallPanel')?.confirmed).toBe(true);
+    expect(result.items.find((item) => item.key === 'worktop')?.confirmed).toBe(false);
+  });
+
+  it('добавленная позиция перевешивает подтверждение отсутствия', () => {
+    const result = checkKitchenChecklist([
+      line('baseboard', 'Плинтус+вставка L=3м', 'Цоколь и длинномеры'),
+    ], ['baseboard']);
+    const baseboard = result.items.find((item) => item.key === 'baseboard')!;
+    expect(baseboard.included).toBe(true);
+    expect(baseboard.confirmed).toBe(false);
+  });
+
   it('пулы чек-листа не смешивают столешницу и стеновую панель', () => {
     expect(checklistPool('worktop', 'Столешницы: Мир Столешниц (постформинг)', 'Столешница 600*3000*38')).toBe(true);
     expect(checklistPool('worktop', 'Столешницы: СОЮЗ (постформинг)', 'Столешница/панель СОЮЗ 600*3000*26 — Classic')).toBe(true);

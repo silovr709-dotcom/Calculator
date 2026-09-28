@@ -40,7 +40,7 @@ export function validateProject(project: Project, pricebook: Pricebook): Project
   if (!project.client.trim()) add({ severity: 'warning', group: 'Проект', entity: 'project', title: 'Не указан клиент', message: 'Клиент не заполнен в данных проекта.', impact: 'Имя заказчика не появится в коммерческом предложении.' });
   if (modules.length === 0 && project.lines.length === 0) add({ severity: 'warning', group: 'Проект', entity: 'project', title: 'Нет позиций', message: 'В проекте пока нет модулей и дополнительных строк.', impact: 'Итоговая цена будет равна нулю.' });
 
-  const checklist = checkKitchenChecklist(lines);
+  const checklist = checkKitchenChecklist(lines, project.checklistConfirmations ?? []);
   for (const item of checklist.missing) add({
     severity: 'error',
     group: 'Обязательный состав кухни',

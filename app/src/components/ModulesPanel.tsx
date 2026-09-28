@@ -11,8 +11,8 @@ import KitchenSketch from './KitchenSketch';
 import WallPlanner from './WallPlanner';
 import BulkEditPanel from './BulkEditPanel';
 
-const DEFAULT_SLOTS: SlotKey[] = ['facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'];
-const ALL_SLOTS: SlotKey[] = ['body', 'facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'];
+const DEFAULT_SLOTS: SlotKey[] = ['facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf', 'legs'];
+const ALL_SLOTS: SlotKey[] = ['body', 'facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf', 'legs'];
 const EMPTY_MODULES: KitchenModule[] = [];
 const EMPTY_DEFAULTS: ModuleDefaults = {};
 
@@ -375,6 +375,7 @@ export default function ModulesPanel(props: {
             <label>Петель, шт<input type="number" min={0} value={sel.hinges} onChange={(e) => updMod(sel.id, { hinges: Number(e.target.value) || 0, hingeSpecStatus: 'manual' })} /></label>
             <label>Ручек, шт<input type="number" min={0} value={sel.handles} onChange={(e) => updMod(sel.id, { handles: Number(e.target.value) || 0 })} /></label>
             <label>Подъёмников, шт<input type="number" min={0} value={sel.lifts} onChange={(e) => updMod(sel.id, { lifts: Number(e.target.value) || 0 })} /></label>
+            <label title="Опоры модуля: у стоящих модулей по умолчанию 4">Опор, шт<input type="number" min={0} value={sel.legs ?? 0} onChange={(e) => updMod(sel.id, { legs: Number(e.target.value) || 0 })} /></label>
           </div>
           {facadeInference && (
             <section className="facade-tech-card">

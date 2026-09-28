@@ -16,6 +16,11 @@ export const MODULE_TYPES = [
   'Другой элемент',
 ] as const;
 
+/** Типы модулей, которые стоят на полу на опорах. Остальные — навесные/декоративные. */
+export function moduleStandsOnFloor(type: string): boolean {
+  return ['Нижний шкаф', 'Пенал', 'Шкаф под мойку', 'Шкаф под духовой шкаф'].includes(type);
+}
+
 /** Быстрые заготовки конструкции без скрытого выбора корпуса и материалов. */
 export interface ModulePreset {
   id: string;
@@ -47,6 +52,7 @@ export const SLOT_LABELS: Record<SlotKey, string> = {
   lift: 'Подъёмный механизм',
   handle: 'Ручки',
   shelf: 'Полка дополнительная',
+  legs: 'Опоры / ножки (модель)',
 };
 
 /** Пулы слотов — ТОЛЬКО реальные категории базы Висма */
@@ -59,6 +65,7 @@ export const SLOT_POOLS: Record<SlotKey, (i: PriceItem) => boolean> = {
   lift: (i) => i.category === 'Подъёмные механизмы' || (i.category.includes('BLUM') && i.subcategory === 'Aventos'),
   handle: (i) => i.category === 'Ручки',
   shelf: (i) => i.category === 'Доп. комплектация каркасов' || i.category.startsWith('Корпуса'),
+  legs: (i) => i.category === 'Опоры и ножки',
 };
 
 const defaultSlots = (): Record<SlotKey, SlotChoice> => ({
@@ -70,6 +77,7 @@ const defaultSlots = (): Record<SlotKey, SlotChoice> => ({
   lift: { mode: 'default', itemId: null },
   handle: { mode: 'default', itemId: null },
   shelf: { mode: 'default', itemId: null },
+  legs: { mode: 'default', itemId: null },
 });
 
 export function newModule(type: string): KitchenModule {
@@ -80,6 +88,8 @@ export function newModule(type: string): KitchenModule {
     qty: 1,
     widthMm: null, heightMm: null, depthMm: null,
     facades: 0, drawers: 0, shelves: 0, hinges: 0, handles: 0, lifts: 0,
+    // стоящие модули сразу получают стандартные 4 опоры; навесные — без опор
+    legs: moduleStandsOnFloor(type) ? 4 : 0,
     facadeWmm: null, facadeHmm: null,
     slots: defaultSlots(),
   };
@@ -111,7 +121,7 @@ export function resolveSlot(
 }
 
 /** Коды проверяемых предупреждений, которые пользователь может подтвердить. */
-export type ModuleWarningCode = 'dims' | 'bodyDrawers' | 'bodyDoors' | 'shelves' | 'opening' | 'handles' | 'dimensionSurcharge';
+export type ModuleWarningCode = 'dims' | 'bodyDrawers' | 'bodyDoors' | 'shelves' | 'opening' | 'handles' | 'dimensionSurcharge' | 'legs';
 
 export interface ModuleWarning {
   code: ModuleWarningCode;
@@ -235,6 +245,7 @@ export function slotNeed(m: KitchenModule, key: SlotKey): number {
     case 'lift': return m.lifts;
     case 'handle': return m.handles;
     case 'shelf': return m.shelves;
+    case 'legs': return m.legs ?? 0;
   }
 }
 
@@ -297,6 +308,9 @@ export function checkModule(m: KitchenModule, defaults: ModuleDefaults, priceboo
   if (m.hinges > 0 && !r('hinge').item) errors.push('Указано количество петель, но модель петли не выбрана');
   if (m.lifts > 0 && !r('lift').item) errors.push('Указаны подъёмники, но механизм не выбран');
   if (m.handles > 0 && !r('handle').item) errors.push('Указаны ручки, но модель не выбрана');
+  if ((m.legs ?? 0) > 0 && !r('legs').item) errors.push('Указано количество опор, но модель опоры не выбрана');
+  if (moduleStandsOnFloor(m.type) && (m.legs ?? 0) === 0)
+    warn('legs', 'Стоящий модуль без опор: обычно нужно 4 — укажите количество и модель, либо подтвердите, что опор нет');
   if (m.shelves > 0 && !r('shelf').item) warn('shelves', 'Полки: если входят в каркас — оставьте как есть; иначе выберите позицию доп. полки');
   if (m.facades > 0 && m.hinges === 0 && m.lifts === 0 && m.drawers === 0)
     warn('opening', 'Есть фасады, но не задано ни петель, ни подъёмников, ни ящиков — укажите, на чём открываются');
@@ -379,6 +393,7 @@ export function moduleToLines(m: KitchenModule, defaults: ModuleDefaults, priceb
   push(r('lift'), m.lifts * m.qty, undefined, `${m.lifts} подъёмника`);
   push(r('handle'), m.handles * m.qty, undefined, `${m.handles} ручки`);
   if (m.shelves > 0) push(r('shelf'), m.shelves * m.qty, undefined, `${m.shelves} полки`);
+  if ((m.legs ?? 0) > 0) push(r('legs'), (m.legs ?? 0) * m.qty, undefined, `${m.legs} опоры`);
   return out;
 }
 

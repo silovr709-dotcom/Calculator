@@ -18,12 +18,16 @@ function matches(key: KitchenChecklistKey, line: ProjectLine): boolean {
   return false;
 }
 
-export function checkKitchenChecklist(lines: ProjectLine[]): KitchenChecklistResult {
+export function checkKitchenChecklist(lines: ProjectLine[], confirmations: KitchenChecklistKey[] = []): KitchenChecklistResult {
+  const affirmed = new Set(confirmations);
   const items = KITCHEN_CHECKLIST.map(({ key, label }) => {
     const lineIds = lines.filter((line) => matches(key, line)).map((line) => line.id);
-    return { key, label, included: lineIds.length > 0, lineIds };
+    const included = lineIds.length > 0;
+    // Если позицию добавили — подтверждение больше ни на что не влияет
+    return { key, label, included, lineIds, confirmed: !included && affirmed.has(key) };
   });
-  return { items, missing: items.filter((item) => !item.included) };
+  // В «недостающие» попадают только не добавленные и не подтверждённые позиции
+  return { items, missing: items.filter((item) => !item.included && !item.confirmed) };
 }
 
 export function checklistPool(key: KitchenChecklistKey, category: string, name: string): boolean {

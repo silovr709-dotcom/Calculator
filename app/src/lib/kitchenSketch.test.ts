@@ -15,6 +15,7 @@ function module(type: string, patch: Partial<KitchenModule> = {}): KitchenModule
       body: { mode: 'manual', itemId: null }, facade: { mode: 'default', itemId: null }, frame: { mode: 'default', itemId: null },
       hinge: { mode: 'default', itemId: null }, drawerSys: { mode: 'default', itemId: null },
       lift: { mode: 'default', itemId: null }, handle: { mode: 'default', itemId: null }, shelf: { mode: 'default', itemId: null },
+      legs: { mode: 'default', itemId: null },
     },
     ...patch,
   };

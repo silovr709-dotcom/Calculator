@@ -247,6 +247,8 @@ export interface KitchenChecklistItem {
   label: string;
   included: boolean;
   lineIds: string[];
+  /** Отсутствие позиции явно подтверждено пользователем (кухня без неё — осознанное решение). */
+  confirmed: boolean;
 }
 
 export interface KitchenChecklistResult {
@@ -278,6 +280,10 @@ export interface Project {
   selectedVariantId?: string;
   clientOffer?: ClientOfferSettings;
   measurement?: MeasurementData;
+  /** Подтверждённые пользователем «сознательные отсутствия» обязательных элементов кухни
+   *  (например, кухня без стеновой панели и без плинтуса). Зафиксированное подтверждение
+   *  снимает ошибку готовности, но остаётся видимым в чек-листе. */
+  checklistConfirmations?: KitchenChecklistKey[];
   createdAt: string;
   updatedAt: string;
 }
@@ -285,7 +291,7 @@ export interface Project {
 // ---------- Модули («Расчёт проекта») ----------
 
 /** Слоты комплектации модуля. Значение слота — конкретная позиция прайса Висма. */
-export type SlotKey = 'body' | 'facade' | 'frame' | 'hinge' | 'drawerSys' | 'lift' | 'handle' | 'shelf';
+export type SlotKey = 'body' | 'facade' | 'frame' | 'hinge' | 'drawerSys' | 'lift' | 'handle' | 'shelf' | 'legs';
 
 /**
  * Выбор в слоте:
@@ -341,6 +347,9 @@ export interface KitchenModule {
   hinges: number;          // петель на модуль, всего
   handles: number;         // ручек на модуль
   lifts: number;           // подъёмных механизмов на модуль
+  /** Опор/ножек на модуль. У новых стоящих модулей — 4 по умолчанию.
+   *  Отсутствие поля (старые проекты) = не задано, выдаётся подсказка-предупреждение. */
+  legs?: number;
   // размер одного фасада (для старых проектов и обратной совместимости)
   facadeWmm: number | null;
   facadeHmm: number | null;
