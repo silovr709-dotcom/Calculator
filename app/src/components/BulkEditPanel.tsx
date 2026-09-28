@@ -1,20 +1,22 @@
 import { useState } from 'react';
-import type { KitchenModule, KitchenWall, Pricebook, SlotKey } from '../types';
+import type { ExtraFacadePart, KitchenModule, KitchenWall, Pricebook, SlotKey } from '../types';
 import { SLOT_LABELS, SLOT_POOLS } from '../lib/modules';
 import { applyBulkModuleEdits, copyModuleValues, type BulkModulePatch } from '../lib/bulkEdit';
 import CatalogPicker from './CatalogPicker';
 
 const SLOTS: SlotKey[] = ['facade', 'frame', 'hinge', 'handle', 'drawerSys', 'lift'];
-type Draft = { widthMm: string; heightMm: string; depthMm: string; wall: KitchenWall; slots: Partial<Record<SlotKey, string | null>> };
+type Draft = { widthMm: string; heightMm: string; depthMm: string; wall: KitchenWall; slots: Partial<Record<SlotKey, string | null>>; extraFacadeParts: ExtraFacadePart[]; surcharges: string[] };
 
 export default function BulkEditPanel(props: { modules: KitchenModule[]; selectedIds: string[]; pricebook: Pricebook; onApply: (modules: KitchenModule[]) => void; onClose: () => void }) {
   const { modules, selectedIds, pricebook } = props;
   const [applyDimensions, setApplyDimensions] = useState(true);
   const [applyWall, setApplyWall] = useState(false);
   const [applySlots, setApplySlots] = useState<SlotKey[]>([]);
+  const [applyExtras, setApplyExtras] = useState(false);
+  const [applySurcharges, setApplySurcharges] = useState(false);
   const [sourceId, setSourceId] = useState(selectedIds[0] ?? '');
   const [pickSlot, setPickSlot] = useState<SlotKey | null>(null);
-  const [draft, setDraft] = useState<Draft>({ widthMm: '', heightMm: '', depthMm: '', wall: 'back', slots: {} });
+  const [draft, setDraft] = useState<Draft>({ widthMm: '', heightMm: '', depthMm: '', wall: 'back', slots: {}, extraFacadeParts: [], surcharges: [] });
   const selected = modules.filter((module) => selectedIds.includes(module.id));
 
   const patchFromDraft = (): BulkModulePatch => {
@@ -26,16 +28,20 @@ export default function BulkEditPanel(props: { modules: KitchenModule[]; selecte
     }
     if (applyWall) patch.wall = draft.wall;
     if (applySlots.length > 0) patch.slots = Object.fromEntries(applySlots.map((slot) => [slot, draft.slots[slot] ?? null])) as Partial<Record<SlotKey, string | null>>;
+    if (applyExtras) patch.extraFacadeParts = draft.extraFacadeParts;
+    if (applySurcharges) patch.surcharges = draft.surcharges;
     return patch;
   };
   const copyValues = () => {
     const source = modules.find((module) => module.id === sourceId);
     if (!source) return;
     const patch = copyModuleValues(source);
-    setDraft({ widthMm: patch.widthMm?.toString() ?? '', heightMm: patch.heightMm?.toString() ?? '', depthMm: patch.depthMm?.toString() ?? '', wall: patch.wall ?? 'back', slots: patch.slots ?? {} });
+    setDraft({ widthMm: patch.widthMm?.toString() ?? '', heightMm: patch.heightMm?.toString() ?? '', depthMm: patch.depthMm?.toString() ?? '', wall: patch.wall ?? 'back', slots: patch.slots ?? {}, extraFacadeParts: patch.extraFacadeParts ?? [], surcharges: patch.surcharges ?? [] });
     setApplyDimensions(true);
     setApplyWall(Boolean(patch.wall));
     setApplySlots(SLOTS);
+    setApplyExtras((patch.extraFacadeParts?.length ?? 0) > 0);
+    setApplySurcharges((patch.surcharges?.length ?? 0) > 0);
   };
   const apply = () => {
     const next = applyBulkModuleEdits(modules, selectedIds, patchFromDraft());
@@ -50,6 +56,8 @@ export default function BulkEditPanel(props: { modules: KitchenModule[]; selecte
       <div className="bulk-options">
         <label className="chk"><input type="checkbox" checked={applyDimensions} onChange={(event) => setApplyDimensions(event.target.checked)} /> размеры</label>
         <label className="chk"><input type="checkbox" checked={applyWall} onChange={(event) => setApplyWall(event.target.checked)} /> стена</label>
+        <label className="chk" title="Отдельные фасадные детали (боковины, накладки) источника заменят списки у выбранных модулей"><input type="checkbox" checked={applyExtras} onChange={(event) => setApplyExtras(event.target.checked)} /> отдельные фасадные детали{applyExtras ? ` (${draft.extraFacadeParts.length})` : ''}</label>
+        <label className="chk" title="Процентные надбавки нестандартных габаритов источника заменят списки у выбранных модулей"><input type="checkbox" checked={applySurcharges} onChange={(event) => setApplySurcharges(event.target.checked)} /> нестандартные надбавки{applySurcharges ? ` (${draft.surcharges.length})` : ''}</label>
       </div>
       <div className="grid3 bulk-dimensions">
         <label>Ширина, мм<input disabled={!applyDimensions} type="number" value={draft.widthMm} placeholder="не менять" onChange={(event) => setDraft({ ...draft, widthMm: event.target.value })} /></label>

@@ -54,6 +54,21 @@ export default function ProjectEditor(props: {
     }
   }, [showQrModal, project]);
 
+  // Горячие клавиши: Ctrl+Z — отмена последнего изменения проекта.
+  // Не перехватываем, когда фокус в поле ввода (там собственный undo текста).
+  const { onUndo, canUndo } = props;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return;
+      e.preventDefault();
+      if (!e.shiftKey && canUndo) onUndo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onUndo, canUndo]);
+
   // строки из модулей («Позиции кухни») + ручные строки — единый расчёт
   const moduleGroups = useMemo(
     () => (project.modules ?? []).map((m) => ({ module: m, lines: moduleToLines(m, project.moduleDefaults ?? {}, pricebook) })),
@@ -120,7 +135,7 @@ export default function ProjectEditor(props: {
             <option value="approved">Согласован</option>
             <option value="archived">Архив</option>
           </select>
-          <button className="btn ghost" disabled={!props.canUndo} title="Отменить последнее изменение проекта" onClick={props.onUndo}>↶ Отменить</button>
+          <button className="btn ghost" disabled={!props.canUndo} title="Отменить последнее изменение проекта (Ctrl+Z)" onClick={props.onUndo}>↶ Отменить</button>
           <div className="dropdown">
             <button className="btn ghost">Экспорт ▾</button>
             <div className="dropdown-menu">

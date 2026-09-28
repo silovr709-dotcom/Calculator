@@ -1,4 +1,4 @@
-import type { KitchenModule, KitchenWall, SlotChoice, SlotKey } from '../types';
+import type { ExtraFacadePart, KitchenModule, KitchenWall, SlotChoice, SlotKey } from '../types';
 
 export interface BulkModulePatch {
   widthMm?: number | null;
@@ -6,6 +6,11 @@ export interface BulkModulePatch {
   depthMm?: number | null;
   wall?: KitchenWall;
   slots?: Partial<Record<SlotKey, string | null>>;
+  /** Отдельные фасадные детали (боковины, накладки) — полностью заменяют список у выбранных модулей. */
+  extraFacadeParts?: ExtraFacadePart[];
+  /** Процентные надбавки нестандартных габаритов — заменяют списки у выбранных модулей. */
+  surcharges?: string[];
+  automaticSurcharges?: string[];
 }
 
 /** Применяет только явно переданные поля к выбранным модулям. */
@@ -37,11 +42,15 @@ export function applyBulkModuleEdits(modules: KitchenModule[], ids: string[], pa
       }
       next.slots = slots;
     }
+    // Пробник копируется глубоко, чтобы правка одного модуля не меняла остальные
+    if (patch.extraFacadeParts) next.extraFacadeParts = JSON.parse(JSON.stringify(patch.extraFacadeParts));
+    if (patch.surcharges) next.surcharges = [...patch.surcharges];
+    if (patch.automaticSurcharges) next.automaticSurcharges = [...patch.automaticSurcharges];
     return next;
   });
 }
 
-/** Копирует размеры, стену и комплектацию источника в другие модули. */
+/** Копирует размеры, стену, комплектацию, отдельные детали и надбавки источника в другие модули. */
 export function copyModuleValues(source: KitchenModule): BulkModulePatch {
   return {
     widthMm: source.widthMm,
@@ -49,5 +58,8 @@ export function copyModuleValues(source: KitchenModule): BulkModulePatch {
     depthMm: source.depthMm,
     wall: source.wall,
     slots: Object.fromEntries(Object.entries(source.slots).map(([key, choice]) => [key, choice.mode === 'manual' ? choice.itemId : null])) as Partial<Record<SlotKey, string | null>>,
+    extraFacadeParts: JSON.parse(JSON.stringify(source.extraFacadeParts ?? [])),
+    surcharges: [...(source.surcharges ?? [])],
+    automaticSurcharges: [...(source.automaticSurcharges ?? [])],
   };
 }

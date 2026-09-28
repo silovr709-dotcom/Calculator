@@ -31,4 +31,27 @@ describe('массовое редактирование модулей', () => {
     expect(patch.slots?.handle).toBe('handle-1');
     expect(patch.slots?.facade).toBeNull();
   });
+
+  it('копирует отдельные фасадные детали и надбавки только выбранным, без общих ссылок', () => {
+    const source = newModule('Пенал');
+    source.extraFacadeParts = [{ widthMm: 596, heightMm: 2100, qty: 1, kind: 'panel', label: 'Боковина', source: 'manual' }];
+    source.surcharges = ['surcharge-10'];
+    const target = newModule('Шкаф');
+    const other = newModule('Тумба');
+    const result = applyBulkModuleEdits([source, target, other], [target.id], copyModuleValues(source));
+    expect(result[1].extraFacadeParts).toEqual(source.extraFacadeParts);
+    expect(result[1].surcharges).toEqual(['surcharge-10']);
+    expect(result[2].extraFacadeParts).toBeUndefined();
+    // глубокое копирование: изменение копии не трогает источник
+    result[1].extraFacadeParts![0].widthMm = 400;
+    expect(source.extraFacadeParts![0].widthMm).toBe(596);
+    expect(result[0]).toBe(source);
+  });
+
+  it('отдельные детали можно снять массово пустым списком', () => {
+    const target = newModule('Шкаф');
+    target.extraFacadeParts = [{ widthMm: 596, heightMm: 2100, qty: 1, kind: 'panel', label: 'Боковина', source: 'manual' }];
+    const result = applyBulkModuleEdits([target], [target.id], { extraFacadeParts: [] });
+    expect(result[0].extraFacadeParts).toEqual([]);
+  });
 });

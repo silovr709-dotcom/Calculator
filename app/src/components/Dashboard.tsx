@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Pricebook, Project } from '../types';
 import { calcTotals } from '../lib/engine';
 import { moduleToLines } from '../lib/modules';
@@ -23,6 +23,7 @@ export default function Dashboard(props: {
   const [form, setForm] = useState({ name: '', client: '', date: todayISO(), comment: '' });
   const fileRef = useRef<HTMLInputElement>(null);
   const backupRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<DashboardStatusFilter>('all');
   const [readinessFilter, setReadinessFilter] = useState<DashboardReadinessFilter>('all');
@@ -38,6 +39,24 @@ export default function Dashboard(props: {
         : readinessById.get(project.id)?.tone !== 'ready'));
     return sortDashboardProjects(filtered, sortOrder);
   }, [props.projects, query, statusFilter, readinessFilter, readinessById, sortOrder]);
+
+  // Горячие клавиши списка проектов: «/» — фокус на поиск, «N» — новый расчёт.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return;
+      if (e.key === '/') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      } else if (e.key.toLowerCase() === 'n' || e.key.toLowerCase() === 'т') {
+        e.preventDefault();
+        setShowNew(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const doBackup = () => {
     const b = makeBackup();
@@ -112,7 +131,7 @@ export default function Dashboard(props: {
         <>
           <div className="dashboard-filters card">
             <label className="dashboard-search">Поиск проекта или клиента
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Название, клиент, комментарий…" />
+              <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Название, клиент, комментарий…" />
             </label>
             <label>Статус
               <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as DashboardStatusFilter)}>
@@ -139,6 +158,7 @@ export default function Dashboard(props: {
               </select>
             </label>
             <span className="muted small dashboard-filter-count">Показано: {filteredProjects.length} из {props.projects.length}</span>
+            <span className="muted small dashboard-hotkeys" title="Горячие клавиши">⌨ / — поиск · N — новый расчёт</span>
             {(query || statusFilter !== 'all' || readinessFilter !== 'all' || sortOrder !== 'updated-desc') && <button className="btn tiny ghost" onClick={() => { setQuery(''); setStatusFilter('all'); setReadinessFilter('all'); setSortOrder('updated-desc'); }}>Сбросить</button>}
           </div>
           {filteredProjects.length === 0 ? <div className="empty">По выбранным фильтрам проекты не найдены.</div> : <table className="table">

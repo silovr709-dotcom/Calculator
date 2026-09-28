@@ -317,7 +317,7 @@ export default function ModulesPanel(props: {
                   <td className="num">{fmtMoney(costs.get(m.id) ?? 0)}</td>
                   <td>{statusDot(c.level)}</td>
                   <td>
-                    <button className="btn tiny ghost" title="Дублировать" onClick={(e) => { e.stopPropagation(); const cp = { ...JSON.parse(JSON.stringify(m)), id: newModule(m.type).id, name: `${m.name} (копия)` }; setMods([...mods, cp]); }}>⧉</button>
+                    <button className="btn tiny ghost" title="Дублировать" onClick={(e) => { e.stopPropagation(); const cp = { ...JSON.parse(JSON.stringify(m)), id: newModule(m.type).id, name: `${m.name} (копия)` }; setMods([...mods, cp]); setSelId(cp.id); }}>⧉</button>
                     <button className="btn tiny danger" title="Удалить" onClick={(e) => { e.stopPropagation(); setMods(mods.filter((x) => x.id !== m.id)); if (selId === m.id) setSelId(null); }}>✕</button>
                   </td>
                 </tr>
