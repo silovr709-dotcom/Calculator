@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Pricebook, Project, ProjectSettings, Template } from './types';
+import type { Pricebook, Project, ProjectSettings, Template, KbArticle } from './types';
 import {
   loadGlobalSettings, saveGlobalSettings,
   loadProjects, saveProjects, loadTemplates, saveTemplates,
-  loadStoredPricebooks, saveStoredPricebooks, uid,
-} from './lib/storage';
+  loadStoredPricebooks, saveStoredPricebooks, uid, loadKbArticles, saveKbArticles } from './lib/storage';
 import {
   loadSyncConfig, saveSyncConfig, performFullSync, parseIncomingHash,
   pushToCloud,
@@ -18,11 +17,15 @@ import SettingsPanel from './components/SettingsPanel';
 import PricebookView from './components/PricebookView';
 import QuickCalc from './components/QuickCalc';
 import SyncPanel from './components/SyncPanel';
+import FactoryBlankView from './components/FactoryBlankView';
+import KnowledgeView from './components/KnowledgeView';
 
 type View =
   | { kind: 'dashboard' }
   | { kind: 'project'; id: string }
   | { kind: 'quick' }
+  | { kind: 'factory'; id?: string }
+  | { kind: 'kb' }
   | { kind: 'settings' }
   | { kind: 'pricebook' }
   | { kind: 'sync' };
@@ -37,7 +40,8 @@ export default function App() {
   const [activePricebookId, setActivePricebookId] = useState<string>(() => localStorage.getItem('recept.activePb') ?? 'visma-2026');
   const [view, setView] = useState<View>({ kind: 'dashboard' });
   const [savedFlash, setSavedFlash] = useState(false);
-  const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig());
+    const [kbArticles, setKbArticles] = useState<KbArticle[]>(() => loadKbArticles());
+const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig());
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => (loadSyncConfig().enabled ? 'synced' : 'idle'));
   const [projectHistory] = useState(() => new ProjectHistory());
 
@@ -136,7 +140,11 @@ export default function App() {
     }
   }, []);
 
-  const persistTemplates = useCallback((next: Template[]) => {
+    const persistKb = useCallback((next: KbArticle[]) => {
+    setKbArticles(next);
+    saveKbArticles(next);
+  }, []);
+const persistTemplates = useCallback((next: Template[]) => {
     setTemplates(next);
     saveTemplates(next);
     const cfg = loadSyncConfig();
@@ -188,6 +196,7 @@ export default function App() {
     };
     persistProjects([p, ...projects]);
     setView({ kind: 'project', id: p.id });
+
   }, [activePricebook, globalSettings, projects, persistProjects]);
 
   const updateProject = useCallback((p: Project) => {
@@ -252,6 +261,7 @@ export default function App() {
         <div className="brand">
           <div className="brand-name">РЕцепт</div>
           <div className="brand-sub">калькулятор кухонь · Висма</div>
+          <div className="brand-pro">PRO</div>
         </div>
         <nav>
           <button className={view.kind === 'dashboard' ? 'active' : ''} onClick={() => setView({ kind: 'dashboard' })}>
@@ -259,6 +269,12 @@ export default function App() {
           </button>
           <button className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>
             <span className="nav-icon">⚡</span>Быстрый расчёт
+          </button>
+          <button className={view.kind === 'factory' ? 'active' : ''} onClick={() => setView({ kind: 'factory' })}>
+            <span className="nav-icon">📋</span>Бланк на фабрику
+          </button>
+          <button className={view.kind === 'kb' ? 'active' : ''} onClick={() => setView({ kind: 'kb' })}>
+            <span className="nav-icon">📚</span>База знаний<span className="nav-count">{kbArticles.length}</span>
           </button>
           <button className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => setView({ kind: 'pricebook' })}>
             <span className="nav-icon">🧾</span>Прайс и версии
@@ -327,6 +343,7 @@ export default function App() {
             onDuplicate={() => duplicateProject(current.id)}
             onDelete={() => deleteProject(current.id)}
             templates={templates}
+            onOpenFactoryBlank={() => setView({ kind: 'factory', id: current.id })}
             onSaveModuleTemplate={(name, module) => {
               persistTemplates([{ id: uid('tpl'), name, comment: 'Шаблон модуля', lines: [], modules: [JSON.parse(JSON.stringify(module))], createdAt: new Date().toISOString() }, ...templates]);
             }}
@@ -343,6 +360,18 @@ export default function App() {
             onDeleteTemplate={(id) => persistTemplates(templates.filter((t) => t.id !== id))}
             onCreateProject={createProject}
           />
+        )}
+        {view.kind === 'factory' && (
+          <FactoryBlankView
+            projects={projects}
+            pricebooks={pricebooks}
+            initialProjectId={view.kind === 'factory' ? view.id : undefined}
+            onOpenProject={(id) => setView({ kind: 'project', id })}
+            onChangeProject={updateProject}
+          />
+        )}
+        {view.kind === 'kb' && (
+          <KnowledgeView articles={kbArticles} onChange={persistKb} />
         )}
         {view.kind === 'settings' && (
           <SettingsPanel

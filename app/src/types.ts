@@ -299,6 +299,9 @@ export interface Project {
    *  (например, кухня без стеновой панели и без плинтуса). Зафиксированное подтверждение
    *  снимает ошибку готовности, но остаётся видимым в чек-листе. */
   checklistConfirmations?: KitchenChecklistKey[];
+  /** Черновики бланков на фабрику: ключ — id спецификации бланка, значения — введённые/отредактированные поля.
+   *  Значения, совпадающие с автоподстановкой из калькулятора, не хранятся (единый источник — проект). */
+  factoryBlankDrafts?: Record<string, Record<string, string>>;
   createdAt: string;
   updatedAt: string;
 }
@@ -429,3 +432,36 @@ export interface Totals {
   marginPct: number | null;      // маржинальность = наценка / цена клиента
   unpricedCount: number;  // строк без цены
 }
+
+// ---------- База знаний РЕцепта ----------
+
+/** Категории базы знаний. Список открытый — новые категории добавляются без миграций. */
+export type KbCategory =
+  | 'instructions'        // инструкции
+  | 'calc-rules'          // правила расчёта
+  | 'factories'           // информация по фабрикам
+  | 'materials'           // материалы
+  | 'facades'             // фасады
+  | 'hardware'            // фурнитура
+  | 'tech-requirements'   // технические требования
+  | 'order-forms'         // правила оформления заказов
+  | 'regulations'         // внутренние инструкции РЕцепта
+  | 'faq';                // ответы на частые вопросы
+
+/** Статья базы знаний. Самодостаточный документ с метаданными — позже ложится в AI-поиск как чанк. */
+export interface KbArticle {
+  id: string;
+  title: string;
+  category: KbCategory;
+  tags: string[];
+  /** Текст статьи (простой markdown-подобный текст). */
+  body: string;
+  /** Необязательная ссылка на документ репозитория/файл (документы и рабочие материалы). */
+  attachment?: string;
+  updatedAt: string; // ISO
+}
+
+// ---------- Бланк на фабрику ----------
+
+/** Источник значения поля бланка. */
+export type FactoryFieldSource = 'project' | 'manual' | 'dict';

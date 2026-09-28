@@ -790,3 +790,67 @@ input.dim { width: 54px; font-size: 11.5px; padding: 3px 4px; text-align: center
 }
 .variant-delta { font-size: .82rem; color: #7a6b9e; margin: -4px 0 8px; }
 .variant-delta.best { color: #1d7a4f; font-weight: 600; }
+
+/* ===== РЕцепт PRO: финансы, база знаний, бланк на фабрику ===== */
+.brand { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.brand-pro {
+  font-size: 11px; font-weight: 800; letter-spacing: .08em;
+  background: linear-gradient(135deg, #f5c76d, #e8a13c);
+  color: #2b1c05; border-radius: 6px; padding: 1px 7px; align-self: center;
+}
+
+.finance-strip {
+  display: flex; gap: 26px; flex-wrap: wrap; align-items: center;
+  padding: 12px 18px; margin-bottom: 14px;
+}
+.fin-item { display: flex; flex-direction: column; gap: 2px; }
+.fin-item span { font-size: 12px; color: var(--muted, #6b7a73); }
+.fin-item b { font-size: 17px; }
+.fin-item.warn { color: #8a5a00; font-weight: 600; align-self: center; gap: 0; font-size: 14px; }
+
+.blank-controls { display: flex; gap: 16px; flex-wrap: wrap; align-items: end; margin-bottom: 14px; }
+.blank-controls label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; min-width: 220px; }
+
+.blank-issues h3 { margin-top: 0; }
+.blank-issues ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.blank-issue { font-size: 14px; line-height: 1.4; }
+.blank-issues { border-left: 4px solid #d4654f; }
+.blank-issues.ok { border-left-color: #3d9b6c; }
+.blank-issues.ok .blank-issue { color: #256947; }
+.blank-bad { color: #b3261e; }
+
+.blank-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px 16px; }
+.blank-field { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.blank-label { display: flex; gap: 6px; align-items: center; font-weight: 600; }
+.blank-req { color: #b3261e; }
+.blank-src { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 8px; white-space: nowrap; }
+.blank-src.project { background: #dbe9ff; color: #1f4c8f; }
+.blank-src.draft { background: #d8f3e0; color: #1c6b3d; }
+.blank-src.empty { background: #eceae4; color: #807a6e; }
+.blank-field textarea { font-size: 13px; min-height: 34px; }
+.blank-field.required textarea:placeholder-shown { border-color: #d4a29a; }
+
+.kb-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+.kb-card h3 { margin: 0; font-size: 15px; }
+.kb-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.kb-head .actions { flex-shrink: 0; }
+.kb-meta { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; align-items: center; }
+.kb-chip { background: #e7f0ec; color: #20513c; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 9px; }
+.kb-tag { color: #4d7c68; font-size: 12px; }
+.kb-body { font-size: 13px; line-height: 1.5; white-space: pre-wrap; margin: 4px 0 6px; }
+
+/* Печать бланка: экранных элементов нет, только печатная форма */
+.blank-print { display: none; }
+@media print {
+  .sidebar, .no-print, .page-head.no-print { display: none !important; }
+  .app { display: block; }
+  .main { margin: 0; padding: 0; }
+  .blank-section, .blank-controls, .blank-issues, .card { display: none !important; }
+  .blank-print { display: block; color: #000; font-size: 12px; }
+  .blank-print h2 { font-size: 17px; margin: 0 0 2px; }
+  .blank-print-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+  .blank-print-table th, .blank-print-table td { border: 1px solid #333; padding: 3px 6px; text-align: left; vertical-align: top; }
+  .blank-print-table th { background: #efefef; font-size: 12px; }
+  .blank-print-label { width: 34%; font-weight: 600; }
+}
+@media screen { .blank-print { display: none; } }

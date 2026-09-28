@@ -4,6 +4,7 @@ import { calcTotals } from '../lib/engine';
 import { moduleToLines } from '../lib/modules';
 import { fmtMoney, fmtDate, todayISO } from '../lib/format';
 import { downloadFile, makeBackup, restoreBackup } from '../lib/storage';
+import { projectFinance } from '../lib/finance';
 import { filterDashboardProjects, projectReadiness, sortDashboardProjects, type DashboardReadinessFilter, type DashboardSort, type DashboardStatusFilter } from '../lib/dashboard';
 
 export default function Dashboard(props: {
@@ -39,6 +40,24 @@ export default function Dashboard(props: {
         : readinessById.get(project.id)?.tone !== 'ready'));
     return sortDashboardProjects(filtered, sortOrder);
   }, [props.projects, query, statusFilter, readinessFilter, readinessById, sortOrder]);
+
+  // Финсводка РЕцепт PRO: считается из тех же итогов проектов (calcTotals), видимых в списке.
+  const portfolio = useMemo(() => {
+    const finances = filteredProjects.map((p) => {
+      const pb = props.pricebooks.find((x) => x.meta.id === p.pricebookId) ?? props.pricebooks[0];
+      return pb ? projectFinance(p, pb) : null;
+    }).filter((f): f is NonNullable<typeof f> => f !== null);
+    return {
+      projectsCount: finances.length,
+      revenue: finances.reduce((s, f) => s + f.clientPrice, 0),
+      cost: finances.reduce((s, f) => s + f.cost, 0),
+      grossProfit: finances.reduce((s, f) => s + f.grossProfit, 0),
+      marginPct: finances.reduce((s, f) => s + f.clientPrice, 0) > 0
+        ? (finances.reduce((s, f) => s + f.grossProfit, 0) / finances.reduce((s, f) => s + f.clientPrice, 0)) * 100
+        : null,
+      unpricedProjects: finances.filter((f) => f.unpricedCount > 0).length,
+    };
+  }, [filteredProjects, props.pricebooks]);
 
   // Горячие клавиши списка проектов: «/» — фокус на поиск, «N» — новый расчёт.
   useEffect(() => {
@@ -160,6 +179,13 @@ export default function Dashboard(props: {
             <span className="muted small dashboard-filter-count">Показано: {filteredProjects.length} из {props.projects.length}</span>
             <span className="muted small dashboard-hotkeys" title="Горячие клавиши">⌨ / — поиск · N — новый расчёт</span>
             {(query || statusFilter !== 'all' || readinessFilter !== 'all' || sortOrder !== 'updated-desc') && <button className="btn tiny ghost" onClick={() => { setQuery(''); setStatusFilter('all'); setReadinessFilter('all'); setSortOrder('updated-desc'); }}>Сбросить</button>}
+          </div>
+          <div className="card finance-strip" title="Финансовая сводка по показанным проектам — считается из тех же итогов, что видны в карточках">
+            <div className="fin-item"><span>Выручка (цена клиента)</span><b>{fmtMoney(portfolio.revenue)}</b></div>
+            <div className="fin-item"><span>Расходы (себест.+доп.)</span><b>{fmtMoney(portfolio.cost)}</b></div>
+            <div className="fin-item"><span>Валовая прибыль</span><b>{fmtMoney(portfolio.grossProfit)}</b></div>
+            <div className="fin-item"><span>Маржинальность</span><b>{portfolio.marginPct === null ? '—' : `${portfolio.marginPct.toFixed(1)} %`}</b></div>
+            {portfolio.unpricedProjects > 0 && <div className="fin-item warn" title="В этих проектах есть позиции без цены — проверьте расчёт">⚠ без цен: {portfolio.unpricedProjects}</div>}
           </div>
           {filteredProjects.length === 0 ? <div className="empty">По выбранным фильтрам проекты не найдены.</div> : <table className="table">
             <thead>

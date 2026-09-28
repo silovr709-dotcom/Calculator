@@ -32,6 +32,7 @@ export default function ProjectEditor(props: {
   onSaveTemplate: (name: string) => void;
   templates?: Template[];
   onSaveModuleTemplate?: (name: string, module: KitchenModule) => void;
+  onOpenFactoryBlank?: () => void;
 }) {
   const { project, pricebook } = props;
   const [tab, setTab] = useState<'modules' | 'sketch' | 'lines' | 'photos' | 'settings' | 'client' | 'check' | 'variants' | 'measurement'>(
@@ -146,6 +147,9 @@ export default function ProjectEditor(props: {
               <button onClick={() => setShowQrModal(true)}>📱 Открыть на телефоне (QR-код)</button>
             </div>
           </div>
+          {props.onOpenFactoryBlank && (
+            <button className="btn ghost" title="Калькулятор → данные проекта → бланк → проверка → документ" onClick={props.onOpenFactoryBlank}>📋 Бланк на фабрику</button>
+          )}
           <button className="btn ghost" title="Открыть этот проект на телефоне" onClick={() => setShowQrModal(true)}>📱 На телефон</button>
           <button className="btn ghost" onClick={props.onDuplicate}>Дублировать</button>
           <button className="btn ghost" onClick={() => { const n = prompt('Название шаблона:', project.name); if (n) props.onSaveTemplate(n); }}>В шаблон</button>
