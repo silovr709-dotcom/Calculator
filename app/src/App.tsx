@@ -282,6 +282,10 @@ export default function App() {
             onCreate={createProject}
             onDuplicate={duplicateProject}
             onDelete={deleteProject}
+            onStatusChange={(id, status) => {
+              const project = projects.find((item) => item.id === id);
+              if (project) updateProject({ ...project, status });
+            }}
             onImport={importProject}
             onQuick={() => setView({ kind: 'quick' })}
             onOpenSync={() => setView({ kind: 'sync' })}

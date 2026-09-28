@@ -3,6 +3,8 @@ import { moduleToLines } from './modules';
 import { validateProject } from './validation';
 
 export type DashboardStatusFilter = Project['status'] | 'all';
+export type DashboardReadinessFilter = 'all' | 'problem' | 'ready';
+export type DashboardSort = 'updated-desc' | 'updated-asc' | 'name' | 'client';
 
 /** Фильтры списка проектов не меняют порядок и не мутируют исходный массив. */
 export function filterDashboardProjects(
@@ -16,6 +18,17 @@ export function filterDashboardProjects(
     if (!needle) return true;
     return [project.name, project.client, project.comment]
       .some((value) => value.toLocaleLowerCase('ru-RU').includes(needle));
+  });
+}
+
+export function sortDashboardProjects(projects: Project[], sort: DashboardSort): Project[] {
+  return [...projects].sort((left, right) => {
+    if (sort === 'name') return left.name.localeCompare(right.name, 'ru-RU');
+    if (sort === 'client') return left.client.localeCompare(right.client, 'ru-RU') || left.name.localeCompare(right.name, 'ru-RU');
+    const leftDate = sort === 'updated-desc' || sort === 'updated-asc' ? left.updatedAt : left.createdAt;
+    const rightDate = sort === 'updated-desc' || sort === 'updated-asc' ? right.updatedAt : right.createdAt;
+    const direction = sort === 'updated-asc' ? 1 : -1;
+    return direction * (leftDate.localeCompare(rightDate));
   });
 }
 

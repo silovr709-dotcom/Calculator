@@ -4,11 +4,7 @@ import { calcTotals } from '../lib/engine';
 import { moduleToLines } from '../lib/modules';
 import { fmtMoney, fmtDate, todayISO } from '../lib/format';
 import { downloadFile, makeBackup, restoreBackup } from '../lib/storage';
-import { filterDashboardProjects, projectReadiness, type DashboardStatusFilter } from '../lib/dashboard';
-
-const STATUS_LABEL: Record<Project['status'], string> = {
-  draft: 'Черновик', sent: 'Отправлен', approved: 'Согласован', archived: 'Архив',
-};
+import { filterDashboardProjects, projectReadiness, sortDashboardProjects, type DashboardReadinessFilter, type DashboardSort, type DashboardStatusFilter } from '../lib/dashboard';
 
 export default function Dashboard(props: {
   projects: Project[];
@@ -18,6 +14,7 @@ export default function Dashboard(props: {
   onCreate: (d: { name: string; client: string; date: string; comment: string }) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
+  onStatusChange: (id: string, status: Project['status']) => void;
   onImport: (f: File) => void;
   onQuick: () => void;
   onOpenSync?: () => void;
@@ -28,10 +25,19 @@ export default function Dashboard(props: {
   const backupRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<DashboardStatusFilter>('all');
-  const filteredProjects = useMemo(
-    () => filterDashboardProjects(props.projects, query, statusFilter),
-    [props.projects, query, statusFilter],
-  );
+  const [readinessFilter, setReadinessFilter] = useState<DashboardReadinessFilter>('all');
+  const [sortOrder, setSortOrder] = useState<DashboardSort>('updated-desc');
+  const readinessById = useMemo(() => new Map(props.projects.map((project) => {
+    const pricebook = props.pricebooks.find((item) => item.meta.id === project.pricebookId) ?? props.pricebooks[0] ?? null;
+    return [project.id, projectReadiness(project, pricebook)] as const;
+  })), [props.projects, props.pricebooks]);
+  const filteredProjects = useMemo(() => {
+    const filtered = filterDashboardProjects(props.projects, query, statusFilter)
+      .filter((project) => readinessFilter === 'all' || (readinessFilter === 'ready'
+        ? readinessById.get(project.id)?.tone === 'ready'
+        : readinessById.get(project.id)?.tone !== 'ready'));
+    return sortDashboardProjects(filtered, sortOrder);
+  }, [props.projects, query, statusFilter, readinessFilter, readinessById, sortOrder]);
 
   const doBackup = () => {
     const b = makeBackup();
@@ -117,8 +123,23 @@ export default function Dashboard(props: {
                 <option value="archived">Архив</option>
               </select>
             </label>
+            <label>Готовность
+              <select value={readinessFilter} onChange={(event) => setReadinessFilter(event.target.value as DashboardReadinessFilter)}>
+                <option value="all">Все проекты</option>
+                <option value="problem">Есть проблемы</option>
+                <option value="ready">Готовы к КП</option>
+              </select>
+            </label>
+            <label>Сортировка
+              <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value as DashboardSort)}>
+                <option value="updated-desc">Сначала изменённые</option>
+                <option value="updated-asc">Сначала старые</option>
+                <option value="name">По названию</option>
+                <option value="client">По клиенту</option>
+              </select>
+            </label>
             <span className="muted small dashboard-filter-count">Показано: {filteredProjects.length} из {props.projects.length}</span>
-            {(query || statusFilter !== 'all') && <button className="btn tiny ghost" onClick={() => { setQuery(''); setStatusFilter('all'); }}>Сбросить</button>}
+            {(query || statusFilter !== 'all' || readinessFilter !== 'all' || sortOrder !== 'updated-desc') && <button className="btn tiny ghost" onClick={() => { setQuery(''); setStatusFilter('all'); setReadinessFilter('all'); setSortOrder('updated-desc'); }}>Сбросить</button>}
           </div>
           {filteredProjects.length === 0 ? <div className="empty">По выбранным фильтрам проекты не найдены.</div> : <table className="table">
             <thead>
@@ -140,7 +161,14 @@ export default function Dashboard(props: {
                     <td>{fmtMoney(totals.cost)}</td>
                     <td><b>{fmtMoney(totals.client)}</b></td>
                     <td><span className={`readiness-pill ${readiness.tone}`} title={readiness.detail}>{readiness.label}</span></td>
-                    <td><span className={`status s-${p.status}`}>{STATUS_LABEL[p.status]}</span></td>
+                    <td onClick={(event) => event.stopPropagation()}>
+                      <select className={`status-inline s-${p.status}`} value={p.status} aria-label={`Статус проекта «${p.name}»`} onChange={(event) => props.onStatusChange(p.id, event.target.value as Project['status'])}>
+                        <option value="draft">Черновик</option>
+                        <option value="sent">Отправлен</option>
+                        <option value="approved">Согласован</option>
+                        <option value="archived">Архив</option>
+                      </select>
+                    </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <button className="btn tiny ghost" title="Дублировать" onClick={() => props.onDuplicate(p.id)}>⧉</button>
                       <button className="btn tiny danger" title="Удалить" onClick={() => props.onDelete(p.id)}>✕</button>
