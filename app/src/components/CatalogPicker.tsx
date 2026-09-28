@@ -15,6 +15,8 @@ export default function CatalogPicker(props: {
   /** Ограничение пула (напр. только петли) */
   poolFilter?: (i: PriceItem) => boolean;
   title?: string;
+  /** Стартовая «нужная длина» в мм (напр. из замера стен) — подставляется в lm/sheet-параметры. */
+  initialLengthMm?: number | null;
 }) {
   const { pricebook } = props;
   const poolItems = useMemo(
@@ -30,8 +32,8 @@ export default function CatalogPicker(props: {
   const [qty, setQty] = useState(1);
   const [w, setW] = useState<string>(''); const [h, setH] = useState<string>('');
   const [area, setArea] = useState<string>('');
-  const [len, setLen] = useState<string>('');
-  const [needLen, setNeedLen] = useState<string>(''); // подбор хлыстов
+  const [len, setLen] = useState<string>(props.initialLengthMm ? String(props.initialLengthMm) : '');
+  const [needLen, setNeedLen] = useState<string>(props.initialLengthMm ? String(props.initialLengthMm) : ''); // подбор хлыстов
   const [recentIds, setRecentIds] = useState<string[]>(() => loadRecentItems());
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -95,7 +97,15 @@ export default function CatalogPicker(props: {
   }, [results]);
 
   const select = (it: PriceItem) => {
-    setSel(it); setQty(1); setW(''); setH(''); setArea(''); setLen(''); setNeedLen('');
+    setSel(it); setW(''); setH(''); setArea('');
+    // «нужная длина» для хлыстов сохраняется между позициями: удобно сравнивать
+    // столешницы одной и той же длины — листы/полхлыста пересчитываются сразу
+    if (it.priceBasis === 'sheet' && needLen) {
+      setQty(sheetsFromLength(Number(needLen) || 0, sheetLengthOf(it), unitIsHalfSheetAllowed(it.unit)));
+    } else {
+      setLen(props.initialLengthMm ? String(props.initialLengthMm) : '');
+      setQty(1);
+    }
   };
 
   const params: LineParams = useMemo(() => {

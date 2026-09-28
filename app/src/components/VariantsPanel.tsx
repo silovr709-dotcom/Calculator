@@ -3,7 +3,7 @@ import type { CalculationVariant, Pricebook, Project, SlotKey } from '../types';
 import { SLOT_LABELS, SLOT_POOLS } from '../lib/modules';
 import { checklistPool, lineMatchesChecklistKey } from '../lib/checklist';
 import { calculateVariant, createVariant, VARIANT_PRESETS } from '../lib/variants';
-import { fmtMoney } from '../lib/format';
+import { fmtMoney, fmtNum } from '../lib/format';
 import CatalogPicker from './CatalogPicker';
 
 const VARIANT_SLOTS: SlotKey[] = ['facade', 'frame', 'hinge', 'drawerSys', 'handle'];
@@ -29,17 +29,28 @@ export default function VariantsPanel(props: { project: Project; pricebook: Pric
   };
 
   const prices = new Map(variants.map((variant) => [variant.id, calculateVariant(project, pricebook, variant)]));
+  const clientTotals = variants.map((variant) => prices.get(variant.id)!.totals.client);
+  const minClient = clientTotals.length > 0 ? Math.min(...clientTotals) : 0;
+  const maxClient = clientTotals.length > 0 ? Math.max(...clientTotals) : 0;
   if (variants.length === 0) return <section className="card variants-empty"><h3>Варианты расчёта</h3><p className="muted">Сравните «Эконом», «Стандарт» и «Премиум», не меняя основной состав проекта.</p><button className="btn primary" onClick={createPresets}>Создать 3 варианта</button></section>;
 
   return (
     <div className="variants-panel">
       <div className="variants-toolbar"><div><h2>Варианты расчёта</h2><p className="muted small">Значения варианта используются только для сравнения. Основной проект не меняется, пока вы не выберете вариант для КП.</p></div><button className="btn ghost" onClick={addVariant}>+ Добавить вариант</button></div>
+      {variants.length > 1 && (
+        <div className="variant-range">💲 Разбег цен: <b>{fmtMoney(minClient)}</b> … <b>{fmtMoney(maxClient)}</b> · разница <b>{fmtMoney(maxClient - minClient)}</b>{minClient > 0 ? ` (+${fmtNum(((maxClient - minClient) / minClient) * 100, 1)}%)` : ''}</div>
+      )}
       <div className="variant-grid">{variants.map((variant) => {
         const calculated = prices.get(variant.id)!;
         const selected = project.selectedVariantId === variant.id;
         return <section className={`card variant-card ${selected ? 'selected' : ''}`} key={variant.id}>
           <div className="variant-card-head"><div><input className="variant-name" value={variant.name} onChange={(event) => updateVariant(variant.id, { name: event.target.value })} /><input className="variant-description" value={variant.description} placeholder="Описание для клиента" onChange={(event) => updateVariant(variant.id, { description: event.target.value })} /></div><button className="btn tiny danger" onClick={() => removeVariant(variant.id)}>Удалить</button></div>
           <div className="variant-prices"><div><span>Себестоимость</span><b>{fmtMoney(calculated.totals.cost)}</b></div><div><span>Цена клиента</span><b>{fmtMoney(calculated.totals.client)}</b></div></div>
+          {variants.length > 1 && (
+            calculated.totals.client === minClient
+              ? <div className="variant-delta best">✓ минимальная цена среди вариантов</div>
+              : <div className="variant-delta">дороже минимума на {fmtMoney(calculated.totals.client - minClient)}{minClient > 0 ? ` (+${fmtNum(((calculated.totals.client - minClient) / minClient) * 100, 1)}%)` : ''}</div>
+          )}
           <div className="variant-composition"><b>Состав: {calculated.lines.length} строк</b><span>{(project.modules ?? []).length} модулей · {project.lines.length} доп. позиций</span></div>
           <h4>Фасады и фурнитура</h4>
           <div className="variant-slots">{VARIANT_SLOTS.map((slot) => { const item = pricebook.items.find((candidate) => candidate.id === variant.slotOverrides[slot]); return <div className="variant-slot" key={slot}><span>{SLOT_LABELS[slot]}</span><b className={item ? '' : 'muted'}>{item?.name ?? 'Без переопределения'}</b><button className="btn tiny" onClick={() => setPick({ variantId: variant.id, slot })}>Выбрать</button>{item && <button className="btn tiny ghost" onClick={() => updateVariant(variant.id, { slotOverrides: { ...variant.slotOverrides, [slot]: null } })}>✕</button>}</div>; })}</div>

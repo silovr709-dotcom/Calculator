@@ -1,4 +1,4 @@
-import type { KitchenChecklistKey, KitchenChecklistResult, ProjectLine } from '../types';
+import type { KitchenChecklistKey, KitchenChecklistResult, KitchenWall, ProjectLine } from '../types';
 
 export const KITCHEN_CHECKLIST: { key: KitchenChecklistKey; label: string; hint: string }[] = [
   { key: 'plinth', label: 'Цоколь', hint: 'Цоколь ПВХ или фасадный цоколь' },
@@ -41,4 +41,14 @@ export function checklistPool(key: KitchenChecklistKey, category: string, name: 
     && !(text.includes('стеновая панель') || /панель.*\*4|\*4.*панель/i.test(text))
     && !text.includes('планк');
   return false;
+}
+
+/**
+ * Подсказка длины для позиций чек-листа (столешница, стеновая, плинтус, цоколь):
+ * сумма измеренных длин стен в мм. null — замер не задан, подсказывать нечего.
+ */
+export function checklistLengthHint(wallLengths?: Partial<Record<KitchenWall, number | null>> | null): number | null {
+  if (!wallLengths) return null;
+  const values = Object.values(wallLengths).filter((v): v is number => typeof v === 'number' && v > 0);
+  return values.length > 0 ? Math.round(values.reduce((a, b) => a + b, 0)) : null;
 }

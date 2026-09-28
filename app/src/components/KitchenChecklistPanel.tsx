@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import type { KitchenChecklistKey, Pricebook, Project } from '../types';
-import { checkKitchenChecklist, checklistPool, KITCHEN_CHECKLIST } from '../lib/checklist';
+import { checkKitchenChecklist, checklistLengthHint, checklistPool, KITCHEN_CHECKLIST } from '../lib/checklist';
 import { lineFromItem } from '../lib/engine';
 import CatalogPicker from './CatalogPicker';
 
 export default function KitchenChecklistPanel(props: { project: Project; pricebook: Pricebook; onChange: (project: Project) => void }) {
   const [pickKey, setPickKey] = useState<KitchenChecklistKey | null>(null);
+  // подсказка длины из замера стен эскиза: столешница/стеновая/плинтус по периметру кухни
+  const lengthHint = checklistLengthHint(props.project.sketch?.wallLengthsMm);
   const result = useMemo(
     () => checkKitchenChecklist(props.project.lines, props.project.checklistConfirmations ?? []),
     [props.project.lines, props.project.checklistConfirmations],
@@ -48,12 +50,12 @@ export default function KitchenChecklistPanel(props: { project: Project; pricebo
       {pickKey && (
         <CatalogPicker
           pricebook={props.pricebook}
-          pickOnly
           poolFilter={(item) => checklistPool(pickKey, item.category, item.name)}
-          title={`Чек-лист: ${KITCHEN_CHECKLIST.find((item) => item.key === pickKey)?.label ?? ''}`}
-          onAdd={(item) => {
+          initialLengthMm={lengthHint}
+          title={`Чек-лист: ${KITCHEN_CHECKLIST.find((item) => item.key === pickKey)?.label ?? ''}${lengthHint ? ` · длина из замера стен: ${lengthHint} мм` : ''} — проверьте количество и параметры`}
+          onAdd={(item, qty, params) => {
             const label = KITCHEN_CHECKLIST.find((candidate) => candidate.key === pickKey)?.label ?? 'обязательная позиция';
-            const line = lineFromItem(item, props.pricebook.meta.id, 1);
+            const line = lineFromItem(item, props.pricebook.meta.id, qty, params);
             line.note = `Чек-лист кухни: ${label}`;
             props.onChange({ ...props.project, lines: [...props.project.lines, line] });
             setPickKey(null);
