@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { Pricebook, ModuleDefaults } from '../types';
-import { newModule, moduleToLines, checkModule, resolveSlot, parseBodyDrawers, parseBodyDoors } from './modules';
+import { newModule, moduleToLines, checkModule, moveModule, resolveSlot, parseBodyDrawers, parseBodyDoors, setWarningConfirmed, isWarningConfirmed } from './modules';
 import { calcTotals } from './engine';
 import { defaultSettings } from './storage';
 
@@ -222,3 +222,90 @@ describe('сверка названия корпуса с конструкцие
   });
 });
 
+
+describe('подтверждение предупреждений и порядок модулей', () => {
+  const completeModuleWithHandleWarning = () => {
+    const m = newModule('Нижний шкаф');
+    m.widthMm = 600; m.heightMm = 720; m.depthMm = 560;
+    m.slots.body = { mode: 'manual', itemId: corpus224.id };
+    m.facades = 2; m.facadeWmm = 296; m.facadeHmm = 716;
+    m.hinges = 2;
+    m.slots.facade = { mode: 'manual', itemId: mdf16.id };
+    m.slots.hinge = { mode: 'manual', itemId: hinge.id };
+    return m;
+  };
+
+  it('возвращает код handles и разделяет открытые и подтверждённые предупреждения', () => {
+    const m = completeModuleWithHandleWarning();
+    const before = checkModule(m, {}, pb);
+    expect(before.openWarnings).toEqual([{ code: 'handles', text: 'Ручки не заданы (0) — подтвердите, если открывание без ручек' }]);
+    expect(before.confirmedWarnings).toHaveLength(0);
+    expect(before.warnings).toEqual([before.openWarnings[0].text]);
+
+    const confirmed = setWarningConfirmed(m, 'handles', true);
+    const after = checkModule(confirmed, {}, pb);
+    expect(after.level).toBe('ok');
+    expect(after.warnings).toHaveLength(0);
+    expect(after.confirmedWarnings[0].code).toBe('handles');
+  });
+
+  it('отмена подтверждения снова открывает предупреждение', () => {
+    const m = completeModuleWithHandleWarning();
+    const confirmed = setWarningConfirmed(m, 'handles', true);
+    const cancelled = setWarningConfirmed(confirmed, 'handles', false);
+    expect(isWarningConfirmed(cancelled, 'handles')).toBe(false);
+    expect(checkModule(cancelled, {}, pb).warnings).toContain('Ручки не заданы (0) — подтвердите, если открывание без ручек');
+  });
+
+  it('подтверждение предупреждения не скрывает критическую ошибку', () => {
+    const m = completeModuleWithHandleWarning();
+    m.drawers = 1;
+    const confirmed = setWarningConfirmed(m, 'handles', true);
+    const c = checkModule(confirmed, {}, pb);
+    expect(c.level).toBe('error');
+    expect(c.errors.some((error) => /система выдвижения/i.test(error))).toBe(true);
+    expect(c.confirmedWarnings.map((warning) => warning.code)).toContain('handles');
+    expect(c.openWarnings).toHaveLength(0);
+  });
+
+  it('старый модуль без confirmations проверяется как раньше', () => {
+    const m = completeModuleWithHandleWarning();
+    expect(m.confirmations).toBeUndefined();
+    expect(isWarningConfirmed(m, 'handles')).toBe(false);
+    const c = checkModule(m, {}, pb);
+    expect(c.level).toBe('warn');
+    expect(c.warnings).toContain('Ручки не заданы (0) — подтвердите, если открывание без ручек');
+  });
+
+  it('перемещает модуль на один шаг вниз и вверх', () => {
+    const modules = [newModule('A'), newModule('B'), newModule('C')];
+    const down = moveModule(modules, modules[0].id, 1);
+    expect(down.map((m) => m.type)).toEqual(['B', 'A', 'C']);
+    const up = moveModule(down, modules[0].id, -1);
+    expect(up.map((m) => m.type)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('перемещает модуль на произвольную позицию', () => {
+    const modules = [newModule('A'), newModule('B'), newModule('C'), newModule('D')];
+    const moved = moveModule(modules, modules[0].id, 3);
+    expect(moved.map((m) => m.type)).toEqual(['B', 'C', 'D', 'A']);
+  });
+
+  it('возвращает тот же массив на границах списка и для отсутствующего id', () => {
+    const modules = [newModule('A'), newModule('B')];
+    expect(moveModule(modules, modules[0].id, -1)).toBe(modules);
+    expect(moveModule(modules, modules[1].id, 1)).toBe(modules);
+    expect(moveModule(modules, 'missing', 0)).toBe(modules);
+    expect(moveModule(modules, modules[0].id, 5)).toBe(modules);
+  });
+
+  it('не мутирует исходный массив при перемещении', () => {
+    const modules = [newModule('A'), newModule('B'), newModule('C')];
+    const original = [...modules];
+    const moved = moveModule(modules, modules[2].id, 0);
+    expect(moved).not.toBe(modules);
+    expect(modules).toEqual(original);
+    expect(moved[0].id).toBe(original[2].id);
+    expect(moved[1]).toBe(original[0]);
+  });
+});
