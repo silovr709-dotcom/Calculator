@@ -36,7 +36,10 @@ export function suggestWallLayouts(
   maxResults = 24,
 ): WallLayoutPlan[] {
   if (!Number.isFinite(wallLengthMm) || wallLengthMm <= 0) return [];
-  const usable = candidates.filter((candidate) => candidate.widthMm != null && candidate.widthMm > 0 && candidate.availableQty > 0);
+  const usable = candidates.filter((candidate) => candidate.widthMm != null
+    && candidate.widthMm > 0
+    && candidate.availableQty > 0
+    && (candidate.wall == null || candidate.wall === wall));
   const mandatory = new Set(mandatoryIds);
   if (mandatoryIds.some((id) => !usable.some((candidate) => candidate.id === id))) return [];
 
