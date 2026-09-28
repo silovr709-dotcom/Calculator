@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { Pricebook, Project } from '../types';
 import { calcTotals } from '../lib/engine';
 import { moduleToLines } from '../lib/modules';
 import { fmtMoney, fmtDate, todayISO } from '../lib/format';
 import { downloadFile, makeBackup, restoreBackup } from '../lib/storage';
+import { filterDashboardProjects, type DashboardStatusFilter } from '../lib/dashboard';
 
 const STATUS_LABEL: Record<Project['status'], string> = {
   draft: 'Черновик', sent: 'Отправлен', approved: 'Согласован', archived: 'Архив',
@@ -25,6 +26,12 @@ export default function Dashboard(props: {
   const [form, setForm] = useState({ name: '', client: '', date: todayISO(), comment: '' });
   const fileRef = useRef<HTMLInputElement>(null);
   const backupRef = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<DashboardStatusFilter>('all');
+  const filteredProjects = useMemo(
+    () => filterDashboardProjects(props.projects, query, statusFilter),
+    [props.projects, query, statusFilter],
+  );
 
   const doBackup = () => {
     const b = makeBackup();
@@ -96,34 +103,52 @@ export default function Dashboard(props: {
           Пока нет проектов. Нажмите <b>«Новый расчёт»</b>, чтобы собрать первую кухню, или <b>«Быстрый расчёт»</b> для предварительной оценки.
         </div>
       ) : (
-        <table className="table">
-          <thead>
-            <tr><th>Название</th><th>Клиент</th><th>Дата</th><th>Позиций</th><th>Себестоимость</th><th>Цена клиента</th><th>Статус</th><th /></tr>
-          </thead>
-          <tbody>
-            {props.projects.map((p) => {
-              // строки из модулей («Позиции кухни») входят в итог наравне с ручными строками
-              const pb = props.pricebooks.find((x) => x.meta.id === p.pricebookId) ?? props.pricebooks[0];
-              const modLines = pb ? (p.modules ?? []).flatMap((m) => moduleToLines(m, p.moduleDefaults ?? {}, pb)) : [];
-              const { totals } = calcTotals([...modLines, ...p.lines], p.settings);
-              return (
-                <tr key={p.id} className="row-click" onClick={() => props.onOpen(p.id)}>
-                  <td><b>{p.name}</b>{p.comment && <div className="muted small">{p.comment}</div>}</td>
-                  <td>{p.client || '—'}</td>
-                  <td>{fmtDate(p.date)}</td>
-                  <td>{(p.modules?.length ?? 0) > 0 ? `${p.modules!.length} мод. + ${p.lines.length}` : p.lines.length}</td>
-                  <td>{fmtMoney(totals.cost)}</td>
-                  <td><b>{fmtMoney(totals.client)}</b></td>
-                  <td><span className={`status s-${p.status}`}>{STATUS_LABEL[p.status]}</span></td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <button className="btn tiny ghost" title="Дублировать" onClick={() => props.onDuplicate(p.id)}>⧉</button>
-                    <button className="btn tiny danger" title="Удалить" onClick={() => props.onDelete(p.id)}>✕</button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <>
+          <div className="dashboard-filters card">
+            <label className="dashboard-search">Поиск проекта или клиента
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Название, клиент, комментарий…" />
+            </label>
+            <label>Статус
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as DashboardStatusFilter)}>
+                <option value="all">Все статусы</option>
+                <option value="draft">Черновики</option>
+                <option value="sent">Отправлены</option>
+                <option value="approved">Согласованы</option>
+                <option value="archived">Архив</option>
+              </select>
+            </label>
+            <span className="muted small dashboard-filter-count">Показано: {filteredProjects.length} из {props.projects.length}</span>
+            {(query || statusFilter !== 'all') && <button className="btn tiny ghost" onClick={() => { setQuery(''); setStatusFilter('all'); }}>Сбросить</button>}
+          </div>
+          {filteredProjects.length === 0 ? <div className="empty">По выбранным фильтрам проекты не найдены.</div> : <table className="table">
+            <thead>
+              <tr><th>Название</th><th>Клиент</th><th>Дата</th><th>Позиций</th><th>Себестоимость</th><th>Цена клиента</th><th>Статус</th><th /></tr>
+            </thead>
+            <tbody>
+              {filteredProjects.map((p) => {
+                // строки из модулей («Позиции кухни») входят в итог наравне с ручными строками
+                const pb = props.pricebooks.find((x) => x.meta.id === p.pricebookId) ?? props.pricebooks[0];
+                const modLines = pb ? (p.modules ?? []).flatMap((m) => moduleToLines(m, p.moduleDefaults ?? {}, pb)) : [];
+                const { totals } = calcTotals([...modLines, ...p.lines], p.settings);
+                return (
+                  <tr key={p.id} className="row-click" onClick={() => props.onOpen(p.id)}>
+                    <td><b>{p.name}</b>{p.comment && <div className="muted small">{p.comment}</div>}</td>
+                    <td>{p.client || '—'}</td>
+                    <td>{fmtDate(p.date)}</td>
+                    <td>{(p.modules?.length ?? 0) > 0 ? `${p.modules!.length} мод. + ${p.lines.length}` : p.lines.length}</td>
+                    <td>{fmtMoney(totals.cost)}</td>
+                    <td><b>{fmtMoney(totals.client)}</b></td>
+                    <td><span className={`status s-${p.status}`}>{STATUS_LABEL[p.status]}</span></td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <button className="btn tiny ghost" title="Дублировать" onClick={() => props.onDuplicate(p.id)}>⧉</button>
+                      <button className="btn tiny danger" title="Удалить" onClick={() => props.onDelete(p.id)}>✕</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>}
+        </>
       )}
     </div>
   );
