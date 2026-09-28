@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Project } from '../types';
-import { filterDashboardProjects } from './dashboard';
+import { filterDashboardProjects, projectReadiness } from './dashboard';
 
 const project = (overrides: Partial<Project>): Project => ({
   id: 'id', name: 'Проект', client: '', date: '2026-09-28', comment: '', status: 'draft',
@@ -30,5 +30,11 @@ describe('фильтры списка проектов', () => {
     expect(result.map((item) => item.id)).toEqual(['1', '2', '3']);
     expect(result).not.toBe(projects);
     expect(projects.map((item) => item.id)).toEqual(['1', '2', '3']);
+  });
+
+  it('показывает отсутствие версии прайса отдельным состоянием', () => {
+    const result = projectReadiness(projects[0], null);
+    expect(result.tone).toBe('error');
+    expect(result.label).toBe('Нет прайса');
   });
 });

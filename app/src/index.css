@@ -49,6 +49,10 @@ body { background: var(--bg); color: var(--text); font-size: 14px; }
 .dashboard-filters .dashboard-search { flex:1 1 280px; }
 .dashboard-filters .dashboard-search input { min-width:220px; }
 .dashboard-filter-count { margin-left:auto; padding-bottom:7px; }
+.readiness-pill { display:inline-block; padding:3px 7px; border-radius:999px; font-size:11px; font-weight:700; white-space:nowrap; }
+.readiness-pill.ready { background:#e2f4e9; color:#18723e; }
+.readiness-pill.warning { background:#fff0d1; color:#946115; }
+.readiness-pill.error { background:#ffe4e1; color:#a52f28; }
 .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }

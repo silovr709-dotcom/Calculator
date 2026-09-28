@@ -4,7 +4,7 @@ import { calcTotals } from '../lib/engine';
 import { moduleToLines } from '../lib/modules';
 import { fmtMoney, fmtDate, todayISO } from '../lib/format';
 import { downloadFile, makeBackup, restoreBackup } from '../lib/storage';
-import { filterDashboardProjects, type DashboardStatusFilter } from '../lib/dashboard';
+import { filterDashboardProjects, projectReadiness, type DashboardStatusFilter } from '../lib/dashboard';
 
 const STATUS_LABEL: Record<Project['status'], string> = {
   draft: 'Черновик', sent: 'Отправлен', approved: 'Согласован', archived: 'Архив',
@@ -122,7 +122,7 @@ export default function Dashboard(props: {
           </div>
           {filteredProjects.length === 0 ? <div className="empty">По выбранным фильтрам проекты не найдены.</div> : <table className="table">
             <thead>
-              <tr><th>Название</th><th>Клиент</th><th>Дата</th><th>Позиций</th><th>Себестоимость</th><th>Цена клиента</th><th>Статус</th><th /></tr>
+              <tr><th>Название</th><th>Клиент</th><th>Дата</th><th>Позиций</th><th>Себестоимость</th><th>Цена клиента</th><th>Готовность</th><th>Статус</th><th /></tr>
             </thead>
             <tbody>
               {filteredProjects.map((p) => {
@@ -130,6 +130,7 @@ export default function Dashboard(props: {
                 const pb = props.pricebooks.find((x) => x.meta.id === p.pricebookId) ?? props.pricebooks[0];
                 const modLines = pb ? (p.modules ?? []).flatMap((m) => moduleToLines(m, p.moduleDefaults ?? {}, pb)) : [];
                 const { totals } = calcTotals([...modLines, ...p.lines], p.settings);
+                const readiness = projectReadiness(p, pb ?? null);
                 return (
                   <tr key={p.id} className="row-click" onClick={() => props.onOpen(p.id)}>
                     <td><b>{p.name}</b>{p.comment && <div className="muted small">{p.comment}</div>}</td>
@@ -138,6 +139,7 @@ export default function Dashboard(props: {
                     <td>{(p.modules?.length ?? 0) > 0 ? `${p.modules!.length} мод. + ${p.lines.length}` : p.lines.length}</td>
                     <td>{fmtMoney(totals.cost)}</td>
                     <td><b>{fmtMoney(totals.client)}</b></td>
+                    <td><span className={`readiness-pill ${readiness.tone}`} title={readiness.detail}>{readiness.label}</span></td>
                     <td><span className={`status s-${p.status}`}>{STATUS_LABEL[p.status]}</span></td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <button className="btn tiny ghost" title="Дублировать" onClick={() => props.onDuplicate(p.id)}>⧉</button>
