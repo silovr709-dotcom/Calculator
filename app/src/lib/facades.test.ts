@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { Pricebook } from '../types';
 import { newModule, moduleToLines } from './modules';
-import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec } from './facades';
+import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalFacadeSpecOutdated } from './facades';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pb: Pricebook = JSON.parse(readFileSync(join(here, '../../public/data/pricebook-visma-2026.json'), 'utf8'));
@@ -28,6 +28,35 @@ describe('размеры фасадов по техничке Висмы', () =>
     expect(result.parts.map((part) => [part.kind, part.widthMm, part.heightMm])).toEqual([
       ['drawer', 146, 176], ['door', 146, 536],
     ]);
+  });
+
+  it('для стола с 3 ящиками сохраняет ширину всех фасадов и техническую разбивку 176+176+356', () => {
+    const result = inferFacadeSpec(newModule('Нижний шкаф'), body('251'))!;
+    expect(result.parts.map((part) => [part.widthMm, part.heightMm, part.kind])).toEqual([
+      [196, 176, 'drawer'], [196, 176, 'drawer'], [196, 356, 'drawer'],
+    ]);
+    expect(result.confidence).toBe('exact');
+  });
+
+  it('для нестандартной высоты пересчитывает нижний фасад и помечает рекомендацию', () => {
+    const result = inferFacadeSpec({ ...newModule('Нижний шкаф'), heightMm: 800 }, body('251'))!;
+    expect(result.parts.map((part) => part.heightMm)).toEqual([176, 176, 436]);
+    expect(result.confidence).toBe('suggestion');
+  });
+
+  it('видит устаревшую техническую разбивку даже без статуса outdated', () => {
+    const applied = applyTechnicalFacadeSpec(newModule('Нижний шкаф'), body('251'));
+    const changed = { ...applied, widthMm: 650, facadeSpecStatus: undefined };
+    expect(isTechnicalFacadeSpecOutdated(changed, body('251'))).toBe(true);
+    expect(isTechnicalFacadeSpecOutdated(applied, body('251'))).toBe(false);
+    const refreshed = applyTechnicalFacadeSpec(changed, body('251'));
+    expect(refreshed.facadeParts?.map((part) => part.widthMm)).toEqual([212, 212, 212]);
+    expect(refreshed.facadeSpecStatus).toBe('applied');
+  });
+
+  it('ручную разбивку не помечает устаревшей автоматически', () => {
+    const manual = { ...applyTechnicalFacadeSpec(newModule('Нижний шкаф'), body('251')), widthMm: 650, facadeSpecStatus: 'manual' as const };
+    expect(isTechnicalFacadeSpecOutdated(manual, body('251'))).toBe(false);
   });
 
   it('рассчитывает 2 петли на каждую дверь высотой до 900 мм', () => {

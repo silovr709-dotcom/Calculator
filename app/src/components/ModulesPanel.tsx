@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import type { KitchenModule, KitchenWall, ModuleDefaults, Pricebook, Project, SlotKey, Template } from '../types';
+import type { KitchenModule, KitchenWall, ModuleDefaults, Pricebook, PriceItem, Project, SlotKey, Template } from '../types';
 import { MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moveModule, modulesSummary, moduleToLines, newModule, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
 import { calcTotals } from '../lib/engine';
-import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec } from '../lib/facades';
+import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalFacadeSpecOutdated } from '../lib/facades';
 import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surcharges';
 import { fmtMoney, fmtNum } from '../lib/format';
 import { LAYOUT_SHAPES, WALL_LABELS, WALL_SHORT_LABELS, layoutWalls, moduleWall, normalizeLayoutShape } from '../lib/kitchenSketch';
@@ -62,6 +62,9 @@ export default function ModulesPanel(props: {
   const selectedBody = sel ? resolveSlot(sel, 'body', defaults, pricebook).item : null;
   const facadeInference = sel && selectedBody ? inferFacadeSpec(sel, selectedBody) : null;
   const hingeInference = sel && selectedBody ? inferHingeSpec(sel, selectedBody) : null;
+  const facadeNeedsUpdate = Boolean(sel && selectedBody && (
+    sel.facadeSpecStatus === 'outdated' || isTechnicalFacadeSpecOutdated(sel, selectedBody)
+  ));
   const dimensionSurchargeRecommendations = sel && selectedBody
     ? inferDimensionSurcharges(sel, selectedBody, pricebook)
     : [];
@@ -83,9 +86,10 @@ export default function ModulesPanel(props: {
   const selectedModuleCalculation = sel ? calcTotals(selectedModuleLines, project.settings) : null;
   const pendingFacadeModuleCount = useMemo(() => mods.filter((module) => {
     const body = resolveSlot(module, 'body', defaults, pricebook).item;
+    const inference = body ? inferFacadeSpec(module, body) : null;
     const empty = !module.facadeParts?.length && module.facades === 0;
-    const outdated = module.facadeSpecStatus === 'outdated';
-    return Boolean(body && inferFacadeSpec(module, body) && (empty || outdated));
+    const outdated = module.facadeSpecStatus === 'outdated' || (body ? isTechnicalFacadeSpecOutdated(module, body) : false);
+    return Boolean(body && inference && (empty || outdated));
   }).length, [mods, defaults, pricebook]);
 
   const addModule = (type: string) => {
@@ -113,7 +117,10 @@ export default function ModulesPanel(props: {
 
   const statusDot = (l: 'ok' | 'warn' | 'error') => l === 'ok' ? <span className="dot ok" title="Готово">●</span> : l === 'warn' ? <span className="dot warn" title="Требует подтверждения">●</span> : <span className="dot err" title="Не хватает обязательных данных">●</span>;
   const dimensionLabel = (dimension: 'width' | 'height' | 'depth') => ({ width: 'ширине', height: 'высоте', depth: 'глубине' }[dimension]);
-  const facadeStatusLabel = (module: KitchenModule) => module.facadeSpecStatus === 'applied' ? 'фасады: техничка' : module.facadeSpecStatus === 'manual' ? 'фасады: вручную' : module.facadeSpecStatus === 'outdated' ? 'фасады: обновить' : module.facadeParts?.length ? 'фасады: заданы' : null;
+  const facadeStatusLabel = (module: KitchenModule, body: PriceItem | null) => {
+    const outdated = module.facadeSpecStatus === 'outdated' || Boolean(body && isTechnicalFacadeSpecOutdated(module, body));
+    return outdated ? 'фасады: обновить' : module.facadeSpecStatus === 'applied' ? 'фасады: техничка' : module.facadeSpecStatus === 'manual' ? 'фасады: вручную' : module.facadeParts?.length ? 'фасады: заданы' : null;
+  };
   const hingeStatusLabel = (module: KitchenModule) => module.hingeSpecStatus === 'applied' ? 'петли: техничка' : module.hingeSpecStatus === 'manual' ? 'петли: вручную' : module.hingeSpecStatus === 'outdated' ? 'петли: обновить' : null;
 
   const allProblems = mods.flatMap((m) => {
@@ -175,7 +182,7 @@ export default function ModulesPanel(props: {
         {pendingFacadeModuleCount > 0 && <button className="btn ghost" onClick={() => {
           const next = mods.map((module) => {
             const body = resolveSlot(module, 'body', defaults, pricebook).item;
-            return body ? applyTechnicalFacadeSpec(module, body, module.facadeSpecStatus === 'outdated') : module;
+            return body ? applyTechnicalFacadeSpec(module, body, module.facadeSpecStatus === 'outdated' || isTechnicalFacadeSpecOutdated(module, body)) : module;
           });
           setMods(next);
         }}>+ Подставить фасады по техничке ({pendingFacadeModuleCount})</button>}
@@ -209,6 +216,8 @@ export default function ModulesPanel(props: {
             <tbody>
               {mods.map((m, idx) => {
                 const c = checks.get(m.id)!;
+                const body = resolveSlot(m, 'body', defaults, pricebook).item;
+                const facadeOutdated = m.facadeSpecStatus === 'outdated' || Boolean(body && isTechnicalFacadeSpecOutdated(m, body));
                 const filled = ALL_SLOTS.filter((k) => slotNeed(m, k) > 0 || k === 'body');
                 const chosen = filled.filter((k) => resolveSlot(m, k, defaults, pricebook).item);
                 const isDropTarget = dropTarget?.id === m.id;
@@ -259,7 +268,7 @@ export default function ModulesPanel(props: {
                       <button className="btn tiny ghost" title="Переместить ниже" disabled={idx === mods.length - 1} onClick={(e) => { e.stopPropagation(); reorder(m.id, 1); }}>▼</button>
                     </span>
                   </td>
-                  <td><b>{m.name}</b><div className="muted small">{m.type}{walls.length > 1 ? ` · ${WALL_SHORT_LABELS[moduleWall(m, shape)].toLocaleLowerCase('ru')} стена` : ''}</div>{facadeStatusLabel(m) && <span className={`module-facade-status ${m.facadeSpecStatus ?? 'set'}`}>{facadeStatusLabel(m)}</span>}{hingeStatusLabel(m) && <span className={`module-facade-status ${m.hingeSpecStatus ?? 'set'}`}>{hingeStatusLabel(m)}</span>}</td>
+                  <td><b>{m.name}</b><div className="muted small">{m.type}{walls.length > 1 ? ` · ${WALL_SHORT_LABELS[moduleWall(m, shape)].toLocaleLowerCase('ru')} стена` : ''}</div>{facadeStatusLabel(m, body) && <span className={`module-facade-status ${facadeOutdated ? 'outdated' : m.facadeSpecStatus ?? 'set'}`}>{facadeStatusLabel(m, body)}</span>}{hingeStatusLabel(m) && <span className={`module-facade-status ${m.hingeSpecStatus ?? 'set'}`}>{hingeStatusLabel(m)}</span>}</td>
                   <td className="small dims" onClick={(e) => e.stopPropagation()}>
                     <input className="dim" type="number" placeholder="Ш" value={m.widthMm ?? ''} onChange={(e) => updMod(m.id, { widthMm: Number(e.target.value) || null, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />×
                     <input className="dim" type="number" placeholder="В" value={m.heightMm ?? ''} onChange={(e) => updMod(m.id, { heightMm: Number(e.target.value) || null, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />×
@@ -341,7 +350,7 @@ export default function ModulesPanel(props: {
             <section className="facade-tech-card">
               <div className="facade-tech-head">
                 <div><h4>Фасады по техничке фабрики</h4><div className="muted small">{facadeInference.source} · корпус: {facadeInference.bodyWidthMm} мм · фасадов: {facadeInference.facades}</div></div>
-                <span className={`badge ${facadeInference.confidence === 'exact' ? 'tech-exact' : 'tech-suggest'}`}>{sel.facadeSpecStatus === 'applied' ? 'применено' : sel.facadeSpecStatus === 'manual' ? 'изменено вручную' : sel.facadeSpecStatus === 'outdated' ? 'нужно обновить' : facadeInference.confidence === 'exact' ? 'точное правило' : 'нужно проверить'}</span>
+                <span className={`badge ${facadeInference.confidence === 'exact' ? 'tech-exact' : 'tech-suggest'}`}>{sel.facadeSpecStatus === 'manual' ? 'изменено вручную' : !facadeNeedsUpdate && sel.facadeSpecStatus === 'applied' ? 'применено' : facadeNeedsUpdate ? 'нужно обновить' : facadeInference.confidence === 'exact' ? 'точное правило' : 'нужно проверить'}</span>
               </div>
               <div className="facade-tech-note">{facadeInference.note}</div>
               <div className="facade-parts-list">
@@ -352,12 +361,12 @@ export default function ModulesPanel(props: {
                   </div>
                 ))}
               </div>
-              {sel.facadeSpecStatus === 'outdated' && sel.facadeParts && (
-                <div className="warn-box small">Размер модуля изменён. Текущие фасады: {sel.facadeParts.map((part) => `${part.widthMm}×${part.heightMm}`).join(', ')} мм. Новая рекомендация: {facadeInference.parts.map((part) => `${part.widthMm}×${part.heightMm}`).join(', ')} мм.</div>
+              {facadeNeedsUpdate && sel.facadeParts && (
+                <div className="warn-box small">Размер модуля или корпуса изменён. Текущие фасады: {sel.facadeParts.map((part) => `${part.widthMm}×${part.heightMm}`).join(', ')} мм. Новая рекомендация: {facadeInference.parts.map((part) => `${part.widthMm}×${part.heightMm}`).join(', ')} мм.</div>
               )}
-              {(!sel.facadeParts || sel.facadeSpecStatus === 'manual' || sel.facadeSpecStatus === 'outdated') && (
+              {(!sel.facadeParts || sel.facadeSpecStatus === 'manual' || facadeNeedsUpdate) && (
                 <button className="btn tiny add" onClick={() => updMod(sel.id, applyTechnicalFacadeSpec(sel, selectedBody!, true))}>
-                  {!sel.facadeParts ? 'Подставить размеры и количество' : sel.facadeSpecStatus === 'outdated' ? 'Обновить по техничке' : 'Заменить ручные размеры рекомендацией'}
+                  {!sel.facadeParts ? 'Подставить размеры и количество' : facadeNeedsUpdate ? 'Обновить по техничке' : 'Заменить ручные размеры рекомендацией'}
                 </button>
               )}
               {sel.facadeParts && <div className="muted small">Размеры участвуют в расчёте площади фасадов отдельно для каждой детали.</div>}

@@ -20,6 +20,12 @@ export interface HingeInference {
   source: string;
 }
 
+function sameFacadePart(left: FacadePart, right: FacadePart): boolean {
+  return left.widthMm === right.widthMm
+    && left.heightMm === right.heightMm
+    && left.kind === right.kind;
+}
+
 function bodyWidthMm(body: PriceItem): number | null {
   const attr = body.attrs?.['размер'] ?? '';
   const fromName = body.name.match(/[—-]\s*(\d+)\s*мм/iu)?.[1];
@@ -61,15 +67,44 @@ function facadeWidth(body: PriceItem, bodyWidth: number, count: number, lower: b
   return Math.max(1, Math.floor((bodyWidth - count * 4) / count));
 }
 
+function nonStandardTechnicalHeights(
+  standard: number[],
+  totalHeight: number,
+  description: string,
+): { heights: number[]; exact: boolean; note: string } {
+  if (totalHeight === 720) return { heights: standard, exact: true, note: `${description} Стандартная высота корпуса 720 мм, техничка, стр. 2.` };
+
+  // Для нестандартной высоты сохраняем техническую разбивку верхних фасадов,
+  // а разницу переносим в нижний фасад. Это не выдаём за точный шаблон фабрики:
+  // пользователь получает новую рекомендацию и явно видит, что её надо подтвердить.
+  const heights = [...standard];
+  heights[heights.length - 1] += totalHeight - 720;
+  if (heights[heights.length - 1] > 0) {
+    return {
+      heights,
+      exact: false,
+      note: `${description} Для нестандартной высоты ${totalHeight} мм разница относительно технички 720 мм добавлена к нижнему фасаду; проверьте схему заказа.`,
+    };
+  }
+
+  const available = Math.max(1, totalHeight - (standard.length + 1) * 4);
+  const fallback = Math.max(1, Math.floor(available / standard.length));
+  return {
+    heights: standard.map(() => fallback),
+    exact: false,
+    note: `${description} Высота ${totalHeight} мм слишком мала для стандартной разбивки; фасады распределены предварительно, проверьте схему заказа.`,
+  };
+}
+
 function lowerHeights(body: PriceItem, drawers: number, doors: number, totalHeight: number): { heights: number[]; exact: boolean; note: string } {
   if (isDrawerUnderOven(body)) {
     if (drawers === 1) return { heights: [120], exact: true, note: 'Под духовым шкафом: фасад ящика 120 мм по техничке, стр. 3.' };
     return { heights: Array.from({ length: drawers }, () => 120), exact: false, note: 'Высота фасадов ящиков под технику требует проверки по схеме конкретной техники.' };
   }
-  if (drawers === 1 && doors === 1) return { heights: [176, 536], exact: true, note: 'Стол высотой 720 мм, 1 ящик + дверь: 176 + 536 мм по техничке, стр. 2.' };
-  if (drawers === 2 && doors === 0) return { heights: [356, 356], exact: true, note: 'Стол высотой 720 мм, 2 ящика: 356 + 356 мм по техничке, стр. 2.' };
-  if (drawers === 3 && doors === 0) return { heights: [176, 176, 356], exact: true, note: 'Стол высотой 720 мм, 3 ящика: 176 + 176 + 356 мм по техничке, стр. 2.' };
-  if (drawers === 4 && doors === 0) return { heights: [176, 176, 176, 176], exact: true, note: 'Стол высотой 720 мм, 4 ящика: 176 + 176 + 176 + 176 мм по техничке, стр. 2.' };
+  if (drawers === 1 && doors === 1) return nonStandardTechnicalHeights([176, 536], totalHeight, '1 ящик + дверь: 176 + 536 мм.');
+  if (drawers === 2 && doors === 0) return nonStandardTechnicalHeights([356, 356], totalHeight, '2 ящика: 356 + 356 мм.');
+  if (drawers === 3 && doors === 0) return nonStandardTechnicalHeights([176, 176, 356], totalHeight, '3 ящика: 176 + 176 + 356 мм.');
+  if (drawers === 4 && doors === 0) return nonStandardTechnicalHeights([176, 176, 176, 176], totalHeight, '4 ящика: 176 + 176 + 176 + 176 мм.');
   if (drawers === 0) return { heights: Array.from({ length: doors }, () => Math.max(1, totalHeight - 4)), exact: true, note: 'Зазор 4 мм учтён по техничке, стр. 4.' };
   return { heights: Array.from({ length: drawers + doors }, () => Math.max(1, Math.floor((totalHeight - (drawers + doors + 1) * 4) / (drawers + doors)))), exact: false, note: 'Размеры смешанных фасадов рассчитаны предварительно; проверьте схему заказа.' };
 }
@@ -104,6 +139,28 @@ export function inferFacadeSpec(module: KitchenModule, body: PriceItem): FacadeI
     note: heightSpec.note,
     source,
   };
+}
+
+/**
+ * Проверяет уже сохранённую техническую разбивку против текущих размеров модуля.
+ * Это нужно для старых проектов и для случаев, когда размер меняли не тем полем,
+ * которое успевало выставить статус «outdated».
+ * Ручная разбивка намеренно не считается устаревшей: её пользователь подтвердил сам.
+ */
+export function isTechnicalFacadeSpecOutdated(module: KitchenModule, body: PriceItem): boolean {
+  if (module.facadeSpecStatus === 'manual') return false;
+  const inferred = inferFacadeSpec(module, body);
+  if (!inferred) return false;
+  if (module.facadeParts?.length) {
+    return module.facadeParts.length !== inferred.parts.length
+      || module.facadeParts.some((part, index) => !sameFacadePart(part, inferred.parts[index]));
+  }
+  if (module.facades <= 0) return false;
+  if (!module.facadeWmm || !module.facadeHmm || module.facades !== inferred.facades) return true;
+
+  // Старый формат хранит только один размер. Он совместим с технической
+  // рекомендацией только если все фасады действительно одинаковые.
+  return inferred.parts.some((part) => part.widthMm !== module.facadeWmm || part.heightMm !== module.facadeHmm);
 }
 
 function hingesForDoorHeight(heightMm: number): number {
@@ -154,7 +211,8 @@ export function applyTechnicalFacadeSpec(module: KitchenModule, body: PriceItem,
   const inferred = inferFacadeSpec(module, body);
   if (!inferred) return module;
   const hasManualSpec = Boolean(module.facadeParts?.length || module.facades > 0 || module.facadeWmm || module.facadeHmm);
-  if (hasManualSpec && !overwrite) return module;
+  const outdated = isTechnicalFacadeSpecOutdated(module, body);
+  if (hasManualSpec && !overwrite && !outdated) return module;
   const first = inferred.parts[0];
   const inferredDrawers = inferred.parts.filter((part) => part.kind === 'drawer').length;
   const hingeInference = inferHingeSpec({ ...module, facadeParts: inferred.parts, facadeSpecStatus: 'applied' }, body);
@@ -162,7 +220,7 @@ export function applyTechnicalFacadeSpec(module: KitchenModule, body: PriceItem,
   return {
     ...module,
     facades: inferred.facades,
-    drawers: hasManualSpec ? module.drawers : inferredDrawers,
+    drawers: hasManualSpec && !overwrite ? module.drawers : inferredDrawers,
     hinges: preserveManualHinges ? module.hinges : hingeInference?.hinges ?? module.hinges,
     widthMm: module.widthMm ?? inferred.bodyWidthMm,
     heightMm: module.heightMm ?? inferred.bodyHeightMm,
