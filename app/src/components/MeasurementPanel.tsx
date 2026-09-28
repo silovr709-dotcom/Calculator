@@ -1,6 +1,6 @@
 import { useRef, useState, type MouseEvent } from 'react';
 import type { MeasurementCommunication, MeasurementData, MeasurementOpening, MeasurementPhotoAnnotation, MeasurementWall, Project, ProjectPhoto } from '../types';
-import { emptyMeasurement } from '../lib/measurement';
+import { calibratedPhotoLengthMm, emptyMeasurement } from '../lib/measurement';
 import { uid } from '../lib/storage';
 
 function readDataUrl(file: File): Promise<string> {
@@ -33,7 +33,7 @@ export default function MeasurementPanel(props: { project: Project; onChange: (p
   const cameraRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(data.photos[0]?.id ?? null);
-  const [photoTool, setPhotoTool] = useState<{ photoId: string; mode: 'dimension' | 'marker'; firstPoint?: { x: number; y: number } } | null>(null);
+  const [photoTool, setPhotoTool] = useState<{ photoId: string; mode: 'calibrate' | 'dimension' | 'marker'; firstPoint?: { x: number; y: number } } | null>(null);
   const [photoDimensionSourceId, setPhotoDimensionSourceId] = useState('manual');
   const photoDimensionSources: PhotoDimensionSource[] = [
     { id: 'manual', label: 'Ввести размер вручную', valueMm: null },
@@ -55,6 +55,7 @@ export default function MeasurementPanel(props: { project: Project; onChange: (p
     } finally { setBusy(false); if (fileRef.current) fileRef.current.value = ''; }
   };
   const updatePhotoAnnotations = (photoId: string, annotations: MeasurementPhotoAnnotation[]) => update({ photos: data.photos.map((photo) => photo.id === photoId ? { ...photo, measurementAnnotations: annotations } : photo) });
+  const updatePhoto = (photoId: string, patch: Partial<ProjectPhoto>) => update({ photos: data.photos.map((photo) => photo.id === photoId ? { ...photo, ...patch } : photo) });
   const addPhotoAnnotation = (photo: ProjectPhoto, annotation: MeasurementPhotoAnnotation) => updatePhotoAnnotations(photo.id, [...(photo.measurementAnnotations ?? []), annotation]);
   const photoPoint = (event: MouseEvent<HTMLDivElement>, element: HTMLDivElement) => {
     const rect = element.getBoundingClientRect();
@@ -74,12 +75,24 @@ export default function MeasurementPanel(props: { project: Project; onChange: (p
       return;
     }
     const source = photoDimensionSources.find((item) => item.id === photoDimensionSourceId);
+    if (photoTool.mode === 'calibrate') {
+      const defaultValue = source?.valueMm != null ? String(source.valueMm) : '';
+      const value = window.prompt('Известная длина этого отрезка, мм:', defaultValue)?.trim() ?? '';
+      const lengthMm = Number(value);
+      if (Number.isFinite(lengthMm) && lengthMm > 0) {
+        updatePhoto(photo.id, { measurementCalibration: { x1: photoTool.firstPoint.x, y1: photoTool.firstPoint.y, x2: point.x, y2: point.y, lengthMm } });
+      }
+      setPhotoTool(null);
+      return;
+    }
+    const calibration = photo.measurementCalibration;
+    const calibratedValue = calibration ? calibratedPhotoLengthMm(calibration, photoTool.firstPoint, point, event.currentTarget.clientWidth, event.currentTarget.clientHeight) : null;
     const label = window.prompt('Подпись размера:', source?.id === 'manual' ? 'Размер' : source?.label ?? 'Размер')?.trim();
     if (!label) { setPhotoTool(null); return; }
-    const defaultValue = source?.valueMm != null ? String(source.valueMm) : '';
-    const value = window.prompt('Размер в миллиметрах (необязательно):', defaultValue)?.trim() ?? '';
-    const valueMm = value && Number.isFinite(Number(value)) ? Number(value) : null;
-    addPhotoAnnotation(photo, { id: uid('photo-dim'), type: 'dimension', x1: photoTool.firstPoint.x, y1: photoTool.firstPoint.y, x2: point.x, y2: point.y, label, valueMm });
+    const defaultValue = calibratedValue ?? source?.valueMm ?? null;
+    const value = calibratedValue == null ? window.prompt('Размер в миллиметрах (необязательно):', defaultValue == null ? '' : String(defaultValue))?.trim() ?? '' : '';
+    const valueMm = calibratedValue ?? (value && Number.isFinite(Number(value)) ? Number(value) : null);
+    addPhotoAnnotation(photo, { id: uid('photo-dim'), type: 'dimension', x1: photoTool.firstPoint.x, y1: photoTool.firstPoint.y, x2: point.x, y2: point.y, label, valueMm, accuracy: calibratedValue != null ? 'calibrated' : 'preliminary' });
     setPhotoTool(null);
   };
   const removeFrom = <T extends { id: string }>(items: T[], id: string) => items.filter((item) => item.id !== id);
@@ -110,9 +123,10 @@ export default function MeasurementPanel(props: { project: Project; onChange: (p
           <>
             <div className="measurement-photo-grid">{data.photos.map((photo) => <figure className={selectedPhoto?.id === photo.id ? 'selected' : ''} key={photo.id} onClick={() => { setSelectedPhotoId(photo.id); setPhotoTool(null); }}><img src={photo.dataUrl} alt={photo.name} /><figcaption>{photo.name}<button className="btn tiny danger" onClick={(event) => { event.stopPropagation(); update({ photos: removeFrom(data.photos, photo.id) }); if (selectedPhotoId === photo.id) setSelectedPhotoId(data.photos.find((item) => item.id !== photo.id)?.id ?? null); }}>✕</button></figcaption></figure>)}</div>
             {selectedPhoto && <div className="measurement-photo-editor">
-              <div className="measurement-photo-editor-head"><div><b>Разметка: {selectedPhoto.name}</b><span className="muted small">{photoTool?.mode === 'dimension' ? (photoTool.firstPoint ? 'Теперь нажмите вторую точку размерной линии' : 'Нажмите первую и вторую точки на фотографии') : photoTool?.mode === 'marker' ? 'Нажмите место для отметки' : 'Выберите инструмент разметки'}</span></div><div className="measurement-photo-tools"><label className="photo-dimension-source">Размер из замера<select value={photoDimensionSourceId} onChange={(event) => setPhotoDimensionSourceId(event.target.value)}>{photoDimensionSources.map((source) => <option key={source.id} value={source.id}>{source.label}{source.valueMm != null ? ` · ${source.valueMm} мм` : ''}</option>)}</select></label><button className={`btn tiny ${photoTool?.mode === 'dimension' ? 'primary' : 'ghost'}`} onClick={() => setPhotoTool(photoTool?.mode === 'dimension' ? null : { photoId: selectedPhoto.id, mode: 'dimension' })}>↔ Добавить размер</button><button className={`btn tiny ${photoTool?.mode === 'marker' ? 'primary' : 'ghost'}`} onClick={() => setPhotoTool(photoTool?.mode === 'marker' ? null : { photoId: selectedPhoto.id, mode: 'marker' })}>⊙ Отметить точку</button></div></div>
-              <div className="measurement-photo-stage" onClick={(event) => handlePhotoStageClick(selectedPhoto, event)}><img src={selectedPhoto.dataUrl} alt={`Разметка ${selectedPhoto.name}`} /><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">{(selectedPhoto.measurementAnnotations ?? []).map((annotation) => annotation.type === 'dimension' ? <g key={annotation.id} className="photo-annotation dimension"><line x1={annotation.x1} y1={annotation.y1} x2={annotation.x2} y2={annotation.y2} /><circle cx={annotation.x1} cy={annotation.y1} r="0.9" /><circle cx={annotation.x2} cy={annotation.y2} r="0.9" /><text x={((annotation.x1 + (annotation.x2 ?? annotation.x1)) / 2)} y={((annotation.y1 + (annotation.y2 ?? annotation.y1)) / 2) - 2}>{annotation.label}{annotation.valueMm ? ` · ${annotation.valueMm} мм` : ''}</text></g> : <g key={annotation.id} className="photo-annotation marker"><circle cx={annotation.x1} cy={annotation.y1} r="1.8" /><text x={annotation.x1 + 2} y={annotation.y1 - 2}>{annotation.label}</text></g>)}</svg>{photoTool?.firstPoint && photoTool.photoId === selectedPhoto.id && <span className="photo-first-point" style={{ left: `${photoTool.firstPoint.x}%`, top: `${photoTool.firstPoint.y}%` }} />}</div>
-              {(selectedPhoto.measurementAnnotations ?? []).length > 0 && <div className="photo-annotation-list">{(selectedPhoto.measurementAnnotations ?? []).map((annotation) => <div key={annotation.id}><span>{annotation.type === 'dimension' ? '↔' : '⊙'} {annotation.label}{annotation.valueMm ? ` — ${annotation.valueMm} мм` : ''}</span><button className="btn tiny danger" onClick={() => updatePhotoAnnotations(selectedPhoto.id, (selectedPhoto.measurementAnnotations ?? []).filter((item) => item.id !== annotation.id))}>Удалить</button></div>)}</div>}
+              <div className="measurement-photo-editor-head"><div><b>Разметка: {selectedPhoto.name}</b><span className="muted small">{photoTool?.mode === 'calibrate' ? (photoTool.firstPoint ? 'Теперь нажмите вторую точку известного отрезка' : 'Нажмите две точки известного отрезка') : photoTool?.mode === 'dimension' ? (photoTool.firstPoint ? 'Теперь нажмите вторую точку размерной линии' : 'Нажмите первую и вторую точки на фотографии') : photoTool?.mode === 'marker' ? 'Нажмите место для отметки' : 'Выберите инструмент разметки'}</span></div><div className="measurement-photo-tools"><label className="photo-dimension-source">Известный размер<select value={photoDimensionSourceId} onChange={(event) => setPhotoDimensionSourceId(event.target.value)}>{photoDimensionSources.map((source) => <option key={source.id} value={source.id}>{source.label}{source.valueMm != null ? ` · ${source.valueMm} мм` : ''}</option>)}</select></label><button className={`btn tiny ${photoTool?.mode === 'calibrate' ? 'primary' : 'ghost'}`} onClick={() => setPhotoTool(photoTool?.mode === 'calibrate' ? null : { photoId: selectedPhoto.id, mode: 'calibrate' })}>⚖ Калибровать</button><button className={`btn tiny ${photoTool?.mode === 'dimension' ? 'primary' : 'ghost'}`} onClick={() => setPhotoTool(photoTool?.mode === 'dimension' ? null : { photoId: selectedPhoto.id, mode: 'dimension' })}>↔ Добавить размер</button><button className={`btn tiny ${photoTool?.mode === 'marker' ? 'primary' : 'ghost'}`} onClick={() => setPhotoTool(photoTool?.mode === 'marker' ? null : { photoId: selectedPhoto.id, mode: 'marker' })}>⊙ Отметить точку</button>{selectedPhoto.measurementCalibration && <button className="btn tiny danger" onClick={() => { updatePhoto(selectedPhoto.id, { measurementCalibration: undefined }); setPhotoTool(null); }}>Сбросить масштаб</button>}</div></div>
+              <div className="measurement-photo-stage" onClick={(event) => handlePhotoStageClick(selectedPhoto, event)}><img src={selectedPhoto.dataUrl} alt={`Разметка ${selectedPhoto.name}`} /><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">{selectedPhoto.measurementCalibration && <g className="photo-annotation calibration"><line x1={selectedPhoto.measurementCalibration.x1} y1={selectedPhoto.measurementCalibration.y1} x2={selectedPhoto.measurementCalibration.x2} y2={selectedPhoto.measurementCalibration.y2} /><text x={(selectedPhoto.measurementCalibration.x1 + selectedPhoto.measurementCalibration.x2) / 2} y={(selectedPhoto.measurementCalibration.y1 + selectedPhoto.measurementCalibration.y2) / 2 - 2}>масштаб: {selectedPhoto.measurementCalibration.lengthMm} мм</text></g>}{(selectedPhoto.measurementAnnotations ?? []).map((annotation) => annotation.type === 'dimension' ? <g key={annotation.id} className="photo-annotation dimension"><line x1={annotation.x1} y1={annotation.y1} x2={annotation.x2} y2={annotation.y2} /><circle cx={annotation.x1} cy={annotation.y1} r="0.9" /><circle cx={annotation.x2} cy={annotation.y2} r="0.9" /><text x={((annotation.x1 + (annotation.x2 ?? annotation.x1)) / 2)} y={((annotation.y1 + (annotation.y2 ?? annotation.y1)) / 2) - 2}>{annotation.label}{annotation.valueMm ? ` · ${annotation.valueMm} мм` : ''}{annotation.accuracy === 'calibrated' ? ' ✓' : ' ?'}</text></g> : <g key={annotation.id} className="photo-annotation marker"><circle cx={annotation.x1} cy={annotation.y1} r="1.8" /><text x={annotation.x1 + 2} y={annotation.y1 - 2}>{annotation.label}</text></g>)}</svg>{photoTool?.firstPoint && photoTool.photoId === selectedPhoto.id && <span className="photo-first-point" style={{ left: `${photoTool.firstPoint.x}%`, top: `${photoTool.firstPoint.y}%` }} />}</div>
+              {selectedPhoto.measurementCalibration && <div className="photo-calibration-status">✓ Фото откалибровано по отрезку {selectedPhoto.measurementCalibration.lengthMm} мм. Размеры с галочкой рассчитываются по масштабу; «?» — предварительные.</div>}
+              {(selectedPhoto.measurementAnnotations ?? []).length > 0 && <div className="photo-annotation-list">{(selectedPhoto.measurementAnnotations ?? []).map((annotation) => <div key={annotation.id}><span>{annotation.type === 'dimension' ? '↔' : '⊙'} {annotation.label}{annotation.valueMm ? ` — ${annotation.valueMm} мм` : ''} <small>{annotation.accuracy === 'calibrated' ? 'точно по масштабу' : annotation.type === 'dimension' ? 'предварительно' : ''}</small></span><button className="btn tiny danger" onClick={() => updatePhotoAnnotations(selectedPhoto.id, (selectedPhoto.measurementAnnotations ?? []).filter((item) => item.id !== annotation.id))}>Удалить</button></div>)}</div>}
             </div>}
           </>
         )}

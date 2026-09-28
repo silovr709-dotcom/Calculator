@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyMeasurement } from './measurement';
+import { calibratedPhotoLengthMm, emptyMeasurement, photoDistancePx } from './measurement';
 import { defaultSettings } from './storage';
 import type { Project } from '../types';
 
@@ -11,5 +11,11 @@ describe('мобильный режим замера', () => {
     expect(measurement.openings).toEqual([]);
     expect(measurement.communications).toEqual([]);
     expect(project.lines).toEqual([]);
+  });
+
+  it('пересчитывает размер по масштабу фотографии с учётом соотношения сторон', () => {
+    expect(photoDistancePx({ x: 0, y: 0 }, { x: 50, y: 0 }, 1000, 500)).toBe(500);
+    expect(calibratedPhotoLengthMm({ x1: 0, y1: 0, x2: 25, y2: 0, lengthMm: 600 }, { x: 0, y: 0 }, { x: 50, y: 0 }, 1000, 500)).toBe(1200);
+    expect(calibratedPhotoLengthMm({ x1: 0, y1: 0, x2: 0, y2: 0, lengthMm: 600 }, { x: 0, y: 0 }, { x: 50, y: 0 }, 1000, 500)).toBeNull();
   });
 });

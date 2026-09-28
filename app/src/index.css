@@ -555,9 +555,11 @@ input.dim { width: 54px; font-size: 11.5px; padding: 3px 4px; text-align: center
 .measurement-photo-stage > img { width:100%; height:auto; display:block; }
 .measurement-photo-stage > svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
 .photo-annotation.dimension { stroke:#f6d54b; fill:#f6d54b; stroke-width:.45; }
-.photo-annotation.dimension text, .photo-annotation.marker text { stroke:#17231f; stroke-width:.35px; paint-order:stroke; font-size:3px; font-weight:700; }
+.photo-annotation.calibration { stroke:#6ee7b7; fill:#6ee7b7; stroke-width:.55; stroke-dasharray:1.2 0.8; }
+.photo-annotation.dimension text, .photo-annotation.marker text, .photo-annotation.calibration text { stroke:#17231f; stroke-width:.35px; paint-order:stroke; font-size:3px; font-weight:700; }
 .photo-annotation.marker { fill:#ff635c; stroke:#fff; stroke-width:.45; }
 .photo-first-point { position:absolute; width:12px; height:12px; margin:-6px; border:2px solid #f6d54b; border-radius:50%; pointer-events:none; }
+.photo-calibration-status { margin-top:7px; padding:6px 8px; border-radius:6px; color:#145c43; background:#e4f6ed; font-size:11px; }
 .photo-annotation-list { display:grid; gap:5px; margin-top:9px; }
 .photo-annotation-list > div { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 7px; background:#fff; border-radius:5px; font-size:11px; }
 @media (max-width:650px) { .measurement-photo-editor-head { flex-direction:column; } .measurement-photo-actions { width:100%; } }

@@ -177,6 +177,16 @@ export interface CalculationVariant {
 
 /** Фото/эскиз проекта (хранится в самом проекте, сжимается при загрузке) */
 export type MeasurementPhotoAnnotationType = 'dimension' | 'marker';
+export type MeasurementPhotoAccuracy = 'calibrated' | 'preliminary';
+
+/** Известный отрезок на фотографии, по которому рассчитывается масштаб. */
+export interface MeasurementPhotoCalibration {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  lengthMm: number;
+}
 
 export interface MeasurementPhotoAnnotation {
   id: string;
@@ -188,6 +198,8 @@ export interface MeasurementPhotoAnnotation {
   y2?: number;
   label: string;
   valueMm?: number | null;
+  /** Без калибровки размер считается предварительным, даже если введён вручную. */
+  accuracy?: MeasurementPhotoAccuracy;
 }
 
 export interface ProjectPhoto {
@@ -196,6 +208,8 @@ export interface ProjectPhoto {
   dataUrl: string; // сжатый JPEG (data:image/jpeg;base64,...)
   addedAt: string;
   showToClient: boolean; // включать в клиентскую версию (КП)
+  /** Калибровка масштаба; отсутствие поля совместимо со старыми фото. */
+  measurementCalibration?: MeasurementPhotoCalibration;
   /** Разметка используется в фото замера; отсутствие поля совместимо со старыми фото. */
   measurementAnnotations?: MeasurementPhotoAnnotation[];
 }
