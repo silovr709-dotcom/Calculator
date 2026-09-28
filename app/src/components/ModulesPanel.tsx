@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { KitchenModule, KitchenWall, ModuleDefaults, Pricebook, Project, SlotKey, Template } from '../types';
-import { MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, modulesSummary, moduleToLines, newModule, resolveSlot, slotNeed } from '../lib/modules';
+import { MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moveModule, modulesSummary, moduleToLines, newModule, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
 import { calcTotals } from '../lib/engine';
 import { fmtMoney, fmtNum } from '../lib/format';
 import { LAYOUT_SHAPES, WALL_LABELS, WALL_SHORT_LABELS, layoutWalls, moduleWall, normalizeLayoutShape } from '../lib/kitchenSketch';
@@ -32,6 +32,8 @@ export default function ModulesPanel(props: {
   // выбор в каталоге: для настроек проекта или для слота конкретного модуля
   const [pick, setPick] = useState<{ slot: SlotKey; moduleId: string | null } | null>(null);
   const [pickSurcharge, setPickSurcharge] = useState(false);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; after: boolean } | null>(null);
 
   const shape = normalizeLayoutShape(project.sketch?.shape);
   const walls = layoutWalls(shape);
@@ -39,6 +41,16 @@ export default function ModulesPanel(props: {
 
   const setMods = (m: KitchenModule[]) => props.onChange({ ...project, modules: m });
   const updMod = (id: string, patch: Partial<KitchenModule>) => setMods(mods.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  const reorder = (id: string, target: number) => {
+    const next = moveModule(mods, id, target);
+    if (next !== mods) setMods(next);
+  };
+  const confirmWarning = (moduleId: string, code: string, confirmed: boolean) => {
+    const module = mods.find((item) => item.id === moduleId);
+    if (!module) return;
+    const nextModule = setWarningConfirmed(module, code, confirmed);
+    if (nextModule !== module) setMods(mods.map((item) => (item.id === moduleId ? nextModule : item)));
+  };
   const sel = mods.find((m) => m.id === selId) ?? null;
 
   const checks = useMemo(() => new Map(mods.map((m) => [m.id, checkModule(m, defaults, pricebook)])), [mods, defaults, pricebook]);
@@ -76,10 +88,11 @@ export default function ModulesPanel(props: {
   const allProblems = mods.flatMap((m) => {
     const c = checks.get(m.id)!;
     return [
-      ...c.errors.map((e) => ({ mod: m, text: e, critical: true })),
-      ...c.warnings.map((w) => ({ mod: m, text: w, critical: false })),
+      ...c.errors.map((text) => ({ mod: m, text, code: null as string | null, critical: true })),
+      ...c.openWarnings.map((warning) => ({ mod: m, text: warning.text, code: warning.code, critical: false })),
     ];
   });
+  const allConfirmed = mods.flatMap((m) => (checks.get(m.id)?.confirmedWarnings ?? []).map((warning) => ({ mod: m, ...warning })));
 
   return (
     <>
@@ -129,14 +142,7 @@ export default function ModulesPanel(props: {
           settings={project.sketch}
           onSettingsChange={(sketch) => props.onChange({ ...project, sketch })}
           onSelectModule={setSelId}
-          onReorder={(id, direction) => {
-            const from = mods.findIndex((module) => module.id === id);
-            const to = from + direction;
-            if (from < 0 || to < 0 || to >= mods.length) return;
-            const next = [...mods];
-            [next[from], next[to]] = [next[to], next[from]];
-            setMods(next);
-          }}
+          onReorder={(id, direction) => reorder(id, direction)}
         />
       )}
 
@@ -144,18 +150,62 @@ export default function ModulesPanel(props: {
       {mods.length === 0 ? (
         <div className="empty">Позиций пока нет. Нажмите «+ Добавить позицию», выберите тип (нижний шкаф, пенал…), затем задайте размеры и комплектацию.</div>
       ) : (
-        <table className="table modules">
-          <thead>
-            <tr><th>№</th><th>Позиция</th><th>Размер, мм</th><th className="num">Кол.</th><th className="num">Фас.</th><th className="num">Ящ.</th><th>Комплектация</th><th className="num">Себест.</th><th>Ст.</th><th /></tr>
-          </thead>
-          <tbody>
-            {mods.map((m, idx) => {
-              const c = checks.get(m.id)!;
-              const filled = ALL_SLOTS.filter((k) => slotNeed(m, k) > 0 || k === 'body');
-              const chosen = filled.filter((k) => resolveSlot(m, k, defaults, pricebook).item);
-              return (
-                <tr key={m.id} className={`${selId === m.id ? 'sel-row' : ''} ${c.level === 'error' ? 'has-warn' : ''}`} onClick={() => setSelId(m.id === selId ? null : m.id)}>
-                  <td className="muted">{idx + 1}</td>
+        <>
+          <div className="module-order-hint">↕ Порядок позиций задаёт порядок модулей в эскизе</div>
+          <table className="table modules">
+            <thead>
+              <tr><th>№</th><th>Позиция</th><th>Размер, мм</th><th className="num">Кол.</th><th className="num">Фас.</th><th className="num">Ящ.</th><th>Комплектация</th><th className="num">Себест.</th><th>Ст.</th><th /></tr>
+            </thead>
+            <tbody>
+              {mods.map((m, idx) => {
+                const c = checks.get(m.id)!;
+                const filled = ALL_SLOTS.filter((k) => slotNeed(m, k) > 0 || k === 'body');
+                const chosen = filled.filter((k) => resolveSlot(m, k, defaults, pricebook).item);
+                const isDropTarget = dropTarget?.id === m.id;
+                return (
+                  <tr
+                    key={m.id}
+                    className={`${selId === m.id ? 'sel-row' : ''} ${c.level !== 'ok' ? 'has-warn' : ''} ${isDropTarget ? (dropTarget.after ? 'drop-after' : 'drop-before') : ''}`}
+                    onClick={() => setSelId(m.id === selId ? null : m.id)}
+                    onDragOver={(e) => {
+                      if (!dragId || dragId === m.id) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      setDropTarget({ id: m.id, after: e.clientY >= e.currentTarget.getBoundingClientRect().top + e.currentTarget.getBoundingClientRect().height / 2 });
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const sourceId = dragId ?? e.dataTransfer.getData('text/plain');
+                      if (sourceId && sourceId !== m.id) {
+                        const targetIndex = idx + (dropTarget?.id === m.id && dropTarget.after ? 1 : 0);
+                        reorder(sourceId, targetIndex);
+                      }
+                      setDragId(null);
+                      setDropTarget(null);
+                    }}
+                  >
+                  <td className="muted module-order-cell">
+                    <span
+                      className="module-drag-handle"
+                      draggable
+                      title="Перетащить позицию"
+                      aria-label={`Перетащить позицию ${idx + 1}`}
+                      onClick={(e) => e.stopPropagation()}
+                      onDragStart={(e) => {
+                        e.stopPropagation();
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', m.id);
+                        setDragId(m.id);
+                      }}
+                      onDragEnd={() => { setDragId(null); setDropTarget(null); }}
+                    >⠿</span>
+                    <span>{idx + 1}</span>
+                    <span className="module-order-buttons">
+                      <button className="btn tiny ghost" title="Переместить выше" disabled={idx === 0} onClick={(e) => { e.stopPropagation(); reorder(m.id, -1); }}>▲</button>
+                      <button className="btn tiny ghost" title="Переместить ниже" disabled={idx === mods.length - 1} onClick={(e) => { e.stopPropagation(); reorder(m.id, 1); }}>▼</button>
+                    </span>
+                  </td>
                   <td><b>{m.name}</b><div className="muted small">{m.type}{walls.length > 1 ? ` · ${WALL_SHORT_LABELS[moduleWall(m, shape)].toLocaleLowerCase('ru')} стена` : ''}</div></td>
                   <td className="small dims" onClick={(e) => e.stopPropagation()}>
                     <input className="dim" type="number" placeholder="Ш" value={m.widthMm ?? ''} onChange={(e) => updMod(m.id, { widthMm: Number(e.target.value) || null })} />×
@@ -181,8 +231,9 @@ export default function ModulesPanel(props: {
                 </tr>
               );
             })}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </>
       )}
 
       {/* Редактор выбранной позиции */}
@@ -288,10 +339,29 @@ export default function ModulesPanel(props: {
             })}
             <button className="btn tiny add" onClick={() => setPickSurcharge(true)}>＋ Добавить надбавку (+10/30/50%…)</button>
           </div>
-          {(checks.get(sel.id)!.errors.length > 0 || checks.get(sel.id)!.warnings.length > 0) && (
-            <div className="warn-box">
-              {checks.get(sel.id)!.errors.map((e, i) => <div key={i}>⛔ {e}</div>)}
-              {checks.get(sel.id)!.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
+          {(checks.get(sel.id)!.errors.length > 0 || checks.get(sel.id)!.openWarnings.length > 0 || checks.get(sel.id)!.confirmedWarnings.length > 0) && (
+            <div className="module-check-messages">
+              {checks.get(sel.id)!.errors.length > 0 && (
+                <div className="warn-box">
+                  {checks.get(sel.id)!.errors.map((error, i) => <div key={i}>⛔ {error}</div>)}
+                </div>
+              )}
+              {checks.get(sel.id)!.openWarnings.map((warning) => (
+                <div className="warning-row" key={warning.code}>
+                  <span>⚠ {warning.text}</span>
+                  <button className="btn tiny" onClick={() => confirmWarning(sel.id, warning.code, true)}>✓ Подтвердить</button>
+                </div>
+              ))}
+              {checks.get(sel.id)!.confirmedWarnings.length > 0 && (
+                <div className="confirmed-warnings">
+                  {checks.get(sel.id)!.confirmedWarnings.map((warning) => (
+                    <div className="confirmed-row" key={warning.code}>
+                      <span>✅ Подтверждено: {warning.text}</span>
+                      <button className="btn tiny ghost" onClick={() => confirmWarning(sel.id, warning.code, false)}>↺ Отменить</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -301,18 +371,31 @@ export default function ModulesPanel(props: {
       {mods.length > 0 && (
         <section className="card">
           <h3>Проверка перед расчётом</h3>
-          {allProblems.length === 0
+          {allProblems.length === 0 && allConfirmed.length === 0
             ? <div className="ok-box">✅ Все позиции укомплектованы. Расчёт полный.</div>
             : (
               <>
                 {allProblems.some((p) => p.critical) && <div className="warn-box">⛔ Критические проблемы: строки по недостающим данным НЕ включены в расчёт — итог занижен, пока всё не заполнено.</div>}
-                <ul className="problems">
-                  {allProblems.map((p, i) => (
-                    <li key={i} className={p.critical ? 'crit' : ''}>
-                      <button className="link" onClick={() => setSelId(p.mod.id)}>{p.mod.name}</button>: {p.text}
-                    </li>
-                  ))}
-                </ul>
+                {allProblems.length > 0 && (
+                  <ul className="problems">
+                    {allProblems.map((p) => (
+                      <li key={`${p.mod.id}-${p.code ?? p.text}`} className={p.critical ? 'crit' : ''}>
+                        <button className="link" onClick={() => setSelId(p.mod.id)}>{p.mod.name}</button>: {p.text}
+                        {p.code && <button className="btn tiny" onClick={() => confirmWarning(p.mod.id, p.code!, true)}>✓ Подтвердить</button>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {allConfirmed.length > 0 && (
+                  <div className="confirmed-warnings">
+                    {allConfirmed.map((warning) => (
+                      <div className="confirmed-row" key={`${warning.mod.id}-${warning.code}`}>
+                        <span><button className="link" onClick={() => setSelId(warning.mod.id)}>{warning.mod.name}</button>: ✅ Подтверждено: {warning.text}</span>
+                        <button className="btn tiny ghost" onClick={() => confirmWarning(warning.mod.id, warning.code, false)}>↺ Отменить</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           <div className="muted small">

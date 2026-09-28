@@ -205,6 +205,8 @@ export interface KitchenModule {
   wall?: KitchenWall;
   /** Процентные надбавки прайса (нестандарт +10/30/50%…), считаются от суммы корпуса */
   surcharges?: string[];
+  /** Коды предупреждений, подтверждённых пользователем для этой позиции. */
+  confirmations?: string[];
   note?: string;
 }
 

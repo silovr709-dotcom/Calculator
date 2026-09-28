@@ -7,7 +7,7 @@ import CatalogPicker from './CatalogPicker';
 import ModulesPanel from './ModulesPanel';
 import KitchenSketch from './KitchenSketch';
 import PhotosPanel from './PhotosPanel';
-import { checkModule, moduleToLines } from '../lib/modules';
+import { checkModule, moduleToLines, moveModule } from '../lib/modules';
 import SettingsPanel from './SettingsPanel';
 import ClientView from './ClientView';
 import { exportInternalXlsx, exportClientXlsx, exportInternalCsv, exportProjectJson } from '../lib/exporters';
@@ -81,12 +81,9 @@ export default function ProjectEditor(props: {
 
   const groupsInUse = SUMMARY_GROUPS.filter((g) => project.lines.some((l) => l.group === g));
   const reorderModule = (id: string, direction: -1 | 1) => {
-    const modules = [...(project.modules ?? [])];
-    const from = modules.findIndex((module) => module.id === id);
-    const to = from + direction;
-    if (from < 0 || to < 0 || to >= modules.length) return;
-    [modules[from], modules[to]] = [modules[to], modules[from]];
-    props.onChange({ ...project, modules });
+    const modules = project.modules ?? [];
+    const next = moveModule(modules, id, direction);
+    if (next !== modules) props.onChange({ ...project, modules: next });
   };
 
   return (

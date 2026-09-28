@@ -260,8 +260,22 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .def-value { font-size: 12px; font-weight: 600; }
 .def-value.none { color: #b3552e; font-weight: 700; }
 .def-actions { margin-top: 6px; display: flex; gap: 6px; }
-table.modules tr { cursor: pointer; }
+table.modules tr { cursor: pointer; position: relative; }
 table.modules tr.sel-row { background: #eef5f0; }
+.module-order-hint { margin: 0 0 8px; padding: 7px 10px; border-radius: 8px; background: #eef6f4; color: #286257; font-size: 12px; font-weight: 600; }
+.module-order-cell { white-space: nowrap; vertical-align: middle !important; }
+.module-drag-handle { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; color: #6f8b81; font-size: 18px; line-height: 1; cursor: grab; user-select: none; }
+.module-drag-handle:active { cursor: grabbing; }
+.module-order-buttons { display: inline-flex; gap: 1px; margin-left: 3px; vertical-align: middle; }
+.module-order-buttons .btn { margin: 0; padding: 2px 5px; font-size: 10px; line-height: 1.15; }
+table.modules tr.drop-before td { box-shadow: inset 0 3px 0 #2e8b78; }
+table.modules tr.drop-after td { box-shadow: inset 0 -3px 0 #2e8b78; }
+table.modules tr.drop-before, table.modules tr.drop-after { background: #e5f5f0; }
+.warning-row, .confirmed-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 7px 9px; margin: 5px 0; border-radius: 7px; font-size: 12px; }
+.warning-row { background: #fff7e8; color: var(--warn); }
+.confirmed-warnings { margin-top: 7px; border-left: 3px solid #42a66b; }
+.confirmed-row { background: #edf8ef; color: #286b42; margin: 4px 0; }
+.warning-row .btn, .confirmed-row .btn { flex: 0 0 auto; margin: 0; white-space: nowrap; }
 .dot { font-size: 15px; }
 .dot.ok { color: #2f9e57; }
 .dot.warn { color: #d99a06; }

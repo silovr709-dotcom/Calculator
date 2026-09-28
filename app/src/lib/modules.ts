@@ -73,10 +73,60 @@ export function resolveSlot(
   return { item, source: item ? (slot.mode === 'manual' ? 'manual' : 'default') : null };
 }
 
+/** Коды проверяемых предупреждений, которые пользователь может подтвердить. */
+export type ModuleWarningCode = 'dims' | 'bodyDrawers' | 'bodyDoors' | 'shelves' | 'opening' | 'handles';
+
+export interface ModuleWarning {
+  code: ModuleWarningCode;
+  text: string;
+}
+
 export interface ModuleCheck {
   level: 'ok' | 'warn' | 'error';
-  errors: string[];   // блокируют полный расчёт модуля
-  warnings: string[]; // требуют подтверждения, но не блокируют
+  errors: string[]; // блокируют полный расчёт модуля
+  /** Только тексты неподтверждённых предупреждений (для обратной совместимости). */
+  warnings: string[];
+  openWarnings: ModuleWarning[];
+  confirmedWarnings: ModuleWarning[];
+}
+
+/**
+ * Перемещает модуль на шаг (-1/1) или на указанную позицию массива.
+ * Исходный массив и его элементы не изменяются. При невозможном перемещении
+ * возвращается тот же экземпляр массива — это удобно для React-состояния.
+ */
+export function moveModule(modules: KitchenModule[], id: string, target: number): KitchenModule[] {
+  const from = modules.findIndex((module) => module.id === id);
+  if (from < 0) return modules;
+
+  const to = target === -1 || target === 1 ? from + target : target;
+  if (!Number.isInteger(to) || to < 0 || to >= modules.length || to === from) return modules;
+
+  const next = [...modules];
+  const [module] = next.splice(from, 1);
+  next.splice(to, 0, module);
+  return next;
+}
+
+export function isWarningConfirmed(module: KitchenModule, code: ModuleWarningCode | string): boolean {
+  return module.confirmations?.includes(code) ?? false;
+}
+
+/** Возвращает копию модуля с добавленным или снятым подтверждением. */
+export function setWarningConfirmed(
+  module: KitchenModule,
+  code: ModuleWarningCode | string,
+  confirmed: boolean,
+): KitchenModule {
+  const confirmations = module.confirmations ?? [];
+  const has = confirmations.includes(code);
+  if (has === confirmed) return module;
+  return {
+    ...module,
+    confirmations: confirmed
+      ? [...confirmations, code]
+      : confirmations.filter((item) => item !== code),
+  };
 }
 
 /**
@@ -152,11 +202,12 @@ export function slotNeed(m: KitchenModule, key: SlotKey): number {
 
 export function checkModule(m: KitchenModule, defaults: ModuleDefaults, pricebook: Pricebook): ModuleCheck {
   const errors: string[] = [];
-  const warnings: string[] = [];
+  const allWarnings: ModuleWarning[] = [];
   const r = (k: SlotKey) => resolveSlot(m, k, defaults, pricebook);
+  const warn = (code: ModuleWarningCode, text: string) => allWarnings.push({ code, text });
 
   if (m.qty <= 0) errors.push('Количество должно быть больше 0');
-  if (!m.widthMm || !m.heightMm) warnings.push('Не указаны размеры модуля (Ш×В)');
+  if (!m.widthMm || !m.heightMm) warn('dims', 'Не указаны размеры модуля (Ш×В)');
 
   const body = r('body');
   if (!body.item) {
@@ -165,13 +216,13 @@ export function checkModule(m: KitchenModule, defaults: ModuleDefaults, priceboo
     // Сверка названия корпуса с конструкцией модуля: ящики
     const expectedDrawers = parseBodyDrawers(body.item.name);
     if (expectedDrawers !== null && m.drawers < expectedDrawers) {
-      warnings.push(`Корпус по названию — с ${expectedDrawers} ящик${expectedDrawers === 1 ? 'ом' : 'ами'}, а в конструкции указано ${m.drawers}. Если нужны системы выдвижения — укажите количество ящиков; если нет — подтвердите`);
+      warn('bodyDrawers', `Корпус по названию — с ${expectedDrawers} ящик${expectedDrawers === 1 ? 'ом' : 'ами'}, а в конструкции указано ${m.drawers}. Если нужны системы выдвижения — укажите количество ящиков; если нет — подтвердите`);
     }
 
     // Сверка названия корпуса с конструкцией модуля: фасады / двери
     const expectedDoors = parseBodyDoors(body.item.name);
     if (expectedDoors !== null && m.facades < expectedDoors) {
-      warnings.push('Фасады в цену каркаса не входят — укажите количество, либо подтвердите');
+      warn('bodyDoors', 'Фасады в цену каркаса не входят — укажите количество, либо подтвердите');
     }
   }
 
@@ -184,11 +235,11 @@ export function checkModule(m: KitchenModule, defaults: ModuleDefaults, priceboo
   if (m.hinges > 0 && !r('hinge').item) errors.push('Указано количество петель, но модель петли не выбрана');
   if (m.lifts > 0 && !r('lift').item) errors.push('Указаны подъёмники, но механизм не выбран');
   if (m.handles > 0 && !r('handle').item) errors.push('Указаны ручки, но модель не выбрана');
-  if (m.shelves > 0 && !r('shelf').item) warnings.push('Полки: если входят в каркас — оставьте как есть; иначе выберите позицию доп. полки');
+  if (m.shelves > 0 && !r('shelf').item) warn('shelves', 'Полки: если входят в каркас — оставьте как есть; иначе выберите позицию доп. полки');
   if (m.facades > 0 && m.hinges === 0 && m.lifts === 0 && m.drawers === 0)
-    warnings.push('Есть фасады, но не задано ни петель, ни подъёмников, ни ящиков — укажите, на чём открываются');
+    warn('opening', 'Есть фасады, но не задано ни петель, ни подъёмников, ни ящиков — укажите, на чём открываются');
   if (m.facades > 0 && m.handles === 0)
-    warnings.push('Ручки не заданы (0) — подтвердите, если открывание без ручек');
+    warn('handles', 'Ручки не заданы (0) — подтвердите, если открывание без ручек');
   if ((m.surcharges?.length ?? 0) > 0) {
     if (!body.item) errors.push('Заданы процентные надбавки, но не выбран корпус (база для процента)');
     for (const sid of m.surcharges ?? []) {
@@ -205,7 +256,15 @@ export function checkModule(m: KitchenModule, defaults: ModuleDefaults, priceboo
     if (item && item.priceKind !== 'fixed') errors.push(`«${item.name.slice(0, 40)}»: в прайсе нет фиксированной цены (${item.priceKind === 'unavailable' ? 'временно недоступна' : 'цена не число'})`);
   });
 
-  return { level: errors.length ? 'error' : warnings.length ? 'warn' : 'ok', errors, warnings };
+  const openWarnings = allWarnings.filter((warning) => !isWarningConfirmed(m, warning.code));
+  const confirmedWarnings = allWarnings.filter((warning) => isWarningConfirmed(m, warning.code));
+  return {
+    level: errors.length ? 'error' : openWarnings.length ? 'warn' : 'ok',
+    errors,
+    warnings: openWarnings.map((warning) => warning.text),
+    openWarnings,
+    confirmedWarnings,
+  };
 }
 
 /** Строки расчёта из модуля. Генерируются ТОЛЬКО из выбранных позиций — ничего не подставляется молча. */
