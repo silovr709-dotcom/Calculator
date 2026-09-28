@@ -16,6 +16,28 @@ export const MODULE_TYPES = [
   'Другой элемент',
 ] as const;
 
+/** Быстрые заготовки конструкции без скрытого выбора корпуса и материалов. */
+export interface ModulePreset {
+  id: string;
+  label: string;
+  type: string;
+  name: string;
+  facades: number;
+  drawers: number;
+  shelves: number;
+}
+
+export const MODULE_PRESETS: ModulePreset[] = [
+  { id: 'base-2-doors', label: 'Нижний шкаф · 2 двери', type: 'Нижний шкаф', name: 'Нижний шкаф · 2 двери', facades: 2, drawers: 0, shelves: 1 },
+  { id: 'base-1-door-drawer', label: 'Нижний шкаф · ящик + дверь', type: 'Нижний шкаф', name: 'Нижний шкаф · ящик + дверь', facades: 2, drawers: 1, shelves: 0 },
+  { id: 'base-2-drawers', label: 'Нижний шкаф · 2 ящика', type: 'Нижний шкаф', name: 'Нижний шкаф · 2 ящика', facades: 2, drawers: 2, shelves: 0 },
+  { id: 'base-3-drawers', label: 'Нижний шкаф · 3 ящика', type: 'Нижний шкаф', name: 'Нижний шкаф · 3 ящика', facades: 3, drawers: 3, shelves: 0 },
+  { id: 'wall-2-doors', label: 'Верхний шкаф · 2 двери', type: 'Верхний шкаф', name: 'Верхний шкаф · 2 двери', facades: 2, drawers: 0, shelves: 1 },
+  { id: 'sink', label: 'Шкаф под мойку', type: 'Шкаф под мойку', name: 'Шкаф под мойку', facades: 2, drawers: 0, shelves: 0 },
+  { id: 'oven', label: 'Шкаф под духовой шкаф', type: 'Шкаф под духовой шкаф', name: 'Шкаф под духовой шкаф', facades: 1, drawers: 1, shelves: 0 },
+  { id: 'tall', label: 'Пенал', type: 'Пенал', name: 'Пенал', facades: 2, drawers: 0, shelves: 4 },
+];
+
 export const SLOT_LABELS: Record<SlotKey, string> = {
   body: 'Корпус (каркас из прайса)',
   facade: 'Фасады (материал, цена за м²)',
@@ -57,6 +79,17 @@ export function newModule(type: string): KitchenModule {
     facades: 0, drawers: 0, shelves: 0, hinges: 0, handles: 0, lifts: 0,
     facadeWmm: null, facadeHmm: null,
     slots: defaultSlots(),
+  };
+}
+
+/** Создаёт заготовку конструкции; корпус, фасады и фурнитура всё ещё выбираются явно. */
+export function moduleFromPreset(preset: ModulePreset): KitchenModule {
+  return {
+    ...newModule(preset.type),
+    name: preset.name,
+    facades: preset.facades,
+    drawers: preset.drawers,
+    shelves: preset.shelves,
   };
 }
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { KitchenModule, KitchenWall, ModuleDefaults, Pricebook, PriceItem, Project, SlotKey, Template } from '../types';
-import { MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moveModule, modulesSummary, moduleToLines, newModule, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
+import { MODULE_PRESETS, MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moduleFromPreset, moveModule, modulesSummary, moduleToLines, newModule, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
 import { calcTotals } from '../lib/engine';
 import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalFacadeSpecOutdated, isTechnicalHingeSpecOutdated } from '../lib/facades';
 import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surcharges';
@@ -101,6 +101,12 @@ export default function ModulesPanel(props: {
     setSelId(m.id);
     setAddOpen(false);
   };
+  const addPreset = (preset: (typeof MODULE_PRESETS)[number]) => {
+    const m = moduleFromPreset(preset);
+    setMods([...mods, m]);
+    setSelId(m.id);
+    setAddOpen(false);
+  };
 
   /** Вставка модулей из шаблона: новые id, слоты и надбавки копируются как есть */
   const insertFromTemplate = (t: Template) => {
@@ -168,6 +174,8 @@ export default function ModulesPanel(props: {
             <div className="dropdown-menu static">
               {MODULE_TYPES.map((t) => <button key={t} onClick={() => addModule(t)}>{t}</button>)}
               <button onClick={() => { const t = prompt('Название собственного типа позиции:'); if (t?.trim()) addModule(t.trim()); }}>Свой тип…</button>
+              <div className="menu-sep">Быстрая конструкция:</div>
+              {MODULE_PRESETS.map((preset) => <button key={preset.id} onClick={() => addPreset(preset)}>⚡ {preset.label}</button>)}
               {moduleTemplates.length > 0 && <div className="menu-sep">Из шаблона:</div>}
               {moduleTemplates.map((t) => (
                 <button key={t.id} onClick={() => insertFromTemplate(t)}>⧉ {t.name} ({t.modules!.length} мод.)</button>

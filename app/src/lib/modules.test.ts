@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { Pricebook, ModuleDefaults } from '../types';
-import { newModule, moduleToLines, checkModule, moveModule, resolveSlot, parseBodyDrawers, parseBodyDoors, setWarningConfirmed, isWarningConfirmed } from './modules';
+import { MODULE_PRESETS, newModule, moduleFromPreset, moduleToLines, checkModule, moveModule, resolveSlot, parseBodyDrawers, parseBodyDoors, setWarningConfirmed, isWarningConfirmed } from './modules';
 import { calcTotals } from './engine';
 import { defaultSettings } from './storage';
 
@@ -26,6 +26,19 @@ const mdf16 = pb.items.find((i) => i.group === 'mdf_pvh' && i.attrs['катег�
   && i.attrs['толщина'] === '16мм' && i.name.includes('Квадратный метр'))!; // 3600/м²
 const hinge = byName('Петля Боярд с дов. 90°');          // 170
 const emal = pb.items.find((i) => i.group === 'emal' && i.priceBasis === 'm2' && i.price === 13500)!;
+
+describe('быстрые конструкции', () => {
+  it('заполняют только конструкцию и не выбирают корпус или материалы', () => {
+    const preset = MODULE_PRESETS.find((item) => item.id === 'base-2-drawers')!;
+    const module = moduleFromPreset(preset);
+    expect(module.name).toBe('Нижний шкаф · 2 ящика');
+    expect(module.drawers).toBe(2);
+    expect(module.facades).toBe(2);
+    expect(module.slots.body.itemId).toBeNull();
+    expect(module.slots.facade.itemId).toBeNull();
+    expect(module.widthMm).toBeNull();
+  });
+});
 
 describe('модуль → строки расчёта', () => {
   it('нижний шкаф 600: корпус + 2 фасада МДФ + 4 петли (ручная сверка)', () => {
