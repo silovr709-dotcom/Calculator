@@ -122,10 +122,23 @@ export interface ProjectPhoto {
 /** Внешний вид и включение автоматически построенного эскиза кухни. */
 export type KitchenSketchStyleId = 'white-oak' | 'graphite-marble' | 'cashmere-stone' | 'scandi-wotan' | 'emerald-gold';
 
+/** Планировка кухни: прямая, Г-образная (левая + задняя стены), П-образная (три стены). */
+export type KitchenLayoutShape = 'straight' | 'l' | 'u';
+
+/** Стена, вдоль которой стоит модуль. */
+export type KitchenWall = 'left' | 'back' | 'right';
+
+/** Вид эскиза: фасадные развёртки стен, план сверху или объёмный 3D-вид. */
+export type KitchenSketchView = 'elevation' | 'plan' | '3d';
+
 export interface KitchenSketchSettings {
   styleId?: KitchenSketchStyleId;
   /** false — не выводить эскиз в клиентском КП; отсутствие поля = выводить */
   showInClient?: boolean;
+  /** Планировка кухни; отсутствие поля = прямая (совместимость со старыми проектами). */
+  shape?: KitchenLayoutShape;
+  /** Вид эскиза по умолчанию; отсутствие поля = фасадные развёртки. */
+  view?: KitchenSketchView;
 }
 
 export interface Project {
@@ -185,6 +198,11 @@ export interface KitchenModule {
   facadeWmm: number | null;
   facadeHmm: number | null;
   slots: Record<SlotKey, SlotChoice>;
+  /**
+   * Стена, вдоль которой стоит модуль в эскизе.
+   * Отсутствие поля = задняя стена (совместимость со старыми проектами).
+   */
+  wall?: KitchenWall;
   /** Процентные надбавки прайса (нестандарт +10/30/50%…), считаются от суммы корпуса */
   surcharges?: string[];
   note?: string;
