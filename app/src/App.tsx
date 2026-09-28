@@ -254,12 +254,20 @@ export default function App() {
           <div className="brand-sub">калькулятор кухонь · Висма</div>
         </div>
         <nav>
-          <button className={view.kind === 'dashboard' ? 'active' : ''} onClick={() => setView({ kind: 'dashboard' })}>Проекты</button>
-          <button className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>Быстрый расчёт</button>
-          <button className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => setView({ kind: 'pricebook' })}>Прайс и версии</button>
-          <button className={view.kind === 'settings' ? 'active' : ''} onClick={() => setView({ kind: 'settings' })}>Настройки</button>
+          <button className={view.kind === 'dashboard' ? 'active' : ''} onClick={() => setView({ kind: 'dashboard' })}>
+            <span className="nav-icon">🗂</span>Проекты<span className="nav-count">{projects.length}</span>
+          </button>
+          <button className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>
+            <span className="nav-icon">⚡</span>Быстрый расчёт
+          </button>
+          <button className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => setView({ kind: 'pricebook' })}>
+            <span className="nav-icon">🧾</span>Прайс и версии
+          </button>
+          <button className={view.kind === 'settings' ? 'active' : ''} onClick={() => setView({ kind: 'settings' })}>
+            <span className="nav-icon">⚙️</span>Настройки
+          </button>
           <button className={view.kind === 'sync' ? 'active' : ''} onClick={() => setView({ kind: 'sync' })}>
-            📱 Синхронизация
+            <span className="nav-icon">📱</span>Синхронизация
             {syncConfig.enabled && (
               <span className={`nav-sync-badge ${syncStatus}`} title={`Синхронизация: ${syncStatus === 'synced' ? 'в сети' : syncStatus === 'syncing' ? 'обновление...' : 'офлайн'}`} />
             )}
