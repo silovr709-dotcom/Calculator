@@ -52,7 +52,7 @@ function isDrawerUnderOven(body: PriceItem): boolean {
   return /под\s+дш[^—]*ящик/iu.test(body.name);
 }
 
-function facadeWidth(body: PriceItem, bodyWidth: number, count: number, lower: boolean): number {
+function facadeWidth(body: PriceItem, bodyWidth: number, count: number, lower: boolean, drawers: number, doors: number): number {
   const name = body.name.toLowerCase();
   if (/дверь\s+гармошка/iu.test(name)) {
     const special = lower ? ({ 800: 220, 900: 320 } as Record<number, number>) : ({ 500: 180, 600: 280 } as Record<number, number>);
@@ -62,8 +62,13 @@ function facadeWidth(body: PriceItem, bodyWidth: number, count: number, lower: b
     const special = lower ? ({ 200: 260, 250: 330, 300: 401, 350: 472, 400: 543 } as Record<number, number>) : ({ 200: 210, 250: 268, 300: 326, 350: 383 } as Record<number, number>);
     if (special[bodyWidth]) return special[bodyWidth];
   }
-  // Техничка, стр. 31–32: зазор между деталями 4 мм. Для двух дверей
-  // 600-мм корпус даёт 296 мм на фасад (600 - 2 × 4) / 2.
+  // Фасады ящиков и вертикальные комбинации «ящик + дверь» занимают
+  // всю ширину корпуса. Зазор 4 мм нужен только по краям: для корпуса
+  // 500 мм фасад ящика получается 496 мм, а не 246 мм.
+  // Деление ширины относится только к нескольким дверям рядом.
+  if (drawers > 0 || doors <= 1) return Math.max(1, bodyWidth - 4);
+  // Техничка, стр. 31–32: для двух дверей 600-мм корпус даёт
+  // 296 мм на дверь (600 - 2 × 4) / 2.
   return Math.max(1, Math.floor((bodyWidth - count * 4) / count));
 }
 
@@ -124,7 +129,7 @@ export function inferFacadeSpec(module: KitchenModule, body: PriceItem): FacadeI
   if (!bodyWidth || count <= 0) return null;
 
   const height = bodyHeightMm(body, module);
-  const width = facadeWidth(body, bodyWidth, count, lower);
+  const width = facadeWidth(body, bodyWidth, count, lower, drawers, doors);
   const heightSpec = lower
     ? lowerHeights(body, drawers, doors, height)
     : { heights: Array.from({ length: count }, () => Math.max(1, height - 4)), exact: Boolean(upper), note: 'Зазор 4 мм учтён по техничке; для нестандартной высоты проверьте заказ.' };

@@ -26,16 +26,23 @@ describe('размеры фасадов по техничке Висмы', () =>
     const module = newModule('Нижний шкаф');
     const result = inferFacadeSpec(module, body('228'))!;
     expect(result.parts.map((part) => [part.kind, part.widthMm, part.heightMm])).toEqual([
-      ['drawer', 146, 176], ['door', 146, 536],
+      ['drawer', 296, 176], ['door', 296, 536],
     ]);
   });
 
   it('для стола с 3 ящиками сохраняет ширину всех фасадов и техническую разбивку 176+176+356', () => {
     const result = inferFacadeSpec(newModule('Нижний шкаф'), body('251'))!;
     expect(result.parts.map((part) => [part.widthMm, part.heightMm, part.kind])).toEqual([
-      [196, 176, 'drawer'], [196, 176, 'drawer'], [196, 356, 'drawer'],
+      [596, 176, 'drawer'], [596, 176, 'drawer'], [596, 356, 'drawer'],
     ]);
     expect(result.confidence).toBe('exact');
+  });
+
+  it('для стола с 2 ящиками 500 мм не делит ширину между ящиками', () => {
+    const result = inferFacadeSpec(newModule('Нижний шкаф'), body('242'))!;
+    expect(result.parts.map((part) => [part.widthMm, part.heightMm, part.kind])).toEqual([
+      [496, 356, 'drawer'], [496, 356, 'drawer'],
+    ]);
   });
 
   it('для нестандартной высоты пересчитывает нижний фасад и помечает рекомендацию', () => {
@@ -50,7 +57,7 @@ describe('размеры фасадов по техничке Висмы', () =>
     expect(isTechnicalFacadeSpecOutdated(changed, body('251'))).toBe(true);
     expect(isTechnicalFacadeSpecOutdated(applied, body('251'))).toBe(false);
     const refreshed = applyTechnicalFacadeSpec(changed, body('251'));
-    expect(refreshed.facadeParts?.map((part) => part.widthMm)).toEqual([212, 212, 212]);
+    expect(refreshed.facadeParts?.map((part) => part.widthMm)).toEqual([646, 646, 646]);
     expect(refreshed.facadeSpecStatus).toBe('applied');
   });
 
