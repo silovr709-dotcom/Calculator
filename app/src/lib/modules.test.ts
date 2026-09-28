@@ -27,7 +27,7 @@ const mdf16 = pb.items.find((i) => i.group === 'mdf_pvh' && i.attrs['катег�
 const hinge = byName('Петля Боярд с дов. 90°');          // 170
 const emal = pb.items.find((i) => i.group === 'emal' && i.priceBasis === 'm2' && i.price === 13500)!;
 const glass = pb.items.find((i) => i.category === 'Фасады: Стекло и зеркала' && i.subcategory === 'Стекло' && i.priceKind === 'fixed')!;
-const aluminiumFrame = pb.items.find((i) => i.subcategory === 'Алюм. рамка F1-10')!;
+const aluminiumFrame = pb.items.find((i) => i.subcategory === 'Алюм. рамка F1-10' && i.attrs['цвет'] === 'золото')!;
 
 describe('быстрые конструкции', () => {
   it('заполняют только конструкцию и не выбирают корпус или материалы', () => {
@@ -43,6 +43,15 @@ describe('быстрые конструкции', () => {
 });
 
 describe('стекло и алюминиевая рамка', () => {
+  it('представляет все цвета рамок явными позициями с сохранением цены модели', () => {
+    const frames = pb.items.filter((item) => item.subcategory?.startsWith('Алюм. рамка'));
+    expect(frames).toHaveLength(8);
+    expect(frames.filter((item) => item.subcategory === 'Алюм. рамка F1-10').map((item) => item.attrs['цвет'])).toEqual(['золото', 'серебро', 'шампань', 'чёрная']);
+    expect(frames.filter((item) => item.subcategory === 'Алюм. рамка INTEGRO').map((item) => item.attrs['цвет'])).toEqual(['золото', 'серебро', 'графит', 'чёрная']);
+    expect(new Set(frames.filter((item) => item.subcategory === 'Алюм. рамка F1-10').map((item) => item.price))).toEqual(new Set([6000]));
+    expect(new Set(frames.filter((item) => item.subcategory === 'Алюм. рамка INTEGRO').map((item) => item.price))).toEqual(new Set([7000]));
+  });
+
   it('считает рамку отдельной строкой по площади каждого стеклянного фасада', () => {
     const m = newModule('Верхний шкаф');
     m.facades = 1; m.facadeWmm = 600; m.facadeHmm = 700;
