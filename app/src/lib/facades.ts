@@ -174,7 +174,9 @@ function hingesForDoorHeight(heightMm: number): number {
 export function inferHingeSpec(module: KitchenModule, body: PriceItem): HingeInference | null {
   const facadeInference = inferFacadeSpec(module, body);
   const technicalParts = facadeInference?.parts ?? [];
-  const legacyManualParts = module.facadeSpecStatus === 'manual' && !module.facadeParts?.length && module.facades > 0
+  const hasManualFacadeCount = module.facadeSpecStatus === 'manual'
+    || (module.facades > 0 && module.facadeSpecStatus !== 'applied' && !module.facadeParts?.length);
+  const legacyManualParts = hasManualFacadeCount
     ? Array.from({ length: module.facades }, (_, index) => ({
       widthMm: module.facadeWmm ?? 0,
       heightMm: module.facadeHmm ?? module.heightMm ?? 720,
@@ -204,6 +206,13 @@ export function inferHingeSpec(module: KitchenModule, body: PriceItem): HingeInf
     note: `По техничке, стр. 31: ${perDoor.join(' + ')} петель на двери.${caveat}`,
     source: 'Техничка 1.08.2025, стр. 31',
   };
+}
+
+/** Сверяет сохранённое количество петель с текущими фасадами и их высотой. */
+export function isTechnicalHingeSpecOutdated(module: KitchenModule, body: PriceItem): boolean {
+  if (module.hingeSpecStatus === 'manual') return false;
+  const inferred = inferHingeSpec(module, body);
+  return Boolean(inferred && module.hinges !== inferred.hinges);
 }
 
 /** Заполняет только пустую комплектацию; ручные размеры пользователя не затираются. */

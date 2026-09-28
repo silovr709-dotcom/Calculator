@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import type { ClientOfferSettings, Pricebook, Project } from '../types';
+import { Fragment, useState } from 'react';
+import type { ClientOfferSettings, Pricebook, Project, ProjectLine, LineCalc } from '../types';
 import { calcTotals } from '../lib/engine';
 import { calculateVariant } from '../lib/variants';
-import { fmtMoney, fmtDate } from '../lib/format';
+import { fmtMoney, fmtDate, fmtNum } from '../lib/format';
 import { exportClientXlsx } from '../lib/exporters';
 import KitchenSketch from './KitchenSketch';
 
@@ -14,6 +14,32 @@ export interface ClientModuleGroup {
   qty: number;
   lineIds: string[];
   composition: string[];
+}
+
+function clientLineTitle(line: ProjectLine): string {
+  const category = line.category.toLocaleLowerCase('ru-RU');
+  if (category.startsWith('фасады')) return `Фасады — ${line.name}`;
+  if (category.includes('петл')) return `Петли — ${line.name}`;
+  if (category.includes('системы выдвижения') || /\b(?:тпо|тчо|нпв)\b/iu.test(line.name)) return `ТПО / система ящиков — ${line.name}`;
+  if (category.includes('подъём') || category.includes('подъем')) return `Подъёмный механизм — ${line.name}`;
+  return line.name;
+}
+
+function clientLineUnit(line: ProjectLine): string {
+  if (line.priceBasis === 'm2') return line.unit || 'м²';
+  if (line.priceBasis === 'lm') return line.unit || 'п.м';
+  if (line.priceBasis === 'sheet') return line.unit || 'лист';
+  return line.unit || 'шт';
+}
+
+function clientLineQuantity(line: ProjectLine, calculation: LineCalc | undefined): number {
+  return line.priceBasis === 'm2' || line.priceBasis === 'lm'
+    ? calculation?.qtyEffective ?? line.qty
+    : line.qty;
+}
+
+function clientLineNote(line: ProjectLine): string {
+  return line.note?.replace(/^Модуль: .*? — /u, '') ?? '';
 }
 
 export default function ClientView({ project, pricebook, moduleGroups, onSketchVisibilityChange, onOfferChange }: {
@@ -82,9 +108,21 @@ export default function ClientView({ project, pricebook, moduleGroups, onSketchV
         {variantSummaries.length > 1 && <section className="cd-variants"><h3>Варианты комплектации</h3>{variantSummaries.map(({ variant, totals: variantTotals }) => <div className={`cd-variant-row ${variant.id === project.selectedVariantId ? 'active' : ''}`} key={variant.id}><div><b>{variant.name}</b><span>{variant.description}</span></div><strong>{variantTotals ? fmtMoney(variantTotals.client) : '—'}</strong></div>)}</section>}
 
         <table className="table client-table"><thead><tr><th>№</th><th>Наименование</th><th className="num">Кол-во</th><th>Ед.</th><th className="num">Стоимость</th></tr></thead><tbody>
-          {groups.map((group, index) => <tr key={group.id}><td>{index + 1}</td><td><b>{group.title}</b>{group.sub && <span className="muted"> · {group.sub}</span>}{group.composition.length > 0 && <div className="cd-comp">{group.composition.join(' · ')}</div>}</td><td className="num">{group.qty}</td><td>шт</td><td className="num">{groupSum(group) != null ? fmtMoney(groupSum(group)) : '—'}</td></tr>)}
+          {groups.map((group, index) => {
+            const ids = groupLineIds(group);
+            const details = activeCalculation.lines.filter((line) => ids.includes(line.id));
+            const total = groupSum(group);
+            return <Fragment key={group.id}>
+              <tr className="cd-module-row"><td>{index + 1}</td><td><b>{group.title}</b>{group.sub && <span className="muted"> · {group.sub}</span>}<div className="cd-comp">Детализация комплектации ниже</div></td><td className="num">{group.qty}</td><td>шт</td><td className="num"><b>{total != null ? fmtMoney(total) : '—'}</b></td></tr>
+              {details.map((line, detailIndex) => {
+                const calc = lineCalcs.get(line.id);
+                const note = clientLineNote(line);
+                return <tr className="cd-detail-row" key={line.id}><td>{index + 1}.{detailIndex + 1}</td><td><span className="cd-detail-kind">{line.group}</span><div>{clientLineTitle(line)}</div>{note && <small>{note}</small>}</td><td className="num">{fmtNum(clientLineQuantity(line, calc), 4)}</td><td>{clientLineUnit(line)}</td><td className="num">{calc?.clientSum != null ? fmtMoney(calc.clientSum) : '—'}</td></tr>;
+              })}
+            </Fragment>;
+          })}
           {groups.length > 0 && extraLines.length > 0 && <tr className="cd-section"><td colSpan={5}>Дополнительно</td></tr>}
-          {extraLines.map((line, index) => { const calc = lineCalcs.get(line.id); return <tr key={line.id}><td>{groups.length + index + 1}</td><td>{line.name}</td><td className="num">{line.qty}</td><td>{line.unit ?? ''}</td><td className="num">{calc?.clientSum != null ? fmtMoney(calc.clientSum) : '—'}</td></tr>; })}
+          {extraLines.map((line, index) => { const calc = lineCalcs.get(line.id); const note = clientLineNote(line); return <tr key={line.id}><td>{groups.length + index + 1}</td><td><div>{clientLineTitle(line)}</div>{note && <small>{note}</small>}</td><td className="num">{fmtNum(clientLineQuantity(line, calc), 4)}</td><td>{clientLineUnit(line)}</td><td className="num">{calc?.clientSum != null ? fmtMoney(calc.clientSum) : '—'}</td></tr>; })}
         </tbody></table>
 
         <div className="cd-total">Итоговая стоимость: <b>{fmtMoney(totals.client)}</b></div>

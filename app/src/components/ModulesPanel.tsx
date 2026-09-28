@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { KitchenModule, KitchenWall, ModuleDefaults, Pricebook, PriceItem, Project, SlotKey, Template } from '../types';
 import { MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moveModule, modulesSummary, moduleToLines, newModule, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
 import { calcTotals } from '../lib/engine';
-import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalFacadeSpecOutdated } from '../lib/facades';
+import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalFacadeSpecOutdated, isTechnicalHingeSpecOutdated } from '../lib/facades';
 import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surcharges';
 import { fmtMoney, fmtNum } from '../lib/format';
 import { LAYOUT_SHAPES, WALL_LABELS, WALL_SHORT_LABELS, layoutWalls, moduleWall, normalizeLayoutShape } from '../lib/kitchenSketch';
@@ -65,6 +65,9 @@ export default function ModulesPanel(props: {
   const facadeNeedsUpdate = Boolean(sel && selectedBody && (
     sel.facadeSpecStatus === 'outdated' || isTechnicalFacadeSpecOutdated(sel, selectedBody)
   ));
+  const hingeNeedsUpdate = Boolean(sel && selectedBody && (
+    sel.hingeSpecStatus === 'outdated' || isTechnicalHingeSpecOutdated(sel, selectedBody)
+  ));
   const dimensionSurchargeRecommendations = sel && selectedBody
     ? inferDimensionSurcharges(sel, selectedBody, pricebook)
     : [];
@@ -121,7 +124,10 @@ export default function ModulesPanel(props: {
     const outdated = module.facadeSpecStatus === 'outdated' || Boolean(body && isTechnicalFacadeSpecOutdated(module, body));
     return outdated ? 'фасады: обновить' : module.facadeSpecStatus === 'applied' ? 'фасады: техничка' : module.facadeSpecStatus === 'manual' ? 'фасады: вручную' : module.facadeParts?.length ? 'фасады: заданы' : null;
   };
-  const hingeStatusLabel = (module: KitchenModule) => module.hingeSpecStatus === 'applied' ? 'петли: техничка' : module.hingeSpecStatus === 'manual' ? 'петли: вручную' : module.hingeSpecStatus === 'outdated' ? 'петли: обновить' : null;
+  const hingeStatusLabel = (module: KitchenModule, body: PriceItem | null) => {
+    const outdated = module.hingeSpecStatus === 'outdated' || Boolean(body && isTechnicalHingeSpecOutdated(module, body));
+    return outdated ? 'петли: обновить' : module.hingeSpecStatus === 'applied' ? 'петли: техничка' : module.hingeSpecStatus === 'manual' ? 'петли: вручную' : null;
+  };
 
   const allProblems = mods.flatMap((m) => {
     const c = checks.get(m.id)!;
@@ -218,6 +224,7 @@ export default function ModulesPanel(props: {
                 const c = checks.get(m.id)!;
                 const body = resolveSlot(m, 'body', defaults, pricebook).item;
                 const facadeOutdated = m.facadeSpecStatus === 'outdated' || Boolean(body && isTechnicalFacadeSpecOutdated(m, body));
+                const hingeOutdated = m.hingeSpecStatus === 'outdated' || Boolean(body && isTechnicalHingeSpecOutdated(m, body));
                 const filled = ALL_SLOTS.filter((k) => slotNeed(m, k) > 0 || k === 'body');
                 const chosen = filled.filter((k) => resolveSlot(m, k, defaults, pricebook).item);
                 const isDropTarget = dropTarget?.id === m.id;
@@ -268,7 +275,7 @@ export default function ModulesPanel(props: {
                       <button className="btn tiny ghost" title="Переместить ниже" disabled={idx === mods.length - 1} onClick={(e) => { e.stopPropagation(); reorder(m.id, 1); }}>▼</button>
                     </span>
                   </td>
-                  <td><b>{m.name}</b><div className="muted small">{m.type}{walls.length > 1 ? ` · ${WALL_SHORT_LABELS[moduleWall(m, shape)].toLocaleLowerCase('ru')} стена` : ''}</div>{facadeStatusLabel(m, body) && <span className={`module-facade-status ${facadeOutdated ? 'outdated' : m.facadeSpecStatus ?? 'set'}`}>{facadeStatusLabel(m, body)}</span>}{hingeStatusLabel(m) && <span className={`module-facade-status ${m.hingeSpecStatus ?? 'set'}`}>{hingeStatusLabel(m)}</span>}</td>
+                  <td><b>{m.name}</b><div className="muted small">{m.type}{walls.length > 1 ? ` · ${WALL_SHORT_LABELS[moduleWall(m, shape)].toLocaleLowerCase('ru')} стена` : ''}</div>{facadeStatusLabel(m, body) && <span className={`module-facade-status ${facadeOutdated ? 'outdated' : m.facadeSpecStatus ?? 'set'}`}>{facadeStatusLabel(m, body)}</span>}{hingeStatusLabel(m, body) && <span className={`module-facade-status ${hingeOutdated ? 'outdated' : m.hingeSpecStatus ?? 'set'}`}>{hingeStatusLabel(m, body)}</span>}</td>
                   <td className="small dims" onClick={(e) => e.stopPropagation()}>
                     <input className="dim" type="number" placeholder="Ш" value={m.widthMm ?? ''} onChange={(e) => updMod(m.id, { widthMm: Number(e.target.value) || null, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />×
                     <input className="dim" type="number" placeholder="В" value={m.heightMm ?? ''} onChange={(e) => updMod(m.id, { heightMm: Number(e.target.value) || null, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />×
@@ -278,10 +285,10 @@ export default function ModulesPanel(props: {
                     <input className="qty cell" type="number" min={0} value={m.qty} onChange={(e) => updMod(m.id, { qty: Number(e.target.value) || 0 })} />
                   </td>
                   <td className="num" onClick={(e) => e.stopPropagation()}>
-                    <input className="qty cell" type="number" min={0} value={m.facades} onChange={(e) => updMod(m.id, { facades: Number(e.target.value) || 0, facadeParts: undefined, facadeSpecStatus: 'manual' })} />
+                    <input className="qty cell" type="number" min={0} value={m.facades} onChange={(e) => updMod(m.id, { facades: Number(e.target.value) || 0, facadeParts: undefined, facadeSpecStatus: 'manual', hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />
                   </td>
                   <td className="num" onClick={(e) => e.stopPropagation()}>
-                    <input className="qty cell" type="number" min={0} value={m.drawers} onChange={(e) => updMod(m.id, { drawers: Number(e.target.value) || 0 })} />
+                    <input className="qty cell" type="number" min={0} value={m.drawers} onChange={(e) => updMod(m.id, { drawers: Number(e.target.value) || 0, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />
                   </td>
                   <td className="small">{chosen.length}/{filled.length} выбрано{c.level === 'error' ? <span className="warn"> · не хватает данных</span> : c.level === 'warn' ? ' · подтвердите' : ''}</td>
                   <td className="num">{fmtMoney(costs.get(m.id) ?? 0)}</td>
@@ -340,7 +347,7 @@ export default function ModulesPanel(props: {
           <h4>Конструкция (на один модуль)</h4>
           <div className="grid4">
             <label>Фасадов, шт<input type="number" min={0} value={sel.facades} onChange={(e) => updMod(sel.id, { facades: Number(e.target.value) || 0, facadeParts: undefined, facadeSpecStatus: 'manual', hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })} /></label>
-            <label>Ящиков, шт<input type="number" min={0} value={sel.drawers} onChange={(e) => updMod(sel.id, { drawers: Number(e.target.value) || 0 })} /></label>
+            <label>Ящиков, шт<input type="number" min={0} value={sel.drawers} onChange={(e) => updMod(sel.id, { drawers: Number(e.target.value) || 0, facadeSpecStatus: sel.facadeSpecStatus === 'applied' ? 'outdated' : sel.facadeSpecStatus, hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })} /></label>
             <label>Полок, шт<input type="number" min={0} value={sel.shelves} onChange={(e) => updMod(sel.id, { shelves: Number(e.target.value) || 0 })} /></label>
             <label>Петель, шт<input type="number" min={0} value={sel.hinges} onChange={(e) => updMod(sel.id, { hinges: Number(e.target.value) || 0, hingeSpecStatus: 'manual' })} /></label>
             <label>Ручек, шт<input type="number" min={0} value={sel.handles} onChange={(e) => updMod(sel.id, { handles: Number(e.target.value) || 0 })} /></label>
@@ -357,7 +364,7 @@ export default function ModulesPanel(props: {
                 {(sel.facadeParts ?? facadeInference.parts).map((part, index) => (
                   <div className="facade-part-row" key={`${part.kind}-${index}`}>
                     <span><b>{part.kind === 'drawer' ? 'Ящик' : 'Дверь'} {index + 1}</b><small>{part.source === 'manual' ? 'ручной размер' : 'по техничке'}</small></span>
-                    {sel.facadeParts ? <><input aria-label={`Ширина фасада ${index + 1}`} type="number" value={part.widthMm} onChange={(e) => { const parts = [...sel.facadeParts!]; parts[index] = { ...parts[index], widthMm: Number(e.target.value) || 0, source: 'manual' }; updMod(sel.id, { facadeParts: parts, facadeWmm: parts[0].widthMm, facadeHmm: parts[0].heightMm, facadeSpecStatus: 'manual' }); }} />×<input aria-label={`Высота фасада ${index + 1}`} type="number" value={part.heightMm} onChange={(e) => { const parts = [...sel.facadeParts!]; parts[index] = { ...parts[index], heightMm: Number(e.target.value) || 0, source: 'manual' }; updMod(sel.id, { facadeParts: parts, facadeWmm: parts[0].widthMm, facadeHmm: parts[0].heightMm, facadeSpecStatus: 'manual' }); }} /> мм</> : <b>{part.widthMm}×{part.heightMm} мм</b>}
+                    {sel.facadeParts ? <><input aria-label={`Ширина фасада ${index + 1}`} type="number" value={part.widthMm} onChange={(e) => { const parts = [...sel.facadeParts!]; parts[index] = { ...parts[index], widthMm: Number(e.target.value) || 0, source: 'manual' }; updMod(sel.id, { facadeParts: parts, facadeWmm: parts[0].widthMm, facadeHmm: parts[0].heightMm, facadeSpecStatus: 'manual', hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus }); }} />×<input aria-label={`Высота фасада ${index + 1}`} type="number" value={part.heightMm} onChange={(e) => { const parts = [...sel.facadeParts!]; parts[index] = { ...parts[index], heightMm: Number(e.target.value) || 0, source: 'manual' }; updMod(sel.id, { facadeParts: parts, facadeWmm: parts[0].widthMm, facadeHmm: parts[0].heightMm, facadeSpecStatus: 'manual', hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus }); }} /> мм</> : <b>{part.widthMm}×{part.heightMm} мм</b>}
                   </div>
                 ))}
               </div>
@@ -376,11 +383,11 @@ export default function ModulesPanel(props: {
             <section className="hinge-tech-card">
               <div className="facade-tech-head">
                 <div><h4>Петли по техничке</h4><div className="muted small">{hingeInference.source} · дверей: {hingeInference.doorCount} · рекомендуется: {hingeInference.hinges} шт.</div></div>
-                <span className={`badge ${hingeInference.confidence === 'exact' ? 'tech-exact' : 'tech-suggest'}`}>{sel.hingeSpecStatus === 'applied' ? 'применено' : sel.hingeSpecStatus === 'manual' ? 'изменено вручную' : sel.hingeSpecStatus === 'outdated' ? 'нужно обновить' : 'предложение'}</span>
+                <span className={`badge ${hingeInference.confidence === 'exact' ? 'tech-exact' : 'tech-suggest'}`}>{sel.hingeSpecStatus === 'manual' ? 'изменено вручную' : !hingeNeedsUpdate && sel.hingeSpecStatus === 'applied' ? 'применено' : hingeNeedsUpdate ? 'нужно обновить' : 'предложение'}</span>
               </div>
               <div className="facade-tech-note">{hingeInference.note}</div>
-              {sel.hinges !== hingeInference.hinges && <div className="muted small">Сейчас указано: {sel.hinges} шт. Применение изменит только количество петель, не модель петли.</div>}
-              {sel.hingeSpecStatus !== 'manual' && sel.hinges !== hingeInference.hinges && <button className="btn tiny add" onClick={() => updMod(sel.id, { hinges: hingeInference.hinges, hingeSpecStatus: 'applied' })}>Подставить количество петель</button>}
+              {(hingeNeedsUpdate || sel.hinges !== hingeInference.hinges) && <div className="muted small">Сейчас указано: {sel.hinges} шт. Применение изменит только количество петель, не модель петли.</div>}
+              {sel.hingeSpecStatus !== 'manual' && (hingeNeedsUpdate || sel.hinges !== hingeInference.hinges) && <button className="btn tiny add" onClick={() => updMod(sel.id, { hinges: hingeInference.hinges, hingeSpecStatus: 'applied' })}>Подставить количество петель</button>}
               {sel.hingeSpecStatus === 'manual' && <button className="btn tiny ghost" onClick={() => updMod(sel.id, { hinges: hingeInference.hinges, hingeSpecStatus: 'applied' })}>Заменить ручное количество рекомендацией</button>}
             </section>
           )}
@@ -388,10 +395,10 @@ export default function ModulesPanel(props: {
             <>
               <h4>Размер одного фасада, мм (для старого или ручного расчёта)</h4>
               <div className="grid3">
-                <label>Ширина фасада<input type="number" value={sel.facadeWmm ?? ''} placeholder="напр. 396" onChange={(e) => updMod(sel.id, { facadeWmm: Number(e.target.value) || null, facadeParts: undefined, facadeSpecStatus: 'manual' })} /></label>
-                <label>Высота фасада<input type="number" value={sel.facadeHmm ?? ''} placeholder="напр. 716" onChange={(e) => updMod(sel.id, { facadeHmm: Number(e.target.value) || null, facadeParts: undefined, facadeSpecStatus: 'manual' })} /></label>
+                <label>Ширина фасада<input type="number" value={sel.facadeWmm ?? ''} placeholder="напр. 396" onChange={(e) => updMod(sel.id, { facadeWmm: Number(e.target.value) || null, facadeParts: undefined, facadeSpecStatus: 'manual', hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })} /></label>
+                <label>Высота фасада<input type="number" value={sel.facadeHmm ?? ''} placeholder="напр. 716" onChange={(e) => updMod(sel.id, { facadeHmm: Number(e.target.value) || null, facadeParts: undefined, facadeSpecStatus: 'manual', hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })} /></label>
                 {sel.widthMm && sel.heightMm ? (
-                  <button className="btn tiny add self-end" onClick={() => updMod(sel.id, { facadeWmm: Math.round(sel.widthMm! / sel.facades), facadeHmm: sel.heightMm, facadeParts: undefined, facadeSpecStatus: 'manual' })}>
+                  <button className="btn tiny add self-end" onClick={() => updMod(sel.id, { facadeWmm: Math.round(sel.widthMm! / sel.facades), facadeHmm: sel.heightMm, facadeParts: undefined, facadeSpecStatus: 'manual', hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })}>
                     подставить {Math.round(sel.widthMm / sel.facades)}×{sel.heightMm} (Ш÷{sel.facades} × В модуля)
                   </button>
                 ) : <div className="muted small self-end">…или выберите корпус — размеры предложит техничка</div>}

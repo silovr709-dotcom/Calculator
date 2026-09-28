@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { Pricebook } from '../types';
 import { newModule, moduleToLines } from './modules';
-import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalFacadeSpecOutdated } from './facades';
+import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalFacadeSpecOutdated, isTechnicalHingeSpecOutdated } from './facades';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pb: Pricebook = JSON.parse(readFileSync(join(here, '../../public/data/pricebook-visma-2026.json'), 'utf8'));
@@ -66,6 +66,28 @@ describe('размеры фасадов по техничке Висмы', () =>
     expect(result.confidence).toBe('exact');
   });
 
+  it('пересчитывает петли для каждой двери по высоте фасада', () => {
+    const standard = inferHingeSpec(newModule('Нижний шкаф'), body('224'))!;
+    const tall = inferHingeSpec({ ...newModule('Нижний шкаф'), heightMm: 1000 }, body('224'))!;
+    expect(standard.perDoor).toEqual([2, 2]);
+    expect(standard.hinges).toBe(4);
+    expect(tall.perDoor).toEqual([3, 3]);
+    expect(tall.hinges).toBe(6);
+  });
+
+  it('использует вручную заданное количество фасадов для рекомендации петель', () => {
+    const module = { ...newModule('Нижний шкаф'), facades: 2, facadeWmm: 296, facadeHmm: 1000, facadeSpecStatus: 'recommended' as const };
+    const result = inferHingeSpec(module, body('224'))!;
+    expect(result.perDoor).toEqual([3, 3]);
+    expect(result.hinges).toBe(6);
+  });
+
+  it('находит устаревшее количество петель без явного статуса', () => {
+    const module = { ...applyTechnicalFacadeSpec(newModule('Нижний шкаф'), body('224')), heightMm: 1000, hingeSpecStatus: undefined };
+    expect(isTechnicalHingeSpecOutdated(module, body('224'))).toBe(true);
+    expect(isTechnicalHingeSpecOutdated({ ...module, hinges: 6 }, body('224'))).toBe(false);
+  });
+
   it('не затирает ручное количество петель при применении технической схемы', () => {
     const module = { ...newModule('Нижний шкаф'), hinges: 3, hingeSpecStatus: 'manual' as const };
     const result = applyTechnicalFacadeSpec(module, body('224'));
@@ -85,6 +107,8 @@ describe('размеры фасадов по техничке Висмы', () =>
     expect(module.heightMm).toBe(720);
     expect(module.facades).toBe(2);
     expect(module.drawers).toBe(0);
+    expect(module.hinges).toBe(4);
+    expect(module.hingeSpecStatus).toBe('applied');
     expect(module.facadeParts?.map((part) => `${part.widthMm}×${part.heightMm}`)).toEqual(['296×716', '296×716']);
   });
 
