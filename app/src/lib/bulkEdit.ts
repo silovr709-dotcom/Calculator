@@ -63,3 +63,32 @@ export function copyModuleValues(source: KitchenModule): BulkModulePatch {
     automaticSurcharges: [...(source.automaticSurcharges ?? [])],
   };
 }
+
+/**
+ * «Заполнить как у верхней позиции» (Ctrl+D в таблице): копирует высоту, глубину,
+ * количество опор и все материалы слотов из модуля, стоящего НАД первым выбранным,
+ * во все выбранные модули. Ширину, фасады и ящики не трогает — они обычно разные.
+ */
+export function fillFromAbove(modules: KitchenModule[], selectedIds: string[]): { modules: KitchenModule[]; changed: number; sourceName: string | null } {
+  const selected = new Set(selectedIds);
+  const firstIdx = modules.findIndex((m) => selected.has(m.id));
+  if (firstIdx <= 0) return { modules, changed: 0, sourceName: null };
+  const source = modules[firstIdx - 1];
+  if (selected.has(source.id)) return { modules, changed: 0, sourceName: null };
+  let changed = 0;
+  const next = modules.map((module, i) => {
+    if (!selected.has(module.id) || i === firstIdx - 1) return module;
+    changed += 1;
+    const res: KitchenModule = {
+      ...module,
+      heightMm: source.heightMm,
+      depthMm: source.depthMm,
+      legs: source.legs,
+      slots: JSON.parse(JSON.stringify(source.slots)) as KitchenModule['slots'],
+    };
+    if (source.heightMm !== module.heightMm && module.facadeSpecStatus === 'applied') res.facadeSpecStatus = 'outdated';
+    if (source.heightMm !== module.heightMm && module.hingeSpecStatus === 'applied') res.hingeSpecStatus = 'outdated';
+    return res;
+  });
+  return { modules: next, changed, sourceName: source.name };
+}

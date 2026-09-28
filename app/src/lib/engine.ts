@@ -1,6 +1,6 @@
 // Расчётный движок. Все цены — из снимков позиций прайса; движок ничего не придумывает.
 import type {
-  PriceItem, ProjectLine, ProjectSettings, LineCalc, Totals, SummaryGroup, LineParams,
+  PriceItem, ProjectLine, ProjectSettings, LineCalc, Totals, SummaryGroup, LineParams, ExtraExpenseDetail,
 } from '../types';
 import { SUMMARY_GROUPS } from '../types';
 
@@ -190,12 +190,20 @@ export function calcTotals(lines: ProjectLine[], settings: ProjectSettings): { l
   let costLines = 0; let clientLines = 0;
   for (const g of SUMMARY_GROUPS) { costLines = round2(costLines + byGroup[g].cost); clientLines = round2(clientLines + byGroup[g].client); }
 
-  // доп. расходы (сборка/доставка/прочее) — без наценки, к клиенту добавляются если toClient
+  // доп. расходы (сборка/доставка/прочее) — без наценки, к клиенту добавляются если toClient.
+  // Процентные расходы («% дизайнеру», «сборка 10%») считаются от клиентской суммы материалов
+  // проекта (clientLines, до самих расходов), чтобы не было рекурсии.
   let extraTotal = 0; let extraClient = 0;
-  const extras: { name: string; amount: number; toClient: boolean }[] = [];
-  if (settings.assemblyCost != null) extras.push({ name: 'Сборка', amount: settings.assemblyCost, toClient: true });
-  if (settings.deliveryCost != null) extras.push({ name: 'Доставка', amount: settings.deliveryCost, toClient: true });
-  for (const e of settings.extraExpenses) if (e.amount != null) extras.push({ name: e.name, amount: e.amount, toClient: e.toClient });
+  const extras: ExtraExpenseDetail[] = [];
+  if (settings.assemblyCost != null) extras.push({ name: 'Сборка', amount: round2(settings.assemblyCost), toClient: true, percent: null });
+  if (settings.deliveryCost != null) extras.push({ name: 'Доставка', amount: round2(settings.deliveryCost), toClient: true, percent: null });
+  for (const e of settings.extraExpenses) {
+    if (e.percent != null) {
+      extras.push({ id: e.id, name: e.name, amount: round2(clientLines * e.percent / 100), toClient: e.toClient, percent: e.percent });
+    } else if (e.amount != null) {
+      extras.push({ id: e.id, name: e.name, amount: round2(e.amount), toClient: e.toClient, percent: null });
+    }
+  }
   for (const e of extras) { extraTotal = round2(extraTotal + e.amount); if (e.toClient) extraClient = round2(extraClient + e.amount); }
 
   const cost = round2(costLines + extraTotal);
@@ -206,7 +214,7 @@ export function calcTotals(lines: ProjectLine[], settings: ProjectSettings): { l
 
   return {
     lineCalcs,
-    totals: { byGroup, emalAdjustment, costLines, extraTotal, cost, client, markupRub, markupPct, marginPct, unpricedCount },
+    totals: { byGroup, emalAdjustment, costLines, extraTotal, extraDetails: extras, cost, client, markupRub, markupPct, marginPct, unpricedCount },
   };
 }
 

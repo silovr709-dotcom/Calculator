@@ -98,7 +98,19 @@ export interface ExtraExpense {
   id: string;
   name: string;
   amount: number | null; // null = не задано (не придумываем)
+  /** Процент от клиентской суммы проекта по материалам (до расходов и правила эмали — от costLines→client).
+   *  Если задан, фиксированная сумма amount игнорируется. Отсутствует в старых проектах = фиксированная сумма. */
+  percent?: number | null;
   toClient: boolean;     // показывать в клиентской цене
+}
+
+/** Расшифровка одного доп. расхода в итогах (сборка/доставка/процентные). */
+export interface ExtraExpenseDetail {
+  id?: string;           // id расхода из настроек (для связи с редактором)
+  name: string;
+  amount: number;        // рассчитанная сумма, ₽
+  percent: number | null;// если расход процентный — сам процент
+  toClient: boolean;
 }
 
 export type ClientPriceRounding = 1 | 10 | 100 | 1000;
@@ -406,6 +418,7 @@ export interface Totals {
   emalAdjustment: { applied: boolean; area: number; amount: number } | null;
   costLines: number;      // сумма позиций (+ правило эмали)
   extraTotal: number;     // сборка + доставка + прочие расходы
+  extraDetails?: ExtraExpenseDetail[]; // расшифровка расходов с рассчитанными суммами
   cost: number;           // итого себестоимость
   client: number;         // цена для клиента
   markupRub: number;

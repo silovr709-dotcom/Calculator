@@ -172,6 +172,36 @@ describe('итоги, наценка, цена клиента, маржа', () =
     expect(totals.marginPct).toBeCloseTo((23500 / 61500) * 100, 2);
   });
 
+  it('процентные расходы считаются от клиентской суммы материалов (без рекурсии)', () => {
+    const it34 = find((i) => i.article === '34' && i.source.sheet === 'каркас шк'); // 2100
+    const lines: ProjectLine[] = [lineFromItem(it34, 'visma-2026', 10)]; // cost 21000
+    const settings = defaultSettings();
+    settings.markupBasePct = 100; // clientLines = 42000
+    settings.extraExpenses = [
+      { id: 'e1', name: 'Сборка', amount: null, percent: 10, toClient: true },   // 4200
+      { id: 'e2', name: 'Дизайнеру', amount: null, percent: 5, toClient: false }, // 2100, только в себестоимость
+      { id: 'e3', name: 'Доставка', amount: 3000, percent: null, toClient: true },
+    ];
+    const { totals } = calcTotals(lines, settings);
+    expect(totals.extraDetails).toHaveLength(3);
+    expect(totals.extraDetails![0]).toMatchObject({ name: 'Сборка', percent: 10, amount: 4200, toClient: true });
+    expect(totals.extraDetails![1]).toMatchObject({ name: 'Дизайнеру', percent: 5, amount: 2100, toClient: false });
+    expect(totals.extraDetails![2]).toMatchObject({ name: 'Доставка', percent: null, amount: 3000 });
+    expect(totals.extraTotal).toBe(4200 + 2100 + 3000);
+    expect(totals.cost).toBe(21000 + 9300);
+    // клиент: 42000 + 4200 + 3000 (дизайнеру НЕ переносим) = 49200
+    expect(totals.client).toBe(49200);
+  });
+
+  it('расход с незаданной суммой и без процента не участвует в итогах', () => {
+    const it34 = find((i) => i.article === '34' && i.source.sheet === 'каркас шк');
+    const settings = defaultSettings();
+    settings.extraExpenses = [{ id: 'e1', name: 'Подъём', amount: null, percent: null, toClient: true }];
+    const { totals } = calcTotals([lineFromItem(it34, 'visma-2026', 1)], settings);
+    expect(totals.extraTotal).toBe(0);
+    expect(totals.extraDetails).toHaveLength(0);
+  });
+
   it('без наценки цена клиента = себестоимости (наценка не задана — не придумываем)', () => {
     const it34 = find((i) => i.article === '34' && i.source.sheet === 'каркас шк');
     const { totals } = calcTotals([lineFromItem(it34, 'visma-2026', 1)], defaultSettings());

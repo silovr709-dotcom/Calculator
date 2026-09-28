@@ -245,6 +245,7 @@ export default function ProjectEditor(props: {
           title="Наценка и расходы этого проекта (не меняют цены Висмы)"
           settings={project.settings}
           onChange={(s) => props.onChange({ ...project, settings: s })}
+          extraDetails={totals.extraDetails}
         />
       )}
 
@@ -413,7 +414,15 @@ function TotalsAside(props: { totals: ReturnType<typeof calcTotals>['totals']; p
           <div className="t-row warn"><span>Эмаль &lt; 1 м² (+30%, правило прайса, {fmtNum(totals.emalAdjustment.area)} м²)</span><span>{fmtMoney(totals.emalAdjustment.amount)}</span></div>
         )}
         {totals.extraTotal !== 0 && (
-          <div className="t-row"><span>Доп. расходы (сборка/доставка/прочее)</span><span>{fmtMoney(totals.extraTotal)}</span></div>
+          <>
+            <div className="t-row"><span>Доп. расходы (сборка/доставка/прочее)</span><span>{fmtMoney(totals.extraTotal)}</span></div>
+            {(totals.extraDetails ?? []).map((d, i) => (
+              <div className="t-row sub" key={d.id ?? `${d.name}-${i}`}>
+                <span>↳ {d.name || 'Расход'}{d.percent != null ? ` (${fmtNum(d.percent, 1)}% от суммы)` : ''}{!d.toClient ? ' · не в цене клиента' : ''}</span>
+                <span>{fmtMoney(d.amount)}</span>
+              </div>
+            ))}
+          </>
         )}
         <div className="t-row total"><span>ИТОГО СЕБЕСТОИМОСТЬ</span><span>{fmtMoney(totals.cost)}</span></div>
         <div className="t-row"><span>Наценка</span><span>{fmtMoney(totals.markupRub)}{totals.markupPct != null && <em> ({fmtNum(totals.markupPct, 1)}%)</em>}</span></div>

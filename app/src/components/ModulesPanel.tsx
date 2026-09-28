@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ExtraFacadePart, KitchenModule, KitchenWall, ModuleDefaults, Pricebook, PriceItem, Project, SlotKey, Template } from '../types';
 import { MODULE_PRESETS, MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moduleFromPreset, moveModule, modulesSummary, moduleToLines, newModule, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
 import { calcTotals } from '../lib/engine';
@@ -10,8 +10,15 @@ import CatalogPicker from './CatalogPicker';
 import KitchenSketch from './KitchenSketch';
 import WallPlanner from './WallPlanner';
 import BulkEditPanel from './BulkEditPanel';
+import { fillFromAbove } from '../lib/bulkEdit';
 
 const DEFAULT_SLOTS: SlotKey[] = ['facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf', 'legs'];
+/** Предупреждение → слот, который можно сразу открыть кнопкой-действием. */
+const WARNING_SLOT: Partial<Record<string, { slot: SlotKey; label: string }>> = {
+  legs: { slot: 'legs', label: 'Выбрать опору…' },
+  handles: { slot: 'handle', label: 'Выбрать ручку…' },
+  shelves: { slot: 'shelf', label: 'Выбрать полку…' },
+};
 const ALL_SLOTS: SlotKey[] = ['body', 'facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf', 'legs'];
 const EMPTY_MODULES: KitchenModule[] = [];
 const EMPTY_DEFAULTS: ModuleDefaults = {};
@@ -41,6 +48,18 @@ export default function ModulesPanel(props: {
   const [showPlanner, setShowPlanner] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
+  const [addQ, setAddQ] = useState('');
+  const [toast, setToast] = useState<{ text: string; undo: (() => void) | null } | null>(null);
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const modsRef = useRef(mods);
+  useEffect(() => { modsRef.current = mods; }, [mods]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 7000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+  const showToast = (text: string, undo: (() => void) | null = null) => setToast({ text, undo });
 
   const shape = normalizeLayoutShape(project.sketch?.shape);
   const walls = layoutWalls(shape);
@@ -105,13 +124,11 @@ export default function ModulesPanel(props: {
     const m = newModule(type);
     setMods([...mods, m]);
     setSelId(m.id);
-    setAddOpen(false);
   };
   const addPreset = (preset: (typeof MODULE_PRESETS)[number]) => {
     const m = moduleFromPreset(preset);
     setMods([...mods, m]);
     setSelId(m.id);
-    setAddOpen(false);
   };
 
   /** Вставка модулей из шаблона: новые id, слоты и надбавки копируются как есть */
@@ -120,9 +137,63 @@ export default function ModulesPanel(props: {
     if (!copies.length) return;
     setMods([...mods, ...copies]);
     setSelId(copies[0].id);
-    setAddOpen(false);
   };
   const moduleTemplates = (props.templates ?? []).filter((t) => (t.modules?.length ?? 0) > 0);
+
+  // Фильтр меню «+ Добавить позицию»: меню остаётся открытым для добавления серии позиций
+  const normAdd = (s: string) => s.toLocaleLowerCase('ru').replace(/ё/g, 'е');
+  const addTerms = normAdd(addQ).split(/\s+/).filter(Boolean);
+  const matchAdd = (label: string) => addTerms.every((term) => normAdd(label).includes(term));
+  const filteredPresets = MODULE_PRESETS.filter((preset) => matchAdd(preset.label));
+  const filteredTypes = MODULE_TYPES.filter((type) => matchAdd(type));
+  const filteredTemplates = moduleTemplates.filter((tpl) => matchAdd(tpl.name));
+  const addFirstMatch = () => {
+    if (filteredPresets[0]) addPreset(filteredPresets[0]);
+    else if (filteredTypes[0]) addModule(filteredTypes[0]);
+    else if (filteredTemplates[0]) insertFromTemplate(filteredTemplates[0]);
+  };
+
+  /** Ctrl+D: скопировать высоту/глубину/опоры/материалы с позиции НАД первой выбранной. */
+  const applyFillFromAbove = () => {
+    const { modules: next, changed, sourceName } = fillFromAbove(modsRef.current, selectedIds);
+    if (changed === 0 || !sourceName) return;
+    setMods(next);
+    showToast(`С «${sourceName}» скопированы высота, глубина, опоры и материалы → ${changed} поз.`);
+  };
+
+  /** Навигация по таблице как в электронной таблице. */
+  const GRID_COLS = 6;
+  const focusGridCell = (r: number, col: number) => {
+    const el = tableRef.current?.querySelector<HTMLInputElement>(`input[data-grid-r="${r}"][data-grid-c="${col}"]`);
+    if (el) { el.focus(); el.select(); }
+  };
+  const onTableKeyDown = (e: React.KeyboardEvent<HTMLTableElement>) => {
+    const el = e.target as HTMLInputElement;
+    if (!el || el.tagName !== 'INPUT' || el.dataset.gridR === undefined) return;
+    const r = Number(el.dataset.gridR);
+    const c = Number(el.dataset.gridC);
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      const next = e.shiftKey ? c - 1 : c + 1;
+      if (next >= 0 && next < GRID_COLS) focusGridCell(r, next);
+      else focusGridCell(e.shiftKey ? r - 1 : r + 1, e.shiftKey ? GRID_COLS - 1 : 0);
+    } else if (e.key === 'ArrowDown') { e.preventDefault(); focusGridCell(r + 1, c); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); focusGridCell(r - 1, c); }
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); applyFillFromAbove(); }
+  };
+
+  /** Удаление позиции с возможностью отмены через тост. */
+  const deleteModuleWithUndo = (m: KitchenModule, index: number) => {
+    const snapshot = JSON.parse(JSON.stringify(m)) as KitchenModule;
+    setMods(modsRef.current.filter((x) => x.id !== m.id));
+    if (selId === m.id) setSelId(null);
+    showToast(`Позиция «${m.name}» удалена`, () => {
+      const arr = [...modsRef.current];
+      if (!arr.some((x) => x.id === snapshot.id)) arr.splice(Math.min(index, arr.length), 0, snapshot);
+      setMods(arr);
+      setToast(null);
+    });
+  };
 
   const itemName = (id: string | null | undefined) => {
     if (!id) return null;
@@ -177,44 +248,57 @@ export default function ModulesPanel(props: {
         <div className="dropdown open-on-click">
           <button className="btn primary" onClick={() => setAddOpen((v) => !v)}>+ Добавить позицию ▾</button>
           {addOpen && (
-            <div className="dropdown-menu static">
-              {MODULE_TYPES.map((t) => <button key={t} onClick={() => addModule(t)}>{t}</button>)}
-              <button onClick={() => { const t = prompt('Название собственного типа позиции:'); if (t?.trim()) addModule(t.trim()); }}>Свой тип…</button>
-              <div className="menu-sep">Быстрая конструкция:</div>
-              {MODULE_PRESETS.map((preset) => <button key={preset.id} onClick={() => addPreset(preset)}>⚡ {preset.label}</button>)}
-              {moduleTemplates.length > 0 && <div className="menu-sep">Из шаблона:</div>}
-              {moduleTemplates.map((t) => (
-                <button key={t.id} onClick={() => insertFromTemplate(t)}>⧉ {t.name} ({t.modules!.length} мод.)</button>
+            <div className="dropdown-menu static add-menu">
+              <input
+                className="add-filter"
+                placeholder="Поиск… Enter — первый, Esc — закрыть"
+                value={addQ}
+                autoFocus
+                onChange={(e) => setAddQ(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); addFirstMatch(); }
+                  if (e.key === 'Escape') { e.preventDefault(); setAddOpen(false); setAddQ(''); }
+                }}
+              />
+              {filteredTypes.length > 0 && <div className="menu-sep">Тип позиции:</div>}
+              {filteredTypes.map((tp) => <button key={tp} onClick={() => addModule(tp)}>{tp}</button>)}
+              {(addTerms.length === 0 || matchAdd('Свой тип')) && <button onClick={() => { const custom = prompt('Название собственного типа позиции:'); if (custom?.trim()) addModule(custom.trim()); }}>Свой тип…</button>}
+              {filteredPresets.length > 0 && <div className="menu-sep">Быстрая конструкция:</div>}
+              {filteredPresets.map((preset) => <button key={preset.id} onClick={() => addPreset(preset)}>⚡ {preset.label}</button>)}
+              {filteredTemplates.length > 0 && <div className="menu-sep">Из шаблона:</div>}
+              {filteredTemplates.map((tpl) => (
+                <button key={tpl.id} onClick={() => insertFromTemplate(tpl)}>⧉ {tpl.name} ({tpl.modules!.length} мод.)</button>
               ))}
+              {filteredTypes.length + filteredPresets.length + filteredTemplates.length === 0 && <div className="menu-sep">Ничего не найдено по «{addQ}»</div>}
+              <div className="menu-sep muted">Меню остаётся открытым — добавляйте позиции серией.</div>
             </div>
           )}
         </div>
         <button className="btn ghost" onClick={() => setShowSketch((value) => !value)}>🎨 {showSketch ? 'Скрыть эскиз ▲' : 'Показать эскиз ▼'}</button>
         <button className="btn ghost" onClick={() => setShowPlanner((value) => !value)}>▦ Разложить по стене</button>
         <button className="btn ghost" disabled={selectedIds.length === 0} onClick={() => setShowBulkEdit((value) => !value)}>✎ Массовое редактирование ({selectedIds.length})</button>
-        {pendingDimensionModuleCount > 0 && <button className="btn ghost" onClick={() => {
-          const next = mods.map((module) => {
-            const body = resolveSlot(module, 'body', defaults, pricebook).item;
-            return body ? applyDimensionSurcharges(module, body, pricebook) : module;
-          });
-          setMods(next);
-        }}>+ Применить наценки по габаритам ({pendingDimensionModuleCount})</button>}
-        {pendingFacadeModuleCount > 0 && <button className="btn ghost" onClick={() => {
-          const next = mods.map((module) => {
-            const body = resolveSlot(module, 'body', defaults, pricebook).item;
-            return body ? applyTechnicalFacadeSpec(module, body, module.facadeSpecStatus === 'outdated' || isTechnicalFacadeSpecOutdated(module, body)) : module;
-          });
-          setMods(next);
-        }}>+ Подставить фасады по техничке ({pendingFacadeModuleCount})</button>}
-        {pendingHingeModuleCount > 0 && <button className="btn ghost" onClick={() => {
-          const next = mods.map((module) => {
-            if (module.hingeSpecStatus === 'manual') return module;
-            const body = resolveSlot(module, 'body', defaults, pricebook).item;
-            const inference = body ? inferHingeSpec(module, body) : null;
-            return inference ? { ...module, hinges: inference.hinges, hingeSpecStatus: 'applied' as const } : module;
-          });
-          setMods(next);
-        }}>+ Подставить петли по техничке ({pendingHingeModuleCount})</button>}
+        {(pendingDimensionModuleCount + pendingFacadeModuleCount + pendingHingeModuleCount) > 0 && (
+          <button
+            className="btn ghost"
+            title="Надбавки за нестандартные габариты + фасады и петли по техничке — для всех позиций сразу"
+            onClick={() => {
+              const next = mods.map((module) => {
+                const body = resolveSlot(module, 'body', defaults, pricebook).item;
+                if (!body) return module;
+                let m = applyDimensionSurcharges(module, body, pricebook);
+                m = applyTechnicalFacadeSpec(m, body, m.facadeSpecStatus === 'outdated' || isTechnicalFacadeSpecOutdated(m, body));
+                if (m.hingeSpecStatus !== 'manual') {
+                  const inference = inferHingeSpec(m, body);
+                  if (inference) m = { ...m, hinges: inference.hinges, hingeSpecStatus: 'applied' as const };
+                }
+                return m;
+              });
+              setMods(next);
+              showToast('Рекомендации применены ко всем позициям');
+            }}
+          >✨ Применить все рекомендации ({pendingDimensionModuleCount + pendingFacadeModuleCount + pendingHingeModuleCount})</button>
+        )}
+        <button className="btn ghost" disabled={selectedIds.length === 0} title="Скопировать высоту, глубину, опоры и материалы позиции, стоящей НАД первой выбранной" onClick={applyFillFromAbove}>⤓ Заполнить с верхней (Ctrl+D)</button>
         {allProblems.some((p) => p.critical) && <span className="warn">⛔ есть позиции с неполными данными — см. проверку внизу</span>}
       </div>
 
@@ -237,8 +321,8 @@ export default function ModulesPanel(props: {
         <div className="empty">Позиций пока нет. Нажмите «+ Добавить позицию», выберите тип (нижний шкаф, пенал…), затем задайте размеры и комплектацию.</div>
       ) : (
         <>
-          <div className="module-order-hint">↕ Порядок позиций задаёт порядок модулей в эскизе</div>
-          <table className="table modules">
+          <div className="module-order-hint">↕ Порядок позиций задаёт порядок модулей в эскизе · ⌨ Enter/Tab — следующее поле · ↑↓ — между строк · Ctrl+D — заполнить с верхней позиции</div>
+          <table className="table modules" ref={tableRef} onKeyDown={onTableKeyDown}>
             <thead>
               <tr><th className="bulk-check"><input type="checkbox" aria-label="Выбрать все модули" checked={mods.length > 0 && selectedIds.length === mods.length} onChange={(event) => setSelectedIds(event.target.checked ? mods.map((module) => module.id) : [])} /></th><th>№</th><th>Позиция</th><th>Размер, мм</th><th className="num">Кол.</th><th className="num">Фас.</th><th className="num">Ящ.</th><th>Комплектация</th><th className="num">Себест.</th><th>Ст.</th><th /></tr>
             </thead>
@@ -300,25 +384,25 @@ export default function ModulesPanel(props: {
                   </td>
                   <td><b>{m.name}</b><div className="muted small">{m.type}{walls.length > 1 ? ` · ${WALL_SHORT_LABELS[moduleWall(m, shape)].toLocaleLowerCase('ru')} стена` : ''}</div>{facadeStatusLabel(m, body) && <span className={`module-facade-status ${facadeOutdated ? 'outdated' : m.facadeSpecStatus ?? 'set'}`}>{facadeStatusLabel(m, body)}</span>}{hingeStatusLabel(m, body) && <span className={`module-facade-status ${hingeOutdated ? 'outdated' : m.hingeSpecStatus ?? 'set'}`}>{hingeStatusLabel(m, body)}</span>}</td>
                   <td className="small dims" onClick={(e) => e.stopPropagation()}>
-                    <input className="dim" type="number" placeholder="Ш" value={m.widthMm ?? ''} onChange={(e) => updMod(m.id, { widthMm: Number(e.target.value) || null, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />×
-                    <input className="dim" type="number" placeholder="В" value={m.heightMm ?? ''} onChange={(e) => updMod(m.id, { heightMm: Number(e.target.value) || null, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />×
-                    <input className="dim" type="number" placeholder="Г" value={m.depthMm ?? ''} onChange={(e) => updMod(m.id, { depthMm: Number(e.target.value) || null })} />
+                    <input className="dim" type="number" placeholder="Ш" data-grid-r={idx} data-grid-c={0} onFocus={(e) => e.currentTarget.select()} value={m.widthMm ?? ''} onChange={(e) => updMod(m.id, { widthMm: Number(e.target.value) || null, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />×
+                    <input className="dim" type="number" placeholder="В" data-grid-r={idx} data-grid-c={1} onFocus={(e) => e.currentTarget.select()} value={m.heightMm ?? ''} onChange={(e) => updMod(m.id, { heightMm: Number(e.target.value) || null, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />×
+                    <input className="dim" type="number" placeholder="Г" data-grid-r={idx} data-grid-c={2} onFocus={(e) => e.currentTarget.select()} value={m.depthMm ?? ''} onChange={(e) => updMod(m.id, { depthMm: Number(e.target.value) || null })} />
                   </td>
                   <td className="num" onClick={(e) => e.stopPropagation()}>
-                    <input className="qty cell" type="number" min={0} value={m.qty} onChange={(e) => updMod(m.id, { qty: Number(e.target.value) || 0 })} />
+                    <input className="qty cell" type="number" min={0} data-grid-r={idx} data-grid-c={3} onFocus={(e) => e.currentTarget.select()} value={m.qty} onChange={(e) => updMod(m.id, { qty: Number(e.target.value) || 0 })} />
                   </td>
                   <td className="num" onClick={(e) => e.stopPropagation()}>
-                    <input className="qty cell" type="number" min={0} value={m.facades} onChange={(e) => updMod(m.id, { facades: Number(e.target.value) || 0, facadeParts: undefined, facadeSpecStatus: 'manual', hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />
+                    <input className="qty cell" type="number" min={0} data-grid-r={idx} data-grid-c={4} onFocus={(e) => e.currentTarget.select()} value={m.facades} onChange={(e) => updMod(m.id, { facades: Number(e.target.value) || 0, facadeParts: undefined, facadeSpecStatus: 'manual', hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />
                   </td>
                   <td className="num" onClick={(e) => e.stopPropagation()}>
-                    <input className="qty cell" type="number" min={0} value={m.drawers} onChange={(e) => updMod(m.id, { drawers: Number(e.target.value) || 0, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />
+                    <input className="qty cell" type="number" min={0} data-grid-r={idx} data-grid-c={5} onFocus={(e) => e.currentTarget.select()} value={m.drawers} onChange={(e) => updMod(m.id, { drawers: Number(e.target.value) || 0, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />
                   </td>
                   <td className="small">{chosen.length}/{filled.length} выбрано{c.level === 'error' ? <span className="warn"> · не хватает данных</span> : c.level === 'warn' ? ' · подтвердите' : ''}</td>
                   <td className="num">{fmtMoney(costs.get(m.id) ?? 0)}</td>
                   <td>{statusDot(c.level)}</td>
                   <td>
                     <button className="btn tiny ghost" title="Дублировать" onClick={(e) => { e.stopPropagation(); const cp = { ...JSON.parse(JSON.stringify(m)), id: newModule(m.type).id, name: `${m.name} (копия)` }; setMods([...mods, cp]); setSelId(cp.id); }}>⧉</button>
-                    <button className="btn tiny danger" title="Удалить" onClick={(e) => { e.stopPropagation(); setMods(mods.filter((x) => x.id !== m.id)); if (selId === m.id) setSelId(null); }}>✕</button>
+                    <button className="btn tiny danger" title="Удалить" onClick={(e) => { e.stopPropagation(); deleteModuleWithUndo(m, idx); }}>✕</button>
                   </td>
                 </tr>
               );
@@ -579,6 +663,9 @@ export default function ModulesPanel(props: {
               {checks.get(sel.id)!.openWarnings.map((warning) => (
                 <div className="warning-row" key={warning.code}>
                   <span>⚠ {warning.text}</span>
+                  {WARNING_SLOT[warning.code] && (
+                    <button className="btn tiny ghost" onClick={() => setPick({ slot: WARNING_SLOT[warning.code]!.slot, moduleId: sel.id })}>{WARNING_SLOT[warning.code]!.label}</button>
+                  )}
                   <button className="btn tiny" onClick={() => confirmWarning(sel.id, warning.code, true)}>✓ Подтвердить</button>
                 </div>
               ))}
@@ -611,6 +698,9 @@ export default function ModulesPanel(props: {
                     {allProblems.map((p) => (
                       <li key={`${p.mod.id}-${p.code ?? p.text}`} className={p.critical ? 'crit' : ''}>
                         <button className="link" onClick={() => setSelId(p.mod.id)}>{p.mod.name}</button>: {p.text}
+                        {p.code && WARNING_SLOT[p.code] && (
+                          <button className="btn tiny ghost" onClick={() => setPick({ slot: WARNING_SLOT[p.code!]!.slot, moduleId: p.mod.id })}>{WARNING_SLOT[p.code!]!.label}</button>
+                        )}
                         {p.code && <button className="btn tiny" onClick={() => confirmWarning(p.mod.id, p.code!, true)}>✓ Подтвердить</button>}
                       </li>
                     ))}
@@ -646,6 +736,14 @@ export default function ModulesPanel(props: {
           }}
           onClose={() => setPickSurcharge(false)}
         />
+      )}
+
+      {toast && (
+        <div className="toast" role="status">
+          <span>{toast.text}</span>
+          {toast.undo && <button className="btn tiny" onClick={() => toast.undo?.()}>↶ Отменить</button>}
+          <button className="btn tiny ghost" onClick={() => setToast(null)}>✕</button>
+        </div>
       )}
 
       {pick && (

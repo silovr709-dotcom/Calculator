@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Pricebook, PriceItem, LineParams } from '../types';
 import { fmtMoney } from '../lib/format';
+import { loadRecentItems, recordRecentItem } from '../lib/recents';
 import { sheetsFromLength, sheetLengthOf, unitIsHalfSheetAllowed, unitIsPerMeterMultiple, effectiveQty } from '../lib/engine';
 
 const norm = (s: string) => s.toLowerCase().replace(/ё/g, 'е');
@@ -31,6 +32,7 @@ export default function CatalogPicker(props: {
   const [area, setArea] = useState<string>('');
   const [len, setLen] = useState<string>('');
   const [needLen, setNeedLen] = useState<string>(''); // подбор хлыстов
+  const [recentIds, setRecentIds] = useState<string[]>(() => loadRecentItems());
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
@@ -118,11 +120,43 @@ export default function CatalogPicker(props: {
   const halfAllowed = sel ? unitIsHalfSheetAllowed(sel.unit) : false;
   const sheetLen = sel ? sheetLengthOf(sel) : 3000;
 
-  const doAdd = () => {
+  const doAdd = (keepOpen = false) => {
     if (!sel) return;
     props.onAdd(sel, qty, params);
-    props.onClose();
+    setRecentIds(recordRecentItem(sel.id));
+    if (keepOpen) {
+      setSel(null);
+      setQ('');
+      setTimeout(() => inputRef.current?.focus(), 0);
+    } else {
+      props.onClose();
+    }
   };
+
+  /** Enter в поиске: первая позиция результатов (в pickOnly — сразу выбирается). */
+  const selectFirstFromSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter' || results.length === 0) return;
+    e.preventDefault();
+    const first = results[0];
+    if (props.pickOnly) {
+      props.onAdd(first, 1, {});
+      setRecentIds(recordRecentItem(first.id));
+      if (e.ctrlKey || e.metaKey) {
+        setQ('');
+      } else {
+        props.onClose();
+      }
+      return;
+    }
+    select(first);
+  };
+
+  // «Недавние» из текущего пула — только когда поиск пуст
+  const recentItems = useMemo(() => {
+    if (q.trim()) return [];
+    const inPool = new Map(poolItems.map((i) => [i.id, i]));
+    return recentIds.map((id) => inPool.get(id)).filter((i): i is PriceItem => Boolean(i));
+  }, [q, poolItems, recentIds]);
 
   return (
     <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
@@ -133,10 +167,19 @@ export default function CatalogPicker(props: {
             <input
               ref={inputRef}
               className="search"
-              placeholder="Поиск: название, артикул, материал, категория…  (например: BLUM, петля, эмаль)"
+              placeholder="Поиск: название, артикул, материал, категория…  (Enter — первая позиция)"
               value={q}
               onChange={(e) => setQ(e.target.value)}
+              onKeyDown={selectFirstFromSearch}
             />
+            {recentItems.length > 0 && (
+              <div className="recent-chips">
+                <span className="muted small">Недавние:</span>
+                {recentItems.map((it) => (
+                  <button key={it.id} className="chip" title={it.name} onClick={() => select(it)}>{it.name.slice(0, 38)}{it.name.length > 38 ? '…' : ''}</button>
+                ))}
+              </div>
+            )}
             <div className="filters">
               <select value={cat} onChange={(e) => { setCat(e.target.value); setSub(''); }}>
                 <option value="">Все категории</option>
@@ -238,7 +281,7 @@ export default function CatalogPicker(props: {
                     </>
                   )}
                   {(sel.priceBasis === 'unit' || sel.priceBasis === 'percent_of_base' || sel.priceBasis == null) && (
-                    <label>Количество ({sel.unit ?? 'шт'})<input autoFocus type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value) || 1)} onKeyDown={(e) => { if (e.key === 'Enter') doAdd(); }} /></label>
+                    <label>Количество ({sel.unit ?? 'шт'})<input autoFocus type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value) || 1)} onKeyDown={(e) => { if (e.key === 'Enter') doAdd(e.ctrlKey || e.metaKey); }} /></label>
                   )}
                 </div>}
 
@@ -253,7 +296,8 @@ export default function CatalogPicker(props: {
                 </div>}
                 <div className="modal-actions">
                   <button className="btn ghost" onClick={props.onClose}>Отмена (Esc)</button>
-                  <button className="btn primary" onClick={doAdd}>{props.pickOnly ? 'Выбрать эту позицию' : 'Добавить в расчёт (Enter)'}</button>
+                  {!props.pickOnly && <button className="btn ghost" onClick={() => doAdd(true)}>Добавить и продолжить (Ctrl+Enter)</button>}
+                  <button className="btn primary" onClick={() => doAdd(false)}>{props.pickOnly ? 'Выбрать эту позицию' : 'Добавить в расчёт (Enter)'}</button>
                 </div>
               </>
             )}
