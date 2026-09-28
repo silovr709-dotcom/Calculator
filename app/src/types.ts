@@ -183,6 +183,9 @@ export interface CalculationVariant {
   defaults: ModuleDefaults;
   /** Явные значения слотов варианта сильнее ручной комплектации модуля. */
   slotOverrides: Partial<Record<SlotKey, string | null>>;
+  /** Переопределение столешницы/стеновой панели (позиции project.lines — не слоты модулей).
+   *  Отсутствует в старых проектах = используются позиции основного проекта. */
+  surfaceOverrides?: Partial<Record<'worktop' | 'wallPanel', string | null>>;
   settings: ProjectSettings;
   clientVisible: boolean;
 }

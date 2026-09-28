@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { CalculationVariant, Pricebook, Project, SlotKey } from '../types';
 import { SLOT_LABELS, SLOT_POOLS } from '../lib/modules';
+import { checklistPool, lineMatchesChecklistKey } from '../lib/checklist';
 import { calculateVariant, createVariant, VARIANT_PRESETS } from '../lib/variants';
 import { fmtMoney } from '../lib/format';
 import CatalogPicker from './CatalogPicker';
@@ -11,6 +12,7 @@ export default function VariantsPanel(props: { project: Project; pricebook: Pric
   const { project, pricebook } = props;
   const variants = project.variants ?? [];
   const [pick, setPick] = useState<{ variantId: string; slot: SlotKey } | null>(null);
+  const [surfacePick, setSurfacePick] = useState<{ variantId: string; key: 'worktop' | 'wallPanel' } | null>(null);
 
   const createPresets = () => {
     const next = VARIANT_PRESETS.map((preset) => createVariant(preset.name, preset.description, project.settings));
@@ -41,12 +43,25 @@ export default function VariantsPanel(props: { project: Project; pricebook: Pric
           <div className="variant-composition"><b>Состав: {calculated.lines.length} строк</b><span>{(project.modules ?? []).length} модулей · {project.lines.length} доп. позиций</span></div>
           <h4>Фасады и фурнитура</h4>
           <div className="variant-slots">{VARIANT_SLOTS.map((slot) => { const item = pricebook.items.find((candidate) => candidate.id === variant.slotOverrides[slot]); return <div className="variant-slot" key={slot}><span>{SLOT_LABELS[slot]}</span><b className={item ? '' : 'muted'}>{item?.name ?? 'Без переопределения'}</b><button className="btn tiny" onClick={() => setPick({ variantId: variant.id, slot })}>Выбрать</button>{item && <button className="btn tiny ghost" onClick={() => updateVariant(variant.id, { slotOverrides: { ...variant.slotOverrides, [slot]: null } })}>✕</button>}</div>; })}</div>
+          <h4>Столешница и стеновая панель</h4>
+          <div className="variant-slots">{(['worktop', 'wallPanel'] as const).map((surfaceKey) => {
+            const overrideId = variant.surfaceOverrides?.[surfaceKey];
+            const item = pricebook.items.find((candidate) => candidate.id === overrideId);
+            const projectLine = (project.lines ?? []).find((line) => lineMatchesChecklistKey(surfaceKey, line));
+            return <div className="variant-slot" key={surfaceKey}>
+              <span>{surfaceKey === 'worktop' ? 'Столешница' : 'Стеновая панель'}</span>
+              <b className={item ? '' : 'muted'}>{item?.name ?? (projectLine ? `Как в проекте: ${projectLine.name.slice(0, 42)}` : 'Как в проекте (позиции нет)')}</b>
+              <button className="btn tiny" onClick={() => setSurfacePick({ variantId: variant.id, key: surfaceKey })}>Выбрать</button>
+              {item && <button className="btn tiny ghost" title="Вернуть позицию проекта" onClick={() => updateVariant(variant.id, { surfaceOverrides: { ...variant.surfaceOverrides, [surfaceKey]: null } })}>✕</button>}
+            </div>;
+          })}</div>
           <label className="chk variant-visible"><input type="checkbox" checked={variant.clientVisible} onChange={(event) => updateVariant(variant.id, { clientVisible: event.target.checked })} /> показывать в клиентской версии</label>
           <button className={`btn ${selected ? 'primary' : 'ghost'} variant-select`} onClick={() => props.onChange({ ...project, selectedVariantId: variant.id })}>{selected ? '✓ Выбран для КП' : 'Выбрать для клиентского КП'}</button>
         </section>;
       })}</div>
       <div className="note">В КП попадут варианты с флажком «показывать». Выбранный вариант отмечен как основной и используется для итоговой цены.</div>
       {pick && <CatalogPicker pricebook={pricebook} pickOnly poolFilter={SLOT_POOLS[pick.slot]} title={`Переопределение: ${SLOT_LABELS[pick.slot]}`} onAdd={(item) => { const variant = variants.find((candidate) => candidate.id === pick.variantId); if (variant) updateVariant(variant.id, { slotOverrides: { ...variant.slotOverrides, [pick.slot]: item.id } }); setPick(null); }} onClose={() => setPick(null)} />}
+      {surfacePick && <CatalogPicker pricebook={pricebook} pickOnly poolFilter={(i) => checklistPool(surfacePick.key, i.category, i.name)} title={`Переопределение: ${surfacePick.key === 'worktop' ? 'Столешница' : 'Стеновая панель'} — длина/листы берутся из позиции проекта`} onAdd={(item) => { const variant = variants.find((candidate) => candidate.id === surfacePick.variantId); if (variant) updateVariant(variant.id, { surfaceOverrides: { ...variant.surfaceOverrides, [surfacePick.key]: item.id } }); setSurfacePick(null); }} onClose={() => setSurfacePick(null)} />}
     </div>
   );
 }
