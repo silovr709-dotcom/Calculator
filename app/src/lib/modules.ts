@@ -228,7 +228,7 @@ export function parseBodyDoors(name: string): number | null {
 export function slotNeed(m: KitchenModule, key: SlotKey): number {
   switch (key) {
     case 'body': return 1;
-    case 'facade': return m.facades;
+    case 'facade': return m.facades + (m.extraFacadeParts ?? []).reduce((sum, part) => sum + part.qty, 0);
     case 'frame': return m.facades;
     case 'hinge': return m.hinges;
     case 'drawerSys': return m.drawers;
@@ -282,6 +282,16 @@ export function checkModule(m: KitchenModule, defaults: ModuleDefaults, priceboo
     } else if (!m.facadeWmm || !m.facadeHmm) errors.push('Не указан размер фасада (Ш×В, мм) — цена материала за м²');
     const frame = r('frame').item;
     if (frame && (!f.item || f.item.category !== 'Фасады: Стекло и зеркала')) errors.push('Алюминиевая рамка выбрана, но материал фасада не относится к стеклу/зеркалу');
+  }
+  // Отдельные фасадные детали: независимая проверка, работает и без конструктивных фасадов.
+  const extras = m.extraFacadeParts ?? [];
+  if (extras.length > 0) {
+    if (!r('facade').item) errors.push('Отдельные фасадные детали: не выбран материал фасада');
+    for (const [index, part] of extras.entries()) {
+      const label = part.label?.trim() || `деталь ${index + 1}`;
+      if (part.widthMm <= 0 || part.heightMm <= 0) errors.push(`Отдельная фасадная «${label}»: укажите ширину и высоту больше 0`);
+      if (part.qty <= 0) errors.push(`Отдельная фасадная «${label}»: укажите количество больше 0`);
+    }
   }
   if (m.drawers > 0 && !r('drawerSys').item) errors.push('Указаны ящики, но система выдвижения не выбрана');
   if (m.hinges > 0 && !r('hinge').item) errors.push('Указано количество петель, но модель петли не выбрана');
@@ -356,6 +366,13 @@ export function moduleToLines(m: KitchenModule, defaults: ModuleDefaults, priceb
     const dimensions = { widthMm: m.facadeWmm, heightMm: m.facadeHmm };
     push(r('facade'), m.facades * m.qty, dimensions, `${m.facades} фасада ${m.facadeWmm}×${m.facadeHmm} мм`);
     push(r('frame'), m.facades * m.qty, dimensions, `${m.facades} алюминиевые рамки ${m.facadeWmm}×${m.facadeHmm} мм`);
+  }
+  // Отдельные фасадные детали (боковина, накладка): только материал фасада,
+  // каждая — своей строкой по своей площади. Рамка на них не начисляется.
+  for (const [index, part] of (m.extraFacadeParts ?? []).entries()) {
+    const kindLabel = part.kind === 'drawer' ? 'фасад ящика' : part.kind === 'door' ? 'фасад двери' : 'фасадная панель';
+    const name = part.label?.trim() || `${part.kind === 'drawer' ? 'Фасад ящика' : part.kind === 'door' ? 'Фасад двери' : 'Фасадная панель'} ${index + 1}`;
+    push(r('facade'), part.qty * m.qty, { widthMm: part.widthMm, heightMm: part.heightMm }, `${name}: ${part.widthMm}×${part.heightMm} мм (${kindLabel})`);
   }
   push(r('hinge'), m.hinges * m.qty, undefined, `${m.hinges} петли`);
   push(r('drawerSys'), m.drawers * m.qty, undefined, `${m.drawers} ящика`);

@@ -306,6 +306,23 @@ export interface FacadePart {
   source?: 'technical' | 'manual';
 }
 
+/**
+ * Отдельная фасадная деталь со своими размерами: боковина, накладка,
+ * фасад холодильника и т.п. Не входит в конструктив модуля и не влияет
+ * на техничку фасадов/петель; считается отдельной строкой по своей площади.
+ */
+export interface ExtraFacadePart {
+  widthMm: number;
+  heightMm: number;
+  kind: 'door' | 'drawer' | 'panel';
+  /** Количество деталей на один модуль. */
+  qty: number;
+  /** Свободное название детали, напр. «Боковина правая». */
+  label?: string;
+  /** Отдельные детали всегда задаются вручную. */
+  source?: 'manual';
+}
+
 export type FacadeSpecStatus = 'recommended' | 'applied' | 'manual' | 'outdated';
 
 export interface KitchenModule {
@@ -329,6 +346,8 @@ export interface KitchenModule {
   facadeHmm: number | null;
   /** Точные размеры каждого фасада по техничке фабрики. Необязательное поле для старых проектов. */
   facadeParts?: FacadePart[];
+  /** Отдельные фасадные детали со своими размерами (боковины, накладки). Не связаны с конструктивом. */
+  extraFacadeParts?: ExtraFacadePart[];
   /** Состояние рекомендации фасадов: старые проекты без поля продолжают работать. */
   facadeSpecStatus?: FacadeSpecStatus;
   /** Состояние рекомендации петель: количество можно оставить ручным. */

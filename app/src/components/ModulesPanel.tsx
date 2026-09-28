@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { KitchenModule, KitchenWall, ModuleDefaults, Pricebook, PriceItem, Project, SlotKey, Template } from '../types';
+import type { ExtraFacadePart, KitchenModule, KitchenWall, ModuleDefaults, Pricebook, PriceItem, Project, SlotKey, Template } from '../types';
 import { MODULE_PRESETS, MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moduleFromPreset, moveModule, modulesSummary, moduleToLines, newModule, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
 import { calcTotals } from '../lib/engine';
 import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalFacadeSpecOutdated, isTechnicalHingeSpecOutdated } from '../lib/facades';
@@ -414,6 +414,52 @@ export default function ModulesPanel(props: {
               {sel.hingeSpecStatus === 'manual' && <button className="btn tiny ghost" onClick={() => updMod(sel.id, { hinges: hingeInference.hinges, hingeSpecStatus: 'applied' })}>Заменить ручное количество рекомендацией</button>}
             </section>
           )}
+          <section className="extra-facade-card">
+            <div className="facade-tech-head">
+              <div>
+                <h4>Отдельные фасадные детали</h4>
+                <div className="muted small">Боковины, накладки, фасады холодильника и другие детали со своими размерами. Каждая попадает в расчёт отдельной строкой по своей площади.</div>
+              </div>
+              <span className="badge man">вручную</span>
+            </div>
+            {(sel.extraFacadeParts ?? []).length > 0 && (
+              <div className="extra-facade-list">
+                {(sel.extraFacadeParts ?? []).map((part, index) => {
+                  const area = (part.widthMm / 1000) * (part.heightMm / 1000) * part.qty * sel.qty;
+                  const updPart = (patch: Partial<ExtraFacadePart>) => {
+                    const next = [...(sel.extraFacadeParts ?? [])];
+                    next[index] = { ...next[index], ...patch };
+                    updMod(sel.id, { extraFacadeParts: next });
+                  };
+                  return (
+                    <div className="extra-facade-row" key={index}>
+                      <input className="extra-facade-name" aria-label={`Название детали ${index + 1}`} value={part.label ?? ''} placeholder={`Деталь ${index + 1} (напр. Боковина правая)`}
+                        onChange={(e) => updPart({ label: e.target.value })} />
+                      <select aria-label={`Тип детали ${index + 1}`} value={part.kind} onChange={(e) => updPart({ kind: e.target.value as ExtraFacadePart['kind'] })}>
+                        <option value="panel">панель</option>
+                        <option value="door">дверь</option>
+                        <option value="drawer">ящик</option>
+                      </select>
+                      <span className="extra-facade-dims">
+                        <input aria-label={`Ширина детали ${index + 1}`} type="number" min={0} value={part.widthMm} onChange={(e) => updPart({ widthMm: Number(e.target.value) || 0 })} />×
+                        <input aria-label={`Высота детали ${index + 1}`} type="number" min={0} value={part.heightMm} onChange={(e) => updPart({ heightMm: Number(e.target.value) || 0 })} /> мм ×
+                        <input aria-label={`Количество детали ${index + 1}`} type="number" min={0} value={part.qty} onChange={(e) => updPart({ qty: Number(e.target.value) || 0 })} /> шт
+                      </span>
+                      <span className="extra-facade-area muted small">{part.widthMm > 0 && part.heightMm > 0 && part.qty > 0 ? `${fmtNum(area)} м²` : 'заполните размеры'}</span>
+                      <button className="btn tiny danger" title="Убрать деталь" onClick={() => updMod(sel.id, { extraFacadeParts: (sel.extraFacadeParts ?? []).filter((_, i) => i !== index) })}>✕</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="extra-facade-actions">
+              <button className="btn tiny add" onClick={() => updMod(sel.id, { extraFacadeParts: [...(sel.extraFacadeParts ?? []), { widthMm: sel.depthMm ?? 596, heightMm: sel.heightMm ?? 720, kind: 'panel', qty: 1, label: 'Боковина', source: 'manual' }] })}>＋ Боковина (Г×В модуля)</button>
+              <button className="btn tiny add" onClick={() => updMod(sel.id, { extraFacadeParts: [...(sel.extraFacadeParts ?? []), { widthMm: 596, heightMm: 720, kind: 'panel', qty: 1, label: '', source: 'manual' }] })}>＋ Добавить деталь</button>
+            </div>
+            {(sel.extraFacadeParts ?? []).length > 0 && (
+              <div className="muted small">Материал берётся из слота «Фасад»; алюминиевая рамка на отдельные детали не начисляется. Площадь считается на один модуль и умножается на его количество.</div>
+            )}
+          </section>
           {sel.facades > 0 && !sel.facadeParts && (
             <>
               <h4>Размер одного фасада, мм (для старого или ручного расчёта)</h4>

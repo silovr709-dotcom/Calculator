@@ -42,6 +42,47 @@ describe('быстрые конструкции', () => {
   });
 });
 
+describe('отдельные фасадные детали (боковины, накладки)', () => {
+  const sidePanel = { widthMm: 596, heightMm: 2100, qty: 2, kind: 'panel' as const, label: 'Боковина', source: 'manual' as const };
+
+  it('считает каждую деталь отдельной строкой по своей площади и количеству', () => {
+    const m = newModule('Пенал');
+    m.qty = 1;
+    m.slots.facade = { mode: 'manual', itemId: mdf16.id }; // 3600 ₽/м²
+    m.extraFacadeParts = [sidePanel];
+    const lines = moduleToLines(m, {}, pb);
+    const facadeLines = lines.filter((line) => line.itemId === mdf16.id);
+    expect(facadeLines).toHaveLength(1);
+    expect(facadeLines[0].qty).toBe(2); // количество деталей × модулей
+    expect(facadeLines[0].params).toEqual({ widthMm: 596, heightMm: 2100 });
+    expect(facadeLines[0].note).toMatch(/Боковина/);
+    expect(facadeLines[0].note).toMatch(/фасадная панель/);
+  });
+
+  it('не ломает конструктивные фасады и не начисляет на отдельную деталь рамку', () => {
+    const m = newModule('Верхний шкаф');
+    m.facades = 1; m.facadeWmm = 600; m.facadeHmm = 700;
+    m.slots.facade = { mode: 'manual', itemId: glass.id };
+    m.slots.frame = { mode: 'manual', itemId: aluminiumFrame.id };
+    m.extraFacadeParts = [{ ...sidePanel, qty: 1 }];
+    const lines = moduleToLines(m, {}, pb);
+    const facadeLines = lines.filter((line) => line.itemId === glass.id);
+    expect(facadeLines).toHaveLength(2); // дверь по техничке + отдельная боковина
+    const frameLines = lines.filter((line) => line.itemId === aluminiumFrame.id);
+    expect(frameLines).toHaveLength(1); // рамка только на дверь, не на боковину
+    expect(frameLines[0].params).toEqual({ widthMm: 600, heightMm: 700 });
+  });
+
+  it('валидация требует размеры, количество и материал фасада', () => {
+    const m = newModule('Пенал');
+    m.extraFacadeParts = [{ widthMm: 0, heightMm: 2100, qty: 0, kind: 'panel', label: 'Боковина', source: 'manual' }];
+    const check = checkModule(m, {}, pb);
+    expect(check.errors.some((error) => error.includes('материал фасада'))).toBe(true);
+    expect(check.errors.some((error) => error.includes('ширину и высоту'))).toBe(true);
+    expect(check.errors.some((error) => error.includes('количество'))).toBe(true);
+  });
+});
+
 describe('стекло и алюминиевая рамка', () => {
   it('представляет все цвета рамок явными позициями с сохранением цены модели', () => {
     const frames = pb.items.filter((item) => item.subcategory?.startsWith('Алюм. рамка'));
