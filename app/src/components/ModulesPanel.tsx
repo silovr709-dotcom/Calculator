@@ -2,10 +2,14 @@ import { useMemo, useState } from 'react';
 import type { KitchenModule, KitchenWall, ModuleDefaults, Pricebook, Project, SlotKey, Template } from '../types';
 import { MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moveModule, modulesSummary, moduleToLines, newModule, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
 import { calcTotals } from '../lib/engine';
+import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec } from '../lib/facades';
+import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surcharges';
 import { fmtMoney, fmtNum } from '../lib/format';
 import { LAYOUT_SHAPES, WALL_LABELS, WALL_SHORT_LABELS, layoutWalls, moduleWall, normalizeLayoutShape } from '../lib/kitchenSketch';
 import CatalogPicker from './CatalogPicker';
 import KitchenSketch from './KitchenSketch';
+import WallPlanner from './WallPlanner';
+import BulkEditPanel from './BulkEditPanel';
 
 const DEFAULT_SLOTS: SlotKey[] = ['facade', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'];
 const ALL_SLOTS: SlotKey[] = ['body', 'facade', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'];
@@ -34,6 +38,9 @@ export default function ModulesPanel(props: {
   const [pickSurcharge, setPickSurcharge] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; after: boolean } | null>(null);
+  const [showPlanner, setShowPlanner] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
 
   const shape = normalizeLayoutShape(project.sketch?.shape);
   const walls = layoutWalls(shape);
@@ -52,6 +59,13 @@ export default function ModulesPanel(props: {
     if (nextModule !== module) setMods(mods.map((item) => (item.id === moduleId ? nextModule : item)));
   };
   const sel = mods.find((m) => m.id === selId) ?? null;
+  const selectedBody = sel ? resolveSlot(sel, 'body', defaults, pricebook).item : null;
+  const facadeInference = sel && selectedBody ? inferFacadeSpec(sel, selectedBody) : null;
+  const hingeInference = sel && selectedBody ? inferHingeSpec(sel, selectedBody) : null;
+  const dimensionSurchargeRecommendations = sel && selectedBody
+    ? inferDimensionSurcharges(sel, selectedBody, pricebook)
+    : [];
+  const pendingDimensionSurcharges = dimensionSurchargeRecommendations.filter((item) => !(sel?.surcharges ?? []).includes(item.itemId));
 
   const checks = useMemo(() => new Map(mods.map((m) => [m.id, checkModule(m, defaults, pricebook)])), [mods, defaults, pricebook]);
   const costs = useMemo(() => new Map(mods.map((m) => {
@@ -59,6 +73,20 @@ export default function ModulesPanel(props: {
     return [m.id, calcTotals(lines, project.settings).totals.cost];
   })), [mods, defaults, pricebook, project.settings]);
   const summary = useMemo(() => modulesSummary(mods), [mods]);
+  const pendingDimensionModuleCount = useMemo(() => mods.filter((module) => {
+    const body = resolveSlot(module, 'body', defaults, pricebook).item;
+    if (!body) return false;
+    const recommendations = inferDimensionSurcharges(module, body, pricebook);
+    return recommendations.some((item) => !(module.surcharges ?? []).includes(item.itemId));
+  }).length, [mods, defaults, pricebook]);
+  const selectedModuleLines = sel ? moduleToLines(sel, defaults, pricebook) : [];
+  const selectedModuleCalculation = sel ? calcTotals(selectedModuleLines, project.settings) : null;
+  const pendingFacadeModuleCount = useMemo(() => mods.filter((module) => {
+    const body = resolveSlot(module, 'body', defaults, pricebook).item;
+    const empty = !module.facadeParts?.length && module.facades === 0;
+    const outdated = module.facadeSpecStatus === 'outdated';
+    return Boolean(body && inferFacadeSpec(module, body) && (empty || outdated));
+  }).length, [mods, defaults, pricebook]);
 
   const addModule = (type: string) => {
     const m = newModule(type);
@@ -84,6 +112,9 @@ export default function ModulesPanel(props: {
   };
 
   const statusDot = (l: 'ok' | 'warn' | 'error') => l === 'ok' ? <span className="dot ok" title="Готово">●</span> : l === 'warn' ? <span className="dot warn" title="Требует подтверждения">●</span> : <span className="dot err" title="Не хватает обязательных данных">●</span>;
+  const dimensionLabel = (dimension: 'width' | 'height' | 'depth') => ({ width: 'ширине', height: 'высоте', depth: 'глубине' }[dimension]);
+  const facadeStatusLabel = (module: KitchenModule) => module.facadeSpecStatus === 'applied' ? 'фасады: техничка' : module.facadeSpecStatus === 'manual' ? 'фасады: вручную' : module.facadeSpecStatus === 'outdated' ? 'фасады: обновить' : module.facadeParts?.length ? 'фасады: заданы' : null;
+  const hingeStatusLabel = (module: KitchenModule) => module.hingeSpecStatus === 'applied' ? 'петли: техничка' : module.hingeSpecStatus === 'manual' ? 'петли: вручную' : module.hingeSpecStatus === 'outdated' ? 'петли: обновить' : null;
 
   const allProblems = mods.flatMap((m) => {
     const c = checks.get(m.id)!;
@@ -132,8 +163,27 @@ export default function ModulesPanel(props: {
           )}
         </div>
         <button className="btn ghost" onClick={() => setShowSketch((value) => !value)}>🎨 {showSketch ? 'Скрыть эскиз ▲' : 'Показать эскиз ▼'}</button>
+        <button className="btn ghost" onClick={() => setShowPlanner((value) => !value)}>▦ Разложить по стене</button>
+        <button className="btn ghost" disabled={selectedIds.length === 0} onClick={() => setShowBulkEdit((value) => !value)}>✎ Массовое редактирование ({selectedIds.length})</button>
+        {pendingDimensionModuleCount > 0 && <button className="btn ghost" onClick={() => {
+          const next = mods.map((module) => {
+            const body = resolveSlot(module, 'body', defaults, pricebook).item;
+            return body ? applyDimensionSurcharges(module, body, pricebook) : module;
+          });
+          setMods(next);
+        }}>+ Применить наценки по габаритам ({pendingDimensionModuleCount})</button>}
+        {pendingFacadeModuleCount > 0 && <button className="btn ghost" onClick={() => {
+          const next = mods.map((module) => {
+            const body = resolveSlot(module, 'body', defaults, pricebook).item;
+            return body ? applyTechnicalFacadeSpec(module, body, module.facadeSpecStatus === 'outdated') : module;
+          });
+          setMods(next);
+        }}>+ Подставить фасады по техничке ({pendingFacadeModuleCount})</button>}
         {allProblems.some((p) => p.critical) && <span className="warn">⛔ есть позиции с неполными данными — см. проверку внизу</span>}
       </div>
+
+      {showPlanner && <WallPlanner project={project} onChange={props.onChange} onClose={() => setShowPlanner(false)} />}
+      {showBulkEdit && <BulkEditPanel modules={mods} selectedIds={selectedIds} pricebook={pricebook} onApply={(next) => props.onChange({ ...project, modules: next })} onClose={() => setShowBulkEdit(false)} />}
 
       {showSketch && (
         <KitchenSketch
@@ -154,7 +204,7 @@ export default function ModulesPanel(props: {
           <div className="module-order-hint">↕ Порядок позиций задаёт порядок модулей в эскизе</div>
           <table className="table modules">
             <thead>
-              <tr><th>№</th><th>Позиция</th><th>Размер, мм</th><th className="num">Кол.</th><th className="num">Фас.</th><th className="num">Ящ.</th><th>Комплектация</th><th className="num">Себест.</th><th>Ст.</th><th /></tr>
+              <tr><th className="bulk-check"><input type="checkbox" aria-label="Выбрать все модули" checked={mods.length > 0 && selectedIds.length === mods.length} onChange={(event) => setSelectedIds(event.target.checked ? mods.map((module) => module.id) : [])} /></th><th>№</th><th>Позиция</th><th>Размер, мм</th><th className="num">Кол.</th><th className="num">Фас.</th><th className="num">Ящ.</th><th>Комплектация</th><th className="num">Себест.</th><th>Ст.</th><th /></tr>
             </thead>
             <tbody>
               {mods.map((m, idx) => {
@@ -185,6 +235,9 @@ export default function ModulesPanel(props: {
                       setDropTarget(null);
                     }}
                   >
+                  <td className="bulk-check" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" aria-label={`Выбрать ${m.name}`} checked={selectedIds.includes(m.id)} onChange={(event) => setSelectedIds((ids) => event.target.checked ? [...ids, m.id] : ids.filter((id) => id !== m.id))} />
+                  </td>
                   <td className="muted module-order-cell">
                     <span
                       className="module-drag-handle"
@@ -206,17 +259,17 @@ export default function ModulesPanel(props: {
                       <button className="btn tiny ghost" title="Переместить ниже" disabled={idx === mods.length - 1} onClick={(e) => { e.stopPropagation(); reorder(m.id, 1); }}>▼</button>
                     </span>
                   </td>
-                  <td><b>{m.name}</b><div className="muted small">{m.type}{walls.length > 1 ? ` · ${WALL_SHORT_LABELS[moduleWall(m, shape)].toLocaleLowerCase('ru')} стена` : ''}</div></td>
+                  <td><b>{m.name}</b><div className="muted small">{m.type}{walls.length > 1 ? ` · ${WALL_SHORT_LABELS[moduleWall(m, shape)].toLocaleLowerCase('ru')} стена` : ''}</div>{facadeStatusLabel(m) && <span className={`module-facade-status ${m.facadeSpecStatus ?? 'set'}`}>{facadeStatusLabel(m)}</span>}{hingeStatusLabel(m) && <span className={`module-facade-status ${m.hingeSpecStatus ?? 'set'}`}>{hingeStatusLabel(m)}</span>}</td>
                   <td className="small dims" onClick={(e) => e.stopPropagation()}>
-                    <input className="dim" type="number" placeholder="Ш" value={m.widthMm ?? ''} onChange={(e) => updMod(m.id, { widthMm: Number(e.target.value) || null })} />×
-                    <input className="dim" type="number" placeholder="В" value={m.heightMm ?? ''} onChange={(e) => updMod(m.id, { heightMm: Number(e.target.value) || null })} />×
+                    <input className="dim" type="number" placeholder="Ш" value={m.widthMm ?? ''} onChange={(e) => updMod(m.id, { widthMm: Number(e.target.value) || null, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />×
+                    <input className="dim" type="number" placeholder="В" value={m.heightMm ?? ''} onChange={(e) => updMod(m.id, { heightMm: Number(e.target.value) || null, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />×
                     <input className="dim" type="number" placeholder="Г" value={m.depthMm ?? ''} onChange={(e) => updMod(m.id, { depthMm: Number(e.target.value) || null })} />
                   </td>
                   <td className="num" onClick={(e) => e.stopPropagation()}>
                     <input className="qty cell" type="number" min={0} value={m.qty} onChange={(e) => updMod(m.id, { qty: Number(e.target.value) || 0 })} />
                   </td>
                   <td className="num" onClick={(e) => e.stopPropagation()}>
-                    <input className="qty cell" type="number" min={0} value={m.facades} onChange={(e) => updMod(m.id, { facades: Number(e.target.value) || 0 })} />
+                    <input className="qty cell" type="number" min={0} value={m.facades} onChange={(e) => updMod(m.id, { facades: Number(e.target.value) || 0, facadeParts: undefined, facadeSpecStatus: 'manual' })} />
                   </td>
                   <td className="num" onClick={(e) => e.stopPropagation()}>
                     <input className="qty cell" type="number" min={0} value={m.drawers} onChange={(e) => updMod(m.id, { drawers: Number(e.target.value) || 0 })} />
@@ -256,30 +309,83 @@ export default function ModulesPanel(props: {
           </div>
           <h4>Размеры модуля, мм</h4>
           <div className="grid3">
-            <label>Ширина<input type="number" value={sel.widthMm ?? ''} placeholder="напр. 800" onChange={(e) => updMod(sel.id, { widthMm: Number(e.target.value) || null })} /></label>
-            <label>Высота<input type="number" value={sel.heightMm ?? ''} placeholder="напр. 720" onChange={(e) => updMod(sel.id, { heightMm: Number(e.target.value) || null })} /></label>
+            <label>Ширина<input type="number" value={sel.widthMm ?? ''} placeholder="напр. 800" onChange={(e) => updMod(sel.id, { widthMm: Number(e.target.value) || null, facadeSpecStatus: sel.facadeSpecStatus === 'applied' ? 'outdated' : sel.facadeSpecStatus, hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })} /></label>
+            <label>Высота<input type="number" value={sel.heightMm ?? ''} placeholder="напр. 720" onChange={(e) => updMod(sel.id, { heightMm: Number(e.target.value) || null, facadeSpecStatus: sel.facadeSpecStatus === 'applied' ? 'outdated' : sel.facadeSpecStatus, hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })} /></label>
             <label>Глубина<input type="number" value={sel.depthMm ?? ''} placeholder="напр. 560" onChange={(e) => updMod(sel.id, { depthMm: Number(e.target.value) || null })} /></label>
           </div>
+          {selectedModuleCalculation && selectedModuleLines.length > 0 && (
+            <section className="module-formula-card">
+              <div className="facade-tech-head"><h4>Расшифровка расчёта модуля</h4><b>{fmtMoney(selectedModuleCalculation.totals.cost)}</b></div>
+              <div className="muted small">Каждая строка считается отдельно; процентные надбавки привязаны только к строке корпуса.</div>
+              <div className="module-formula-list">
+                {selectedModuleLines.map((line) => {
+                  const calculation = selectedModuleCalculation.lineCalcs.get(line.id);
+                  return <div className="module-formula-row" key={line.id}>
+                    <span>{line.name.slice(0, 55)}<small>{line.note?.replace(`Модуль: ${sel.name} — `, '')}</small></span>
+                    <b>{calculation?.sum != null ? `${fmtNum(calculation.qtyEffective)} × ${fmtMoney(line.price)} = ${fmtMoney(calculation.sum)}` : 'нет цены'}</b>
+                  </div>;
+                })}
+              </div>
+            </section>
+          )}
           <h4>Конструкция (на один модуль)</h4>
           <div className="grid4">
-            <label>Фасадов, шт<input type="number" min={0} value={sel.facades} onChange={(e) => updMod(sel.id, { facades: Number(e.target.value) || 0 })} /></label>
+            <label>Фасадов, шт<input type="number" min={0} value={sel.facades} onChange={(e) => updMod(sel.id, { facades: Number(e.target.value) || 0, facadeParts: undefined, facadeSpecStatus: 'manual', hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })} /></label>
             <label>Ящиков, шт<input type="number" min={0} value={sel.drawers} onChange={(e) => updMod(sel.id, { drawers: Number(e.target.value) || 0 })} /></label>
             <label>Полок, шт<input type="number" min={0} value={sel.shelves} onChange={(e) => updMod(sel.id, { shelves: Number(e.target.value) || 0 })} /></label>
-            <label>Петель, шт<input type="number" min={0} value={sel.hinges} onChange={(e) => updMod(sel.id, { hinges: Number(e.target.value) || 0 })} /></label>
+            <label>Петель, шт<input type="number" min={0} value={sel.hinges} onChange={(e) => updMod(sel.id, { hinges: Number(e.target.value) || 0, hingeSpecStatus: 'manual' })} /></label>
             <label>Ручек, шт<input type="number" min={0} value={sel.handles} onChange={(e) => updMod(sel.id, { handles: Number(e.target.value) || 0 })} /></label>
             <label>Подъёмников, шт<input type="number" min={0} value={sel.lifts} onChange={(e) => updMod(sel.id, { lifts: Number(e.target.value) || 0 })} /></label>
           </div>
-          {sel.facades > 0 && (
+          {facadeInference && (
+            <section className="facade-tech-card">
+              <div className="facade-tech-head">
+                <div><h4>Фасады по техничке фабрики</h4><div className="muted small">{facadeInference.source} · корпус: {facadeInference.bodyWidthMm} мм · фасадов: {facadeInference.facades}</div></div>
+                <span className={`badge ${facadeInference.confidence === 'exact' ? 'tech-exact' : 'tech-suggest'}`}>{sel.facadeSpecStatus === 'applied' ? 'применено' : sel.facadeSpecStatus === 'manual' ? 'изменено вручную' : sel.facadeSpecStatus === 'outdated' ? 'нужно обновить' : facadeInference.confidence === 'exact' ? 'точное правило' : 'нужно проверить'}</span>
+              </div>
+              <div className="facade-tech-note">{facadeInference.note}</div>
+              <div className="facade-parts-list">
+                {(sel.facadeParts ?? facadeInference.parts).map((part, index) => (
+                  <div className="facade-part-row" key={`${part.kind}-${index}`}>
+                    <span><b>{part.kind === 'drawer' ? 'Ящик' : 'Дверь'} {index + 1}</b><small>{part.source === 'manual' ? 'ручной размер' : 'по техничке'}</small></span>
+                    {sel.facadeParts ? <><input aria-label={`Ширина фасада ${index + 1}`} type="number" value={part.widthMm} onChange={(e) => { const parts = [...sel.facadeParts!]; parts[index] = { ...parts[index], widthMm: Number(e.target.value) || 0, source: 'manual' }; updMod(sel.id, { facadeParts: parts, facadeWmm: parts[0].widthMm, facadeHmm: parts[0].heightMm, facadeSpecStatus: 'manual' }); }} />×<input aria-label={`Высота фасада ${index + 1}`} type="number" value={part.heightMm} onChange={(e) => { const parts = [...sel.facadeParts!]; parts[index] = { ...parts[index], heightMm: Number(e.target.value) || 0, source: 'manual' }; updMod(sel.id, { facadeParts: parts, facadeWmm: parts[0].widthMm, facadeHmm: parts[0].heightMm, facadeSpecStatus: 'manual' }); }} /> мм</> : <b>{part.widthMm}×{part.heightMm} мм</b>}
+                  </div>
+                ))}
+              </div>
+              {sel.facadeSpecStatus === 'outdated' && sel.facadeParts && (
+                <div className="warn-box small">Размер модуля изменён. Текущие фасады: {sel.facadeParts.map((part) => `${part.widthMm}×${part.heightMm}`).join(', ')} мм. Новая рекомендация: {facadeInference.parts.map((part) => `${part.widthMm}×${part.heightMm}`).join(', ')} мм.</div>
+              )}
+              {(!sel.facadeParts || sel.facadeSpecStatus === 'manual' || sel.facadeSpecStatus === 'outdated') && (
+                <button className="btn tiny add" onClick={() => updMod(sel.id, applyTechnicalFacadeSpec(sel, selectedBody!, true))}>
+                  {!sel.facadeParts ? 'Подставить размеры и количество' : sel.facadeSpecStatus === 'outdated' ? 'Обновить по техничке' : 'Заменить ручные размеры рекомендацией'}
+                </button>
+              )}
+              {sel.facadeParts && <div className="muted small">Размеры участвуют в расчёте площади фасадов отдельно для каждой детали.</div>}
+            </section>
+          )}
+          {hingeInference && (
+            <section className="hinge-tech-card">
+              <div className="facade-tech-head">
+                <div><h4>Петли по техничке</h4><div className="muted small">{hingeInference.source} · дверей: {hingeInference.doorCount} · рекомендуется: {hingeInference.hinges} шт.</div></div>
+                <span className={`badge ${hingeInference.confidence === 'exact' ? 'tech-exact' : 'tech-suggest'}`}>{sel.hingeSpecStatus === 'applied' ? 'применено' : sel.hingeSpecStatus === 'manual' ? 'изменено вручную' : sel.hingeSpecStatus === 'outdated' ? 'нужно обновить' : 'предложение'}</span>
+              </div>
+              <div className="facade-tech-note">{hingeInference.note}</div>
+              {sel.hinges !== hingeInference.hinges && <div className="muted small">Сейчас указано: {sel.hinges} шт. Применение изменит только количество петель, не модель петли.</div>}
+              {sel.hingeSpecStatus !== 'manual' && sel.hinges !== hingeInference.hinges && <button className="btn tiny add" onClick={() => updMod(sel.id, { hinges: hingeInference.hinges, hingeSpecStatus: 'applied' })}>Подставить количество петель</button>}
+              {sel.hingeSpecStatus === 'manual' && <button className="btn tiny ghost" onClick={() => updMod(sel.id, { hinges: hingeInference.hinges, hingeSpecStatus: 'applied' })}>Заменить ручное количество рекомендацией</button>}
+            </section>
+          )}
+          {sel.facades > 0 && !sel.facadeParts && (
             <>
-              <h4>Размер одного фасада, мм (для площади — материал за м²)</h4>
+              <h4>Размер одного фасада, мм (для старого или ручного расчёта)</h4>
               <div className="grid3">
-                <label>Ширина фасада<input type="number" value={sel.facadeWmm ?? ''} placeholder="напр. 396" onChange={(e) => updMod(sel.id, { facadeWmm: Number(e.target.value) || null })} /></label>
-                <label>Высота фасада<input type="number" value={sel.facadeHmm ?? ''} placeholder="напр. 716" onChange={(e) => updMod(sel.id, { facadeHmm: Number(e.target.value) || null })} /></label>
+                <label>Ширина фасада<input type="number" value={sel.facadeWmm ?? ''} placeholder="напр. 396" onChange={(e) => updMod(sel.id, { facadeWmm: Number(e.target.value) || null, facadeParts: undefined, facadeSpecStatus: 'manual' })} /></label>
+                <label>Высота фасада<input type="number" value={sel.facadeHmm ?? ''} placeholder="напр. 716" onChange={(e) => updMod(sel.id, { facadeHmm: Number(e.target.value) || null, facadeParts: undefined, facadeSpecStatus: 'manual' })} /></label>
                 {sel.widthMm && sel.heightMm ? (
-                  <button className="btn tiny add self-end" onClick={() => updMod(sel.id, { facadeWmm: Math.round(sel.widthMm! / sel.facades), facadeHmm: sel.heightMm })}>
+                  <button className="btn tiny add self-end" onClick={() => updMod(sel.id, { facadeWmm: Math.round(sel.widthMm! / sel.facades), facadeHmm: sel.heightMm, facadeParts: undefined, facadeSpecStatus: 'manual' })}>
                     подставить {Math.round(sel.widthMm / sel.facades)}×{sel.heightMm} (Ш÷{sel.facades} × В модуля)
                   </button>
-                ) : <div className="muted small self-end">…или задайте размеры модуля — предложим подстановку</div>}
+                ) : <div className="muted small self-end">…или выберите корпус — размеры предложит техничка</div>}
               </div>
               {sel.facadeWmm && sel.facadeHmm ? <div className="muted small">Площадь: {sel.facades} × {sel.facadeWmm}×{sel.facadeHmm} = {fmtNum((sel.facadeWmm / 1000) * (sel.facadeHmm / 1000) * sel.facades)} м² на модуль</div> : null}
             </>
@@ -321,6 +427,41 @@ export default function ModulesPanel(props: {
               </button>
             </div>
           )}
+          {selectedBody && (dimensionSurchargeRecommendations.length > 0 || (sel.automaticSurcharges?.length ?? 0) > 0) && (
+            <section className="surcharge-tech-card">
+              <div className="facade-tech-head">
+                <div>
+                  <h4>Нестандартные габариты корпуса</h4>
+                  <div className="muted small">Надбавка считается только от строки корпуса. Петли, ящики, фасады и прочая комплектация в базу процента не входят.</div>
+                </div>
+                {pendingDimensionSurcharges.length > 0 && <span className="badge tech-suggest">есть рекомендация</span>}
+              </div>
+              <div className="surcharge-tech-list">
+                {dimensionSurchargeRecommendations.map((item) => {
+                  const applied = (sel.surcharges ?? []).includes(item.itemId);
+                  return <div className="surcharge-tech-row" key={`${item.dimension}-${item.itemId}`}>
+                    <span><b>+{item.percent}% по {dimensionLabel(item.dimension)}</b><small>{item.rule} · к корпусу {selectedBody.price != null ? `≈ ${fmtMoney(selectedBody.price * item.percent / 100)} ₽/модуль` : 'без цены'}</small></span>
+                    <span className={applied ? 'badge tech-exact' : 'badge tech-suggest'}>{applied ? 'применено' : 'предложение'}</span>
+                  </div>;
+                })}
+                {(sel.automaticSurcharges ?? []).filter((id) => !dimensionSurchargeRecommendations.some((item) => item.itemId === id)).map((id) => {
+                  const item = pricebook.items.find((candidate) => candidate.id === id);
+                  return <div className="surcharge-tech-row stale" key={`stale-${id}`}><span><b>+{item?.price ?? '?'}% устаревшей надбавки</b><small>Размер модуля изменён — проверьте это правило.</small></span><span className="badge tech-suggest">нужно проверить</span></div>;
+                })}
+              </div>
+              {pendingDimensionSurcharges.length > 0 && (
+                <button className="btn tiny add" onClick={() => {
+                  const nextIds = [...(sel.surcharges ?? [])];
+                  const nextAuto = [...(sel.automaticSurcharges ?? [])];
+                  for (const item of pendingDimensionSurcharges) {
+                    if (!nextIds.includes(item.itemId)) nextIds.push(item.itemId);
+                    if (!nextAuto.includes(item.itemId)) nextAuto.push(item.itemId);
+                  }
+                  updMod(sel.id, { surcharges: nextIds, automaticSurcharges: nextAuto });
+                }}>✓ Применить рекомендации к корпусу</button>
+              )}
+            </section>
+          )}
           <h4>Нестандарт / процентные надбавки (от суммы корпуса — правило прайса)</h4>
           <div className="slot-list">
             {(sel.surcharges ?? []).map((sid) => {
@@ -332,7 +473,10 @@ export default function ModulesPanel(props: {
                     {it ? <>{it.name.slice(0, 70)} — <b>+{it.price}%</b></> : '⚠ позиция не найдена в прайсе'}
                   </div>
                   <div className="slot-actions">
-                    <button className="btn tiny danger" onClick={() => updMod(sel.id, { surcharges: (sel.surcharges ?? []).filter((x) => x !== sid) })}>✕</button>
+                    <button className="btn tiny danger" onClick={() => updMod(sel.id, {
+                      surcharges: (sel.surcharges ?? []).filter((x) => x !== sid),
+                      automaticSurcharges: (sel.automaticSurcharges ?? []).filter((x) => x !== sid),
+                    })}>✕</button>
                   </div>
                 </div>
               );
@@ -429,7 +573,14 @@ export default function ModulesPanel(props: {
           onAdd={(item) => {
             if (pick.moduleId) {
               const m = mods.find((x) => x.id === pick.moduleId)!;
-              updMod(m.id, { slots: { ...m.slots, [pick.slot]: { mode: 'manual', itemId: item.id } } });
+              const withBody = { ...m, slots: { ...m.slots, [pick.slot]: { mode: 'manual', itemId: item.id } } };
+              if (pick.slot === 'body') {
+                // Выбор корпуса только обновляет слот. Техническая фасадная схема
+                // отображается рядом и применяется отдельной кнопкой.
+                updMod(m.id, { slots: withBody.slots, facadeSpecStatus: m.facadeParts?.length ? 'outdated' : 'recommended', hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus });
+              } else {
+                updMod(m.id, { slots: withBody.slots });
+              }
             } else {
               props.onChange({ ...project, moduleDefaults: { ...defaults, [pick.slot]: item.id } });
             }

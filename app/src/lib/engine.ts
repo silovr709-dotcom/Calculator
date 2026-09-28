@@ -6,6 +6,13 @@ import { SUMMARY_GROUPS } from '../types';
 
 export const round2 = (v: number) => Math.round(v * 100) / 100;
 
+/** Клиентская цена округляется вверх, чтобы не уменьшать рассчитанную стоимость. */
+export function roundClientPrice(value: number, step: ProjectSettings['clientRounding'] = 1): number {
+  const safeStep = step === 10 || step === 100 || step === 1000 ? step : 1;
+  if (safeStep === 1) return round2(value);
+  return round2(Math.ceil(value / safeStep) * safeStep);
+}
+
 // ---------- Сводная группа по категории прайса ----------
 export function summaryGroupFor(category: string): SummaryGroup {
   const c = category.toLowerCase();
@@ -192,7 +199,7 @@ export function calcTotals(lines: ProjectLine[], settings: ProjectSettings): { l
   for (const e of extras) { extraTotal = round2(extraTotal + e.amount); if (e.toClient) extraClient = round2(extraClient + e.amount); }
 
   const cost = round2(costLines + extraTotal);
-  const client = round2(clientLines + extraClient);
+  const client = roundClientPrice(round2(clientLines + extraClient), settings.clientRounding);
   const markupRub = round2(client - cost);
   const markupPct = cost > 0 ? round2((markupRub / cost) * 100) : null;
   const marginPct = client > 0 ? round2((markupRub / client) * 100) : null;

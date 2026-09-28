@@ -37,6 +37,11 @@ export default function SettingsPanel(props: {
             <label>Базовая наценка, %<NumInput value={s.markupBasePct} onChange={(v) => set({ markupBasePct: v })} placeholder="напр. 100" /></label>
             <label>Сборка, ₽<NumInput value={s.assemblyCost} onChange={(v) => set({ assemblyCost: v })} /></label>
             <label>Доставка, ₽<NumInput value={s.deliveryCost} onChange={(v) => set({ deliveryCost: v })} /></label>
+            <label>Округление цены клиента
+              <select value={s.clientRounding ?? 1} onChange={(e) => set({ clientRounding: Number(e.target.value) as ProjectSettings['clientRounding'] })}>
+                <option value={1}>Без округления</option><option value={10}>До 10 ₽</option><option value={100}>До 100 ₽</option><option value={1000}>До 1 000 ₽</option>
+              </select>
+            </label>
             <label className="chk-row">
               <input type="checkbox" checked={s.applyEmalRule} onChange={(e) => set({ applyEmalRule: e.target.checked })} />
               Правило прайса: эмаль &lt; 1 кв.м на проект — +30% (лист «Эмаль»)

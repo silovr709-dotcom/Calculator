@@ -40,6 +40,7 @@ export function defaultSettings(): ProjectSettings {
     applyEmalRule: true,
     assemblyCost: null,
     deliveryCost: null,
+    clientRounding: 1,
   };
 }
 

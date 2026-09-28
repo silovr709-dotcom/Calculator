@@ -101,6 +101,8 @@ export interface ExtraExpense {
   toClient: boolean;     // показывать в клиентской цене
 }
 
+export type ClientPriceRounding = 1 | 10 | 100 | 1000;
+
 export interface ProjectSettings {
   markupBasePct: number | null;               // null = не задано
   markupByGroup: Partial<Record<SummaryGroup, number | null>>;
@@ -108,15 +110,94 @@ export interface ProjectSettings {
   applyEmalRule: boolean;                     // правило «эмаль < 1 кв.м +30%» (на сумму проекта)
   assemblyCost: number | null;
   deliveryCost: number | null;
+  /** Шаг округления клиентской цены вверх. Отсутствует в старых проектах = 1 ₽. */
+  clientRounding?: ClientPriceRounding;
+}
+
+export type WizardStepId = 'data' | 'shape' | 'materials' | 'modules' | 'review' | 'total';
+
+export interface ClientOfferSettings {
+  validUntil?: string;
+  paymentTerms?: string;
+  installation?: string;
+  delivery?: string;
+  notes?: string;
+}
+
+export interface MeasurementWall {
+  id: string;
+  name: string;
+  lengthMm: number | null;
+  note?: string;
+}
+
+export interface MeasurementOpening {
+  id: string;
+  kind: 'window' | 'door' | 'other';
+  name: string;
+  wallId?: string;
+  offsetMm: number | null;
+  widthMm: number | null;
+  heightMm: number | null;
+  sillHeightMm?: number | null;
+  note?: string;
+}
+
+export interface MeasurementCommunication {
+  id: string;
+  kind: 'water' | 'gas' | 'electricity' | 'ventilation' | 'other';
+  name: string;
+  wallId?: string;
+  offsetMm: number | null;
+  heightMm: number | null;
+  note?: string;
+}
+
+export interface MeasurementData {
+  roomHeightMm: number | null;
+  walls: MeasurementWall[];
+  openings: MeasurementOpening[];
+  communications: MeasurementCommunication[];
+  photos: ProjectPhoto[];
+  notes: string;
+  updatedAt: string;
+}
+
+export interface CalculationVariant {
+  id: string;
+  name: string;
+  description: string;
+  /** Перекрытия настроек проекта для всех модулей. */
+  defaults: ModuleDefaults;
+  /** Явные значения слотов варианта сильнее ручной комплектации модуля. */
+  slotOverrides: Partial<Record<SlotKey, string | null>>;
+  settings: ProjectSettings;
+  clientVisible: boolean;
 }
 
 /** Фото/эскиз проекта (хранится в самом проекте, сжимается при загрузке) */
+export type MeasurementPhotoAnnotationType = 'dimension' | 'marker';
+
+export interface MeasurementPhotoAnnotation {
+  id: string;
+  type: MeasurementPhotoAnnotationType;
+  /** Координаты в процентах от ширины/высоты фотографии, чтобы разметка не ломалась на телефоне. */
+  x1: number;
+  y1: number;
+  x2?: number;
+  y2?: number;
+  label: string;
+  valueMm?: number | null;
+}
+
 export interface ProjectPhoto {
   id: string;
   name: string;
   dataUrl: string; // сжатый JPEG (data:image/jpeg;base64,...)
   addedAt: string;
   showToClient: boolean; // включать в клиентскую версию (КП)
+  /** Разметка используется в фото замера; отсутствие поля совместимо со старыми фото. */
+  measurementAnnotations?: MeasurementPhotoAnnotation[];
 }
 
 /** Внешний вид и включение автоматически построенного эскиза кухни. */
@@ -139,6 +220,24 @@ export interface KitchenSketchSettings {
   shape?: KitchenLayoutShape;
   /** Вид эскиза по умолчанию; отсутствие поля = фасадные развёртки. */
   view?: KitchenSketchView;
+  /** Измеренные длины стен, мм. Используются только для подсказок и планировщика. */
+  wallLengthsMm?: Partial<Record<KitchenWall, number | null>>;
+  /** Измеренная высота помещения, мм. */
+  roomHeightMm?: number | null;
+}
+
+export type KitchenChecklistKey = 'plinth' | 'baseboard' | 'worktop' | 'wallPanel';
+
+export interface KitchenChecklistItem {
+  key: KitchenChecklistKey;
+  label: string;
+  included: boolean;
+  lineIds: string[];
+}
+
+export interface KitchenChecklistResult {
+  items: KitchenChecklistItem[];
+  missing: KitchenChecklistItem[];
 }
 
 export interface Project {
@@ -158,6 +257,13 @@ export interface Project {
   photos?: ProjectPhoto[];
   /** Настройки эскиза. Необязательное поле сохраняет совместимость со старыми проектами. */
   sketch?: KitchenSketchSettings;
+  /** Режим открытия проекта: мастер или привычные вкладки. */
+  wizardMode?: 'wizard' | 'advanced';
+  wizardStep?: WizardStepId;
+  variants?: CalculationVariant[];
+  selectedVariantId?: string;
+  clientOffer?: ClientOfferSettings;
+  measurement?: MeasurementData;
   createdAt: string;
   updatedAt: string;
 }
@@ -178,6 +284,16 @@ export interface SlotChoice {
   itemId: string | null;
 }
 
+export interface FacadePart {
+  widthMm: number;
+  heightMm: number;
+  kind: 'door' | 'drawer' | 'panel';
+  /** Источник размера для объяснения пользователю. */
+  source?: 'technical' | 'manual';
+}
+
+export type FacadeSpecStatus = 'recommended' | 'applied' | 'manual' | 'outdated';
+
 export interface KitchenModule {
   id: string;
   type: string;            // «Нижний шкаф», «Пенал», … или собственный тип
@@ -194,9 +310,15 @@ export interface KitchenModule {
   hinges: number;          // петель на модуль, всего
   handles: number;         // ручек на модуль
   lifts: number;           // подъёмных механизмов на модуль
-  // размер одного фасада (для расчёта площади м²)
+  // размер одного фасада (для старых проектов и обратной совместимости)
   facadeWmm: number | null;
   facadeHmm: number | null;
+  /** Точные размеры каждого фасада по техничке фабрики. Необязательное поле для старых проектов. */
+  facadeParts?: FacadePart[];
+  /** Состояние рекомендации фасадов: старые проекты без поля продолжают работать. */
+  facadeSpecStatus?: FacadeSpecStatus;
+  /** Состояние рекомендации петель: количество можно оставить ручным. */
+  hingeSpecStatus?: FacadeSpecStatus;
   slots: Record<SlotKey, SlotChoice>;
   /**
    * Стена, вдоль которой стоит модуль в эскизе.
@@ -205,6 +327,8 @@ export interface KitchenModule {
   wall?: KitchenWall;
   /** Процентные надбавки прайса (нестандарт +10/30/50%…), считаются от суммы корпуса */
   surcharges?: string[];
+  /** Надбавки, применённые через рекомендацию по габаритам; не смешиваются с ручными. */
+  automaticSurcharges?: string[];
   /** Коды предупреждений, подтверждённых пользователем для этой позиции. */
   confirmations?: string[];
   note?: string;

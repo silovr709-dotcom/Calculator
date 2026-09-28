@@ -10,6 +10,7 @@ import {
   pushToCloud,
 } from './lib/sync';
 import type { SyncConfig, SyncStatus } from './lib/sync';
+import { ProjectHistory } from './lib/history';
 import { todayISO } from './lib/format';
 import Dashboard from './components/Dashboard';
 import ProjectEditor from './components/ProjectEditor';
@@ -38,6 +39,7 @@ export default function App() {
   const [savedFlash, setSavedFlash] = useState(false);
   const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig());
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => (loadSyncConfig().enabled ? 'synced' : 'idle'));
+  const [projectHistory] = useState(() => new ProjectHistory());
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}data/pricebook-visma-2026.json`)
@@ -61,8 +63,7 @@ export default function App() {
         secretKey: parsed.secretKey,
       };
       saveSyncConfig(cfg);
-      setSyncConfig(cfg);
-      setSyncStatus('syncing');
+      window.setTimeout(() => { setSyncConfig(cfg); setSyncStatus('syncing'); }, 0);
       performFullSync(cfg).then((res) => {
         setSyncStatus(res.status);
         if (res.merged) {
@@ -79,8 +80,7 @@ export default function App() {
       p.updatedAt = new Date().toISOString();
       const next = [p, ...loadProjects()];
       saveProjects(next);
-      setProjects(next);
-      setView({ kind: 'project', id: p.id });
+      window.setTimeout(() => { setProjects(next); setView({ kind: 'project', id: p.id }); }, 0);
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
       alert(`📱 Проект «${p.name}» успешно импортирован на это устройство!`);
     }
@@ -180,6 +180,8 @@ export default function App() {
       lines,
       modules: modules ?? [],
       moduleDefaults: moduleDefaults ?? {},
+      wizardMode: 'wizard',
+      wizardStep: 'data',
       settings: JSON.parse(JSON.stringify(globalSettings)),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -189,8 +191,18 @@ export default function App() {
   }, [activePricebook, globalSettings, projects, persistProjects]);
 
   const updateProject = useCallback((p: Project) => {
+    const current = projects.find((x) => x.id === p.id);
+    if (current) projectHistory.push(current);
     persistProjects(projects.map((x) => (x.id === p.id ? { ...p, updatedAt: new Date().toISOString() } : x)));
-  }, [projects, persistProjects]);
+  }, [projects, persistProjects, projectHistory]);
+
+  const undoProject = useCallback((id: string) => {
+    const previous = projectHistory.undo(id);
+    if (!previous) return;
+    persistProjects(projects.map((x) => (x.id === id ? { ...previous, updatedAt: new Date().toISOString() } : x)));
+  }, [projects, persistProjects, projectHistory]);
+
+  const canUndoProject = useCallback((id: string) => projectHistory.canUndo(id), [projectHistory]);
 
   const duplicateProject = useCallback((id: string) => {
     const src = projects.find((p) => p.id === id);
@@ -209,9 +221,10 @@ export default function App() {
 
   const deleteProject = useCallback((id: string) => {
     if (!confirm('Удалить проект безвозвратно?')) return;
+    projectHistory.clear(id);
     persistProjects(projects.filter((p) => p.id !== id));
     setView({ kind: 'dashboard' });
-  }, [projects, persistProjects]);
+  }, [projects, persistProjects, projectHistory]);
 
   const importProject = useCallback((file: File) => {
     file.text().then((t) => {
@@ -296,6 +309,8 @@ export default function App() {
             project={current}
             pricebook={pricebooks.find((pb) => pb.meta.id === current.pricebookId) ?? activePricebook}
             onChange={updateProject}
+            onUndo={() => undoProject(current.id)}
+            canUndo={canUndoProject(current.id)}
             onBack={() => setView({ kind: 'dashboard' })}
             onDuplicate={() => duplicateProject(current.id)}
             onDelete={() => deleteProject(current.id)}

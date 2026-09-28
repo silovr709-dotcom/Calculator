@@ -1,5 +1,6 @@
 import type { KitchenModule, ModuleDefaults, Pricebook, PriceItem, ProjectLine, SlotChoice, SlotKey } from '../types';
 import { lineFromItem } from './engine';
+import { inferDimensionSurcharges } from './surcharges';
 import { uid } from './storage';
 
 /** Типовые виды позиций (пользователь может ввести и собственный тип) */
@@ -74,7 +75,7 @@ export function resolveSlot(
 }
 
 /** Коды проверяемых предупреждений, которые пользователь может подтвердить. */
-export type ModuleWarningCode = 'dims' | 'bodyDrawers' | 'bodyDoors' | 'shelves' | 'opening' | 'handles';
+export type ModuleWarningCode = 'dims' | 'bodyDrawers' | 'bodyDoors' | 'shelves' | 'opening' | 'handles' | 'dimensionSurcharge';
 
 export interface ModuleWarning {
   code: ModuleWarningCode;
@@ -224,12 +225,24 @@ export function checkModule(m: KitchenModule, defaults: ModuleDefaults, priceboo
     if (expectedDoors !== null && m.facades < expectedDoors) {
       warn('bodyDoors', 'Фасады в цену каркаса не входят — укажите количество, либо подтвердите');
     }
+
+    const dimensionRules = inferDimensionSurcharges(m, body.item, pricebook);
+    const pendingRules = dimensionRules.filter((rule) => !(m.surcharges ?? []).includes(rule.itemId));
+    const staleRules = (m.automaticSurcharges ?? []).filter((id) => !dimensionRules.some((rule) => rule.itemId === id));
+    if (pendingRules.length > 0) {
+      warn('dimensionSurcharge', `Изменены габариты корпуса: примените рекомендованные надбавки (${pendingRules.map((rule) => `+${rule.percent}%`).join(' + ')}) только к корпусу`);
+    } else if (staleRules.length > 0) {
+      warn('dimensionSurcharge', 'Автоматическая надбавка сохранена от прежних габаритов — проверьте и обновите её');
+    }
   }
 
   if (m.facades > 0) {
     const f = r('facade');
     if (!f.item) errors.push('Указаны фасады, но материал фасада не выбран');
-    else if (!m.facadeWmm || !m.facadeHmm) errors.push('Не указан размер фасада (Ш×В, мм) — цена материала за м²');
+    else if (m.facadeParts?.length) {
+      if (m.facadeParts.length !== m.facades) errors.push(`Размеров фасадов указано ${m.facadeParts.length}, а фасадов в конструкции ${m.facades}`);
+      if (m.facadeParts.some((part) => part.widthMm <= 0 || part.heightMm <= 0)) errors.push('В размерах фасадов есть нулевые или отрицательные значения');
+    } else if (!m.facadeWmm || !m.facadeHmm) errors.push('Не указан размер фасада (Ш×В, мм) — цена материала за м²');
   }
   if (m.drawers > 0 && !r('drawerSys').item) errors.push('Указаны ящики, но система выдвижения не выбрана');
   if (m.hinges > 0 && !r('hinge').item) errors.push('Указано количество петель, но модель петли не выбрана');
@@ -293,7 +306,11 @@ export function moduleToLines(m: KitchenModule, defaults: ModuleDefaults, priceb
     line.note = `${tag} — от корпуса`;
     out.push(line);
   }
-  if (m.facades > 0 && m.facadeWmm && m.facadeHmm) {
+  if (m.facadeParts?.length) {
+    for (const [index, part] of m.facadeParts.entries()) {
+      push(r('facade'), m.qty, { widthMm: part.widthMm, heightMm: part.heightMm }, `${part.kind === 'drawer' ? 'Фасад ящика' : 'Фасад двери'} ${index + 1}: ${part.widthMm}×${part.heightMm} мм`);
+    }
+  } else if (m.facades > 0 && m.facadeWmm && m.facadeHmm) {
     push(r('facade'), m.facades * m.qty, { widthMm: m.facadeWmm, heightMm: m.facadeHmm }, `${m.facades} фасада ${m.facadeWmm}×${m.facadeHmm} мм`);
   }
   push(r('hinge'), m.hinges * m.qty, undefined, `${m.hinges} петли`);
