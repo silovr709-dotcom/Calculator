@@ -5,6 +5,7 @@
   !разбивка 2026 ЛДСП.xlsx                          — цвета ЛДСП + артикул кромки GP
   !!разбивка ПВХ.xlsx (Лист1)                       — плёнки для фасадов МДФ (ПВХ)
   !разбивка 2026 ARPA, FENIX, AGT, Rexay.xlsx       — пластики HPL
+  Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf  — фрезеровки фасадов (см. extract_millings)
 Правила чтения — только из самих файлов и их легенд:
   '!' — направление рисунка/текстура: по инструкции фабрики ОБЯЗАТЕЛЬНО указывать в бланке;
   '*' — плёнка изготавливается только с фрезеровкой «Мыло»;
@@ -15,8 +16,13 @@ JSON: app/public/data/factory-dicts-visma.json
 import json
 import re
 import sys
+from pathlib import Path
 
 import openpyxl
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from extract_millings import CATALOG as MILLINGS_FILE  # noqa: E402
+from extract_millings import load_millings  # noqa: E402
 
 OUT = 'app/public/data/factory-dicts-visma.json'
 LDSP_FILE = '!разбивка 2026 ЛДСП.xlsx'
@@ -138,10 +144,11 @@ def extract_plastics():
 
 
 def main():
+    millings, milling_issues = load_millings()
     data = {
         'id': 'visma-dicts-2026',
         'name': 'Справочники разбивок Висма',
-        'sources': [LDSP_FILE, FILMS_FILE, PLASTICS_FILE],
+        'sources': [LDSP_FILE, FILMS_FILE, PLASTICS_FILE, MILLINGS_FILE],
         'groups': {
             'ldspColors': {
                 'label': 'Цвета ЛДСП (разбивка 2026)',
@@ -160,6 +167,17 @@ def main():
             'plastics': {
                 'label': 'Пластики HPL (фасады)',
                 'items': extract_plastics(),
+            },
+            'millings': {
+                'label': 'Фрезеровки фасадов (каталог 2026)',
+                'legend': {
+                    'category': 'Категория 1–4 — ею прайс 2026 задаёт цену фасада (ПВХ и эмаль)',
+                    'coatings': '«Возможность изготовления» — в чём фабрика делает фрезеровку',
+                    'sizes': 'Размеры — допустимые «высота*ширина» в мм для глухого, РК, РБК и ящика',
+                    'source': 'Источник — страница PDF каталога, по ней значение можно перепроверить',
+                },
+                'issues': milling_issues,
+                'items': millings,
             },
         },
     }

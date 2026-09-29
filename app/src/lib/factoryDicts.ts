@@ -2,6 +2,7 @@
 // из реальных файлов репозитория (разбивка 2026 ЛДСП, разбивка ПВХ, разбивка 2026 пластиков).
 // Ничего не придумываем: совпадение с бланком проверяем по данным самих разбивок.
 import type { BlankIssue, FactoryBlankField } from './factoryBlank';
+import { checkMillingValue, type Milling, type MillingsGroup } from './millings';
 
 export interface LdspColor { name: string; texture: boolean; brand: string; format: string; category: string; edgingArticle: string | null }
 export interface FilmColor { code: string; name: string; status: string; texture: boolean; brand: string; category: string; onlyMillingMilo?: boolean; onlyMdf16?: boolean }
@@ -13,7 +14,14 @@ export interface FactoryDicts {
     ldspColors: { label: string; items: LdspColor[] };
     films: { label: string; items: FilmColor[] };
     plastics: { label: string; items: PlasticItem[] };
+    /** Фрезеровки фасадов из «Каталога фрезеровок ВИСМА 2026». */
+    millings: MillingsGroup;
   };
+}
+
+/** Фрезеровки справочника (пустой список, если файл справочников старой версии). */
+export function millingsOf(dicts: FactoryDicts | null | undefined): Milling[] {
+  return dicts?.groups?.millings?.items ?? [];
 }
 
 export async function loadFactoryDicts(baseUrl: string): Promise<FactoryDicts | null> {
@@ -39,6 +47,8 @@ export function dictSuggestions(fieldKey: string, dicts: FactoryDicts, limit = 4
       return uniq(ldspColors.items.map((i) => i.edgingArticle ? `0,4мм ${i.edgingArticle} GP` : null));
     case 'facadeColor':
       return films.items.filter((i) => i.status === 'в работе').map((i) => `${i.texture ? '! ' : ''}${i.code} — ${i.name} (${i.brand})`);
+    case 'facadeMilling':
+      return millingsOf(dicts).map((m) => `${m.name} (${m.categoryLabel}, ${m.mdfThicknessMm} мм, ${m.coatings.join('/')})`);
     case 'facadeEdging':
       return [
         ...uniq(ldspColors.items.map((i) => i.edgingArticle ? `1мм ${i.edgingArticle}` : null)),
@@ -81,13 +91,36 @@ function findDictMentions(value: string, dicts: FactoryDicts): DictHit[] {
 /**
  * Дополнительные проверки бланка по правилам самих разбивок (не придумываем):
  *  — «!» текстуры обязательны по инструкции (иначе претензии не принимаются) → 🔴;
- *  — «выведена»/«снята» позиции в работу не берутся → 🔴 при использовании.
+ *  — «выведена»/«снята» позиции в работу не берутся → 🔴 при использовании;
+ *  — фрезеровка сверяется с каталогом 2026: покрытие (эмаль/ПВХ), плёнки «только Мыло»,
+ *    примечания страницы каталога («переход рисунка не совпадает», «радиус не изготавливается»).
  */
 export function checkDictRules(fields: { field: FactoryBlankField; value: string }[], dicts: FactoryDicts): BlankIssue[] {
   const issues: BlankIssue[] = [];
   const seen = new Set<string>();
+
+  // Контекст для правил фрезеровок: покрытие фасада и плёнка «только Мыло».
+  const facadeText = fields
+    .filter(({ field }) => field.section.startsWith('Фасад'))
+    .map(({ value }) => value)
+    .join(' ');
+  const facadeNorm = normText(facadeText);
+  const millingContext = {
+    mentionsPvh: /\bпвх\b|плен(ка|ки|ке)/.test(facadeNorm),
+    mentionsEnamel: /эмал/.test(facadeNorm),
+    onlyMiloFilm: dicts.groups.films.items.some(
+      (f) => f.onlyMillingMilo && f.code && normText(facadeText).includes(normText(f.code)),
+    ),
+  };
+
   for (const { field, value } of fields) {
     if (!value.trim()) continue;
+
+    if (field.key === 'facadeMilling') {
+      for (const issue of checkMillingValue(value, millingsOf(dicts), millingContext)) {
+        issues.push({ fieldKey: field.key, label: field.label, level: issue.level, text: issue.text });
+      }
+    }
     const hits = findDictMentions(value, dicts);
     const textureHits = hits.filter((h) => h.texture);
     if (textureHits.length > 0 && !value.includes('!')) {
