@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import type { KbArticle, KbCategory, Pricebook } from '../types';
 import { createKbArticle, filterKbArticles, KB_CATEGORIES, kbCategoryLabel, removeKbArticle, seedKbArticles, upsertKbArticle } from '../lib/knowledge';
 import { loadKnowledgeDocs, searchDocs, type DocHit, type KnowledgeDocs } from '../lib/knowledgeDocs';
-import { loadFactoryDicts, type FactoryDicts } from '../lib/factoryDicts';
+import { loadFactoryDicts, millingsOf, type FactoryDicts } from '../lib/factoryDicts';
+import { millingPriceFrom, millingPrices, searchMillings, MILLING_CATEGORIES, type Milling } from '../lib/millings';
 import { hardwareCounts, hardwareEntries, HARDWARE_GROUPS, searchHardware } from '../lib/hardware';
 import { fmtMoney } from '../lib/format';
 
@@ -11,14 +12,16 @@ import { fmtMoney } from '../lib/format';
  *  📄 Документы — свои статьи + полные тексты инструкций и техничек фабрики
  *                 (поиск по самим текстам, прощает опечатки, показывает источник).
  *  🎨 Разбивки  — те самые разбивки цветов: ЛДСП, плёнки ПВХ, пластики, с фильтрами.
+ *  🪚 Фрезеровки — каталог фрезеровок 2026 с картинками, размерами и ценой м² из прайса.
  *  🔩 Фурнитура — справочник из актуального прайса по группам.
  */
 
-type Tab = 'docs' | 'colors' | 'hardware';
+type Tab = 'docs' | 'colors' | 'millings' | 'hardware';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'docs', label: '📄 Документы' },
   { id: 'colors', label: '🎨 Разбивки цветов' },
+  { id: 'millings', label: '🪚 Фрезеровки' },
   { id: 'hardware', label: '🔩 Фурнитура' },
 ];
 
@@ -61,6 +64,7 @@ export default function KnowledgeView(props: {
 
       {tab === 'docs' && <DocsTab articles={props.articles} onChange={props.onChange} docs={docs} />}
       {tab === 'colors' && <ColorsTab dicts={dicts} />}
+      {tab === 'millings' && <MillingsTab dicts={dicts} pricebooks={props.pricebooks} />}
       {tab === 'hardware' && <HardwareTab pricebooks={props.pricebooks} />}
     </div>
   );
@@ -366,6 +370,174 @@ function ColorsTab(props: { dicts: FactoryDicts | null }) {
       {filtered.length > 500 && <p className="muted small">Показаны первые 500 — уточните поиск или фильтры.</p>}
       {filtered.length === 0 && <div className="empty small">Ничего не найдено. Снимите фильтры или измените запрос.</div>}
     </>
+  );
+}
+
+// ---------------------------------------------------------------- Фрезеровки
+
+function MillingsTab(props: { dicts: FactoryDicts | null; pricebooks: Pricebook[] }) {
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<number | null>(null);
+  const [coating, setCoating] = useState<string | null>(null);
+  const [open, setOpen] = useState<Milling | null>(null);
+
+  const pricebook = props.pricebooks[0];
+  const items = useMemo(() => millingsOf(props.dicts), [props.dicts]);
+  const found = useMemo(
+    () => searchMillings(items, query, { category, coating }),
+    [items, query, category, coating],
+  );
+  const byCategory = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const m of items) map.set(m.category, (map.get(m.category) ?? 0) + 1);
+    return map;
+  }, [items]);
+
+  if (!props.dicts) return <div className="empty">Каталог фрезеровок загружается…</div>;
+  if (!items.length) return <div className="empty">Каталог фрезеровок не найден в справочниках.</div>;
+
+  const group = props.dicts.groups.millings;
+
+  return (
+    <>
+      <div className="kb-subtabs">
+        <button className={`chip${category === null ? ' active' : ''}`} onClick={() => setCategory(null)}>
+          Все категории <b>{items.length}</b>
+        </button>
+        {MILLING_CATEGORIES.filter((c) => byCategory.get(c)).map((c) => (
+          <button key={c} className={`chip${category === c ? ' active' : ''}`} onClick={() => setCategory(c)}>
+            {c} категория <b>{byCategory.get(c)}</b>
+          </button>
+        ))}
+      </div>
+
+      <div className="card blank-controls">
+        <label className="dashboard-search">Поиск фрезеровки
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Например: пирамида, R3, классика, 19 мм…" />
+        </label>
+        <label>Покрытие
+          <select value={coating ?? ''} onChange={(e) => setCoating(e.target.value || null)}>
+            <option value="">Любое</option>
+            <option value="ПВХ">ПВХ</option>
+            <option value="эмаль">эмаль</option>
+          </select>
+        </label>
+        {(query || category || coating) && (
+          <button className="btn tiny ghost" onClick={() => { setQuery(''); setCategory(null); setCoating(null); }}>Сбросить</button>
+        )}
+        <div className="dashboard-filter-count muted small">
+          Найдено: {found.length} из {items.length}
+          {pricebook ? ` · цены из «${pricebook.meta.name}»` : ' · прайс не загружен, цены не показываем'}
+        </div>
+      </div>
+
+      <div className="milling-grid">
+        {found.map((m) => {
+          const from = millingPriceFrom(m, pricebook);
+          return (
+            <button key={m.slug} className="milling-card" onClick={() => setOpen(m)} title="Показать размеры и цены">
+              <img
+                className="milling-thumb"
+                src={`${import.meta.env.BASE_URL}${m.image}`}
+                alt={`Фрезеровка ${m.name}`}
+                loading="lazy"
+                width={440}
+              />
+              <div className="milling-card-body">
+                <b>{m.name}</b>
+                <div className="muted small">
+                  {m.categoryLabel} · {m.mdfThicknessMm} мм · {m.coatings.join(', ')}
+                </div>
+                {from && <div className="milling-price">от {fmtMoney(from.price)} / м² <span className="muted">({from.coating}, {from.variant})</span></div>}
+                {m.note && <div className="milling-note small">⚠️ {m.note}</div>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {found.length === 0 && <div className="empty small">Ничего не найдено — измените запрос или снимите фильтры.</div>}
+
+      {group.issues && group.issues.length > 0 && (
+        <div className="card kb-section">
+          <b>Замечания к самому каталогу</b>
+          <ul className="kb-legend">
+            {group.issues.map((i) => <li key={i.text}>{i.text}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {open && <MillingDialog milling={open} pricebook={pricebook} onClose={() => setOpen(null)} />}
+    </>
+  );
+}
+
+const SIZE_LABELS: { key: 'blind' | 'rk' | 'rbk' | 'drawer'; label: string }[] = [
+  { key: 'blind', label: 'Глухой' },
+  { key: 'rk', label: 'Рамка с крестом (РК)' },
+  { key: 'rbk', label: 'Рамка без креста (РБК)' },
+  { key: 'drawer', label: 'Ящик' },
+];
+
+function MillingDialog(props: { milling: Milling; pricebook: Pricebook | undefined; onClose: () => void }) {
+  const m = props.milling;
+  const prices = millingPrices(m, props.pricebook);
+  return (
+    <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
+      <div className="modal milling-modal" role="dialog" aria-modal="true" aria-label={`Фрезеровка ${m.name}`}>
+        <header className="milling-modal-head">
+          <h2>{m.name}</h2>
+          <button className="btn tiny ghost" onClick={props.onClose}>Закрыть</button>
+        </header>
+
+        <div className="milling-modal-body">
+          <img src={`${import.meta.env.BASE_URL}${m.image}`} alt={`Фрезеровка ${m.name}`} className="milling-big" />
+
+          <div>
+            <table className="table">
+              <tbody>
+                <tr><th>Категория</th><td>{m.categoryLabel}</td></tr>
+                <tr><th>Возможность изготовления</th><td>{m.coatings.join(', ')}</td></tr>
+                <tr><th>Вид фаски</th><td>{m.faska ?? '—'}</td></tr>
+                <tr><th>Ширина рамки</th><td>{m.frameWidthMm ? `${m.frameWidthMm} мм` : '—'}</td></tr>
+                <tr><th>Толщина МДФ</th><td>{m.mdfThicknessMm} мм</td></tr>
+                {m.stepMm && <tr><th>Шаг рисунка</th><td>{m.stepMm} мм</td></tr>}
+                {SIZE_LABELS.map((s) => (
+                  <tr key={s.key}>
+                    <th>{s.label}</th>
+                    <td>{m.sizes[s.key] ?? <span className="muted">не изготавливается</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {m.note && <p className="milling-note">⚠️ {m.note}</p>}
+            <p className="muted small">
+              Источник: «{m.source.file}», стр. {m.source.pdfPage} файла
+              {m.source.printedPage !== m.source.pdfPage - 1 && ` (в подвале напечатано ${m.source.printedPage})`}
+            </p>
+          </div>
+        </div>
+
+        <h3>Цена квадратного метра фасада по прайсу</h3>
+        {prices.length === 0 ? (
+          <p className="muted small">Прайс не загружен или в нём нет строки для этой категории — цену не подставляем.</p>
+        ) : (
+          <table className="table">
+            <thead><tr><th>Покрытие</th><th>Исполнение</th><th>Ед.</th><th className="num">Цена</th><th>Строка прайса</th></tr></thead>
+            <tbody>
+              {prices.map((p) => (
+                <tr key={`${p.coating}-${p.variant}`}>
+                  <td>{p.coating}</td>
+                  <td>{p.variant}</td>
+                  <td className="small">{p.unit}</td>
+                  <td className="num">{fmtMoney(p.price)}</td>
+                  <td className="small muted">{p.item.source.sheet}, стр. {p.item.source.row}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
   );
 }
 

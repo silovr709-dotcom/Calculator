@@ -4,7 +4,8 @@
  "sources": [
   "!разбивка 2026 ЛДСП.xlsx",
   "!!разбивка ПВХ.xlsx",
-  "!разбивка 2026 ARPA, FENIX, AGT, Rexay.xlsx"
+  "!разбивка 2026 ARPA, FENIX, AGT, Rexay.xlsx",
+  "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf"
  ],
  "groups": {
   "ldspColors": {
@@ -10802,6 +10803,1696 @@
      "format": "0756 GRIGIO SCARI",
      "category": null,
      "status": "в работе"
+    }
+   ]
+  },
+  "millings": {
+   "label": "Фрезеровки фасадов (каталог 2026)",
+   "legend": {
+    "category": "Категория 1–4 — ею прайс 2026 задаёт цену фасада (ПВХ и эмаль)",
+    "coatings": "«Возможность изготовления» — в чём фабрика делает фрезеровку",
+    "sizes": "Размеры — допустимые «высота*ширина» в мм для глухого, РК, РБК и ящика",
+    "source": "Источник — страница PDF каталога, по ней значение можно перепроверить"
+   },
+   "issues": [
+    {
+     "level": "warn",
+     "text": "в каталоге номер страницы 50 напечатан дважды: Дублин, Мадрид — опечатка вёрстки, ссылаться нужно на страницу PDF"
+    },
+    {
+     "level": "warn",
+     "text": "Дублин: в подвале напечатано 50, а по порядку это 48 (страница PDF 49)"
+    }
+   ],
+   "items": [
+    {
+     "name": "Арина",
+     "slug": "arina",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "49/49",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*296-1036",
+      "rk": "356-2290*356-1036",
+      "rbk": "296-2290*296-1036",
+      "drawer": "176-296*296-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/arina.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 2,
+      "printedPage": 1
+     }
+    },
+    {
+     "name": "Арка",
+     "slug": "arka",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "53/33",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": "356-2290*296-1036",
+      "rbk": "296-2290*296-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/arka.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 3,
+      "printedPage": 2
+     }
+    },
+    {
+     "name": "Арка 2",
+     "slug": "arka-2",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "52/25",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": "356-2290*356-1036",
+      "rbk": "296-2290*296-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/arka-2.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 4,
+      "printedPage": 3
+     }
+    },
+    {
+     "name": "Арка Р",
+     "slug": "arka-r",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "53/33",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": "356-2290*356-1036",
+      "rbk": "296-2290*296-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/arka-r.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 5,
+      "printedPage": 4
+     }
+    },
+    {
+     "name": "Валенсия",
+     "slug": "valensiya",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "55/55",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": "356-2290*296-1036",
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*196-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/valensiya.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 6,
+      "printedPage": 5
+     }
+    },
+    {
+     "name": "Дали",
+     "slug": "dali",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "54/41•24",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/dali.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 7,
+      "printedPage": 6
+     }
+    },
+    {
+     "name": "Дуэт",
+     "slug": "duet",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "R3",
+     "frameWidthMm": "60/30",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "196-2290*246-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-196*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/duet.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 8,
+      "printedPage": 7
+     }
+    },
+    {
+     "name": "Квадрат",
+     "slug": "kvadrat",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "R3",
+     "frameWidthMm": "53/43",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": "356-2290*296-1036",
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/kvadrat.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 9,
+      "printedPage": 8
+     }
+    },
+    {
+     "name": "Квадро",
+     "slug": "kvadro",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "R3",
+     "frameWidthMm": "53/32",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/kvadro.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 10,
+      "printedPage": 9
+     }
+    },
+    {
+     "name": "Классика",
+     "slug": "klassika",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "47/27",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": "356-2290*356-1036",
+      "rbk": "296-2290*296-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/klassika.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 11,
+      "printedPage": 10
+     }
+    },
+    {
+     "name": "Классика 2",
+     "slug": "klassika-2",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "61/20",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": "356-2290*356-1036",
+      "rbk": "296-2290*296-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/klassika-2.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 12,
+      "printedPage": 11
+     }
+    },
+    {
+     "name": "Лучи",
+     "slug": "luchi",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "R3",
+     "frameWidthMm": "53/48",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": "356-2290*296-1036",
+      "rbk": "246-2290*246-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/luchi.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 13,
+      "printedPage": 12
+     }
+    },
+    {
+     "name": "Модерн",
+     "slug": "modern",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "R3",
+     "frameWidthMm": "60/60",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*196-1036",
+      "rk": "356-2290*296-1036",
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*196-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/modern.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 14,
+      "printedPage": 13
+     }
+    },
+    {
+     "name": "Мюнхен",
+     "slug": "myunhen",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "50/30",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": "356-2290*296-1096",
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/myunhen.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 15,
+      "printedPage": 14
+     }
+    },
+    {
+     "name": "Мыло",
+     "slug": "mylo",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "R3",
+     "frameWidthMm": "64",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "116-2290*96-1036",
+      "rk": "356-2290*296-1036",
+      "rbk": "296-2290*246-1036",
+      "drawer": "116-246*96-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/mylo.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 16,
+      "printedPage": 15
+     }
+    },
+    {
+     "name": "Ницца",
+     "slug": "nicca",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "R3",
+     "frameWidthMm": "54/29",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*196-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*196-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/nicca.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 17,
+      "printedPage": 16
+     }
+    },
+    {
+     "name": "Петра",
+     "slug": "petra",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "50/30",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": "356-2290*296-1036",
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/petra.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 18,
+      "printedPage": 17
+     }
+    },
+    {
+     "name": "Пирамида",
+     "slug": "piramida",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "R3",
+     "frameWidthMm": "60/23",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/piramida.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 19,
+      "printedPage": 18
+     }
+    },
+    {
+     "name": "Ретро",
+     "slug": "retro",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "51/26",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": "356-2290*296-1036",
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/retro.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 20,
+      "printedPage": 19
+     }
+    },
+    {
+     "name": "Ромб",
+     "slug": "romb",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "54/25",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": "356-2290*296-1036",
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/romb.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 21,
+      "printedPage": 20
+     }
+    },
+    {
+     "name": "Рондо",
+     "slug": "rondo",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "53/18",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": null,
+      "rbk": "356-2290*296-1036",
+      "drawer": "176-246*296-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/rondo.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 22,
+      "printedPage": 21
+     }
+    },
+    {
+     "name": "Симпа",
+     "slug": "simpa",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "55/20",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/simpa.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 23,
+      "printedPage": 22
+     }
+    },
+    {
+     "name": "Ситро",
+     "slug": "sitro",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "51/26",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/sitro.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 24,
+      "printedPage": 23
+     }
+    },
+    {
+     "name": "Ситро Р",
+     "slug": "sitro-r",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "51/26",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/sitro-r.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 25,
+      "printedPage": 24
+     }
+    },
+    {
+     "name": "Стрит",
+     "slug": "strit",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "R3",
+     "frameWidthMm": "64",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": "356-2290*296-1036",
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/strit.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 26,
+      "printedPage": 25
+     }
+    },
+    {
+     "name": "Флоренция",
+     "slug": "florenciya",
+     "category": 1,
+     "categoryLabel": "1 категория",
+     "faska": "классика",
+     "frameWidthMm": "53/23",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "296-2290*296-1036",
+      "rk": null,
+      "rbk": "296-2290*296-1036",
+      "drawer": "176-296*296-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/florenciya.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 27,
+      "printedPage": 26
+     }
+    },
+    {
+     "name": "Византия",
+     "slug": "vizantiya",
+     "category": 2,
+     "categoryLabel": "2 категория",
+     "faska": "R3",
+     "frameWidthMm": "64/64",
+     "mdfThicknessMm": "19",
+     "coatings": [
+      "эмаль"
+     ],
+     "onlyEnamel": true,
+     "sizes": {
+      "blind": "246-2290*196-1036",
+      "rk": null,
+      "rbk": null,
+      "drawer": "176-246*196-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/vizantiya.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 28,
+      "printedPage": 27
+     }
+    },
+    {
+     "name": "Византия 2",
+     "slug": "vizantiya-2",
+     "category": 2,
+     "categoryLabel": "2 категория",
+     "faska": "R3",
+     "frameWidthMm": "64/64",
+     "mdfThicknessMm": "19",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*196-1036",
+      "rk": null,
+      "rbk": null,
+      "drawer": "176-246*196-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/vizantiya-2.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 29,
+      "printedPage": 28
+     }
+    },
+    {
+     "name": "Джулия",
+     "slug": "dzhuliya",
+     "category": 2,
+     "categoryLabel": "2 категория",
+     "faska": "R3",
+     "frameWidthMm": "26",
+     "mdfThicknessMm": "19",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "196-2290*196-1036",
+      "rk": null,
+      "rbk": null,
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": "Место для установки ручки, по согласованию",
+     "image": "img/millings/dzhuliya.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 30,
+      "printedPage": 29
+     }
+    },
+    {
+     "name": "Лжевыборка",
+     "slug": "lzhevyborka",
+     "category": 2,
+     "categoryLabel": "2 категория",
+     "faska": "R3",
+     "frameWidthMm": "100/60",
+     "mdfThicknessMm": "19",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": null,
+      "rbk": "296-2290*296-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/lzhevyborka.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 31,
+      "printedPage": 30
+     }
+    },
+    {
+     "name": "Лорето",
+     "slug": "loreto",
+     "category": 2,
+     "categoryLabel": "2 категория",
+     "faska": null,
+     "frameWidthMm": "64",
+     "mdfThicknessMm": "19",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "116-2290*146-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "116-2290*146-1036"
+     },
+     "stepMm": "14",
+     "note": "Переход рисунка не совпадает.",
+     "image": "img/millings/loreto.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 32,
+      "printedPage": 31
+     }
+    },
+    {
+     "name": "Марко",
+     "slug": "marko",
+     "category": 2,
+     "categoryLabel": "2 категория",
+     "faska": "марко",
+     "frameWidthMm": "50",
+     "mdfThicknessMm": "19",
+     "coatings": [
+      "эмаль"
+     ],
+     "onlyEnamel": true,
+     "sizes": {
+      "blind": "296-2290*296-1036",
+      "rk": null,
+      "rbk": null,
+      "drawer": "176-326*326-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/marko.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 33,
+      "printedPage": 32
+     }
+    },
+    {
+     "name": "Марокко",
+     "slug": "marokko",
+     "category": 2,
+     "categoryLabel": "2 категория",
+     "faska": "классика",
+     "frameWidthMm": "59/59",
+     "mdfThicknessMm": "19",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "196-2290*196-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-196*196-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/marokko.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 34,
+      "printedPage": 33
+     }
+    },
+    {
+     "name": "Марокко 2",
+     "slug": "marokko-2",
+     "category": 2,
+     "categoryLabel": "2 категория",
+     "faska": "классика",
+     "frameWidthMm": "59/59",
+     "mdfThicknessMm": "19",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "196-2290*196-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-196*196-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/marokko-2.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 35,
+      "printedPage": 34
+     }
+    },
+    {
+     "name": "Монако",
+     "slug": "monako",
+     "category": 2,
+     "categoryLabel": "2 категория",
+     "faska": "монако",
+     "frameWidthMm": null,
+     "mdfThicknessMm": "19",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "116-2290*146-1036",
+      "rk": null,
+      "rbk": null,
+      "drawer": "116-2290*146-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/monako.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 36,
+      "printedPage": 35
+     }
+    },
+    {
+     "name": "Нео",
+     "slug": "neo",
+     "category": 2,
+     "categoryLabel": "2 категория",
+     "faska": "нео",
+     "frameWidthMm": null,
+     "mdfThicknessMm": "19",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "116-2290*146-1036",
+      "rk": null,
+      "rbk": null,
+      "drawer": "116-2290*146-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/neo.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 37,
+      "printedPage": 36
+     }
+    },
+    {
+     "name": "Паллада",
+     "slug": "pallada",
+     "category": 2,
+     "categoryLabel": "2 категория",
+     "faska": "R3",
+     "frameWidthMm": "57/57",
+     "mdfThicknessMm": "19",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*196-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*196-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/pallada.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 38,
+      "printedPage": 37
+     }
+    },
+    {
+     "name": "Рим",
+     "slug": "rim",
+     "category": 2,
+     "categoryLabel": "2 категория",
+     "faska": null,
+     "frameWidthMm": null,
+     "mdfThicknessMm": "19",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "116-2290*146-1036",
+      "rk": null,
+      "rbk": null,
+      "drawer": "116-2290*146-1036"
+     },
+     "stepMm": "24",
+     "note": "Переход рисунка не совпадает.",
+     "image": "img/millings/rim.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 39,
+      "printedPage": 38
+     }
+    },
+    {
+     "name": "Римини",
+     "slug": "rimini",
+     "category": 2,
+     "categoryLabel": "2 категория",
+     "faska": null,
+     "frameWidthMm": "64",
+     "mdfThicknessMm": "19",
+     "coatings": [
+      "эмаль"
+     ],
+     "onlyEnamel": true,
+     "sizes": {
+      "blind": "116-2290*146-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "116-2290*146-1036"
+     },
+     "stepMm": null,
+     "note": "Переход рисунка не совпадает.",
+     "image": "img/millings/rimini.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 40,
+      "printedPage": 39
+     }
+    },
+    {
+     "name": "Тоскана",
+     "slug": "toskana",
+     "category": 2,
+     "categoryLabel": "2 категория",
+     "faska": "классика",
+     "frameWidthMm": "56/56",
+     "mdfThicknessMm": "19",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/toskana.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 41,
+      "printedPage": 40
+     }
+    },
+    {
+     "name": "Фостер",
+     "slug": "foster",
+     "category": 2,
+     "categoryLabel": "2 категория",
+     "faska": "R3",
+     "frameWidthMm": "62",
+     "mdfThicknessMm": "19",
+     "coatings": [
+      "эмаль"
+     ],
+     "onlyEnamel": true,
+     "sizes": {
+      "blind": "346-2290*346-1036",
+      "rk": null,
+      "rbk": "356-2290*346-1036",
+      "drawer": "176-346*346-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/foster.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 42,
+      "printedPage": 41
+     }
+    },
+    {
+     "name": "Арецио",
+     "slug": "arecio",
+     "category": 3,
+     "categoryLabel": "3 категория",
+     "faska": "арецио",
+     "frameWidthMm": "75",
+     "mdfThicknessMm": "22",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "346-2290*346-1036",
+      "rk": null,
+      "rbk": "356-2290*346-1036",
+      "drawer": "176-346*346-1036"
+     },
+     "stepMm": null,
+     "note": "Место для установки ручки, по согласованию",
+     "image": "img/millings/arecio.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 43,
+      "printedPage": 42
+     }
+    },
+    {
+     "name": "Бергамо",
+     "slug": "bergamo",
+     "category": 3,
+     "categoryLabel": "3 категория",
+     "faska": "бергамо",
+     "frameWidthMm": "66/66",
+     "mdfThicknessMm": "22",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*196-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*196-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/bergamo.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 44,
+      "printedPage": 43
+     }
+    },
+    {
+     "name": "Бридж",
+     "slug": "bridzh",
+     "category": 3,
+     "categoryLabel": "3 категория",
+     "faska": "R3",
+     "frameWidthMm": "32",
+     "mdfThicknessMm": "22",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "116-2290*146-1036",
+      "rk": null,
+      "rbk": null,
+      "drawer": "116-356*146-1036"
+     },
+     "stepMm": null,
+     "note": "Место для установки ручки, по согласованию",
+     "image": "img/millings/bridzh.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 45,
+      "printedPage": 44
+     }
+    },
+    {
+     "name": "Барнео",
+     "slug": "barneo",
+     "category": 3,
+     "categoryLabel": "3 категория",
+     "faska": "барнео",
+     "frameWidthMm": "66/66",
+     "mdfThicknessMm": "22",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*196-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*196-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/barneo.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 46,
+      "printedPage": 45
+     }
+    },
+    {
+     "name": "Венеция",
+     "slug": "veneciya",
+     "category": 3,
+     "categoryLabel": "3 категория",
+     "faska": "классика",
+     "frameWidthMm": "55/55",
+     "mdfThicknessMm": "22",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*196-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*196-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/veneciya.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 47,
+      "printedPage": 46
+     }
+    },
+    {
+     "name": "Волна",
+     "slug": "volna",
+     "category": 3,
+     "categoryLabel": "3 категория",
+     "faska": null,
+     "frameWidthMm": null,
+     "mdfThicknessMm": "22",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "116-2290*146-1036",
+      "rk": null,
+      "rbk": null,
+      "drawer": "116-356*146-1036"
+     },
+     "stepMm": "21",
+     "note": "Переход рисунка не совпадает.",
+     "image": "img/millings/volna.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 48,
+      "printedPage": 47
+     }
+    },
+    {
+     "name": "Дублин",
+     "slug": "dublin",
+     "category": 3,
+     "categoryLabel": "3 категория",
+     "faska": "дублин",
+     "frameWidthMm": "44/44",
+     "mdfThicknessMm": "22",
+     "coatings": [
+      "эмаль"
+     ],
+     "onlyEnamel": true,
+     "sizes": {
+      "blind": "296-2290*296-1086",
+      "rk": null,
+      "rbk": null,
+      "drawer": "176-346*346-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/dublin.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 49,
+      "printedPage": 50
+     }
+    },
+    {
+     "name": "Жалюзи",
+     "slug": "zhalyuzi",
+     "category": 3,
+     "categoryLabel": "3 категория",
+     "faska": "R3",
+     "frameWidthMm": "62",
+     "mdfThicknessMm": "16-19",
+     "coatings": [
+      "эмаль"
+     ],
+     "onlyEnamel": true,
+     "sizes": {
+      "blind": "346-2290*346-1036",
+      "rk": null,
+      "rbk": "356-2290*346-1036",
+      "drawer": "176-346*346-1036"
+     },
+     "stepMm": null,
+     "note": "Радиус не изготавливается",
+     "image": "img/millings/zhalyuzi.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 50,
+      "printedPage": 49
+     }
+    },
+    {
+     "name": "Мадрид",
+     "slug": "madrid",
+     "category": 3,
+     "categoryLabel": "3 категория",
+     "faska": "классика",
+     "frameWidthMm": "53/28",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": "356-2290*296-1036",
+      "rbk": "296-2290*296-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/madrid.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 51,
+      "printedPage": 50
+     }
+    },
+    {
+     "name": "Мальта",
+     "slug": "malta",
+     "category": 3,
+     "categoryLabel": "3 категория",
+     "faska": "R3",
+     "frameWidthMm": "20",
+     "mdfThicknessMm": "22",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "196-2290*196-1036",
+      "rk": null,
+      "rbk": null,
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": "Место для установки ручки, по согласованию",
+     "image": "img/millings/malta.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 52,
+      "printedPage": 51
+     }
+    },
+    {
+     "name": "Олимпия",
+     "slug": "olimpiya",
+     "category": 3,
+     "categoryLabel": "3 категория",
+     "faska": "классика",
+     "frameWidthMm": "53/24",
+     "mdfThicknessMm": "16",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "246-2290*246-1036",
+      "rk": null,
+      "rbk": "296-2290*246-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/olimpiya.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 53,
+      "printedPage": 52
+     }
+    },
+    {
+     "name": "Палермо",
+     "slug": "palermo",
+     "category": 3,
+     "categoryLabel": "3 категория",
+     "faska": "R3",
+     "frameWidthMm": "25",
+     "mdfThicknessMm": "22",
+     "coatings": [
+      "эмаль"
+     ],
+     "onlyEnamel": true,
+     "sizes": {
+      "blind": "116-2290*146-1036",
+      "rk": null,
+      "rbk": null,
+      "drawer": "116-356*146-1036"
+     },
+     "stepMm": null,
+     "note": "Место для установки ручки, по согласованию",
+     "image": "img/millings/palermo.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 54,
+      "printedPage": 53
+     }
+    },
+    {
+     "name": "София",
+     "slug": "sofiya",
+     "category": 3,
+     "categoryLabel": "3 категория",
+     "faska": "R3",
+     "frameWidthMm": "32",
+     "mdfThicknessMm": "22",
+     "coatings": [
+      "эмаль"
+     ],
+     "onlyEnamel": true,
+     "sizes": {
+      "blind": "116-2290*146-1036",
+      "rk": null,
+      "rbk": null,
+      "drawer": "116-356*146-1036"
+     },
+     "stepMm": null,
+     "note": "Место для установки ручки, по согласованию",
+     "image": "img/millings/sofiya.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 55,
+      "printedPage": 54
+     }
+    },
+    {
+     "name": "Фабио",
+     "slug": "fabio",
+     "category": 3,
+     "categoryLabel": "3 категория",
+     "faska": null,
+     "frameWidthMm": null,
+     "mdfThicknessMm": "22",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "116-2290*146-1036",
+      "rk": null,
+      "rbk": null,
+      "drawer": "116-2290*146-1036"
+     },
+     "stepMm": "34",
+     "note": "Переход рисунка не совпадает.",
+     "image": "img/millings/fabio.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 56,
+      "printedPage": 55
+     }
+    },
+    {
+     "name": "Белладжо",
+     "slug": "belladzho",
+     "category": 4,
+     "categoryLabel": "4 категория",
+     "faska": "R3",
+     "frameWidthMm": "22/22",
+     "mdfThicknessMm": "25",
+     "coatings": [
+      "эмаль"
+     ],
+     "onlyEnamel": true,
+     "sizes": {
+      "blind": "196-2290*196-1036",
+      "rk": null,
+      "rbk": "246-2290*246-1036",
+      "drawer": "176-246*246-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/belladzho.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 57,
+      "printedPage": 56
+     }
+    },
+    {
+     "name": "Капелла",
+     "slug": "kapella",
+     "category": 4,
+     "categoryLabel": "4 категория",
+     "faska": "капелла",
+     "frameWidthMm": "50",
+     "mdfThicknessMm": "25",
+     "coatings": [
+      "эмаль"
+     ],
+     "onlyEnamel": true,
+     "sizes": {
+      "blind": "296-2290*296-1086",
+      "rk": null,
+      "rbk": null,
+      "drawer": "176-296*296-1036"
+     },
+     "stepMm": null,
+     "note": "Место для установки ручки, по согласованию",
+     "image": "img/millings/kapella.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 58,
+      "printedPage": 57
+     }
+    },
+    {
+     "name": "Луиджи",
+     "slug": "luidzhi",
+     "category": 4,
+     "categoryLabel": "4 категория",
+     "faska": "R3",
+     "frameWidthMm": "60/60",
+     "mdfThicknessMm": "25",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "396-2290*396-1036",
+      "rk": null,
+      "rbk": null,
+      "drawer": "176-396*396-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/luidzhi.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 59,
+      "printedPage": 58
+     }
+    },
+    {
+     "name": "Паола",
+     "slug": "paola",
+     "category": 4,
+     "categoryLabel": "4 категория",
+     "faska": "R3",
+     "frameWidthMm": "60/60",
+     "mdfThicknessMm": "25",
+     "coatings": [
+      "эмаль"
+     ],
+     "onlyEnamel": true,
+     "sizes": {
+      "blind": "296-2290*296-1036",
+      "rk": null,
+      "rbk": null,
+      "drawer": "176-326*326-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/paola.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 60,
+      "printedPage": 59
+     }
+    },
+    {
+     "name": "Помпея",
+     "slug": "pompeya",
+     "category": 4,
+     "categoryLabel": "4 категория",
+     "faska": "R3",
+     "frameWidthMm": "48/48",
+     "mdfThicknessMm": "25",
+     "coatings": [
+      "ПВХ",
+      "эмаль"
+     ],
+     "onlyEnamel": false,
+     "sizes": {
+      "blind": "396-2290*396-1036",
+      "rk": null,
+      "rbk": null,
+      "drawer": "176-396*396-1036"
+     },
+     "stepMm": null,
+     "note": null,
+     "image": "img/millings/pompeya.jpg",
+     "source": {
+      "file": "Каталог Фрезеровок ВИСМА 2026_compressed (1).pdf",
+      "pdfPage": 61,
+      "printedPage": 60
+     }
     }
    ]
   }

@@ -898,3 +898,29 @@ input.dim { width: 54px; font-size: 11.5px; padding: 3px 4px; text-align: center
 .kb-sec:last-child { border-bottom: 0; }
 .kb-sec > summary { cursor: pointer; font-size: 13px; font-weight: 600; }
 .kb-sec > p { margin: 8px 0 4px; font-size: 13px; line-height: 1.65; color: #3b3550; }
+
+/* ---------- Каталог фрезеровок (база знаний) ---------- */
+.milling-grid {
+  display: grid; gap: 12px; margin-bottom: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+}
+.milling-card {
+  display: flex; flex-direction: column; gap: 0; padding: 0; text-align: left; cursor: pointer;
+  background: var(--card, #fff); border: 1px solid var(--line, #e7e3f0); border-radius: 12px;
+  overflow: hidden; transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+.milling-card:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+.milling-thumb { display: block; width: 100%; height: auto; background: #f3f3f5; }
+.milling-card-body { display: flex; flex-direction: column; gap: 3px; padding: 9px 11px 11px; }
+.milling-price { font-size: 13px; font-weight: 700; color: var(--accent); }
+.milling-note { color: var(--warn); font-size: 12px; line-height: 1.45; }
+.milling-modal { width: min(940px, 96vw); display: flex; flex-direction: column; gap: 12px; }
+.milling-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.milling-modal-head h2 { margin: 0; }
+.milling-modal h3 { margin: 4px 0 0; font-size: 15px; }
+.milling-modal-body { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.milling-big { width: 100%; height: auto; border-radius: 10px; background: #f3f3f5; }
+.milling-modal-body th { text-align: left; white-space: nowrap; width: 1%; padding-right: 14px; }
+@media (max-width: 720px) {
+  .milling-modal-body { grid-template-columns: 1fr; }
+}
