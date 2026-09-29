@@ -37,8 +37,6 @@ export default function SyncPanel(props: {
       QRCode.toDataURL(url, { width: 260, margin: 2, color: { dark: '#10231f', light: '#ffffff' } })
         .then((url) => setQrDataUrl(url))
         .catch(() => {});
-    } else {
-      setQrDataUrl('');
     }
   }, [config.enabled, config.roomCode, config.secretKey]);
 
@@ -50,8 +48,6 @@ export default function SyncPanel(props: {
       QRCode.toDataURL(url, { width: 240, margin: 2, color: { dark: '#10231f', light: '#ffffff' } })
         .then((url) => setProjectQrDataUrl(url))
         .catch(() => {});
-    } else {
-      setProjectQrDataUrl('');
     }
   }, [selProjectForQr, props.projects]);
 
@@ -256,7 +252,7 @@ export default function SyncPanel(props: {
                 </select>
               </label>
 
-              {projectQrDataUrl && (
+              {props.projects.some((project) => project.id === selProjectForQr) && projectQrDataUrl && (
                 <div className="qr-container" style={{ marginTop: 16 }}>
                   <img src={projectQrDataUrl} alt="QR-код проекта" className="qr-image" style={{ width: 200, height: 200 }} />
                   <div className="qr-hint">

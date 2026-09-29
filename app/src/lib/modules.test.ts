@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { Pricebook, ModuleDefaults } from '../types';
-import { newModule, moduleToLines, checkModule, moveModule, resolveSlot, parseBodyDrawers, parseBodyDoors, setWarningConfirmed, isWarningConfirmed } from './modules';
+import { MODULE_PRESETS, newModule, moduleFromPreset, moduleToLines, checkModule, moveModule, resolveSlot, parseBodyDrawers, parseBodyDoors, setWarningConfirmed, isWarningConfirmed } from './modules';
 import { calcTotals } from './engine';
 import { defaultSettings } from './storage';
 
@@ -25,7 +25,151 @@ const drawerSys = pb.items.find((i) => i.category === 'Системы выдви
 const mdf16 = pb.items.find((i) => i.group === 'mdf_pvh' && i.attrs['категория']?.startsWith('1 категория')
   && i.attrs['толщина'] === '16мм' && i.name.includes('Квадратный метр'))!; // 3600/м²
 const hinge = byName('Петля Боярд с дов. 90°');          // 170
+const oporaLeg = byName('Опора регулируемая пвх h100мм'); // 25 ₽/шт
 const emal = pb.items.find((i) => i.group === 'emal' && i.priceBasis === 'm2' && i.price === 13500)!;
+const glass = pb.items.find((i) => i.category === 'Фасады: Стекло и зеркала' && i.subcategory === 'Стекло' && i.priceKind === 'fixed')!;
+const aluminiumFrame = pb.items.find((i) => i.subcategory === 'Алюм. рамка F1-10' && i.attrs['цвет'] === 'золото')!;
+
+describe('быстрые конструкции', () => {
+  it('заполняют только конструкцию и не выбирают корпус или материалы', () => {
+    const preset = MODULE_PRESETS.find((item) => item.id === 'base-2-drawers')!;
+    const module = moduleFromPreset(preset);
+    expect(module.name).toBe('Нижний шкаф · 2 ящика');
+    expect(module.drawers).toBe(2);
+    expect(module.facades).toBe(2);
+    expect(module.slots.body.itemId).toBeNull();
+    expect(module.slots.facade.itemId).toBeNull();
+    expect(module.widthMm).toBeNull();
+  });
+});
+
+describe('опоры модулей', () => {
+  it('стоящие модули получают 4 опоры по умолчанию, навесные — 0', () => {
+    expect(newModule('Нижний шкаф').legs).toBe(4);
+    expect(newModule('Пенал').legs).toBe(4);
+    expect(newModule('Шкаф под мойку').legs).toBe(4);
+    expect(newModule('Верхний шкаф').legs).toBe(0);
+    const preset = MODULE_PRESETS.find((item) => item.id === 'tall')!;
+    expect(moduleFromPreset(preset).legs).toBe(4);
+  });
+
+  it('опоры попадают в расчёт отдельной строкой по количеству на модуль', () => {
+    const m = newModule('Нижний шкаф');
+    m.qty = 2;
+    m.slots.legs = { mode: 'manual', itemId: oporaLeg.id };
+    const lines = moduleToLines(m, {}, pb);
+    const legsLine = lines.find((line) => line.itemId === oporaLeg.id)!;
+    expect(legsLine).toBeTruthy();
+    expect(legsLine.qty).toBe(8); // 4 опоры × 2 модуля
+    expect(legsLine.note).toMatch(/4 опоры/);
+  });
+
+  it('указанные опоры без модели — ошибка; стоящий модуль с 0 опор — предупреждение', () => {
+    const noModel = checkModule(newModule('Нижний шкаф'), {}, pb);
+    expect(noModel.errors.some((error) => error.includes('модель опоры не выбрана'))).toBe(true);
+
+    const zero = newModule('Нижний шкаф');
+    zero.legs = 0;
+    zero.slots.legs = { mode: 'manual', itemId: oporaLeg.id };
+    zero.slots.body = { mode: 'manual', itemId: corpus224.id };
+    const check = checkModule(zero, {}, pb);
+    expect(check.errors.some((error) => error.includes('модель опоры'))).toBe(false);
+    expect(check.openWarnings.some((warning) => warning.code === 'legs')).toBe(true);
+
+    // старый модуль (без поля legs) ведёт себя как «не задано» — предупреждение без ошибки
+    const legacy = newModule('Нижний шкаф');
+    delete legacy.legs;
+    legacy.slots.body = { mode: 'manual', itemId: corpus224.id };
+    const legacyCheck = checkModule(legacy, {}, pb);
+    expect(legacyCheck.errors.some((error) => error.includes('модель опоры'))).toBe(false);
+    expect(legacyCheck.openWarnings.some((warning) => warning.code === 'legs')).toBe(true);
+  });
+
+  it('стоящий модуль с подтверждённым «без опор» больше не открывает предупреждение опор', () => {
+    const zero = newModule('Нижний шкаф');
+    zero.legs = 0;
+    zero.slots.body = { mode: 'manual', itemId: corpus224.id };
+    zero.slots.legs = { mode: 'manual', itemId: oporaLeg.id };
+    const before = checkModule(zero, {}, pb);
+    expect(before.openWarnings.some((warning) => warning.code === 'legs')).toBe(true);
+    const confirmed = setWarningConfirmed(zero, 'legs', true);
+    const check = checkModule(confirmed, {}, pb);
+    expect(check.openWarnings.some((warning) => warning.code === 'legs')).toBe(false);
+    expect(check.confirmedWarnings.some((warning) => warning.code === 'legs')).toBe(true);
+  });
+});
+
+describe('отдельные фасадные детали (боковины, накладки)', () => {
+  const sidePanel = { widthMm: 596, heightMm: 2100, qty: 2, kind: 'panel' as const, label: 'Боковина', source: 'manual' as const };
+
+  it('считает каждую деталь отдельной строкой по своей площади и количеству', () => {
+    const m = newModule('Пенал');
+    m.qty = 1;
+    m.slots.facade = { mode: 'manual', itemId: mdf16.id }; // 3600 ₽/м²
+    m.extraFacadeParts = [sidePanel];
+    const lines = moduleToLines(m, {}, pb);
+    const facadeLines = lines.filter((line) => line.itemId === mdf16.id);
+    expect(facadeLines).toHaveLength(1);
+    expect(facadeLines[0].qty).toBe(2); // количество деталей × модулей
+    expect(facadeLines[0].params).toEqual({ widthMm: 596, heightMm: 2100 });
+    expect(facadeLines[0].note).toMatch(/Боковина/);
+    expect(facadeLines[0].note).toMatch(/фасадная панель/);
+  });
+
+  it('не ломает конструктивные фасады и не начисляет на отдельную деталь рамку', () => {
+    const m = newModule('Верхний шкаф');
+    m.facades = 1; m.facadeWmm = 600; m.facadeHmm = 700;
+    m.slots.facade = { mode: 'manual', itemId: glass.id };
+    m.slots.frame = { mode: 'manual', itemId: aluminiumFrame.id };
+    m.extraFacadeParts = [{ ...sidePanel, qty: 1 }];
+    const lines = moduleToLines(m, {}, pb);
+    const facadeLines = lines.filter((line) => line.itemId === glass.id);
+    expect(facadeLines).toHaveLength(2); // дверь по техничке + отдельная боковина
+    const frameLines = lines.filter((line) => line.itemId === aluminiumFrame.id);
+    expect(frameLines).toHaveLength(1); // рамка только на дверь, не на боковину
+    expect(frameLines[0].params).toEqual({ widthMm: 600, heightMm: 700 });
+  });
+
+  it('валидация требует размеры, количество и материал фасада', () => {
+    const m = newModule('Пенал');
+    m.extraFacadeParts = [{ widthMm: 0, heightMm: 2100, qty: 0, kind: 'panel', label: 'Боковина', source: 'manual' }];
+    const check = checkModule(m, {}, pb);
+    expect(check.errors.some((error) => error.includes('материал фасада'))).toBe(true);
+    expect(check.errors.some((error) => error.includes('ширину и высоту'))).toBe(true);
+    expect(check.errors.some((error) => error.includes('количество'))).toBe(true);
+  });
+});
+
+describe('стекло и алюминиевая рамка', () => {
+  it('представляет все цвета рамок явными позициями с сохранением цены модели', () => {
+    const frames = pb.items.filter((item) => item.subcategory?.startsWith('Алюм. рамка'));
+    expect(frames).toHaveLength(8);
+    expect(frames.filter((item) => item.subcategory === 'Алюм. рамка F1-10').map((item) => item.attrs['цвет'])).toEqual(['золото', 'серебро', 'шампань', 'чёрная']);
+    expect(frames.filter((item) => item.subcategory === 'Алюм. рамка INTEGRO').map((item) => item.attrs['цвет'])).toEqual(['золото', 'серебро', 'графит', 'чёрная']);
+    expect(new Set(frames.filter((item) => item.subcategory === 'Алюм. рамка F1-10').map((item) => item.price))).toEqual(new Set([6000]));
+    expect(new Set(frames.filter((item) => item.subcategory === 'Алюм. рамка INTEGRO').map((item) => item.price))).toEqual(new Set([7000]));
+  });
+
+  it('считает рамку отдельной строкой по площади каждого стеклянного фасада', () => {
+    const m = newModule('Верхний шкаф');
+    m.facades = 1; m.facadeWmm = 600; m.facadeHmm = 700;
+    m.slots.facade = { mode: 'manual', itemId: glass.id };
+    m.slots.frame = { mode: 'manual', itemId: aluminiumFrame.id };
+    const lines = moduleToLines(m, {}, pb);
+    expect(lines).toHaveLength(2);
+    expect(lines.map((line) => line.name)).toEqual([glass.name, aluminiumFrame.name]);
+    expect(lines[1].params).toEqual({ widthMm: 600, heightMm: 700 });
+    expect(calcTotals(lines, defaultSettings()).totals.cost).toBeCloseTo(0.42 * (glass.price! + aluminiumFrame.price!), 2);
+  });
+
+  it('не разрешает алюминиевую рамку для не-стеклянного фасада', () => {
+    const m = newModule('Верхний шкаф');
+    m.facades = 1; m.facadeWmm = 600; m.facadeHmm = 700;
+    m.slots.facade = { mode: 'manual', itemId: mdf16.id };
+    m.slots.frame = { mode: 'manual', itemId: aluminiumFrame.id };
+    expect(checkModule(m, {}, pb).errors.join(' ')).toMatch(/рамка.*стекла|стеклу.*зеркалу/i);
+  });
+});
 
 describe('модуль → строки расчёта', () => {
   it('нижний шкаф 600: корпус + 2 фасада МДФ + 4 петли (ручная сверка)', () => {
@@ -129,6 +273,7 @@ describe('сверка названия корпуса с конструкцие
     const m = newModule('Нижний шкаф');
     m.widthMm = 300; m.heightMm = 720; m.depthMm = 560;
     m.slots.body = { mode: 'manual', itemId: corpus238.id }; // «Стол напольный с 2-мя ящиками — 300мм»
+    m.slots.legs = { mode: 'manual', itemId: oporaLeg.id };
     m.drawers = 0; // в конструкции 0 ящиков
 
     const c = checkModule(m, {}, pb);
@@ -143,6 +288,7 @@ describe('сверка названия корпуса с конструкцие
     const m = newModule('Нижний шкаф');
     m.widthMm = 300; m.heightMm = 720; m.depthMm = 560;
     m.slots.body = { mode: 'manual', itemId: corpus228.id }; // «Стол напольный 1-но дверный с ящиком — 300мм»
+    m.slots.legs = { mode: 'manual', itemId: oporaLeg.id };
     m.drawers = 0;
     m.facades = 1; m.facadeWmm = 296; m.facadeHmm = 716; m.hinges = 2; m.handles = 1;
     const defaults: ModuleDefaults = { facade: mdf16.id, hinge: hinge.id, handle: hinge.id };
@@ -158,6 +304,7 @@ describe('сверка названия корпуса с конструкцие
     const m = newModule('Нижний шкаф');
     m.widthMm = 300; m.heightMm = 720; m.depthMm = 560;
     m.slots.body = { mode: 'manual', itemId: corpus246.id }; // «Стол напольный с 3-мя ящиками (180+180+360) — 300мм»
+    m.slots.legs = { mode: 'manual', itemId: oporaLeg.id };
     m.drawers = 1;
     m.slots.drawerSys = { mode: 'manual', itemId: drawerSys.id };
 
@@ -183,6 +330,7 @@ describe('сверка названия корпуса с конструкцие
     const m = newModule('Нижний шкаф');
     m.widthMm = 600; m.heightMm = 720; m.depthMm = 560;
     m.slots.body = { mode: 'manual', itemId: corpus224.id }; // «Стол напольный 2-х дверный — 600мм»
+    m.slots.legs = { mode: 'manual', itemId: oporaLeg.id };
     m.facades = 1; m.facadeWmm = 596; m.facadeHmm = 716; m.hinges = 2; m.handles = 1;
     const defaults: ModuleDefaults = { facade: mdf16.id, hinge: hinge.id, handle: hinge.id };
 
@@ -228,6 +376,7 @@ describe('подтверждение предупреждений и поряд�
     const m = newModule('Нижний шкаф');
     m.widthMm = 600; m.heightMm = 720; m.depthMm = 560;
     m.slots.body = { mode: 'manual', itemId: corpus224.id };
+    m.slots.legs = { mode: 'manual', itemId: oporaLeg.id };
     m.facades = 2; m.facadeWmm = 296; m.facadeHmm = 716;
     m.hinges = 2;
     m.slots.facade = { mode: 'manual', itemId: mdf16.id };

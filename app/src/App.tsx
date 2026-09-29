@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Pricebook, Project, ProjectSettings, Template } from './types';
+import type { Pricebook, Project, ProjectSettings, Template, KbArticle } from './types';
 import {
   loadGlobalSettings, saveGlobalSettings,
   loadProjects, saveProjects, loadTemplates, saveTemplates,
-  loadStoredPricebooks, saveStoredPricebooks, uid,
-} from './lib/storage';
+  loadStoredPricebooks, saveStoredPricebooks, uid, loadKbArticles, saveKbArticles } from './lib/storage';
 import {
   loadSyncConfig, saveSyncConfig, performFullSync, parseIncomingHash,
   pushToCloud,
 } from './lib/sync';
 import type { SyncConfig, SyncStatus } from './lib/sync';
+import { ProjectHistory } from './lib/history';
 import { todayISO } from './lib/format';
 import Dashboard from './components/Dashboard';
 import ProjectEditor from './components/ProjectEditor';
@@ -17,11 +17,15 @@ import SettingsPanel from './components/SettingsPanel';
 import PricebookView from './components/PricebookView';
 import QuickCalc from './components/QuickCalc';
 import SyncPanel from './components/SyncPanel';
+import FactoryBlankView from './components/FactoryBlankView';
+import KnowledgeView from './components/KnowledgeView';
 
 type View =
   | { kind: 'dashboard' }
   | { kind: 'project'; id: string }
   | { kind: 'quick' }
+  | { kind: 'factory'; id?: string }
+  | { kind: 'kb' }
   | { kind: 'settings' }
   | { kind: 'pricebook' }
   | { kind: 'sync' };
@@ -36,8 +40,10 @@ export default function App() {
   const [activePricebookId, setActivePricebookId] = useState<string>(() => localStorage.getItem('recept.activePb') ?? 'visma-2026');
   const [view, setView] = useState<View>({ kind: 'dashboard' });
   const [savedFlash, setSavedFlash] = useState(false);
-  const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig());
+    const [kbArticles, setKbArticles] = useState<KbArticle[]>(() => loadKbArticles());
+const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig());
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => (loadSyncConfig().enabled ? 'synced' : 'idle'));
+  const [projectHistory] = useState(() => new ProjectHistory());
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}data/pricebook-visma-2026.json`)
@@ -61,8 +67,7 @@ export default function App() {
         secretKey: parsed.secretKey,
       };
       saveSyncConfig(cfg);
-      setSyncConfig(cfg);
-      setSyncStatus('syncing');
+      window.setTimeout(() => { setSyncConfig(cfg); setSyncStatus('syncing'); }, 0);
       performFullSync(cfg).then((res) => {
         setSyncStatus(res.status);
         if (res.merged) {
@@ -79,8 +84,7 @@ export default function App() {
       p.updatedAt = new Date().toISOString();
       const next = [p, ...loadProjects()];
       saveProjects(next);
-      setProjects(next);
-      setView({ kind: 'project', id: p.id });
+      window.setTimeout(() => { setProjects(next); setView({ kind: 'project', id: p.id }); }, 0);
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
       alert(`📱 Проект «${p.name}» успешно импортирован на это устройство!`);
     }
@@ -136,7 +140,11 @@ export default function App() {
     }
   }, []);
 
-  const persistTemplates = useCallback((next: Template[]) => {
+    const persistKb = useCallback((next: KbArticle[]) => {
+    setKbArticles(next);
+    saveKbArticles(next);
+  }, []);
+const persistTemplates = useCallback((next: Template[]) => {
     setTemplates(next);
     saveTemplates(next);
     const cfg = loadSyncConfig();
@@ -180,17 +188,30 @@ export default function App() {
       lines,
       modules: modules ?? [],
       moduleDefaults: moduleDefaults ?? {},
+      wizardMode: 'wizard',
+      wizardStep: 'data',
       settings: JSON.parse(JSON.stringify(globalSettings)),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     persistProjects([p, ...projects]);
     setView({ kind: 'project', id: p.id });
+
   }, [activePricebook, globalSettings, projects, persistProjects]);
 
   const updateProject = useCallback((p: Project) => {
+    const current = projects.find((x) => x.id === p.id);
+    if (current) projectHistory.push(current);
     persistProjects(projects.map((x) => (x.id === p.id ? { ...p, updatedAt: new Date().toISOString() } : x)));
-  }, [projects, persistProjects]);
+  }, [projects, persistProjects, projectHistory]);
+
+  const undoProject = useCallback((id: string) => {
+    const previous = projectHistory.undo(id);
+    if (!previous) return;
+    persistProjects(projects.map((x) => (x.id === id ? { ...previous, updatedAt: new Date().toISOString() } : x)));
+  }, [projects, persistProjects, projectHistory]);
+
+  const canUndoProject = useCallback((id: string) => projectHistory.canUndo(id), [projectHistory]);
 
   const duplicateProject = useCallback((id: string) => {
     const src = projects.find((p) => p.id === id);
@@ -209,9 +230,10 @@ export default function App() {
 
   const deleteProject = useCallback((id: string) => {
     if (!confirm('Удалить проект безвозвратно?')) return;
+    projectHistory.clear(id);
     persistProjects(projects.filter((p) => p.id !== id));
     setView({ kind: 'dashboard' });
-  }, [projects, persistProjects]);
+  }, [projects, persistProjects, projectHistory]);
 
   const importProject = useCallback((file: File) => {
     file.text().then((t) => {
@@ -239,14 +261,29 @@ export default function App() {
         <div className="brand">
           <div className="brand-name">РЕцепт</div>
           <div className="brand-sub">калькулятор кухонь · Висма</div>
+          <div className="brand-pro">PRO</div>
         </div>
         <nav>
-          <button className={view.kind === 'dashboard' ? 'active' : ''} onClick={() => setView({ kind: 'dashboard' })}>Проекты</button>
-          <button className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>Быстрый расчёт</button>
-          <button className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => setView({ kind: 'pricebook' })}>Прайс и версии</button>
-          <button className={view.kind === 'settings' ? 'active' : ''} onClick={() => setView({ kind: 'settings' })}>Настройки</button>
+          <button className={view.kind === 'dashboard' ? 'active' : ''} onClick={() => setView({ kind: 'dashboard' })}>
+            <span className="nav-icon">🗂</span>Проекты<span className="nav-count">{projects.length}</span>
+          </button>
+          <button className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>
+            <span className="nav-icon">⚡</span>Быстрый расчёт
+          </button>
+          <button className={view.kind === 'factory' ? 'active' : ''} onClick={() => setView({ kind: 'factory' })}>
+            <span className="nav-icon">📋</span>Бланк на фабрику
+          </button>
+          <button className={view.kind === 'kb' ? 'active' : ''} onClick={() => setView({ kind: 'kb' })}>
+            <span className="nav-icon">📚</span>База знаний<span className="nav-count">{kbArticles.length}</span>
+          </button>
+          <button className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => setView({ kind: 'pricebook' })}>
+            <span className="nav-icon">🧾</span>Прайс и версии
+          </button>
+          <button className={view.kind === 'settings' ? 'active' : ''} onClick={() => setView({ kind: 'settings' })}>
+            <span className="nav-icon">⚙️</span>Настройки
+          </button>
           <button className={view.kind === 'sync' ? 'active' : ''} onClick={() => setView({ kind: 'sync' })}>
-            📱 Синхронизация
+            <span className="nav-icon">📱</span>Синхронизация
             {syncConfig.enabled && (
               <span className={`nav-sync-badge ${syncStatus}`} title={`Синхронизация: ${syncStatus === 'synced' ? 'в сети' : syncStatus === 'syncing' ? 'обновление...' : 'офлайн'}`} />
             )}
@@ -269,6 +306,10 @@ export default function App() {
             onCreate={createProject}
             onDuplicate={duplicateProject}
             onDelete={deleteProject}
+            onStatusChange={(id, status) => {
+              const project = projects.find((item) => item.id === id);
+              if (project) updateProject({ ...project, status });
+            }}
             onImport={importProject}
             onQuick={() => setView({ kind: 'quick' })}
             onOpenSync={() => setView({ kind: 'sync' })}
@@ -296,10 +337,13 @@ export default function App() {
             project={current}
             pricebook={pricebooks.find((pb) => pb.meta.id === current.pricebookId) ?? activePricebook}
             onChange={updateProject}
+            onUndo={() => undoProject(current.id)}
+            canUndo={canUndoProject(current.id)}
             onBack={() => setView({ kind: 'dashboard' })}
             onDuplicate={() => duplicateProject(current.id)}
             onDelete={() => deleteProject(current.id)}
             templates={templates}
+            onOpenFactoryBlank={() => setView({ kind: 'factory', id: current.id })}
             onSaveModuleTemplate={(name, module) => {
               persistTemplates([{ id: uid('tpl'), name, comment: 'Шаблон модуля', lines: [], modules: [JSON.parse(JSON.stringify(module))], createdAt: new Date().toISOString() }, ...templates]);
             }}
@@ -316,6 +360,18 @@ export default function App() {
             onDeleteTemplate={(id) => persistTemplates(templates.filter((t) => t.id !== id))}
             onCreateProject={createProject}
           />
+        )}
+        {view.kind === 'factory' && (
+          <FactoryBlankView
+            projects={projects}
+            pricebooks={pricebooks}
+            initialProjectId={view.kind === 'factory' ? view.id : undefined}
+            onOpenProject={(id) => setView({ kind: 'project', id })}
+            onChangeProject={updateProject}
+          />
+        )}
+        {view.kind === 'kb' && (
+          <KnowledgeView articles={kbArticles} onChange={persistKb} />
         )}
         {view.kind === 'settings' && (
           <SettingsPanel

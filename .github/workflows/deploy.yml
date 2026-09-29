@@ -34,13 +34,15 @@ jobs:
         with:
           path: app/dist
   deploy:
-    # Ветка Arena нужна для проверки сборки PR, но среда github-pages разрешена
-    # только main. Публикация выполняется после merge отдельным запуском main.
-    if: github.ref == 'refs/heads/main'
+    # Публикуем и main, и текущую рабочую ветку Arena, чтобы ссылку можно было
+    # проверить до merge. Для других arena-веток достаточно проверки сборки.
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/01a0e89a-calculator'
     needs: build
     runs-on: ubuntu-latest
     environment:
-      name: github-pages
+      # Отдельное окружение без правила «только main», чтобы рабочую Arena-ветку
+      # можно было открыть по публичной ссылке до слияния.
+      name: github-pages-preview
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment

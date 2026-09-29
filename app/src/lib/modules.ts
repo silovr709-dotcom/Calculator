@@ -1,5 +1,6 @@
 import type { KitchenModule, ModuleDefaults, Pricebook, PriceItem, ProjectLine, SlotChoice, SlotKey } from '../types';
 import { lineFromItem } from './engine';
+import { inferDimensionSurcharges } from './surcharges';
 import { uid } from './storage';
 
 /** Типовые виды позиций (пользователь может ввести и собственный тип) */
@@ -15,35 +16,68 @@ export const MODULE_TYPES = [
   'Другой элемент',
 ] as const;
 
+/** Типы модулей, которые стоят на полу на опорах. Остальные — навесные/декоративные. */
+export function moduleStandsOnFloor(type: string): boolean {
+  return ['Нижний шкаф', 'Пенал', 'Шкаф под мойку', 'Шкаф под духовой шкаф'].includes(type);
+}
+
+/** Быстрые заготовки конструкции без скрытого выбора корпуса и материалов. */
+export interface ModulePreset {
+  id: string;
+  label: string;
+  type: string;
+  name: string;
+  facades: number;
+  drawers: number;
+  shelves: number;
+}
+
+export const MODULE_PRESETS: ModulePreset[] = [
+  { id: 'base-2-doors', label: 'Нижний шкаф · 2 двери', type: 'Нижний шкаф', name: 'Нижний шкаф · 2 двери', facades: 2, drawers: 0, shelves: 1 },
+  { id: 'base-1-door-drawer', label: 'Нижний шкаф · ящик + дверь', type: 'Нижний шкаф', name: 'Нижний шкаф · ящик + дверь', facades: 2, drawers: 1, shelves: 0 },
+  { id: 'base-2-drawers', label: 'Нижний шкаф · 2 ящика', type: 'Нижний шкаф', name: 'Нижний шкаф · 2 ящика', facades: 2, drawers: 2, shelves: 0 },
+  { id: 'base-3-drawers', label: 'Нижний шкаф · 3 ящика', type: 'Нижний шкаф', name: 'Нижний шкаф · 3 ящика', facades: 3, drawers: 3, shelves: 0 },
+  { id: 'wall-2-doors', label: 'Верхний шкаф · 2 двери', type: 'Верхний шкаф', name: 'Верхний шкаф · 2 двери', facades: 2, drawers: 0, shelves: 1 },
+  { id: 'sink', label: 'Шкаф под мойку', type: 'Шкаф под мойку', name: 'Шкаф под мойку', facades: 2, drawers: 0, shelves: 0 },
+  { id: 'oven', label: 'Шкаф под духовой шкаф', type: 'Шкаф под духовой шкаф', name: 'Шкаф под духовой шкаф', facades: 1, drawers: 1, shelves: 0 },
+  { id: 'tall', label: 'Пенал', type: 'Пенал', name: 'Пенал', facades: 2, drawers: 0, shelves: 4 },
+];
+
 export const SLOT_LABELS: Record<SlotKey, string> = {
   body: 'Корпус (каркас из прайса)',
   facade: 'Фасады (материал, цена за м²)',
+  frame: 'Алюминиевая рамка фасада (доплата за м²)',
   hinge: 'Петли (модель)',
   drawerSys: 'Система ящиков',
   lift: 'Подъёмный механизм',
   handle: 'Ручки',
   shelf: 'Полка дополнительная',
+  legs: 'Опоры / ножки (модель)',
 };
 
 /** Пулы слотов — ТОЛЬКО реальные категории базы Висма */
 export const SLOT_POOLS: Record<SlotKey, (i: PriceItem) => boolean> = {
   body: (i) => i.category.startsWith('Корпуса'),
   facade: (i) => i.category.startsWith('Фасады') && i.priceBasis === 'm2',
+  frame: (i) => i.category === 'Фасады: Стекло и зеркала' && Boolean(i.subcategory?.startsWith('Алюм. рамка')) && i.priceBasis === 'm2',
   hinge: (i) => i.category === 'Петли' || (i.category.includes('BLUM') && i.subcategory === 'Петли Blum'),
   drawerSys: (i) => i.category === 'Системы выдвижения' || (i.category.includes('BLUM') && i.subcategory === 'Ящики и направляющие Blum'),
   lift: (i) => i.category === 'Подъёмные механизмы' || (i.category.includes('BLUM') && i.subcategory === 'Aventos'),
   handle: (i) => i.category === 'Ручки',
   shelf: (i) => i.category === 'Доп. комплектация каркасов' || i.category.startsWith('Корпуса'),
+  legs: (i) => i.category === 'Опоры и ножки',
 };
 
 const defaultSlots = (): Record<SlotKey, SlotChoice> => ({
   body: { mode: 'manual', itemId: null }, // корпус всегда индивидуален — из настроек не наследуется
   facade: { mode: 'default', itemId: null },
+  frame: { mode: 'default', itemId: null },
   hinge: { mode: 'default', itemId: null },
   drawerSys: { mode: 'default', itemId: null },
   lift: { mode: 'default', itemId: null },
   handle: { mode: 'default', itemId: null },
   shelf: { mode: 'default', itemId: null },
+  legs: { mode: 'default', itemId: null },
 });
 
 export function newModule(type: string): KitchenModule {
@@ -54,8 +88,21 @@ export function newModule(type: string): KitchenModule {
     qty: 1,
     widthMm: null, heightMm: null, depthMm: null,
     facades: 0, drawers: 0, shelves: 0, hinges: 0, handles: 0, lifts: 0,
+    // стоящие модули сразу получают стандартные 4 опоры; навесные — без опор
+    legs: moduleStandsOnFloor(type) ? 4 : 0,
     facadeWmm: null, facadeHmm: null,
     slots: defaultSlots(),
+  };
+}
+
+/** Создаёт заготовку конструкции; корпус, фасады и фурнитура всё ещё выбираются явно. */
+export function moduleFromPreset(preset: ModulePreset): KitchenModule {
+  return {
+    ...newModule(preset.type),
+    name: preset.name,
+    facades: preset.facades,
+    drawers: preset.drawers,
+    shelves: preset.shelves,
   };
 }
 
@@ -74,7 +121,7 @@ export function resolveSlot(
 }
 
 /** Коды проверяемых предупреждений, которые пользователь может подтвердить. */
-export type ModuleWarningCode = 'dims' | 'bodyDrawers' | 'bodyDoors' | 'shelves' | 'opening' | 'handles';
+export type ModuleWarningCode = 'dims' | 'bodyDrawers' | 'bodyDoors' | 'shelves' | 'opening' | 'handles' | 'dimensionSurcharge' | 'legs';
 
 export interface ModuleWarning {
   code: ModuleWarningCode;
@@ -191,12 +238,14 @@ export function parseBodyDoors(name: string): number | null {
 export function slotNeed(m: KitchenModule, key: SlotKey): number {
   switch (key) {
     case 'body': return 1;
-    case 'facade': return m.facades;
+    case 'facade': return m.facades + (m.extraFacadeParts ?? []).reduce((sum, part) => sum + part.qty, 0);
+    case 'frame': return m.facades;
     case 'hinge': return m.hinges;
     case 'drawerSys': return m.drawers;
     case 'lift': return m.lifts;
     case 'handle': return m.handles;
     case 'shelf': return m.shelves;
+    case 'legs': return m.legs ?? 0;
   }
 }
 
@@ -224,17 +273,44 @@ export function checkModule(m: KitchenModule, defaults: ModuleDefaults, priceboo
     if (expectedDoors !== null && m.facades < expectedDoors) {
       warn('bodyDoors', 'Фасады в цену каркаса не входят — укажите количество, либо подтвердите');
     }
+
+    const dimensionRules = inferDimensionSurcharges(m, body.item, pricebook);
+    const pendingRules = dimensionRules.filter((rule) => !(m.surcharges ?? []).includes(rule.itemId));
+    const staleRules = (m.automaticSurcharges ?? []).filter((id) => !dimensionRules.some((rule) => rule.itemId === id));
+    if (pendingRules.length > 0) {
+      warn('dimensionSurcharge', `Изменены габариты корпуса: примените рекомендованные надбавки (${pendingRules.map((rule) => `+${rule.percent}%`).join(' + ')}) только к корпусу`);
+    } else if (staleRules.length > 0) {
+      warn('dimensionSurcharge', 'Автоматическая надбавка сохранена от прежних габаритов — проверьте и обновите её');
+    }
   }
 
   if (m.facades > 0) {
     const f = r('facade');
     if (!f.item) errors.push('Указаны фасады, но материал фасада не выбран');
-    else if (!m.facadeWmm || !m.facadeHmm) errors.push('Не указан размер фасада (Ш×В, мм) — цена материала за м²');
+    else if (m.facadeParts?.length) {
+      if (m.facadeParts.length !== m.facades) errors.push(`Размеров фасадов указано ${m.facadeParts.length}, а фасадов в конструкции ${m.facades}`);
+      if (m.facadeParts.some((part) => part.widthMm <= 0 || part.heightMm <= 0)) errors.push('В размерах фасадов есть нулевые или отрицательные значения');
+    } else if (!m.facadeWmm || !m.facadeHmm) errors.push('Не указан размер фасада (Ш×В, мм) — цена материала за м²');
+    const frame = r('frame').item;
+    if (frame && (!f.item || f.item.category !== 'Фасады: Стекло и зеркала')) errors.push('Алюминиевая рамка выбрана, но материал фасада не относится к стеклу/зеркалу');
+  }
+  // Отдельные фасадные детали: независимая проверка, работает и без конструктивных фасадов.
+  const extras = m.extraFacadeParts ?? [];
+  if (extras.length > 0) {
+    if (!r('facade').item) errors.push('Отдельные фасадные детали: не выбран материал фасада');
+    for (const [index, part] of extras.entries()) {
+      const label = part.label?.trim() || `деталь ${index + 1}`;
+      if (part.widthMm <= 0 || part.heightMm <= 0) errors.push(`Отдельная фасадная «${label}»: укажите ширину и высоту больше 0`);
+      if (part.qty <= 0) errors.push(`Отдельная фасадная «${label}»: укажите количество больше 0`);
+    }
   }
   if (m.drawers > 0 && !r('drawerSys').item) errors.push('Указаны ящики, но система выдвижения не выбрана');
   if (m.hinges > 0 && !r('hinge').item) errors.push('Указано количество петель, но модель петли не выбрана');
   if (m.lifts > 0 && !r('lift').item) errors.push('Указаны подъёмники, но механизм не выбран');
   if (m.handles > 0 && !r('handle').item) errors.push('Указаны ручки, но модель не выбрана');
+  if ((m.legs ?? 0) > 0 && !r('legs').item) errors.push('Указано количество опор, но модель опоры не выбрана');
+  if (moduleStandsOnFloor(m.type) && (m.legs ?? 0) === 0)
+    warn('legs', 'Стоящий модуль без опор: обычно нужно 4 — укажите количество и модель, либо подтвердите, что опор нет');
   if (m.shelves > 0 && !r('shelf').item) warn('shelves', 'Полки: если входят в каркас — оставьте как есть; иначе выберите позицию доп. полки');
   if (m.facades > 0 && m.hinges === 0 && m.lifts === 0 && m.drawers === 0)
     warn('opening', 'Есть фасады, но не задано ни петель, ни подъёмников, ни ящиков — укажите, на чём открываются');
@@ -250,7 +326,7 @@ export function checkModule(m: KitchenModule, defaults: ModuleDefaults, priceboo
   }
 
   // выбранные позиции без цены
-  (['body', 'facade', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'] as SlotKey[]).forEach((k) => {
+  (['body', 'facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf'] as SlotKey[]).forEach((k) => {
     if (slotNeed(m, k) <= 0 && k !== 'body') return;
     const { item } = r(k);
     if (item && item.priceKind !== 'fixed') errors.push(`«${item.name.slice(0, 40)}»: в прайсе нет фиксированной цены (${item.priceKind === 'unavailable' ? 'временно недоступна' : 'цена не число'})`);
@@ -293,14 +369,31 @@ export function moduleToLines(m: KitchenModule, defaults: ModuleDefaults, priceb
     line.note = `${tag} — от корпуса`;
     out.push(line);
   }
-  if (m.facades > 0 && m.facadeWmm && m.facadeHmm) {
-    push(r('facade'), m.facades * m.qty, { widthMm: m.facadeWmm, heightMm: m.facadeHmm }, `${m.facades} фасада ${m.facadeWmm}×${m.facadeHmm} мм`);
+  if (m.facadeParts?.length) {
+    for (const [index, part] of m.facadeParts.entries()) {
+      const dimensions = { widthMm: part.widthMm, heightMm: part.heightMm };
+      const detail = `${part.kind === 'drawer' ? 'Фасад ящика' : 'Фасад двери'} ${index + 1}: ${part.widthMm}×${part.heightMm} мм`;
+      push(r('facade'), m.qty, dimensions, detail);
+      push(r('frame'), m.qty, dimensions, `Рамка фасада ${index + 1}: ${part.widthMm}×${part.heightMm} мм`);
+    }
+  } else if (m.facades > 0 && m.facadeWmm && m.facadeHmm) {
+    const dimensions = { widthMm: m.facadeWmm, heightMm: m.facadeHmm };
+    push(r('facade'), m.facades * m.qty, dimensions, `${m.facades} фасада ${m.facadeWmm}×${m.facadeHmm} мм`);
+    push(r('frame'), m.facades * m.qty, dimensions, `${m.facades} алюминиевые рамки ${m.facadeWmm}×${m.facadeHmm} мм`);
+  }
+  // Отдельные фасадные детали (боковина, накладка): только материал фасада,
+  // каждая — своей строкой по своей площади. Рамка на них не начисляется.
+  for (const [index, part] of (m.extraFacadeParts ?? []).entries()) {
+    const kindLabel = part.kind === 'drawer' ? 'фасад ящика' : part.kind === 'door' ? 'фасад двери' : 'фасадная панель';
+    const name = part.label?.trim() || `${part.kind === 'drawer' ? 'Фасад ящика' : part.kind === 'door' ? 'Фасад двери' : 'Фасадная панель'} ${index + 1}`;
+    push(r('facade'), part.qty * m.qty, { widthMm: part.widthMm, heightMm: part.heightMm }, `${name}: ${part.widthMm}×${part.heightMm} мм (${kindLabel})`);
   }
   push(r('hinge'), m.hinges * m.qty, undefined, `${m.hinges} петли`);
   push(r('drawerSys'), m.drawers * m.qty, undefined, `${m.drawers} ящика`);
   push(r('lift'), m.lifts * m.qty, undefined, `${m.lifts} подъёмника`);
   push(r('handle'), m.handles * m.qty, undefined, `${m.handles} ручки`);
   if (m.shelves > 0) push(r('shelf'), m.shelves * m.qty, undefined, `${m.shelves} полки`);
+  if ((m.legs ?? 0) > 0) push(r('legs'), (m.legs ?? 0) * m.qty, undefined, `${m.legs} опоры`);
   return out;
 }
 

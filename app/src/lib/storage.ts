@@ -1,10 +1,11 @@
 // Локальное хранилище: проекты, настройки, шаблоны, загруженные версии прайса.
 // Всё хранится отдельно от исходного прайса; наценки не влияют на цены Висмы.
-import type { Project, ProjectSettings, Template, Pricebook } from '../types';
+import type { Project, ProjectSettings, Template, Pricebook, KbArticle } from '../types';
 
 const K_PROJECTS = 'recept.projects.v1';
 const K_SETTINGS = 'recept.settings.v1';
 const K_TEMPLATES = 'recept.templates.v1';
+const K_KNOWLEDGE = 'recept-kb-articles';
 const K_PRICEBOOKS = 'recept.pricebooks.v1'; // загруженные (кроме встроенного)
 
 function read<T>(key: string, fallback: T): T {
@@ -40,6 +41,7 @@ export function defaultSettings(): ProjectSettings {
     applyEmalRule: true,
     assemblyCost: null,
     deliveryCost: null,
+    clientRounding: 1,
   };
 }
 
@@ -51,6 +53,9 @@ export const saveProjects = (p: Project[]) => write(K_PROJECTS, p);
 
 export const loadTemplates = (): Template[] => read<Template[]>(K_TEMPLATES, []);
 export const saveTemplates = (t: Template[]) => write(K_TEMPLATES, t);
+
+export const loadKbArticles = (): KbArticle[] => read<KbArticle[]>(K_KNOWLEDGE, []);
+export const saveKbArticles = (a: KbArticle[]) => write(K_KNOWLEDGE, a);
 
 export const loadStoredPricebooks = (): Pricebook[] => read<Pricebook[]>(K_PRICEBOOKS, []);
 export const saveStoredPricebooks = (p: Pricebook[]) => write(K_PRICEBOOKS, p);
@@ -79,6 +84,7 @@ export interface Backup {
   settings: ProjectSettings;
   templates: Template[];
   pricebooks: Pricebook[]; // загруженные версии прайса (встроенный не нужен)
+  kbArticles?: KbArticle[];
 }
 
 export function makeBackup(): Backup {
@@ -90,6 +96,7 @@ export function makeBackup(): Backup {
     settings: loadGlobalSettings(),
     templates: loadTemplates(),
     pricebooks: loadStoredPricebooks(),
+    kbArticles: loadKbArticles(),
   };
 }
 
@@ -104,6 +111,7 @@ export function restoreBackup(raw: string): string {
   const okS = saveGlobalSettings(b.settings ?? defaultSettings());
   const okT = saveTemplates(b.templates ?? []);
   const okB = saveStoredPricebooks(b.pricebooks ?? []);
-  if (!okP || !okS || !okT || !okB) throw new Error('Не хватило места в хранилище браузера — данные восстановлены не полностью.');
+  const okK = saveKbArticles(b.kbArticles ?? []);
+  if (!okP || !okS || !okT || !okB || !okK) throw new Error('Не хватило места в хранилище браузера — данные восстановлены не полностью.');
   return `Восстановлено: проектов ${b.projects.length}, шаблонов ${(b.templates ?? []).length}, версий прайса ${(b.pricebooks ?? []).length} (копия от ${b.exportedAt.slice(0, 10)})`;
 }

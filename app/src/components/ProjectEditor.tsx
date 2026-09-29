@@ -8,8 +8,14 @@ import ModulesPanel from './ModulesPanel';
 import KitchenSketch from './KitchenSketch';
 import PhotosPanel from './PhotosPanel';
 import { checkModule, moduleToLines, moveModule } from '../lib/modules';
+import { validateProject } from '../lib/validation';
 import SettingsPanel from './SettingsPanel';
 import ClientView from './ClientView';
+import KitchenWizard from './KitchenWizard';
+import ProjectCheckCenter from './ProjectCheckCenter';
+import VariantsPanel from './VariantsPanel';
+import MeasurementPanel from './MeasurementPanel';
+import KitchenChecklistPanel from './KitchenChecklistPanel';
 import { exportInternalXlsx, exportClientXlsx, exportInternalCsv, exportProjectJson } from '../lib/exporters';
 import QRCode from 'qrcode';
 import { makeProjectShareUrl } from '../lib/sync';
@@ -18,18 +24,23 @@ export default function ProjectEditor(props: {
   project: Project;
   pricebook: Pricebook;
   onChange: (p: Project) => void;
+  onUndo: () => void;
+  canUndo: boolean;
   onBack: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
   onSaveTemplate: (name: string) => void;
   templates?: Template[];
   onSaveModuleTemplate?: (name: string, module: KitchenModule) => void;
+  onOpenFactoryBlank?: () => void;
 }) {
   const { project, pricebook } = props;
-  const [tab, setTab] = useState<'modules' | 'sketch' | 'lines' | 'photos' | 'settings' | 'client'>(
+  const [tab, setTab] = useState<'modules' | 'sketch' | 'lines' | 'photos' | 'settings' | 'client' | 'check' | 'variants' | 'measurement'>(
     () => ((project.modules?.length ?? 0) > 0 || project.lines.length === 0 ? 'modules' : 'lines'),
   );
+  const [editorMode, setEditorMode] = useState<'wizard' | 'advanced'>(() => project.wizardMode ?? 'advanced');
   const [focusModuleId, setFocusModuleId] = useState<string | null>(null);
+  const [focusLineId, setFocusLineId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [editMeta, setEditMeta] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
@@ -44,6 +55,21 @@ export default function ProjectEditor(props: {
     }
   }, [showQrModal, project]);
 
+  // Горячие клавиши: Ctrl+Z — отмена последнего изменения проекта.
+  // Не перехватываем, когда фокус в поле ввода (там собственный undo текста).
+  const { onUndo, canUndo } = props;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return;
+      e.preventDefault();
+      if (!e.shiftKey && canUndo) onUndo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onUndo, canUndo]);
+
   // строки из модулей («Позиции кухни») + ручные строки — единый расчёт
   const moduleGroups = useMemo(
     () => (project.modules ?? []).map((m) => ({ module: m, lines: moduleToLines(m, project.moduleDefaults ?? {}, pricebook) })),
@@ -56,6 +82,7 @@ export default function ProjectEditor(props: {
     () => (project.modules ?? []).reduce((n, m) => n + checkModule(m, project.moduleDefaults ?? {}, pricebook).errors.length, 0),
     [project.modules, project.moduleDefaults, pricebook],
   );
+  const projectValidation = useMemo(() => validateProject(project, pricebook), [project, pricebook]);
   const outProject = useMemo(() => ({ ...project, lines: combinedLines }), [project, combinedLines]);
 
   useEffect(() => {
@@ -109,6 +136,7 @@ export default function ProjectEditor(props: {
             <option value="approved">Согласован</option>
             <option value="archived">Архив</option>
           </select>
+          <button className="btn ghost" disabled={!props.canUndo} title="Отменить последнее изменение проекта (Ctrl+Z)" onClick={props.onUndo}>↶ Отменить</button>
           <div className="dropdown">
             <button className="btn ghost">Экспорт ▾</button>
             <div className="dropdown-menu">
@@ -119,6 +147,9 @@ export default function ProjectEditor(props: {
               <button onClick={() => setShowQrModal(true)}>📱 Открыть на телефоне (QR-код)</button>
             </div>
           </div>
+          {props.onOpenFactoryBlank && (
+            <button className="btn ghost" title="Калькулятор → данные проекта → бланк → проверка → документ" onClick={props.onOpenFactoryBlank}>📋 Бланк на фабрику</button>
+          )}
           <button className="btn ghost" title="Открыть этот проект на телефоне" onClick={() => setShowQrModal(true)}>📱 На телефон</button>
           <button className="btn ghost" onClick={props.onDuplicate}>Дублировать</button>
           <button className="btn ghost" onClick={() => { const n = prompt('Название шаблона:', project.name); if (n) props.onSaveTemplate(n); }}>В шаблон</button>
@@ -160,11 +191,28 @@ export default function ProjectEditor(props: {
         </div>
       )}
 
+      <div className="editor-mode-bar no-print">
+        <div><b>{editorMode === 'wizard' ? 'Мастер сборки' : 'Продвинутый режим'}</b><span className="muted small"> {editorMode === 'wizard' ? ' · шаги проведут по обязательным данным' : ' · все вкладки и быстрый доступ'}</span></div>
+        <button className="btn tiny ghost" onClick={() => { const next = editorMode === 'wizard' ? 'advanced' : 'wizard'; setEditorMode(next); props.onChange({ ...project, wizardMode: next }); }}>{editorMode === 'wizard' ? 'Перейти к вкладкам' : 'Открыть мастер'}</button>
+      </div>
+      <KitchenChecklistPanel project={project} pricebook={pricebook} onChange={props.onChange} />
+      {editorMode === 'wizard' ? (
+        <KitchenWizard
+          project={project}
+          pricebook={pricebook}
+          onChange={props.onChange}
+          onSelectModule={(id) => { setFocusModuleId(id); setEditorMode('advanced'); setTab('modules'); }}
+          onOpenAdvanced={() => { setEditorMode('advanced'); props.onChange({ ...project, wizardMode: 'advanced' }); }}
+        />
+      ) : (<>
       <div className="tabs">
         <button className={tab === 'modules' ? 'active' : ''} onClick={() => setTab('modules')}>
           Позиции кухни{(project.modules?.length ?? 0) > 0 ? ` (${project.modules!.length})` : ''}{moduleCriticals > 0 ? ' ⛔' : ''}
         </button>
         <button className={tab === 'sketch' ? 'active' : ''} onClick={() => setTab('sketch')}>🎨 Эскиз кухни</button>
+        <button className={tab === 'check' ? 'active' : ''} onClick={() => setTab('check')}>✓ Проверка</button>
+        <button className={tab === 'variants' ? 'active' : ''} onClick={() => setTab('variants')}>Варианты</button>
+        <button className={tab === 'measurement' ? 'active' : ''} onClick={() => setTab('measurement')}>📏 Замер</button>
         <button className={tab === 'lines' ? 'active' : ''} onClick={() => setTab('lines')}>Доп. позиции и строки</button>
         <button className={tab === 'photos' ? 'active' : ''} onClick={() => setTab('photos')}>Фото{(project.photos?.length ?? 0) > 0 ? ` (${project.photos!.length})` : ''}</button>
         <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>Настройки проекта</button>
@@ -183,19 +231,36 @@ export default function ProjectEditor(props: {
         />
       )}
 
+      {tab === 'check' && (
+        <ProjectCheckCenter
+          project={project}
+          pricebook={pricebook}
+          onChange={props.onChange}
+          onSelectModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
+          onSelectLine={(id) => { setFocusLineId(id); setTab('lines'); window.setTimeout(() => document.getElementById(`project-line-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0); }}
+        />
+      )}
+
+      {tab === 'variants' && <VariantsPanel project={project} pricebook={pricebook} onChange={props.onChange} />}
+      {tab === 'measurement' && <MeasurementPanel project={project} onChange={props.onChange} />}
+
       {tab === 'settings' && (
         <SettingsPanel
           title="Наценка и расходы этого проекта (не меняют цены Висмы)"
           settings={project.settings}
           onChange={(s) => props.onChange({ ...project, settings: s })}
+          extraDetails={totals.extraDetails}
         />
       )}
 
       {tab === 'client' && (
         <>
+          {!projectValidation.ready && <div className="warn-box">⛔ Проект ещё не готов: ошибок {projectValidation.errors.length}, предупреждений {projectValidation.warnings.length}. Проверьте обязательный состав кухни и центр проверки перед отправкой КП.</div>}
           {moduleCriticals > 0 && <div className="warn-box">⛔ Расчёт неполный: в «Позициях кухни» есть {moduleCriticals} незаполненных обязательных параметров — эти строки не входят в цену.</div>}
           <ClientView
             project={outProject}
+            pricebook={pricebook}
+            onOfferChange={(clientOffer) => props.onChange({ ...project, clientOffer })}
             onSketchVisibilityChange={(showInClient) => props.onChange({ ...project, sketch: { ...project.sketch, showInClient } })}
             moduleGroups={moduleGroups.map(({ module: m, lines }) => ({
               id: m.id,
@@ -249,6 +314,7 @@ export default function ProjectEditor(props: {
                       groupTotal={totals.byGroup[g]}
                       updLine={updLine}
                       delLine={delLine}
+                      focusLineId={focusLineId}
                     />
                   ))}
                 </tbody>
@@ -259,6 +325,8 @@ export default function ProjectEditor(props: {
           <TotalsAside totals={totals} project={project} />
         </div>
       )}
+
+      </>)}
 
       {showPicker && (
         <CatalogPicker pricebook={pricebook} onAdd={addItem} onClose={() => setShowPicker(false)} />
@@ -275,6 +343,7 @@ function GroupRows(props: {
   groupTotal: { cost: number; client: number };
   updLine: (id: string, patch: Partial<ProjectLine>) => void;
   delLine: (id: string) => void;
+  focusLineId?: string | null;
 }) {
   return (
     <>
@@ -282,7 +351,7 @@ function GroupRows(props: {
       {props.lines.map((l) => {
         const c = props.lineCalcs.get(l.id);
         return (
-          <tr key={l.id} className={c?.warning ? 'has-warn' : ''}>
+          <tr id={`project-line-${l.id}`} key={l.id} className={`${c?.warning ? 'has-warn' : ''} ${props.focusLineId === l.id ? 'focus-line' : ''}`}>
             <td className="muted small">{l.category}</td>
             <td>
               <div>{l.name}</div>
@@ -349,7 +418,15 @@ function TotalsAside(props: { totals: ReturnType<typeof calcTotals>['totals']; p
           <div className="t-row warn"><span>Эмаль &lt; 1 м² (+30%, правило прайса, {fmtNum(totals.emalAdjustment.area)} м²)</span><span>{fmtMoney(totals.emalAdjustment.amount)}</span></div>
         )}
         {totals.extraTotal !== 0 && (
-          <div className="t-row"><span>Доп. расходы (сборка/доставка/прочее)</span><span>{fmtMoney(totals.extraTotal)}</span></div>
+          <>
+            <div className="t-row"><span>Доп. расходы (сборка/доставка/прочее)</span><span>{fmtMoney(totals.extraTotal)}</span></div>
+            {(totals.extraDetails ?? []).map((d, i) => (
+              <div className="t-row sub" key={d.id ?? `${d.name}-${i}`}>
+                <span>↳ {d.name || 'Расход'}{d.percent != null ? ` (${fmtNum(d.percent, 1)}% от суммы)` : ''}{!d.toClient ? ' · не в цене клиента' : ''}</span>
+                <span>{fmtMoney(d.amount)}</span>
+              </div>
+            ))}
+          </>
         )}
         <div className="t-row total"><span>ИТОГО СЕБЕСТОИМОСТЬ</span><span>{fmtMoney(totals.cost)}</span></div>
         <div className="t-row"><span>Наценка</span><span>{fmtMoney(totals.markupRub)}{totals.markupPct != null && <em> ({fmtNum(totals.markupPct, 1)}%)</em>}</span></div>
