@@ -302,6 +302,8 @@ export interface Project {
   /** Черновики бланков на фабрику: ключ — id спецификации бланка, значения — введённые/отредактированные поля.
    *  Значения, совпадающие с автоподстановкой из калькулятора, не хранятся (единый источник — проект). */
   factoryBlankDrafts?: Record<string, Record<string, string>>;
+  /** Лист 2 бланка — схема столешницы: детали и виды кромок (по инструкции фабрики). */
+  worktopPlan?: WorktopPiece[];
   createdAt: string;
   updatedAt: string;
 }
@@ -436,6 +438,18 @@ export interface Totals {
 // ---------- База знаний РЕцепта ----------
 
 /** Категории базы знаний. Список открытый — новые категории добавляются без миграций. */
+export type WorktopEdgeKind = 'pf' | 'pvc' | 'v' | 'eurozapil' | 'eurostyk';
+
+export interface WorktopPiece {
+  id: string;
+  name: string;
+  lengthMm: number | null;
+  widthMm: number | null;
+  front: WorktopEdgeKind | null;
+  left: WorktopEdgeKind | null;
+  right: WorktopEdgeKind | null;
+}
+
 export type KbCategory =
   | 'instructions'        // инструкции
   | 'calc-rules'          // правила расчёта

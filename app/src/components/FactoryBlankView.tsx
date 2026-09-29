@@ -1,6 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Pricebook, Project } from '../types';
-import { checkFactoryBlank, draftFactoryBlank, FACTORY_BLANK_SPECS, factoryBlankProgress } from '../lib/factoryBlank';
+import { checkFactoryBlank, draftFactoryBlank, FACTORY_BLANK_SPECS, factoryBlankProgress, type BlankIssue } from '../lib/factoryBlank';
+import { checkDictRules, dictSuggestions, loadFactoryDicts, type FactoryDicts } from '../lib/factoryDicts';
+import { BACK_EDGE_NOTE, checkWorktopPlan, edgeKindLabel, suggestWorktopPlan, WORKTOP_EDGE_KINDS } from '../lib/worktopPlan';
+import { lineMatchesChecklistKey } from '../lib/checklist';
+import { uid } from '../lib/storage';
+import type { WorktopEdgeKind, WorktopPiece } from '../types';
+
+const NO_PIECES: WorktopPiece[] = [];
 
 /**
  * Экран «Бланк на фабрику»: Калькулятор → Автоподстановка → Ручная корректура → Проверка → Печать.
@@ -17,6 +24,11 @@ export default function FactoryBlankView(props: {
 }) {
   const [projectId, setProjectId] = useState<string | undefined>(props.initialProjectId ?? props.projects[0]?.id);
   const [specId, setSpecId] = useState<string>(FACTORY_BLANK_SPECS[0].id);
+  const [dicts, setDicts] = useState<FactoryDicts | null>(null);
+
+  useEffect(() => {
+    loadFactoryDicts(import.meta.env.BASE_URL).then(setDicts);
+  }, []);
 
   const project = props.projects.find((p) => p.id === projectId) ?? props.projects[0];
   const spec = FACTORY_BLANK_SPECS.find((s) => s.id === specId) ?? FACTORY_BLANK_SPECS[0];
@@ -28,11 +40,44 @@ export default function FactoryBlankView(props: {
     () => (project && pricebook ? draftFactoryBlank(project, pricebook, spec) : []),
     [project, pricebook, spec],
   );
-  const issues = useMemo(
-    () => (project && pricebook ? checkFactoryBlank(project, pricebook, spec, draft) : []),
-    [project, pricebook, spec, draft],
-  );
+  const hasWorktopPlanSection = spec.fields.some((f) => f.autoFrom === 'worktop');
+  const hasWorktopInProject = Boolean(project?.lines.some((l) => lineMatchesChecklistKey('worktop', l)));
+  const pieces = project?.worktopPlan ?? NO_PIECES;
+  const planIssues = useMemo<BlankIssue[]>(() =>
+    hasWorktopPlanSection && hasWorktopInProject
+      ? checkWorktopPlan(pieces, true).map((i) => ({ fieldKey: 'worktopPlan', label: 'Лист 2', level: i.level, text: i.text }))
+      : []
+  , [hasWorktopPlanSection, hasWorktopInProject, pieces]);
+
+  const updatePiece = (id: string, patch: Partial<WorktopPiece>) => {
+    if (!project) return;
+    const next = pieces.map((piece) => (piece.id === id ? { ...piece, ...patch } : piece));
+    props.onChangeProject({ ...project, worktopPlan: next });
+  };
+
+  const issues = useMemo<BlankIssue[]>(() => {
+    if (!project || !pricebook) return [];
+    const base = checkFactoryBlank(project, pricebook, spec, draft);
+    // Проверки по правилам самих разбивок (текстура «!», выведенные/снятые позиции)
+    const dict = dicts ? checkDictRules(draft, dicts) : [];
+    return [...base, ...dict, ...planIssues];
+  }, [project, pricebook, spec, draft, dicts, planIssues]);
   const progress = useMemo(() => factoryBlankProgress(draft), [draft]);
+  const removePiece = (id: string) => {
+    if (!project) return;
+    props.onChangeProject({ ...project, worktopPlan: pieces.filter((piece) => piece.id !== id) });
+  };
+  const addPiece = () => {
+    if (!project) return;
+    props.onChangeProject({ ...project, worktopPlan: [...pieces, { id: uid('wp'), name: `Деталь ${pieces.length + 1}`, lengthMm: null, widthMm: null, front: null, left: null, right: null }] });
+  };
+  const fillPlanFromProject = () => {
+    if (!project) return;
+    const suggested = suggestWorktopPlan(project);
+    if (suggested.length === 0) { alert('В чек-листе проекта нет столешницы — добавьте её там или нарисуйте деталь вручную.'); return; }
+    if (pieces.length > 0 && !confirm('Заменить текущую схему автоподстановкой из проекта?')) return;
+    props.onChangeProject({ ...project, worktopPlan: suggested });
+  };
 
   if (!project || !pricebook) {
     return (
@@ -129,12 +174,67 @@ export default function FactoryBlankView(props: {
                   placeholder={d.field.expected === 'dict' ? 'по разбивке/прайсу фабрики…' : 'заполнить…'}
                   onChange={(e) => setDraftValue(d.field.key, e.target.value)}
                 />
+                {d.field.expected === 'dict' && dicts && dictSuggestions(d.field.key, dicts, 60).length > 0 && (
+                  <select
+                    className="dict-picker"
+                    value=""
+                    title="Вставить позицию из справочника разбивок Висма (можно несколько)"
+                    onChange={(e) => {
+                      if (!e.target.value) return;
+                      setDraftValue(d.field.key, d.value.trim() === '' ? e.target.value : `${d.value.replace(/[;\s]+$/, '')}; ${e.target.value}`);
+                      e.target.value = '';
+                    }}
+                  >
+                    <option value="">+ вставить из справочника…</option>
+                    {dictSuggestions(d.field.key, dicts, 60).map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                )}
                 {d.field.hint && <span className="muted small">{d.field.hint}</span>}
               </label>
             ))}
           </div>
         </div>
       ))}
+
+      {hasWorktopPlanSection && (
+        <div className="card blank-section no-print">
+          <h3>Лист 2 — схема столешницы</h3>
+          <div className="muted small">
+            Обязателен при столешницах: отметьте обработку видимых кромок. {BACK_EDGE_NOTE}.
+          </div>
+          <div className="blank-plan-actions">
+            <button className="btn tiny ghost" onClick={fillPlanFromProject}>⚙ Заполнить из проекта</button>
+            <button className="btn tiny ghost" onClick={addPiece}>+ Деталь</button>
+          </div>
+          {pieces.length === 0 ? (
+            <div className="empty small">Деталей пока нет — добавьте вручную или заполните из проекта.</div>
+          ) : (
+            <table className="table blank-plan-table">
+              <thead>
+                <tr><th>Деталь</th><th>Длина, мм</th><th>Ширина, мм</th><th>Перед</th><th>Левый торец</th><th>Правый / стык</th><th /></tr>
+              </thead>
+              <tbody>
+                {pieces.map((piece) => (
+                  <tr key={piece.id}>
+                    <td><input value={piece.name} onChange={(e) => updatePiece(piece.id, { name: e.target.value })} /></td>
+                    <td><input type="number" min={1} value={piece.lengthMm ?? ''} onChange={(e) => updatePiece(piece.id, { lengthMm: e.target.value ? Number(e.target.value) : null })} /></td>
+                    <td><input type="number" min={1} value={piece.widthMm ?? ''} onChange={(e) => updatePiece(piece.id, { widthMm: e.target.value ? Number(e.target.value) : null })} /></td>
+                    {(['front', 'left', 'right'] as const).map((side) => (
+                      <td key={side}>
+                        <select value={piece[side] ?? ''} onChange={(e) => updatePiece(piece.id, { [side]: (e.target.value || null) as WorktopEdgeKind | null })}>
+                          <option value="">—</option>
+                          {WORKTOP_EDGE_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+                        </select>
+                      </td>
+                    ))}
+                    <td><button className="btn tiny danger" title="Убрать деталь" onClick={() => removePiece(piece.id)}>✕</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {/* Печатная форма: компактная таблица «пункт → значение» как на бланке */}
       <div className="blank-print">
@@ -153,6 +253,26 @@ export default function FactoryBlankView(props: {
             </tbody>
           </table>
         ))}
+        {hasWorktopPlanSection && pieces.length > 0 && (
+          <table className="blank-print-table">
+            <thead><tr><th colSpan={7}>Лист 2 — схема столешницы (виды обработки видимых частей)</th></tr>
+              <tr><th>Деталь</th><th>Длина, мм</th><th>Ширина, мм</th><th>Перед</th><th>Левый торец</th><th>Правый / стык</th><th>Зад</th></tr></thead>
+            <tbody>
+              {pieces.map((piece) => (
+                <tr key={piece.id}>
+                  <td>{piece.name}</td>
+                  <td>{piece.lengthMm ?? ''}</td>
+                  <td>{piece.widthMm ?? ''}</td>
+                  <td>{edgeKindLabel(piece.front)}</td>
+                  <td>{edgeKindLabel(piece.left)}</td>
+                  <td>{edgeKindLabel(piece.right)}</td>
+                  <td>ПВХ 0,4 белая</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div className="muted small">{BACK_EDGE_NOTE}.</div>
         <div className="muted small">* — обязательные поля по инструкции фабрики. Заказ запускается только по подтверждённому бланку.</div>
       </div>
     </div>
