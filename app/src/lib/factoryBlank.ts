@@ -5,7 +5,7 @@
 // Ничего не придумываем: поля и обязательность — из бланков, значения из калькулятора
 // подставляются только там, где это однозначно. Ручные значения хранятся в
 // project.factoryBlankDrafts, молча данные пользователя не исправляются.
-import type { FactoryFieldSource, KitchenModule, Pricebook, Project } from '../types';
+import type { FactoryFieldSource, KitchenModule, Pricebook, PriceItem, Project, SlotKey } from '../types';
 import { lineMatchesChecklistKey } from './checklist';
 import { checkModule, moduleStandsOnFloor, resolveSlot } from './modules';
 
@@ -215,6 +215,83 @@ function itemNameOf(module: KitchenModule, slot: Parameters<typeof resolveSlot>[
 /** Сокращённое имя позиции прайса для бланка (без служебного хвоста). */
 const shortName = (name: string) => name.replace(/\s+/g, ' ').trim();
 
+export type HardwareBreakdownKey = 'hinges' | 'handles' | 'drawerGuides';
+
+/** Одна строка расшифровки фурнитуры по модели. */
+export interface HardwareBreakdownRow {
+  /** Ключ позиции прайса; null означает, что в модуле модель не выбрана. */
+  itemId: string | null;
+  /** Короткое имя для бланка. */
+  model: string;
+  /** Алиас model, удобен для таблиц и экспорта. */
+  name: string;
+  article: string | null;
+  qty: number;
+  /** quantity — читаемый алиас qty для интеграций. */
+  quantity: number;
+  unit: 'шт' | 'компл.';
+  price: number | null;
+  moduleNames: string[];
+}
+
+export interface HardwareBreakdown {
+  hinges: HardwareBreakdownRow[];
+  handles: HardwareBreakdownRow[];
+  drawerGuides: HardwareBreakdownRow[];
+}
+
+/**
+ * Собирает петли, ручки и направляющие из всех модулей и агрегирует их по
+ * конкретной позиции прайса. Поэтому в бланке видно не только общее число,
+ * но и сколько каждого артикула заказывать. Неназначенная модель не теряется:
+ * она попадает в отдельную строку «Модель не выбрана».
+ */
+export function hardwareBreakdown(project: Project, pricebook: Pricebook): HardwareBreakdown {
+  const modules = project.modules ?? [];
+  const defaults = project.moduleDefaults ?? {};
+  const build = (key: HardwareBreakdownKey, slot: SlotKey, unit: HardwareBreakdownRow['unit']): HardwareBreakdownRow[] => {
+    const rows = new Map<string, HardwareBreakdownRow>();
+    for (const module of modules) {
+      const qty = key === 'hinges' ? module.hinges * module.qty
+        : key === 'handles' ? module.handles * module.qty
+          : module.drawers * module.qty;
+      if (qty <= 0) continue;
+      const item: PriceItem | null = resolveSlot(module, slot, defaults, pricebook).item;
+      const itemId = item?.id ?? null;
+      const rowKey = itemId ?? '__missing__';
+      const existing = rows.get(rowKey);
+      if (existing) {
+        existing.qty += qty;
+        existing.quantity = existing.qty;
+        if (!existing.moduleNames.includes(module.name)) existing.moduleNames.push(module.name);
+      } else {
+        rows.set(rowKey, {
+          itemId,
+          model: item ? shortName(item.name) : 'Модель не выбрана',
+          name: item ? shortName(item.name) : 'Модель не выбрана',
+          article: item?.article ?? null,
+          qty,
+          quantity: qty,
+          unit,
+          price: item?.price ?? null,
+          moduleNames: [module.name],
+        });
+      }
+    }
+    return [...rows.values()];
+  };
+
+  return {
+    hinges: build('hinges', 'hinge', 'шт'),
+    handles: build('handles', 'handle', 'шт'),
+    drawerGuides: build('drawerGuides', 'drawerSys', 'компл.'),
+  };
+}
+
+function formatHardwareBreakdown(rows: HardwareBreakdownRow[], suffix = ''): string {
+  return rows.map((row) => `${row.model} — ${row.qty} ${row.unit}${suffix}`).join('; ');
+}
+
 export function autofillValue(kind: BlankAutoFrom, project: Project, pricebook: Pricebook): string {
   const modules = project.modules ?? [];
   switch (kind) {
@@ -250,22 +327,16 @@ export function autofillValue(kind: BlankAutoFrom, project: Project, pricebook: 
       return name ? shortName(name) : '';
     }
     case 'hinges': {
-      const total = modules.reduce((sum, m) => sum + m.hinges * m.qty, 0);
-      if (total === 0) return '';
-      const names = new Set(modules.filter((m) => m.hinges > 0).map((m) => itemNameOf(m, 'hinge', project, pricebook)).filter((n): n is string => Boolean(n)));
-      return names.size === 1 ? `${shortName([...names][0])} — ${total} шт` : `${total} шт (модели разные — расписать вручную)`;
+      const rows = hardwareBreakdown(project, pricebook).hinges;
+      return rows.length > 0 ? formatHardwareBreakdown(rows) : '';
     }
     case 'handles': {
-      const total = modules.reduce((sum, m) => sum + m.handles * m.qty, 0);
-      if (total === 0) return '';
-      const names = new Set(modules.filter((m) => m.handles > 0).map((m) => itemNameOf(m, 'handle', project, pricebook)).filter((n): n is string => Boolean(n)));
-      return names.size === 1 ? `${shortName([...names][0])} — ${total} шт, сверловка по эскизу` : `${total} шт (модели разные — расписать вручную)`;
+      const rows = hardwareBreakdown(project, pricebook).handles;
+      return rows.length > 0 ? formatHardwareBreakdown(rows, ', сверловка по эскизу') : '';
     }
     case 'drawerGuides': {
-      const total = modules.reduce((sum, m) => sum + m.drawers * m.qty, 0);
-      if (total === 0) return '';
-      const names = new Set(modules.filter((m) => m.drawers > 0).map((m) => itemNameOf(m, 'drawerSys', project, pricebook)).filter((n): n is string => Boolean(n)));
-      return names.size === 1 ? `${shortName([...names][0])} — ${total} компл.` : `${total} компл. (модели разные — расписать вручную)`;
+      const rows = hardwareBreakdown(project, pricebook).drawerGuides;
+      return rows.length > 0 ? formatHardwareBreakdown(rows) : '';
     }
     case 'legs': {
       const stands = modules.filter((m) => moduleStandsOnFloor(m.type) && (m.legs ?? 0) > 0);

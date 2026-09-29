@@ -217,6 +217,22 @@ export interface MeasurementPhotoAnnotation {
   accuracy?: MeasurementPhotoAccuracy;
 }
 
+/** Лёгкая ссылка на полноценный документ «Эскиз PRO» в IndexedDB. */
+export interface ProjectSketchRef {
+  id: string;
+  name: string;
+  room: string;
+  variant: string;
+  sourceAssetId: string;
+  updatedAt: string;
+  showInClient: boolean;
+}
+
+export interface ProjectSketchPro {
+  documents: ProjectSketchRef[];
+  activeDocumentId?: string;
+}
+
 export interface ProjectPhoto {
   id: string;
   name: string;
@@ -286,8 +302,10 @@ export interface Project {
   modules?: KitchenModule[];
   moduleDefaults?: ModuleDefaults;
   photos?: ProjectPhoto[];
-  /** Настройки эскиза. Необязательное поле сохраняет совместимость со старыми проектами. */
+  /** Настройки старого автоматического эскиза. Необязательное поле сохраняет совместимость. */
   sketch?: KitchenSketchSettings;
+  /** Ссылки на документы «Эскиз PRO»; полные документы и изображения лежат в IndexedDB. */
+  sketchPro?: ProjectSketchPro;
   /** Режим открытия проекта: мастер или привычные вкладки. */
   wizardMode?: 'wizard' | 'advanced';
   wizardStep?: WizardStepId;

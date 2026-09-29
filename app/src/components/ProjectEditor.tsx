@@ -5,9 +5,9 @@ import { calcTotals, lineFromItem } from '../lib/engine';
 import { fmtMoney, fmtNum, fmtDate } from '../lib/format';
 import CatalogPicker from './CatalogPicker';
 import ModulesPanel from './ModulesPanel';
-import KitchenSketch from './KitchenSketch';
+import SketchProPanel from '../features/sketch-pro/components/SketchProPanel';
 import PhotosPanel from './PhotosPanel';
-import { checkModule, moduleToLines, moveModule } from '../lib/modules';
+import { checkModule, moduleToLines } from '../lib/modules';
 import { validateProject } from '../lib/validation';
 import SettingsPanel from './SettingsPanel';
 import ClientView from './ClientView';
@@ -107,12 +107,6 @@ export default function ProjectEditor(props: {
   };
 
   const groupsInUse = SUMMARY_GROUPS.filter((g) => project.lines.some((l) => l.group === g));
-  const reorderModule = (id: string, direction: -1 | 1) => {
-    const modules = project.modules ?? [];
-    const next = moveModule(modules, id, direction);
-    if (next !== modules) props.onChange({ ...project, modules: next });
-  };
-
   return (
     <div className="page project">
       <header className="page-head">
@@ -222,12 +216,11 @@ export default function ProjectEditor(props: {
       {tab === 'photos' && <PhotosPanel project={project} onChange={props.onChange} />}
 
       {tab === 'sketch' && (
-        <KitchenSketch
-          modules={project.modules ?? []}
-          settings={project.sketch}
-          onSettingsChange={(sketch) => props.onChange({ ...project, sketch })}
+        <SketchProPanel
+          project={project}
+          pricebook={pricebook}
+          onChange={props.onChange}
           onSelectModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
-          onReorder={reorderModule}
         />
       )}
 

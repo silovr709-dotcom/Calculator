@@ -1,0 +1,31 @@
+.sketch-pro-root.sketch-pro-panel {
+  min-height: 560px;
+  padding: 26px;
+  background: #f6f5f2;
+  border: 1px solid #e2e4e7;
+  border-radius: 16px;
+  color: #20242b;
+}
+.sketch-pro-empty-head { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
+.sketch-pro-empty-head h2 { margin: 8px 0; font-size: 28px; }
+.sketch-pro-empty-head p { max-width: 720px; margin: 0; color: #747b85; line-height: 1.55; }
+.sketch-pro-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.sketch-pro-root .sketch-pro-actions button { min-height: 40px; padding: 0 14px; }
+.sketch-pro-empty-card, .sketch-pro-legend-note { margin-top: 28px; padding: 24px; display: grid; gap: 8px; border: 1px dashed #c9ced5; border-radius: 12px; background: #fff; }
+.sketch-pro-empty-card span, .sketch-pro-legend-note span { color: #747b85; font-size: 13px; line-height: 1.5; }
+.sketch-pro-loading { margin-top: 24px; color: #747b85; }
+.sketch-pro-documents { margin-top: 28px; }
+.sketch-pro-documents .section-title { display: flex; justify-content: space-between; align-items: center; }
+.sketch-pro-documents h3 { margin: 0; }
+.sketch-pro-document-card { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-top: 10px; padding: 16px; border: 1px solid #e2e4e7; border-radius: 10px; background: #fff; }
+.sketch-pro-document-card > div:first-child { display: grid; gap: 5px; min-width: 0; }
+.sketch-pro-document-card span, .sketch-pro-document-card small { color: #747b85; font-size: 12px; }
+.sketch-pro-document-card > div:last-child { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+.sketch-pro-root .module-source-card { display: grid; gap: 5px; margin: 2px 0 10px; padding: 9px; border-radius: 7px; border: 1px solid #cfe0ff; background: #f5f8ff; font-size: 11px; }
+.sketch-pro-root .module-source-card > span { color: #35568d; }
+.sketch-pro-root .module-source-card > button { border: 0; background: transparent; color: #2563eb; padding: 3px 0; text-align: left; font-size: 11px; font-weight: 700; cursor: pointer; }
+.sketch-pro-root .material-legend { display: grid; gap: 3px; margin-top: 5px; padding-top: 6px; border-top: 1px solid #dce7ff; }
+.sketch-pro-root .material-legend strong { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.sketch-pro-root .material-legend span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sketch-pro-root .material-legend b { display: inline-block; min-width: 34px; color: #ff5c35; }
+@media (max-width: 900px) { .sketch-pro-empty-head, .sketch-pro-document-card { flex-direction: column; align-items: stretch; } .sketch-pro-actions { justify-content: flex-start; } .sketch-pro-document-card > div:last-child { justify-content: flex-start; } }
