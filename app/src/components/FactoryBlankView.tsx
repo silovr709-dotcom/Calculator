@@ -4,6 +4,7 @@ import { checkFactoryBlank, draftFactoryBlank, FACTORY_BLANK_SPECS, factoryBlank
 import { checkDictRules, dictSuggestions, loadFactoryDicts, type FactoryDicts } from '../lib/factoryDicts';
 import { BACK_EDGE_NOTE, checkWorktopPlan, edgeKindLabel, suggestWorktopPlan, WORKTOP_EDGE_KINDS } from '../lib/worktopPlan';
 import { lineMatchesChecklistKey } from '../lib/checklist';
+import { exportFactoryBlankXlsx, getBlankSheetMap } from '../lib/factoryBlankXls';
 import { uid } from '../lib/storage';
 import type { WorktopEdgeKind, WorktopPiece } from '../types';
 
@@ -25,6 +26,7 @@ export default function FactoryBlankView(props: {
   const [projectId, setProjectId] = useState<string | undefined>(props.initialProjectId ?? props.projects[0]?.id);
   const [specId, setSpecId] = useState<string>(FACTORY_BLANK_SPECS[0].id);
   const [dicts, setDicts] = useState<FactoryDicts | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     loadFactoryDicts(import.meta.env.BASE_URL).then(setDicts);
@@ -101,6 +103,23 @@ export default function FactoryBlankView(props: {
   const sections = [...new Set(spec.fields.map((f) => f.section))];
   const errors = issues.filter((i) => i.level === 'error');
   const warns = issues.filter((i) => i.level === 'warn');
+  const hasTemplate = Boolean(getBlankSheetMap(spec.id));
+
+  /** Заполняет настоящий шаблон фабрики и скачивает его. */
+  const downloadXlsx = async () => {
+    if (errors.length > 0 && !confirm(`В бланке ${errors.length} незаполненных обязательных пунктов. Всё равно выгрузить в Excel?`)) return;
+    setExporting(true);
+    try {
+      await exportFactoryBlankXlsx({
+        baseUrl: import.meta.env.BASE_URL,
+        project, spec, draft, pieces,
+      });
+    } catch (e) {
+      alert(`Не получилось собрать файл бланка: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="page">
@@ -113,7 +132,17 @@ export default function FactoryBlankView(props: {
         </div>
         <div className="actions">
           <button className="btn ghost" onClick={() => props.onOpenProject(project.id)}>← К проекту</button>
-          <button className="btn primary" onClick={() => window.print()} title={`${spec.blankName}: печать или сохранение в PDF браузером`}>🖨 Печать / PDF</button>
+          <button className="btn ghost small" onClick={() => window.print()} title={`${spec.blankName}: печать или сохранение в PDF браузером`}>🖨 Печать / PDF</button>
+          <button
+            className="btn primary"
+            disabled={!hasTemplate || exporting}
+            onClick={downloadXlsx}
+            title={hasTemplate
+              ? `Заполнить настоящий шаблон фабрики («${spec.blankName}») и скачать готовый файл`
+              : 'Для этого бланка нет файлового шаблона'}
+          >
+            {exporting ? 'Собираю файл…' : '⭳ Excel — бланк заказа'}
+          </button>
         </div>
       </header>
 
