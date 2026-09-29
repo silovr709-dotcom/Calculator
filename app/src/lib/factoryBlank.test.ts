@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { KitchenModule, Pricebook, Project } from '../types';
-import { autofillValue, checkFactoryBlank, draftFactoryBlank, factoryBlankProgress, FACTORY_BLANK_SPECS, getFactoryBlankSpec, VISMA_CORPUS_BLANK, VISMA_KITCHEN_BLANK } from './factoryBlank';
+import { autofillValue, checkFactoryBlank, draftFactoryBlank, factoryBlankProgress, hardwareBreakdown, FACTORY_BLANK_SPECS, getFactoryBlankSpec, VISMA_CORPUS_BLANK, VISMA_KITCHEN_BLANK } from './factoryBlank';
 import { lineFromItem } from './engine';
 import { newModule } from './modules';
 import { defaultSettings } from './storage';
@@ -72,6 +72,50 @@ describe('бланк на фабрику (РЕцепт PRO)', () => {
     const draft = draftFactoryBlank(project, pb, VISMA_CORPUS_BLANK);
     expect(draft.find((d) => d.field.key === 'corpusSizes')!.value).toBe('2400*1600*600 — 1 шт');
     expect(draft.some((d) => d.field.required && d.value === '')).toBe(true); // цвет корпуса не придумываем
+  });
+
+  it('раскладывает петли, ручки и направляющие по моделям, не смешивая количества', () => {
+    const hingeA = pb.items.find((item) => item.category === 'Петли' && item.priceKind === 'fixed')!;
+    const hingeB = pb.items.find((item) => item.category === 'Петли' && item.priceKind === 'fixed' && item.id !== hingeA.id)!;
+    const handle = pb.items.find((item) => item.category === 'Ручки' && item.priceKind === 'fixed')!;
+    const guide = pb.items.find((item) => item.category === 'Системы выдвижения' && item.priceKind === 'fixed')!;
+    const moduleA: KitchenModule = {
+      ...baseModule,
+      id: 'hardware-a',
+      name: 'Низ 600',
+      qty: 2,
+      hinges: 2,
+      handles: 1,
+      drawers: 1,
+      slots: {
+        ...baseModule.slots,
+        hinge: { mode: 'manual', itemId: hingeA.id },
+        handle: { mode: 'manual', itemId: handle.id },
+        drawerSys: { mode: 'manual', itemId: guide.id },
+      },
+    };
+    const moduleB: KitchenModule = {
+      ...baseModule,
+      id: 'hardware-b',
+      name: 'Низ 800',
+      qty: 1,
+      hinges: 3,
+      handles: 2,
+      drawers: 2,
+      slots: {
+        ...baseModule.slots,
+        hinge: { mode: 'manual', itemId: hingeB.id },
+        handle: { mode: 'manual', itemId: handle.id },
+        drawerSys: { mode: 'manual', itemId: guide.id },
+      },
+    };
+    const project = makeProject({ modules: [moduleA, moduleB] });
+    const breakdown = hardwareBreakdown(project, pb);
+    expect(breakdown.hinges.map((row) => [row.itemId, row.qty])).toEqual([[hingeA.id, 4], [hingeB.id, 3]]);
+    expect(breakdown.handles[0].qty).toBe(4);
+    expect(breakdown.drawerGuides[0].qty).toBe(4);
+    expect(autofillValue('hinges', project, pb)).toContain(`${hingeA.name} — 4 шт`);
+    expect(autofillValue('drawerGuides', project, pb)).toContain(`${guide.name} — 4 компл.`);
   });
 
   it('спецификация неделима по инструкции: не придумывает полей, все секции на месте', () => {

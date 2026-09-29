@@ -7,6 +7,7 @@ import { lineMatchesChecklistKey } from '../lib/checklist';
 import { exportFactoryBlankXlsx, getBlankSheetMap } from '../lib/factoryBlankXls';
 import { uid } from '../lib/storage';
 import type { WorktopEdgeKind, WorktopPiece } from '../types';
+import BlankPickerDialog from './BlankPickerDialog';
 
 const NO_PIECES: WorktopPiece[] = [];
 
@@ -27,6 +28,7 @@ export default function FactoryBlankView(props: {
   const [specId, setSpecId] = useState<string>(FACTORY_BLANK_SPECS[0].id);
   const [dicts, setDicts] = useState<FactoryDicts | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [pickerField, setPickerField] = useState<{ key: string; label: string; value: string } | null>(null);
 
   useEffect(() => {
     loadFactoryDicts(import.meta.env.BASE_URL).then(setDicts);
@@ -203,6 +205,15 @@ export default function FactoryBlankView(props: {
                   placeholder={d.field.expected === 'dict' ? 'по разбивке/прайсу фабрики…' : 'заполнить…'}
                   onChange={(e) => setDraftValue(d.field.key, e.target.value)}
                 />
+                {d.field.expected === 'dict' && (
+                  <button
+                    type="button"
+                    className="btn tiny ghost blank-picker-open"
+                    onClick={() => setPickerField({ key: d.field.key, label: d.field.label, value: d.value })}
+                  >
+                    🎨 Выбрать материал / цвет
+                  </button>
+                )}
                 {d.field.expected === 'dict' && dicts && dictSuggestions(d.field.key, dicts, 60).length > 0 && (
                   <select
                     className="dict-picker"
@@ -304,6 +315,21 @@ export default function FactoryBlankView(props: {
         <div className="muted small">{BACK_EDGE_NOTE}.</div>
         <div className="muted small">* — обязательные поля по инструкции фабрики. Заказ запускается только по подтверждённому бланку.</div>
       </div>
+
+      {pickerField && (
+        <BlankPickerDialog
+          fieldKey={pickerField.key}
+          fieldLabel={pickerField.label}
+          currentValue={pickerField.value}
+          pricebook={pricebook}
+          dicts={dicts}
+          onPick={(value) => {
+            const current = pickerField.value.trim();
+            setDraftValue(pickerField.key, current ? `${current.replace(/[;\\s]+$/, '')}; ${value}` : value);
+          }}
+          onClose={() => setPickerField(null)}
+        />
+      )}
     </div>
   );
 }

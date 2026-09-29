@@ -856,6 +856,20 @@ input.dim { width: 54px; font-size: 11.5px; padding: 3px 4px; text-align: center
 @media screen { .blank-print { display: none; } }
 
 .dict-picker { font-size: 11px; min-height: 24px !important; padding: 1px 4px; color: var(--muted, #6b7a73); border-style: dashed; }
+.blank-picker-open { align-self: flex-start; }
+.blank-picker-modal { width: min(900px, 96vw); max-height: 92vh; display: flex; flex-direction: column; gap: 10px; }
+.blank-picker-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.blank-picker-head h2 { margin: 0 0 3px; }
+.blank-picker-current { padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); font-size: 13px; max-height: 72px; overflow: auto; }
+.blank-picker-search { width: 100%; box-sizing: border-box; font-size: 15px; padding: 10px 12px; }
+.blank-picker-count { margin-top: -3px; }
+.blank-picker-list { min-height: 0; max-height: 58vh; overflow: auto; border: 1px solid var(--line); border-radius: 9px; }
+.blank-picker-option { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 12px; border: 0; border-bottom: 1px solid var(--line); background: var(--panel); text-align: left; cursor: pointer; }
+.blank-picker-option:last-child { border-bottom: 0; }
+.blank-picker-option:hover { background: var(--accent-soft); }
+.blank-picker-option-main { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.blank-picker-option-main b { overflow-wrap: anywhere; }
+.blank-picker-price { white-space: nowrap; color: var(--accent); font-weight: 700; }
 
 .blank-plan-actions { display: flex; gap: 8px; margin: 8px 0; }
 .blank-plan-table input, .blank-plan-table select { width: 100%; min-height: 32px; }

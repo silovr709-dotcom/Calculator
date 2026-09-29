@@ -6,12 +6,13 @@ import { loadFactoryDicts, millingsOf, type FactoryDicts } from '../lib/factoryD
 import { millingPriceFrom, millingPrices, searchMillings, MILLING_CATEGORIES, type Milling } from '../lib/millings';
 import { hardwareCounts, hardwareEntries, HARDWARE_GROUPS, searchHardware } from '../lib/hardware';
 import { fmtMoney } from '../lib/format';
+import { materialCategories, materialEntries, materialPriceText, searchMaterials, MATERIAL_GROUPS, type MaterialEntry } from '../lib/materials';
 
 /**
  * База знаний РЕцепта: три вкладки.
  *  📄 Документы — свои статьи + полные тексты инструкций и техничек фабрики
  *                 (поиск по самим текстам, прощает опечатки, показывает источник).
- *  🎨 Разбивки  — те самые разбивки цветов: ЛДСП, плёнки ПВХ, пластики, с фильтрами.
+ *  🎨 Материалы и цвета — каталог материалов с ценами прайса и разбивки цветов.
  *  🪚 Фрезеровки — каталог фрезеровок 2026 с картинками, размерами и ценой м² из прайса.
  *  🔩 Фурнитура — справочник из актуального прайса по группам.
  */
@@ -20,7 +21,7 @@ type Tab = 'docs' | 'colors' | 'millings' | 'hardware';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'docs', label: '📄 Документы' },
-  { id: 'colors', label: '🎨 Разбивки цветов' },
+  { id: 'colors', label: '🎨 Материалы и цвета' },
   { id: 'millings', label: '🪚 Фрезеровки' },
   { id: 'hardware', label: '🔩 Фурнитура' },
 ];
@@ -44,7 +45,7 @@ export default function KnowledgeView(props: {
       <header className="page-head">
         <div>
           <h1>База знаний</h1>
-          <div className="muted">Документы фабрики, разбивки цветов и фурнитура — в одном месте, с поиском.</div>
+          <div className="muted">Документы фабрики, материалы с ценами, цвета и фурнитура — в одном месте, с поиском.</div>
         </div>
       </header>
 
@@ -63,7 +64,7 @@ export default function KnowledgeView(props: {
       </div>
 
       {tab === 'docs' && <DocsTab articles={props.articles} onChange={props.onChange} docs={docs} />}
-      {tab === 'colors' && <ColorsTab dicts={dicts} />}
+      {tab === 'colors' && <ColorsTab dicts={dicts} pricebook={props.pricebooks[0]} />}
       {tab === 'millings' && <MillingsTab dicts={dicts} pricebooks={props.pricebooks} />}
       {tab === 'hardware' && <HardwareTab pricebooks={props.pricebooks} />}
     </div>
@@ -240,12 +241,75 @@ function DocsTab(props: { articles: KbArticle[]; onChange: (a: KbArticle[]) => v
   );
 }
 
-// ------------------------------------------------------------ Разбивки цветов
+// ------------------------------------------------------------ Материалы и цвета
 
-type ColorKind = 'ldspColors' | 'films' | 'plastics';
+function MaterialsCatalog(props: { pricebook?: Pricebook }) {
+  const [query, setQuery] = useState('');
+  const [groupId, setGroupId] = useState<string | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
+  const [onlyPriced, setOnlyPriced] = useState(true);
+  const entries = useMemo(() => materialEntries(props.pricebook), [props.pricebook]);
+  const categories = useMemo(() => materialCategories(entries, groupId), [entries, groupId]);
+  const found = useMemo(() => searchMaterials(entries, query, { groupId, category, onlyPriced, limit: 1200 }), [entries, query, groupId, category, onlyPriced]);
 
-function ColorsTab(props: { dicts: FactoryDicts | null }) {
-  const [kind, setKind] = useState<ColorKind>('ldspColors');
+  if (!props.pricebook) return <div className="empty">Прайс не загружен — каталог материалов будет доступен после загрузки прайса.</div>;
+
+  return (
+    <>
+      <div className="kb-subtabs">
+        <button className={`chip${groupId === null ? ' active' : ''}`} onClick={() => { setGroupId(null); setCategory(null); }}>
+          Все материалы <b>{entries.length}</b>
+        </button>
+        {MATERIAL_GROUPS.filter((group) => entries.some((entry) => entry.group.id === group.id)).map((group) => (
+          <button key={group.id} className={`chip${groupId === group.id ? ' active' : ''}`} onClick={() => { setGroupId(group.id); setCategory(null); }}>
+            {group.icon} {group.label} <b>{entries.filter((entry) => entry.group.id === group.id).length}</b>
+          </button>
+        ))}
+      </div>
+      <div className="card blank-controls">
+        <label className="dashboard-search">Поиск материала
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Например: FENIX, эмаль 3 кат, 600*3000, стекло…" />
+        </label>
+        {categories.length > 0 && (
+          <label>Категория прайса
+            <select value={category ?? ''} onChange={(event) => setCategory(event.target.value || null)}>
+              <option value="">Все категории</option>
+              {categories.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+        )}
+        <label className="kb-check">
+          <input type="checkbox" checked={onlyPriced} onChange={(event) => setOnlyPriced(event.target.checked)} /> только с числовой ценой
+        </label>
+        {(query || groupId || category || !onlyPriced) && <button className="btn tiny ghost" onClick={() => { setQuery(''); setGroupId(null); setCategory(null); setOnlyPriced(true); }}>Сбросить</button>}
+        <div className="dashboard-filter-count muted small">Показано: {found.length} из {entries.length} · цены из «{props.pricebook.meta.name}»</div>
+      </div>
+      <table className="table materials-table">
+        <thead><tr><th>Группа</th><th>Материал / позиция прайса</th><th>Категория</th><th>Арт.</th><th>Ед.</th><th className="num">Цена</th><th>Источник</th></tr></thead>
+        <tbody>
+          {found.slice(0, 600).map((entry: MaterialEntry) => (
+            <tr key={entry.item.id}>
+              <td className="small">{entry.group.icon} {entry.group.label}</td>
+              <td><b>{entry.item.name}</b>{entry.item.note && <div className="muted small">{entry.item.note}</div>}</td>
+              <td className="small">{entry.item.category}{entry.item.subcategory ? ` · ${entry.item.subcategory}` : ''}</td>
+              <td className="small">{entry.item.article ?? '—'}</td>
+              <td className="small">{entry.item.unit ?? '—'}</td>
+              <td className="num">{materialPriceText(entry.item)}</td>
+              <td className="small muted">{entry.item.source.sheet}, стр. {entry.item.source.row}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {found.length > 600 && <p className="muted small">Показаны первые 600 — уточните поиск или фильтры.</p>}
+      {found.length === 0 && <div className="empty small">Ничего не найдено. Снимите фильтр или измените запрос.</div>}
+    </>
+  );
+}
+
+type ColorKind = 'materials' | 'ldspColors' | 'films' | 'plastics';
+
+function ColorsTab(props: { dicts: FactoryDicts | null; pricebook?: Pricebook }) {
+  const [kind, setKind] = useState<ColorKind>('materials');
   const [query, setQuery] = useState('');
   const [brand, setBrand] = useState('');
   const [category, setCategory] = useState('');
@@ -254,7 +318,7 @@ function ColorsTab(props: { dicts: FactoryDicts | null }) {
 
   const d = props.dicts;
   const rows = useMemo(() => {
-    if (!d) return [] as Record<string, unknown>[];
+    if (!d || kind === 'materials') return [] as Record<string, unknown>[];
     return d.groups[kind].items as unknown as Record<string, unknown>[];
   }, [d, kind]);
 
@@ -276,24 +340,31 @@ function ColorsTab(props: { dicts: FactoryDicts | null }) {
     });
   }, [rows, query, brand, category, onlyTexture, hideRetired]);
 
-  if (!d) return <div className="empty">Справочники разбивок загружаются…</div>;
+  if (!d && kind !== 'materials') return <div className="empty">Справочники разбивок загружаются…</div>;
 
-  const legend = (d.groups.films as unknown as { legend?: Record<string, string> }).legend;
+  const legend = d ? (d.groups.films as unknown as { legend?: Record<string, string> }).legend : undefined;
 
   return (
     <>
       <div className="kb-subtabs">
-        {(['ldspColors', 'films', 'plastics'] as ColorKind[]).map((k) => (
+        <button
+          className={`chip${kind === 'materials' ? ' active' : ''}`}
+          onClick={() => { setKind('materials'); setBrand(''); setCategory(''); }}
+        >
+          🎨 Материалы с ценами <b>{materialEntries(props.pricebook).length}</b>
+        </button>
+        {(['ldspColors', 'films', 'plastics'] as const).map((k) => (
           <button
             key={k}
             className={`chip${kind === k ? ' active' : ''}`}
             onClick={() => { setKind(k); setBrand(''); setCategory(''); }}
           >
-            {d.groups[k].label} <b>{d.groups[k].items.length}</b>
+            {d?.groups[k].label ?? 'Загрузка…'} <b>{d?.groups[k].items.length ?? 0}</b>
           </button>
         ))}
       </div>
 
+      {kind === 'materials' ? <MaterialsCatalog pricebook={props.pricebook} /> : <>
       <div className="card blank-controls">
         <label className="dashboard-search">Поиск
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Название, артикул или код цвета…" />
@@ -369,6 +440,7 @@ function ColorsTab(props: { dicts: FactoryDicts | null }) {
       </table>
       {filtered.length > 500 && <p className="muted small">Показаны первые 500 — уточните поиск или фильтры.</p>}
       {filtered.length === 0 && <div className="empty small">Ничего не найдено. Снимите фильтры или измените запрос.</div>}
+      </>}
     </>
   );
 }
