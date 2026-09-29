@@ -371,7 +371,7 @@ const persistTemplates = useCallback((next: Template[]) => {
           />
         )}
         {view.kind === 'kb' && (
-          <KnowledgeView articles={kbArticles} onChange={persistKb} />
+          <KnowledgeView articles={kbArticles} pricebooks={pricebooks} onChange={persistKb} />
         )}
         {view.kind === 'settings' && (
           <SettingsPanel
