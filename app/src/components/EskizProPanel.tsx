@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EskizProIntegration, KitchenModule, Pricebook, PriceItem, Project, SlotKey } from '../types';
 import {
   ESKIZ_PRO_URL,
   collectEskizModuleMarkers,
+  isEskizProject,
   listEskizProjects,
   loadEskizProject,
   readEskizFile,
@@ -11,6 +12,7 @@ import {
   upsertEskizSnapshot,
   type EskizModuleMarker,
   type EskizModuleObject,
+  type EskizProject,
   type EskizProjectSummary,
 } from '../lib/eskizPro';
 import { MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moduleToLines, slotNeed } from '../lib/modules';
@@ -20,6 +22,8 @@ import EskizProjectPreview from './EskizProjectPreview';
 
 const EMPTY_LINKS: string[] = [];
 const EMPTY_SNAPSHOTS: NonNullable<EskizProIntegration['snapshots']> = [];
+const EMPTY_BINDINGS: NonNullable<EskizProIntegration['moduleBindings']> = {};
+const EMPTY_ESKIZ_PRO: EskizProIntegration = {};
 const QUICK_SLOTS: SlotKey[] = ['body', 'facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf', 'legs'];
 
 function unique(items: string[]): string[] {
@@ -66,6 +70,7 @@ function EskizMarkerModuleEditor(props: {
       .filter((item) => item.priceKind === 'fixed')
       .sort((a, b) => `${a.category} ${a.name}`.localeCompare(`${b.category} ${b.name}`, 'ru')),
   ])) as Record<SlotKey, PriceItem[]>, [pricebook]);
+  const [slotQueries, setSlotQueries] = useState<Partial<Record<SlotKey, string>>>({});
   const check = useMemo(() => checkModule(module, defaults, pricebook), [module, defaults, pricebook]);
   const lines = useMemo(() => moduleToLines(module, defaults, pricebook), [module, defaults, pricebook]);
   const lineCalcs = useMemo(() => calcLines(lines), [lines]);
@@ -83,6 +88,16 @@ function EskizMarkerModuleEditor(props: {
     const choice = module.slots[slot] ?? { mode: 'default' as const, itemId: null };
     const id = choice.mode === 'manual' ? choice.itemId : (defaults[slot] ?? null);
     return id ? pricebook.items.find((item) => item.id === id) ?? null : null;
+  };
+  const visibleSlotOptions = (slot: SlotKey) => {
+    const query = (slotQueries[slot] ?? '').trim().toLocaleLowerCase('ru').replace(/ё/g, 'е');
+    const options = slotOptions[slot];
+    if (!query) return options.slice(0, slot === 'body' ? 120 : 180);
+    const words = query.split(/\s+/).filter(Boolean);
+    return options.filter((item) => {
+      const text = `${item.name} ${item.article ?? ''} ${item.category} ${item.subcategory ?? ''}`.toLocaleLowerCase('ru').replace(/ё/g, 'е');
+      return words.every((word) => text.includes(word));
+    }).slice(0, 160);
   };
   return (
     <div className="eskiz-marker-editor">
@@ -113,12 +128,13 @@ function EskizMarkerModuleEditor(props: {
           const current = selectedItem(slot);
           const value = choice.mode === 'default' ? '__default__' : choice.itemId ?? '';
           return (
-            <label key={slot}>
+            <label key={slot} className={slot === 'body' ? 'primary-slot' : ''}>
               <span>{SLOT_LABELS[slot]} <em>×{slotNeed(module, slot)}</em></span>
+              <input className="slot-search" value={slotQueries[slot] ?? ''} onChange={(event) => setSlotQueries((current) => ({ ...current, [slot]: event.target.value }))} placeholder={slot === 'body' ? 'Быстрый поиск корпуса: НБ 800, мойка, пенал…' : 'Фильтр по прайсу…'} />
               <select value={value} onChange={(event) => updateSlot(slot, event.target.value)}>
                 {slot !== 'body' && <option value="__default__">Из настроек проекта{defaults[slot] ? ` · ${shortLine(pricebook.items.find((item) => item.id === defaults[slot])?.name ?? 'позиция')}` : ' · не задано'}</option>}
                 <option value="">— не использовать —</option>
-                {slotOptions[slot].map((item) => <option key={item.id} value={item.id}>{shortLine(itemTitle(item), 118)}</option>)}
+                {visibleSlotOptions(slot).map((item) => <option key={item.id} value={item.id}>{shortLine(itemTitle(item), 118)}</option>)}
               </select>
               {current && <small>{current.category}{current.subcategory ? ` · ${current.subcategory}` : ''}{current.priceBasis ? ` · ${current.priceBasis}` : ''}</small>}
             </label>
@@ -139,8 +155,8 @@ function EskizMarkerModuleEditor(props: {
 }
 
 export default function EskizProPanel(props: { project: Project; pricebook: Pricebook; onChange: (project: Project) => void; onOpenModule?: (moduleId: string) => void }) {
-  const { project, pricebook } = props;
-  const eskizPro = project.eskizPro ?? {};
+  const { project, pricebook, onChange } = props;
+  const eskizPro = project.eskizPro ?? EMPTY_ESKIZ_PRO;
   const linkedIds = eskizPro.linkedProjectIds ?? EMPTY_LINKS;
   const snapshots = eskizPro.snapshots ?? EMPTY_SNAPSHOTS;
   const [summaries, setSummaries] = useState<EskizProjectSummary[]>([]);
@@ -149,6 +165,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const [frameKey, setFrameKey] = useState(0);
   const [activeMarkerKey, setActiveMarkerKey] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const liveSyncRef = useRef('');
   const linkedProjects = useMemo(() => linkedIds
     .map((id) => snapshotProject(snapshots.find((item) => item.id === id)))
     .filter((item): item is NonNullable<typeof item> => Boolean(item)), [linkedIds, snapshots]);
@@ -156,13 +173,13 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const showInClient = eskizPro.showInClient !== false;
   const clientMode = eskizPro.clientMode ?? 'active';
   const moduleMarkers = useMemo(() => collectEskizModuleMarkers(linkedProjects), [linkedProjects]);
-  const moduleBindings = eskizPro.moduleBindings ?? {};
+  const moduleBindings = eskizPro.moduleBindings ?? EMPTY_BINDINGS;
   const linkedModuleCount = moduleMarkers.filter((marker) => Boolean(moduleBindings[marker.key])).length;
   const activeMarker = moduleMarkers.find((marker) => marker.key === activeMarkerKey) ?? null;
   const activeModuleId = activeMarker ? moduleBindings[activeMarker.key] : null;
   const activeModule = activeModuleId ? project.modules?.find((module) => module.id === activeModuleId) ?? null : null;
 
-  const updateEskizPro = (patch: Partial<EskizProIntegration>) => props.onChange({ ...project, eskizPro: { ...eskizPro, ...patch } });
+  const updateEskizPro = useCallback((patch: Partial<EskizProIntegration>) => onChange({ ...project, eskizPro: { ...eskizPro, ...patch } }), [onChange, project, eskizPro]);
 
   const refresh = async () => {
     setLoading(true);
@@ -254,11 +271,35 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
 
   const syncModulesToCalculation = () => {
     const result = syncEskizModulesToCalculation(project, linkedProjects);
-    props.onChange(result.project);
+    onChange(result.project);
     setMessage(result.markers.length
       ? `Модули из Эскиз PRO синхронизированы: создано ${result.created}, обновлено ${result.updated}. Они уже участвуют в просчёте, КП и проверке.`
       : 'В связанных эскизах нет объектов «Модуль». Добавьте в Эскиз PRO модуль как маркер/плашку и заполните его описание.');
   };
+
+  const syncLiveProjectModule = useCallback((eskizProject: EskizProject, objectId?: string) => {
+    const liveMarkers = collectEskizModuleMarkers([eskizProject]);
+    const marker = liveMarkers.find((item) => item.objectId === objectId) ?? liveMarkers.at(-1);
+    if (!marker) {
+      setMessage('В живом Эскиз PRO выбран не модуль. Поставьте объект «Модуль» на скрин — он сразу появится в просчёте.');
+      return;
+    }
+    const baseProject: Project = {
+      ...project,
+      eskizPro: {
+        ...eskizPro,
+        linkedProjectIds: unique([eskizProject.id, ...linkedIds]),
+        activeProjectId: eskizProject.id,
+        showInClient,
+        clientMode,
+        snapshots: upsertEskizSnapshot(snapshots, eskizProject),
+      },
+    };
+    const result = syncEskizModulesToCalculation(baseProject, [eskizProject]);
+    onChange(result.project);
+    setActiveMarkerKey(marker.key);
+    setMessage(`Маркер «${marker.number}» выбран прямо в живом Эскиз PRO. Справа выберите корпус из прайса и комплектующие — модуль уже добавлен в просчёт.`);
+  }, [project, eskizPro, linkedIds, showInClient, clientMode, snapshots, onChange]);
 
   const openMarkerModule = (marker: EskizModuleMarker) => {
     const alreadyLinked = Boolean(moduleBindings[marker.key]);
@@ -268,7 +309,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       return;
     }
     const result = syncEskizModulesToCalculation(project, linkedProjects);
-    props.onChange(result.project);
+    onChange(result.project);
     setActiveMarkerKey(marker.key);
     setMessage(`Для маркера «${marker.number}» создана позиция расчёта. Теперь выберите корпус, фасады и фурнитуру из прайса.`);
   };
@@ -278,8 +319,57 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     if (marker) openMarkerModule(marker);
   };
 
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      const payload = event.data as { source?: string; type?: string; project?: unknown; objectId?: string; object?: { id?: string; type?: string } };
+      if (payload?.source !== 'recept-eskiz-pro') return;
+      if (payload.type !== 'module-selected' && payload.type !== 'project-saved') return;
+      if (!isEskizProject(payload.project)) return;
+      if (payload.type === 'project-saved') {
+        if (!linkedIds.includes(payload.project.id)) return;
+        updateEskizPro({ snapshots: upsertEskizSnapshot(snapshots, payload.project) });
+        return;
+      }
+      const objectId = payload.object?.type === 'module' ? payload.object.id : payload.objectId;
+      syncLiveProjectModule(payload.project, objectId);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [linkedIds, snapshots, updateEskizPro, syncLiveProjectModule]);
+
+  useEffect(() => {
+    if (!sameGithubPagesOrigin()) return undefined;
+    let stopped = false;
+    const tick = async () => {
+      try {
+        const nextSummaries = await listEskizProjects();
+        if (stopped) return;
+        setSummaries(nextSummaries);
+        const candidates = unique([activeId ?? '', ...linkedIds, nextSummaries[0]?.id ?? '']);
+        for (const id of candidates) {
+          const found = await loadEskizProject(id);
+          if (stopped || !found) continue;
+          const markers = collectEskizModuleMarkers([found]);
+          if (markers.length === 0) continue;
+          const unbound = markers.find((marker) => !moduleBindings[marker.key]);
+          const marker = unbound ?? markers.at(-1);
+          const signature = `${found.id}:${found.updatedAt}:${markers.map((item) => item.objectId).join(',')}:${unbound?.objectId ?? ''}`;
+          if (liveSyncRef.current === signature || !marker) return;
+          liveSyncRef.current = signature;
+          syncLiveProjectModule(found, marker.objectId);
+          return;
+        }
+      } catch {
+        // В preview или при запрете IndexedDB живой режим просто молчит — остаётся ручной импорт .eskiz.
+      }
+    };
+    void tick();
+    const interval = window.setInterval(() => { void tick(); }, 2500);
+    return () => { stopped = true; window.clearInterval(interval); };
+  }, [activeId, linkedIds, moduleBindings, syncLiveProjectModule]);
+
   const updateModule = (moduleId: string, patch: Partial<KitchenModule>) => {
-    props.onChange({
+    onChange({
       ...project,
       modules: (project.modules ?? []).map((module) => (module.id === moduleId ? { ...module, ...patch } : module)),
     });
@@ -291,7 +381,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
         <div>
           <span className="eyebrow">ЭСКИЗ PRO</span>
           <h3>Внешний инструмент для скрина проекта, размеров и модулей-маркеров</h3>
-          <p className="muted small">Откройте настоящий Эскиз PRO, загрузите скрин, нанесите размеры/подписи и добавьте объекты «Модуль» как точки/плашки. В сохранённом snapshot можно нажать на такой маркер и выбрать корпус, фасады и фурнитуру из прайса — всё сразу попадёт в расчёт.</p>
+          <p className="muted small">Откройте настоящий Эскиз PRO, загрузите скрин, нанесите размеры/подписи и добавьте объект «Модуль» как точку/сноску. Теперь при выборе этого маркера прямо в окне Эскиз PRO калькулятор сразу создаёт модуль в просчёте и открывает выбор корпуса/фурнитуры из прайса.</p>
         </div>
         <div className="actions">
           <a className="btn ghost" href={ESKIZ_PRO_URL} target="_blank" rel="noreferrer">Открыть в новой вкладке</a>
@@ -301,13 +391,13 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       </div>
 
       {!sameGithubPagesOrigin() && (
-        <div className="note no-print">В live preview Эскиз PRO открыт с другого origin, поэтому браузер может не дать калькулятору читать его IndexedDB. На основной ссылке GitHub Pages оба приложения находятся на <b>silovr709-dotcom.github.io</b>, и привязка работает напрямую. Для локальной проверки можно импортировать файл <b>.eskiz</b>.</div>
+        <div className="note no-print">В live preview Эскиз PRO открыт с другого origin, поэтому браузер может не дать калькулятору читать его IndexedDB. На основной ссылке GitHub Pages оба приложения находятся на <b>silovr709-dotcom.github.io</b>, и живое добавление модулей работает напрямую. Для локальной проверки можно импортировать файл <b>.eskiz</b>.</div>
       )}
 
       <div className="eskiz-pro-grid">
         <div className="card eskiz-pro-frame-card no-print">
           <div className="section-head">
-            <div><h3>Окно Эскиз PRO</h3><p className="muted small">Загрузите скрин, расставьте размеры, дождитесь автосохранения и нажмите «Обновить список» справа.</p></div>
+            <div><h3>Окно Эскиз PRO</h3><p className="muted small">Загрузите скрин, поставьте объект «Модуль» на нужное место и кликните по нему. Справа откроется выбор корпуса из прайса, а позиция сразу уйдёт в просчёт.</p></div>
           </div>
           <iframe key={frameKey} className="eskiz-pro-frame" src={ESKIZ_PRO_URL} title="Эскиз PRO" />
         </div>
@@ -322,7 +412,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             <div className="eskiz-pro-status-cards">
               <div><b>{linkedIds.length}</b><span>привязано</span></div>
               <div><b>{activeId ? 'Да' : 'Нет'}</b><span>главный эскиз</span></div>
-              <div><b>{showInClient ? 'Да' : 'Нет'}</b><span>в КП</span></div>
+              <div><b>{sameGithubPagesOrigin() ? 'Да' : 'Preview'}</b><span>живой режим</span></div>
             </div>
             <div className="actions eskiz-pro-import-actions">
               <button className="btn ghost" onClick={() => fileRef.current?.click()}>Импорт .eskiz</button>
@@ -332,7 +422,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
           </section>
 
           <section className="card no-print eskiz-pro-module-sync">
-            <div className="section-head"><div><h3>Модули с эскиза → просчёт</h3><p className="muted small">Используйте объект «Модуль» в Эскиз PRO как точку или сноску. Описание можно писать свободно: «Низ 800 800×720×560, фасады 2, ящики 0».</p></div></div>
+            <div className="section-head"><div><h3>Модули с эскиза → просчёт</h3><p className="muted small">Поставьте модуль в живом окне Эскиз PRO и кликните его: здесь сразу откроется карточка с поиском корпуса из прайса. Описание маркера можно оставить коротким — состав выбирается из прайса ниже.</p></div></div>
             <div className="eskiz-pro-module-stats"><div><b>{moduleMarkers.length}</b><span>маркеров</span></div><div><b>{linkedModuleCount}</b><span>уже связаны</span></div><div><b>{Math.max(0, moduleMarkers.length - linkedModuleCount)}</b><span>новые</span></div></div>
             <button className="btn primary block" disabled={moduleMarkers.length === 0} onClick={syncModulesToCalculation}>Создать / обновить модули в расчёте</button>
             {moduleMarkers.length === 0 ? <div className="empty small">В привязанных эскизах пока нет объектов «Модуль».</div> : (
