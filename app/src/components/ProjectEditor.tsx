@@ -5,9 +5,9 @@ import { calcTotals, lineFromItem } from '../lib/engine';
 import { fmtMoney, fmtNum, fmtDate } from '../lib/format';
 import CatalogPicker from './CatalogPicker';
 import ModulesPanel from './ModulesPanel';
-import SketchProPanel from './SketchProPanel';
+import EskizProPanel from './EskizProPanel';
 import PhotosPanel from './PhotosPanel';
-import { checkModule, moduleToLines, moveModule } from '../lib/modules';
+import { checkModule, moduleToLines } from '../lib/modules';
 import { validateProject } from '../lib/validation';
 import SettingsPanel from './SettingsPanel';
 import ClientView from './ClientView';
@@ -40,7 +40,6 @@ export default function ProjectEditor(props: {
   );
   const [editorMode, setEditorMode] = useState<'wizard' | 'advanced'>(() => project.wizardMode ?? 'advanced');
   const [focusModuleId, setFocusModuleId] = useState<string | null>(null);
-  const [selectedSketchModuleId, setSelectedSketchModuleId] = useState<string | null>(null);
   const [focusLineId, setFocusLineId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [editMeta, setEditMeta] = useState(false);
@@ -108,11 +107,6 @@ export default function ProjectEditor(props: {
   };
 
   const groupsInUse = SUMMARY_GROUPS.filter((g) => project.lines.some((l) => l.group === g));
-  const reorderModule = (id: string, direction: -1 | 1) => {
-    const modules = project.modules ?? [];
-    const next = moveModule(modules, id, direction);
-    if (next !== modules) props.onChange({ ...project, modules: next });
-  };
 
   return (
     <div className="page project">
@@ -222,17 +216,7 @@ export default function ProjectEditor(props: {
 
       {tab === 'photos' && <PhotosPanel project={project} onChange={props.onChange} />}
 
-      {tab === 'sketch' && (
-        <SketchProPanel
-          project={project}
-          onChange={props.onChange}
-          selectedModuleId={selectedSketchModuleId}
-          onSelectCreated={(id) => { setSelectedSketchModuleId(id); setFocusModuleId(id); }}
-          onSelectModule={(id) => setSelectedSketchModuleId(id)}
-          onOpenModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
-          onReorder={reorderModule}
-        />
-      )}
+      {tab === 'sketch' && <EskizProPanel project={project} onChange={props.onChange} />}
 
       {tab === 'check' && (
         <ProjectCheckCenter

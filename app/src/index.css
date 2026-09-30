@@ -341,94 +341,50 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .cd-component-bodySurcharge .cd-component-kind { background: #fff2d8; color: #8a5a07; }
 .cd-component-handle .cd-component-kind, .cd-component-legs .cd-component-kind, .cd-component-shelf .cd-component-kind { background: #f4f0ea; color: #755b35; }
 
-/* ---------- Sketch PRO ---------- */
-.sketch-pro-panel { border-left: 4px solid var(--accent); }
-.sketch-pro-head { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; margin-bottom: 10px; }
-.sketch-pro-head h3 { margin: 0 0 3px; color: #3b2565; }
-.sketch-pro-head p { margin: 0; max-width: 760px; }
-.sketch-pro-badge { padding: 4px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 800; white-space: nowrap; }
-.sketch-pro-controls { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr) minmax(210px, 1.4fr) auto auto; gap: 8px; align-items: end; margin: 10px 0 12px; padding: 10px; border: 1px solid #dfe9e4; border-radius: 12px; background: #fbfdfc; }
-.sketch-pro-controls .chk-row { min-height: 37px; align-items: center; justify-content: center; padding: 7px 10px; border: 1px solid #dce6e1; border-radius: 9px; background: #fff; }
-.sketch-pro-canvas { display: grid; gap: 10px; margin: 10px 0 12px; }
-.sketch-pro-canvas-empty { padding: 26px; border: 1px dashed #cbd7d1; border-radius: 12px; background: linear-gradient(135deg, #fbfffd, #f7f3ff); text-align: center; color: var(--muted); }
-.sketch-pro-canvas-empty b { display: block; margin-bottom: 4px; color: #3b2565; }
-.sketch-pro-wall-drawing, .sketch-pro-plan, .sketch-pro-3d { overflow: hidden; border: 1px solid #dbe6e1; border-radius: 12px; background: #fff; page-break-inside: avoid; }
-.sketch-pro-wall-drawing-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 9px 11px; border-bottom: 1px solid #edf2ef; background: linear-gradient(135deg, #fbfffd, #f8f3ff); }
-.sketch-pro-wall-drawing-head b { display: block; color: #332255; font-size: 13px; }
-.sketch-pro-wall-drawing-head span, .sketch-pro-wall-drawing-head em { color: var(--muted); font-size: 11px; font-style: normal; }
-.sketch-pro-wall-drawing-head em { text-align: right; white-space: nowrap; }
-.sketch-pro-wall-drawing-head em.over { color: var(--danger); font-weight: 800; }
-.sketch-pro-wall-drawing svg, .sketch-pro-plan svg { display: block; width: 100%; background: linear-gradient(#fff, #f6faf8); }
-.sketch-pro-wall-bg { fill: var(--sketch-backsplash); opacity: .72; stroke: #dce5e1; }
-.sketch-pro-floor { fill: var(--sketch-floor); opacity: .75; }
-.sketch-pro-zero { stroke: #9aaba3; stroke-width: 1; }
-.sketch-pro-counter { fill: var(--sketch-counter); stroke: rgba(0,0,0,.14); stroke-width: 1; }
-.sketch-pro-module rect { fill: var(--sketch-facade); stroke: var(--sketch-line); stroke-width: 1.2; filter: drop-shadow(0 2px 2px rgba(40, 54, 48, .12)); }
-.sketch-pro-module-tall rect { fill: var(--sketch-body); }
-.sketch-pro-module-upper rect { fill: color-mix(in srgb, var(--sketch-facade) 86%, white); stroke-dasharray: 0; }
-.sketch-pro-module.selected rect, .sketch-pro-plan-module.selected rect { stroke: var(--accent); stroke-width: 3; filter: drop-shadow(0 0 5px rgba(124,58,237,.32)); }
-.sketch-pro-module.interactive, .sketch-pro-plan-module.interactive { cursor: pointer; }
-.sketch-pro-module.interactive:hover rect, .sketch-pro-plan-module.interactive:hover rect { stroke: var(--accent); stroke-width: 2; }
-.sketch-pro-module-split, .sketch-pro-module-shelf { stroke: rgba(35,48,43,.35); stroke-width: .8; }
-.sketch-pro-module-shelf { stroke-dasharray: 3 2; }
-.sketch-pro-module-marker { fill: var(--accent); }
-.sketch-pro-module-number { fill: #fff; font-size: 10px; font-weight: 800; pointer-events: none; }
-.sketch-pro-module-name { fill: #26362f; font-size: 10px; font-weight: 800; pointer-events: none; }
-.sketch-pro-module-size { fill: #63756d; font-size: 9px; font-weight: 700; pointer-events: none; }
-.sketch-pro-dim line { stroke: var(--accent); stroke-width: 1; }
-.sketch-pro-dim.over line { stroke: var(--danger); }
-.sketch-pro-dim text { fill: var(--accent); font-size: 10px; font-weight: 800; }
-.sketch-pro-dim.over text { fill: var(--danger); }
-.sketch-pro-plan-room { fill: #f8fbfa; stroke: #cad8d1; stroke-width: 1; }
-.sketch-pro-plan-wall { stroke: #44564e; stroke-width: 5; stroke-linecap: round; }
-.sketch-pro-plan-module rect { fill: var(--sketch-facade); stroke: var(--sketch-line); stroke-width: 1.2; }
-.sketch-pro-plan-module-upper rect { fill: rgba(255,255,255,.58); stroke-dasharray: 4 3; }
-.sketch-pro-plan-module-tall rect { fill: var(--sketch-body); }
-.sketch-pro-plan-module text, .sketch-pro-plan-wall-label { fill: #26362f; font-size: 11px; font-weight: 800; pointer-events: none; }
-.sketch-pro-3d svg { display: block; width: 100%; background: linear-gradient(#fff, #f5faf8); }
-.sketch-pro-3d-floor { fill: var(--sketch-floor); opacity: .42; stroke: rgba(0,0,0,.15); stroke-width: 1; }
-.sketch-pro-3d-wall { fill: var(--sketch-backsplash); opacity: .28; stroke: rgba(71, 85, 105, .2); stroke-width: 1; }
-.sketch-pro-3d-wall-right { opacity: .16; }
-.sketch-pro-3d-box { filter: drop-shadow(0 6px 5px rgba(38, 54, 47, .18)); }
-.sketch-pro-3d-box.interactive { cursor: pointer; }
-.sketch-pro-3d-face { stroke: var(--sketch-line); stroke-width: 1.1; }
-.sketch-pro-3d-face-front { fill: var(--sketch-facade); }
-.sketch-pro-3d-face-side { fill: var(--sketch-facade-dark); }
-.sketch-pro-3d-face-top { fill: color-mix(in srgb, var(--sketch-facade) 82%, white); }
-.sketch-pro-3d-box-tall .sketch-pro-3d-face-front { fill: var(--sketch-body); }
-.sketch-pro-3d-box-upper .sketch-pro-3d-face { opacity: .84; }
-.sketch-pro-3d-box.selected .sketch-pro-3d-face { stroke: var(--accent); stroke-width: 3; }
-.sketch-pro-3d-box.interactive:hover .sketch-pro-3d-face { stroke: var(--accent); stroke-width: 2; }
-.sketch-pro-3d-label { fill: #fff; stroke: rgba(0,0,0,.25); stroke-width: 2.5; paint-order: stroke; font-size: 13px; font-weight: 900; pointer-events: none; }
-.sketch-pro-3d-dim { fill: var(--accent); font-size: 11px; font-weight: 800; }
-.sketch-pro-canvas-client { margin: 4px 0 12px; }
-.sketch-pro-canvas-client .sketch-pro-wall-drawing-head { padding: 7px 9px; }
-.sketch-pro-canvas-client .sketch-pro-wall-drawing svg, .sketch-pro-canvas-client .sketch-pro-3d svg { max-height: 285px; }
-.sketch-pro-canvas-secondary { margin-top: 6px; }
+/* ---------- Эскиз PRO (внешний инструмент) ---------- */
+.eskiz-pro-workspace { display: flex; flex-direction: column; gap: 12px; }
+.eskiz-pro-intro { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; border-left: 4px solid var(--accent); }
+.eskiz-pro-intro h3 { margin: 0 0 4px; color: #332255; }
+.eskiz-pro-intro p { margin: 0; max-width: 850px; }
+.eskiz-pro-grid { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 14px; align-items: start; }
+.eskiz-pro-frame-card { padding: 0; overflow: hidden; }
+.eskiz-pro-frame-card .section-head { padding: 14px 16px 10px; margin: 0; }
+.eskiz-pro-frame { display: block; width: 100%; min-height: 760px; border: 0; border-top: 1px solid var(--line); background: #eef0f2; }
+.eskiz-pro-side { display: flex; flex-direction: column; gap: 12px; }
+.eskiz-pro-import-actions { margin-top: 10px; }
+.eskiz-pro-message { margin-top: 10px; padding: 8px 10px; background: #f3f8f6; border: 1px solid #d9ebe4; border-radius: 8px; }
+.eskiz-pro-list, .eskiz-pro-linked-list { display: flex; flex-direction: column; gap: 8px; }
+.eskiz-pro-list article { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: #fbfdfc; }
+.eskiz-pro-list article.linked { border-color: var(--accent); background: var(--accent-soft); }
+.eskiz-pro-list img { width: 58px; height: 44px; object-fit: cover; border-radius: 7px; border: 1px solid #dce4e0; background: #fff; }
+.eskiz-pro-list b, .eskiz-pro-linked-list b { display: block; color: #332255; font-size: 12px; line-height: 1.25; }
+.eskiz-pro-list span, .eskiz-pro-linked-list span { display: block; margin-top: 2px; color: var(--muted); font-size: 10.5px; }
+.eskiz-pro-linked-list article { padding: 9px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.eskiz-pro-linked-list article.active { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.eskiz-pro-linked-list article > .actions { margin: 7px 0; }
+.eskiz-pro-project-preview { page-break-inside: avoid; }
 .cd-sketch-pro { margin: 10px 0 16px; page-break-inside: avoid; }
-.sketch-pro-wall-status { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin: 10px 0 12px; }
-.sketch-wall-card { display: grid; grid-template-columns: 1fr 92px; gap: 6px 8px; align-items: end; padding: 9px 10px; border: 1px solid #dce8e3; border-radius: 10px; background: #fbfdfc; }
-.sketch-wall-card.over { border-color: #e2a09a; background: #fff7f5; }
-.sketch-wall-card div { display: flex; flex-direction: column; gap: 2px; }
-.sketch-wall-card b { color: #3b2565; }
-.sketch-wall-card span, .sketch-wall-card em { font-size: 11px; color: var(--muted); font-style: normal; }
-.sketch-wall-card.over em { color: var(--danger); font-weight: 800; }
-.sketch-wall-card label { font-size: 10px; }
-.sketch-wall-card input { min-height: 30px; padding: 5px 7px; }
-.sketch-wall-card .btn { grid-column: 2; justify-self: end; }
-.sketch-pro-selected { margin: 10px 0 12px; padding: 12px; border-radius: 11px; border: 1px solid #d8c9ff; background: linear-gradient(135deg, #fbf8ff, #f4fbf8); }
-.sketch-pro-selected-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 9px; flex-wrap: wrap; }
-.sketch-pro-selected-head b { display: block; color: #3b2565; }
-.sketch-pro-edit-grid { display: grid; grid-template-columns: minmax(180px, 1.6fr) minmax(130px, 1fr) repeat(auto-fit, minmax(76px, .75fr)); gap: 8px; align-items: end; }
-.sketch-pro-edit-grid label { min-width: 0; }
-.sketch-pro-edit-grid input, .sketch-pro-edit-grid select { min-width: 0; }
-.sketch-pro-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
-.sketch-pro-grid { display: grid; grid-template-columns: 1.4fr 1fr repeat(10, minmax(76px, .72fr)); gap: 8px; align-items: end; }
-.sketch-pro-grid label { min-width: 0; }
-.sketch-pro-grid input, .sketch-pro-grid select { min-width: 0; }
-.sketch-pro-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
-@media (max-width: 1260px) { .sketch-pro-grid, .sketch-pro-edit-grid, .sketch-pro-controls { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@media (max-width: 760px) { .sketch-pro-head { flex-direction: column; } .sketch-pro-grid, .sketch-pro-edit-grid, .sketch-pro-controls { grid-template-columns: 1fr 1fr; } .sketch-wall-card { grid-template-columns: 1fr; } .sketch-wall-card .btn { grid-column: auto; justify-self: start; } .sketch-pro-wall-drawing-head { flex-direction: column; } }
+.eskiz-preview { overflow: hidden; border: 1px solid #dbe6e1; border-radius: 12px; background: #fff; margin: 10px 0; page-break-inside: avoid; }
+.eskiz-preview.compact { margin: 8px 0; }
+.eskiz-preview-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 9px 11px; border-bottom: 1px solid #edf2ef; background: linear-gradient(135deg, #fbfffd, #fff6f2); }
+.eskiz-preview-head b { display: block; color: #332255; font-size: 13px; }
+.eskiz-preview-head span, .eskiz-preview-head em { color: var(--muted); font-size: 11px; font-style: normal; }
+.eskiz-preview-head em { white-space: nowrap; }
+.eskiz-preview-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 10px; padding: 8px 11px; border-bottom: 1px solid #edf2ef; background: #171a1f; color: #fff; font-size: 11px; }
+.eskiz-preview-meta b { color: #ff8a6d; }
+.eskiz-preview-stage { overflow: auto; background: #eef0f2; padding: 10px; }
+.eskiz-preview-stage svg { display: block; width: 100%; max-height: 620px; background: #fff; box-shadow: 0 3px 18px rgba(30, 41, 59, .12); }
+.eskiz-preview.compact .eskiz-preview-stage { padding: 6px; }
+.eskiz-preview.compact .eskiz-preview-stage svg { max-height: 280px; }
+.eskiz-preview-object { pointer-events: none; }
+.eskiz-preview-label { filter: drop-shadow(0 2px 3px rgba(20, 24, 30, .12)); }
+.eskiz-preview-dimension text { paint-order: stroke; stroke: rgba(255,255,255,.55); stroke-width: .4px; }
+@media print {
+  .eskiz-preview-stage { overflow: visible; padding: 0; background: #fff; }
+  .eskiz-preview-stage svg { max-height: none; box-shadow: none; }
+}
+@media (max-width: 1180px) { .eskiz-pro-grid { grid-template-columns: 1fr; } .eskiz-pro-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .eskiz-pro-side section:last-child { grid-column: 1 / -1; } }
+@media (max-width: 760px) { .eskiz-pro-intro { flex-direction: column; } .eskiz-pro-side { display: flex; } .eskiz-pro-frame { min-height: 680px; } .eskiz-preview-meta { grid-template-columns: 1fr 1fr; } .eskiz-pro-list article { grid-template-columns: 48px minmax(0, 1fr); } .eskiz-pro-list article .btn { grid-column: 1 / -1; justify-self: start; } }
 
 /* ---- Позиции кухни (модули) ---- */
 .defaults-card { border-left: 3px solid var(--accent); }

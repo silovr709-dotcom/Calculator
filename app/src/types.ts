@@ -249,9 +249,9 @@ export type KitchenSketchView = 'elevation' | 'plan' | '3d';
 
 export interface KitchenSketchSettings {
   styleId?: KitchenSketchStyleId;
-  /** false — не выводить эскиз в клиентском КП; отсутствие поля = выводить */
+  /** legacy-настройка старого автоэскиза; сам автоэскиз удалён из интерфейса. */
   showInClient?: boolean;
-  /** true — в КП принудительно выводить эскиз с размерными линиями; отсутствие поля = выводить размеры. */
+  /** legacy-настройка старого автоэскиза; вывод размеров теперь идёт через внешний Эскиз PRO. */
   showDimensionsInClient?: boolean;
   /** Планировка кухни; отсутствие поля = прямая (совместимость со старыми проектами). */
   shape?: KitchenLayoutShape;
@@ -261,6 +261,22 @@ export interface KitchenSketchSettings {
   wallLengthsMm?: Partial<Record<KitchenWall, number | null>>;
   /** Измеренная высота помещения, мм. */
   roomHeightMm?: number | null;
+}
+
+export interface EskizProSnapshot {
+  id: string;
+  title: string;
+  updatedAt: string;
+  /** Полный JSON проекта внешнего инструмента Эскиз PRO. Храним как snapshot, чтобы КП/экспорт проекта не зависели от IndexedDB браузера. */
+  project: unknown;
+}
+
+export interface EskizProIntegration {
+  linkedProjectIds?: string[];
+  activeProjectId?: string | null;
+  /** false — не показывать связанные эскизы в клиентском КП; отсутствие поля = показывать. */
+  showInClient?: boolean;
+  snapshots?: EskizProSnapshot[];
 }
 
 export type KitchenChecklistKey = 'plinth' | 'baseboard' | 'worktop' | 'wallPanel';
@@ -294,8 +310,10 @@ export interface Project {
   modules?: KitchenModule[];
   moduleDefaults?: ModuleDefaults;
   photos?: ProjectPhoto[];
-  /** Настройки эскиза. Необязательное поле сохраняет совместимость со старыми проектами. */
+  /** Технические параметры планировки/стен для проверки и планировщика. Старый автоэскиз удалён из UI. */
   sketch?: KitchenSketchSettings;
+  /** Связь с внешним инструментом Эскиз PRO: https://silovr709-dotcom.github.io/ESCIZ/ */
+  eskizPro?: EskizProIntegration;
   /** Режим открытия проекта: мастер или привычные вкладки. */
   wizardMode?: 'wizard' | 'advanced';
   wizardStep?: WizardStepId;

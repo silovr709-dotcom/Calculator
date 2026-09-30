@@ -5,7 +5,8 @@ import { calculateVariant } from '../lib/variants';
 import { buildClientOfferDetails, isModuleLine, moduleNoteMatches, stripModuleNote } from '../lib/clientOffer';
 import { fmtMoney, fmtDate, fmtNum } from '../lib/format';
 import { exportClientXlsx } from '../lib/exporters';
-import SketchProCanvas from './SketchProCanvas';
+import { snapshotProject } from '../lib/eskizPro';
+import EskizProjectPreview from './EskizProjectPreview';
 
 /** Строка модуля в клиентской версии — без закупочных цен и внутренних данных. */
 export interface ClientModuleGroup {
@@ -102,9 +103,12 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const showDetailPrices = project.clientOffer?.showDetailPrices !== false;
   const isBrief = presentationMode === 'brief';
   const isTechnical = presentationMode === 'technical';
-  const clientSketchVisible = (project.modules?.length ?? 0) > 0 && project.sketch?.showInClient !== false;
-  const clientSketchDimensions = project.sketch?.showDimensionsInClient !== false;
-  const clientSketchView = project.sketch?.view === 'plan' || project.sketch?.view === '3d' ? project.sketch.view : 'elevation';
+  const linkedEskizIds = project.eskizPro?.linkedProjectIds ?? [];
+  const eskizSnapshots = project.eskizPro?.snapshots ?? [];
+  const linkedEskizProjects = linkedEskizIds
+    .map((id) => snapshotProject(eskizSnapshots.find((item) => item.id === id)))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+  const clientSketchVisible = linkedEskizProjects.length > 0 && project.eskizPro?.showInClient !== false;
   const visibleVariants = (project.variants ?? []).filter((variant) => variant.clientVisible || variant.id === project.selectedVariantId);
   const groupLineIds = (group: ClientModuleGroup) => selectedVariant
     ? activeCalculation.lines.filter((line) => moduleNoteMatches(line.note, group.title, group.id)).map((line) => line.id)
@@ -195,9 +199,8 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
 
         {clientSketchVisible && (
           <section className="cd-sketch-pro">
-            <div className="cd-section-head"><h3>Схема Эскиз PRO</h3><span>{clientSketchDimensions ? 'с размерами по модулям и стенам' : 'визуальная раскладка модулей'}</span></div>
-            <SketchProCanvas modules={project.modules ?? []} settings={{ ...project.sketch, view: clientSketchView }} showDimensions={clientSketchDimensions} variant="client" />
-            {isTechnical && clientSketchView !== 'plan' && <SketchProCanvas modules={project.modules ?? []} settings={{ ...project.sketch, view: 'plan' }} showDimensions={clientSketchDimensions} variant="client" className="sketch-pro-canvas-secondary" />}
+            <div className="cd-section-head"><h3>Эскиз PRO</h3><span>{isTechnical ? 'внешний эскиз со скрином проекта и размерными аннотациями' : 'схема из внешнего Эскиз PRO'}</span></div>
+            {linkedEskizProjects.map((eskiz) => <EskizProjectPreview key={eskiz.id} project={eskiz} compact={!isTechnical} />)}
           </section>
         )}
 
