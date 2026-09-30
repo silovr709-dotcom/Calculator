@@ -377,13 +377,29 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .sketch-pro-head h3 { margin: 0 0 3px; color: #3b2565; }
 .sketch-pro-head p { margin: 0; max-width: 760px; }
 .sketch-pro-badge { padding: 4px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 800; white-space: nowrap; }
+.sketch-pro-wall-status { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin: 10px 0 12px; }
+.sketch-wall-card { display: grid; grid-template-columns: 1fr 92px; gap: 6px 8px; align-items: end; padding: 9px 10px; border: 1px solid #dce8e3; border-radius: 10px; background: #fbfdfc; }
+.sketch-wall-card.over { border-color: #e2a09a; background: #fff7f5; }
+.sketch-wall-card div { display: flex; flex-direction: column; gap: 2px; }
+.sketch-wall-card b { color: #3b2565; }
+.sketch-wall-card span, .sketch-wall-card em { font-size: 11px; color: var(--muted); font-style: normal; }
+.sketch-wall-card.over em { color: var(--danger); font-weight: 800; }
+.sketch-wall-card label { font-size: 10px; }
+.sketch-wall-card input { min-height: 30px; padding: 5px 7px; }
+.sketch-wall-card .btn { grid-column: 2; justify-self: end; }
+.sketch-pro-selected { margin: 10px 0 12px; padding: 12px; border-radius: 11px; border: 1px solid #d8c9ff; background: linear-gradient(135deg, #fbf8ff, #f4fbf8); }
+.sketch-pro-selected-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 9px; flex-wrap: wrap; }
+.sketch-pro-selected-head b { display: block; color: #3b2565; }
+.sketch-pro-edit-grid { display: grid; grid-template-columns: 1.6fr 1fr repeat(6, minmax(76px, .75fr)); gap: 8px; align-items: end; }
+.sketch-pro-edit-grid label { min-width: 0; }
+.sketch-pro-edit-grid input, .sketch-pro-edit-grid select { min-width: 0; }
 .sketch-pro-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
 .sketch-pro-grid { display: grid; grid-template-columns: 1.4fr 1fr repeat(10, minmax(76px, .72fr)); gap: 8px; align-items: end; }
 .sketch-pro-grid label { min-width: 0; }
 .sketch-pro-grid input, .sketch-pro-grid select { min-width: 0; }
 .sketch-pro-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
-@media (max-width: 1260px) { .sketch-pro-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@media (max-width: 760px) { .sketch-pro-head { flex-direction: column; } .sketch-pro-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 1260px) { .sketch-pro-grid, .sketch-pro-edit-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .sketch-pro-head { flex-direction: column; } .sketch-pro-grid, .sketch-pro-edit-grid { grid-template-columns: 1fr 1fr; } .sketch-wall-card { grid-template-columns: 1fr; } .sketch-wall-card .btn { grid-column: auto; justify-self: start; } }
 .kitchen-sketch--compact { margin: 0 0 14px; box-shadow: none; }
 .kitchen-sketch--compact .sketch-head { padding: 11px 13px 4px; }
 .kitchen-sketch--compact .sketch-head h3 { font-size: 14px; }

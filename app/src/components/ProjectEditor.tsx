@@ -41,6 +41,7 @@ export default function ProjectEditor(props: {
   );
   const [editorMode, setEditorMode] = useState<'wizard' | 'advanced'>(() => project.wizardMode ?? 'advanced');
   const [focusModuleId, setFocusModuleId] = useState<string | null>(null);
+  const [selectedSketchModuleId, setSelectedSketchModuleId] = useState<string | null>(null);
   const [focusLineId, setFocusLineId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [editMeta, setEditMeta] = useState(false);
@@ -227,13 +228,16 @@ export default function ProjectEditor(props: {
           <SketchProPanel
             project={project}
             onChange={props.onChange}
-            onSelectCreated={(id) => setFocusModuleId(id)}
+            selectedModuleId={selectedSketchModuleId}
+            onSelectCreated={(id) => { setSelectedSketchModuleId(id); setFocusModuleId(id); }}
+            onOpenModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
           />
           <KitchenSketch
             modules={project.modules ?? []}
             settings={project.sketch}
+            selectedModuleId={selectedSketchModuleId}
             onSettingsChange={(sketch) => props.onChange({ ...project, sketch })}
-            onSelectModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
+            onSelectModule={(id) => setSelectedSketchModuleId(id)}
             onReorder={reorderModule}
           />
         </>

@@ -17,8 +17,10 @@ interface KitchenSketchProps {
   settings?: KitchenSketchSettings;
   /** Сохраняет только оформление/видимость КП, а не меняет расчёт модулей. */
   onSettingsChange?: (settings: KitchenSketchSettings) => void;
-  /** Открывает исходный модуль в «Позициях кухни». */
+  /** Открывает исходный модуль в «Позициях кухни» или выбирает его во внешнем редакторе. */
   onSelectModule?: (moduleId: string) => void;
+  /** Внешне выбранный модуль: используется Эскиз PRO, чтобы карточка и холст были синхронизированы. */
+  selectedModuleId?: string | null;
   /** Переставляет модуль в исходном списке; недоступно в клиентском КП. */
   onReorder?: (moduleId: string, direction: -1 | 1) => void;
   mode?: SketchMode;
@@ -528,7 +530,8 @@ export default function KitchenSketch(props: KitchenSketchProps) {
   const { modules, mode = 'full' } = props;
   const shape = normalizeLayoutShape(props.settings?.shape);
   const [view, setView] = useState<KitchenSketchView>(props.settings?.view ?? 'elevation');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [localSelectedId, setLocalSelectedId] = useState<string | null>(null);
+  const selectedId = props.selectedModuleId ?? localSelectedId;
   const [notice, setNotice] = useState('');
   const svgWrapRef = useRef<HTMLDivElement>(null);
   const style = getSketchStyle(props.settings?.styleId);
@@ -538,7 +541,7 @@ export default function KitchenSketch(props: KitchenSketchProps) {
   const compact = mode === 'compact';
 
   const select = (id: string) => {
-    setSelectedId(id);
+    setLocalSelectedId(id);
     props.onSelectModule?.(id);
   };
   const chooseStyle = (styleId: KitchenSketchStyleId) => props.onSettingsChange?.({ ...props.settings, styleId });
