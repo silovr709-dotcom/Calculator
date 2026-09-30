@@ -21,7 +21,7 @@ import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surch
 import { calcLines } from '../lib/engine';
 import { fmtMoney, fmtNum } from '../lib/format';
 import CatalogPicker from './CatalogPicker';
-import EskizProjectPreview from './EskizProjectPreview';
+import EskizProjectPreview, { type EskizModulePreviewStatus } from './EskizProjectPreview';
 
 const EMPTY_LINKS: string[] = [];
 const EMPTY_SNAPSHOTS: NonNullable<EskizProIntegration['snapshots']> = [];
@@ -53,17 +53,68 @@ function shortLine(text: string, length = 76) {
   return text.length > length ? `${text.slice(0, length - 1)}…` : text;
 }
 
+function normSearch(value: string) {
+  return value.toLocaleLowerCase('ru').replace(/ё/g, 'е');
+}
+
+function itemHaystack(item: PriceItem) {
+  return normSearch(`${item.name} ${item.article ?? ''} ${item.category} ${item.subcategory ?? ''} ${Object.values(item.attrs ?? {}).join(' ')}`);
+}
+
+function firstDimensionMm(item: PriceItem): number | null {
+  const attr = item.attrs?.['размер'] ?? '';
+  const source = `${item.name} ${attr}`;
+  const match = source.match(/(?:^|[^\d])(\d{2,4})\s*(?:мм|x|×|$)/iu);
+  return match ? Number(match[1]) : null;
+}
+
+function recommendedSlotItemIds(slot: SlotKey, module: KitchenModule, pricebook: Pricebook): string[] {
+  const moduleText = normSearch(`${module.name} ${module.type} ${module.note ?? ''}`);
+  return pricebook.items
+    .filter(SLOT_POOLS[slot])
+    .filter((item) => item.priceKind === 'fixed')
+    .map((item) => {
+      let score = 0;
+      const hay = itemHaystack(item);
+      if (slot === 'body') {
+        const width = firstDimensionMm(item);
+        if (module.widthMm && width === module.widthMm) score += 60;
+        if (module.widthMm && width && Math.abs(width - module.widthMm) <= 50) score += 20;
+        if (/ниж|стол|тумб/iu.test(module.type) && /стол|тумб/iu.test(hay)) score += 18;
+        if (/верх|навес/iu.test(module.type) && /настенн|верх/iu.test(hay)) score += 18;
+        if (/пенал/iu.test(module.type) && /пенал/iu.test(hay)) score += 22;
+        if (/мойк/iu.test(moduleText) && /мойк/iu.test(hay)) score += 25;
+        if (/дух|дш|духов/iu.test(moduleText) && /дш|дух/iu.test(hay)) score += 25;
+        if (/холод/iu.test(moduleText) && /холод/iu.test(hay)) score += 25;
+      } else {
+        if (module.facades > 0 && slot === 'facade') score += 10;
+        if (module.hinges > 0 && slot === 'hinge') score += 10;
+        if (module.drawers > 0 && slot === 'drawerSys') score += 10;
+        if (module.handles > 0 && slot === 'handle') score += 10;
+        if (module.lifts > 0 && slot === 'lift') score += 10;
+        if ((module.legs ?? 0) > 0 && slot === 'legs') score += 10;
+      }
+      return { id: item.id, score, name: item.name };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'ru'))
+    .slice(0, 10)
+    .map((item) => item.id);
+}
+
 function EskizMarkerModuleEditor(props: {
   marker: EskizModuleMarker;
   module: KitchenModule;
   pricebook: Pricebook;
   defaults: Partial<Record<SlotKey, string | null>>;
+  modules: KitchenModule[];
   onModuleChange: (moduleId: string, patch: Partial<KitchenModule>) => void;
   onOpenFull?: (moduleId: string) => void;
 }) {
-  const { marker, module, pricebook, defaults } = props;
+  const { marker, module, pricebook, defaults, modules } = props;
   const [pickSlot, setPickSlot] = useState<SlotKey | null>(null);
   const [pickSurcharge, setPickSurcharge] = useState(false);
+  const [copySourceId, setCopySourceId] = useState('');
   const check = useMemo(() => checkModule(module, defaults, pricebook), [module, defaults, pricebook]);
   const lines = useMemo(() => moduleToLines(module, defaults, pricebook), [module, defaults, pricebook]);
   const lineCalcs = useMemo(() => calcLines(lines), [lines]);
@@ -76,8 +127,32 @@ function EskizMarkerModuleEditor(props: {
   const dimensionSurchargeRecommendations = selectedBody ? inferDimensionSurcharges(module, selectedBody, pricebook) : [];
   const pendingDimensionSurcharges = dimensionSurchargeRecommendations.filter((item) => !(module.surcharges ?? []).includes(item.itemId));
   const facadePartsForEditor = module.facadeParts ?? facadeInference?.parts ?? [];
+  const recommendedBySlot = useMemo(() => Object.fromEntries(QUICK_SLOTS.map((slot) => [slot, recommendedSlotItemIds(slot, module, pricebook)])) as Record<SlotKey, string[]>, [module, pricebook]);
+  const copySources = modules.filter((item) => item.id !== module.id);
 
   const update = (patch: Partial<KitchenModule>) => props.onModuleChange(module.id, patch);
+  const copyKitFrom = (sourceId: string) => {
+    const source = modules.find((item) => item.id === sourceId);
+    if (!source) return;
+    update({
+      slots: JSON.parse(JSON.stringify(source.slots)) as KitchenModule['slots'],
+      facades: source.facades,
+      drawers: source.drawers,
+      shelves: source.shelves,
+      hinges: source.hinges,
+      handles: source.handles,
+      lifts: source.lifts,
+      legs: source.legs,
+      facadeWmm: source.facadeWmm,
+      facadeHmm: source.facadeHmm,
+      facadeParts: source.facadeParts ? JSON.parse(JSON.stringify(source.facadeParts)) as FacadePart[] : undefined,
+      extraFacadeParts: source.extraFacadeParts ? JSON.parse(JSON.stringify(source.extraFacadeParts)) as ExtraFacadePart[] : undefined,
+      facadeSpecStatus: source.facadeSpecStatus,
+      hingeSpecStatus: source.hingeSpecStatus,
+      surcharges: source.surcharges ? [...source.surcharges] : undefined,
+      automaticSurcharges: source.automaticSurcharges ? [...source.automaticSurcharges] : undefined,
+    });
+  };
   const updateDimension = (key: 'widthMm' | 'heightMm' | 'depthMm', value: string) => {
     const patch: Partial<KitchenModule> = { [key]: numberValue(value) };
     if (key !== 'depthMm') {
@@ -155,6 +230,18 @@ function EskizMarkerModuleEditor(props: {
         <div><span className="eyebrow">Маркер {marker.number}</span><h4>{module.name}</h4><p className="muted small">Редактируйте модуль прямо рядом с эскизом: корпус, габариты, фасады, фурнитура, надбавки и проверка сразу попадают в просчёт.</p></div>
         {props.onOpenFull && <button className="btn tiny ghost" onClick={() => props.onOpenFull?.(module.id)}>Открыть в общей таблице</button>}
       </div>
+
+      <div className={`eskiz-live-card ${check.level}`}>
+        <div><span>Статус</span><b>{check.level === 'ok' ? 'Готов' : check.level === 'warn' ? 'Проверить' : 'Неполный'}</b></div>
+        <div><span>Корпус</span><b>{selectedBody ? shortLine(selectedBody.name, 42) : 'не выбран'}</b></div>
+        <div><span>Сумма</span><b>{fmtMoney(cost)}</b></div>
+      </div>
+      {copySources.length > 0 && (
+        <div className="eskiz-copy-kit">
+          <label>Скопировать комплектацию с модуля<select value={copySourceId} onChange={(event) => setCopySourceId(event.target.value)}><option value="">— выбрать источник —</option>{copySources.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <button className="btn tiny ghost" type="button" disabled={!copySourceId} onClick={() => copyKitFrom(copySourceId)}>Скопировать</button>
+        </div>
+      )}
 
       <h4>Основные параметры</h4>
       <div className="eskiz-module-form-grid">
@@ -292,6 +379,8 @@ function EskizMarkerModuleEditor(props: {
           pickOnly
           poolFilter={SLOT_POOLS[pickSlot]}
           title={`${SLOT_LABELS[pickSlot]} — маркер ${marker.number}, «${module.name}»`}
+          recommendedIds={recommendedBySlot[pickSlot]}
+          recommendedTitle={pickSlot === 'body' ? 'Подходит по типу/ширине' : 'Подходит к модулю'}
           onAdd={(item) => {
             updateSlot(pickSlot, item.id);
             setPickSlot(null);
@@ -339,6 +428,15 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const activeMarker = moduleMarkers.find((marker) => marker.key === activeMarkerKey) ?? null;
   const activeModuleId = activeMarker ? moduleBindings[activeMarker.key] : null;
   const activeModule = activeModuleId ? project.modules?.find((module) => module.id === activeModuleId) ?? null : null;
+  const moduleStatuses = useMemo(() => Object.fromEntries(moduleMarkers.map((marker) => {
+    const moduleId = moduleBindings[marker.key];
+    const linkedModule = moduleId ? project.modules?.find((module) => module.id === moduleId) ?? null : null;
+    if (!linkedModule) return [marker.key, { level: 'new', label: 'новый', summary: 'Модуль ещё не создан в просчёте.' } satisfies EskizModulePreviewStatus];
+    const checked = checkModule(linkedModule, project.moduleDefaults ?? {}, pricebook);
+    if (checked.level === 'error') return [marker.key, { level: 'error', label: 'нет данных', summary: checked.errors[0] ?? 'Есть обязательные ошибки.' } satisfies EskizModulePreviewStatus];
+    if (checked.level === 'warn') return [marker.key, { level: 'warn', label: 'проверить', summary: checked.openWarnings[0]?.text ?? checked.warnings[0] ?? 'Есть предупреждения.' } satisfies EskizModulePreviewStatus];
+    return [marker.key, { level: 'ok', label: 'готов', summary: 'Модуль полностью участвует в просчёте.' } satisfies EskizModulePreviewStatus];
+  })) as Record<string, EskizModulePreviewStatus>, [moduleMarkers, moduleBindings, project.modules, project.moduleDefaults, pricebook]);
 
   const updateEskizPro = useCallback((patch: Partial<EskizProIntegration>) => onChange({ ...project, eskizPro: { ...eskizPro, ...patch } }), [onChange, project, eskizPro]);
 
@@ -602,6 +700,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
                 module={activeModule}
                 pricebook={pricebook}
                 defaults={project.moduleDefaults ?? {}}
+                modules={project.modules ?? []}
                 onModuleChange={updateModule}
                 onOpenFull={props.onOpenModule}
               />
@@ -641,7 +740,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
                         <button className="btn tiny ghost" disabled={loading} onClick={() => void sync(id)}>Синхр.</button>
                         <button className="btn tiny danger" onClick={() => detach(id)}>Убрать</button>
                       </div>
-                      {previewProject && <EskizProjectPreview project={previewProject} compact activeModuleKey={activeMarkerKey} moduleBindings={moduleBindings} onModuleClick={handlePreviewModuleClick} />}
+                      {previewProject && <EskizProjectPreview project={previewProject} compact activeModuleKey={activeMarkerKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} onModuleClick={handlePreviewModuleClick} />}
                     </article>
                   );
                 })}
@@ -654,7 +753,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       {linkedProjects.length > 0 && (
         <section className="card eskiz-pro-project-preview">
           <div className="section-head"><div><h3>Как это будет выглядеть в КП</h3><p className="muted small">Рендерим сохранённый snapshot из настоящего Эскиз PRO.</p></div></div>
-          {linkedProjects.map((item) => <EskizProjectPreview key={item.id} project={item} activeModuleKey={activeMarkerKey} moduleBindings={moduleBindings} onModuleClick={handlePreviewModuleClick} />)}
+          {linkedProjects.map((item) => <EskizProjectPreview key={item.id} project={item} activeModuleKey={activeMarkerKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} onModuleClick={handlePreviewModuleClick} />)}
         </section>
       )}
     </section>

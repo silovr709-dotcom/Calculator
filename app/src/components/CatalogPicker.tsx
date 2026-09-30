@@ -5,6 +5,21 @@ import { loadRecentItems, recordRecentItem } from '../lib/recents';
 import { sheetsFromLength, sheetLengthOf, unitIsHalfSheetAllowed, unitIsPerMeterMultiple, effectiveQty } from '../lib/engine';
 
 const norm = (s: string) => s.toLowerCase().replace(/ё/g, 'е');
+const FAVORITES_KEY = 'recept-price-favorites';
+
+function loadFavoriteItems(): string[] {
+  try {
+    const raw = localStorage.getItem(FAVORITES_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch { return []; }
+}
+
+function saveFavoriteItems(ids: string[]): string[] {
+  const next = Array.from(new Set(ids));
+  try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(next.slice(0, 300))); } catch {}
+  return next;
+}
 
 export default function CatalogPicker(props: {
   pricebook: Pricebook;
@@ -17,6 +32,9 @@ export default function CatalogPicker(props: {
   title?: string;
   /** Стартовая «нужная длина» в мм (напр. из замера стен) — подставляется в lm/sheet-параметры. */
   initialLengthMm?: number | null;
+  /** Подсказки из контекста (например, подходящие корпуса по ширине модуля). */
+  recommendedIds?: string[];
+  recommendedTitle?: string;
 }) {
   const { pricebook } = props;
   const poolItems = useMemo(
@@ -35,6 +53,7 @@ export default function CatalogPicker(props: {
   const [len, setLen] = useState<string>(props.initialLengthMm ? String(props.initialLengthMm) : '');
   const [needLen, setNeedLen] = useState<string>(props.initialLengthMm ? String(props.initialLengthMm) : ''); // подбор хлыстов
   const [recentIds, setRecentIds] = useState<string[]>(() => loadRecentItems());
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => loadFavoriteItems());
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
@@ -43,6 +62,8 @@ export default function CatalogPicker(props: {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [props]);
+
+  const toggleFavorite = (id: string) => setFavoriteIds((current) => saveFavoriteItems(current.includes(id) ? current.filter((item) => item !== id) : [id, ...current]));
 
   const cats = useMemo(() => [...new Set(poolItems.map((i) => i.category))].sort(), [poolItems]);
   // категории по разделам, чтобы выпадашка читалась
@@ -77,8 +98,18 @@ export default function CatalogPicker(props: {
         return terms.every((t) => hay.includes(t));
       });
     }
-    return list;
-  }, [poolItems, q, cat, sub, unitF, onlyPriced]);
+    const recommendedOrder = new Map((props.recommendedIds ?? []).map((id, index) => [id, index]));
+    const favoriteSet = new Set(favoriteIds);
+    return [...list].sort((a, b) => {
+      const ar = recommendedOrder.has(a.id) ? recommendedOrder.get(a.id)! : 9999;
+      const br = recommendedOrder.has(b.id) ? recommendedOrder.get(b.id)! : 9999;
+      if (ar !== br) return ar - br;
+      const af = favoriteSet.has(a.id) ? 0 : 1;
+      const bf = favoriteSet.has(b.id) ? 0 : 1;
+      if (af !== bf) return af - bf;
+      return 0;
+    });
+  }, [poolItems, q, cat, sub, unitF, onlyPriced, props.recommendedIds, favoriteIds]);
 
   // группировка результатов заголовками «Категория — Подкатегория», чтобы не теряться в списке
   const grouped = useMemo(() => {
@@ -167,6 +198,16 @@ export default function CatalogPicker(props: {
     const inPool = new Map(poolItems.map((i) => [i.id, i]));
     return recentIds.map((id) => inPool.get(id)).filter((i): i is PriceItem => Boolean(i));
   }, [q, poolItems, recentIds]);
+  const recommendedItems = useMemo(() => {
+    if (q.trim() || !props.recommendedIds?.length) return [];
+    const inPool = new Map(poolItems.map((i) => [i.id, i]));
+    return props.recommendedIds.map((id) => inPool.get(id)).filter((i): i is PriceItem => Boolean(i)).slice(0, 8);
+  }, [q, poolItems, props.recommendedIds]);
+  const favoriteItems = useMemo(() => {
+    if (q.trim()) return [];
+    const inPool = new Map(poolItems.map((i) => [i.id, i]));
+    return favoriteIds.map((id) => inPool.get(id)).filter((i): i is PriceItem => Boolean(i)).slice(0, 12);
+  }, [q, poolItems, favoriteIds]);
 
   return (
     <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
@@ -182,6 +223,22 @@ export default function CatalogPicker(props: {
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={selectFirstFromSearch}
             />
+            {recommendedItems.length > 0 && (
+              <div className="recent-chips recommended-chips">
+                <span className="muted small">{props.recommendedTitle ?? 'Рекомендовано'}:</span>
+                {recommendedItems.map((it) => (
+                  <button key={it.id} className="chip rec" title={it.name} onClick={() => select(it)}>{it.name.slice(0, 42)}{it.name.length > 42 ? '…' : ''}</button>
+                ))}
+              </div>
+            )}
+            {favoriteItems.length > 0 && (
+              <div className="recent-chips favorite-chips">
+                <span className="muted small">Избранное:</span>
+                {favoriteItems.map((it) => (
+                  <button key={it.id} className="chip fav" title={it.name} onClick={() => select(it)}>★ {it.name.slice(0, 38)}{it.name.length > 38 ? '…' : ''}</button>
+                ))}
+              </div>
+            )}
             {recentItems.length > 0 && (
               <div className="recent-chips">
                 <span className="muted small">Недавние:</span>
@@ -227,6 +284,7 @@ export default function CatalogPicker(props: {
                           ))}
                         </div>
                         <div className="r-price">
+                          <button className={`favorite-toggle ${favoriteIds.includes(it.id) ? 'active' : ''}`} title={favoriteIds.includes(it.id) ? 'Убрать из избранного' : 'Добавить в избранное'} onClick={(event) => { event.stopPropagation(); toggleFavorite(it.id); }}>{favoriteIds.includes(it.id) ? '★' : '☆'}</button>
                           {it.priceKind === 'fixed' && <b>{fmtMoney(it.price)}</b>}
                           {it.priceKind === 'percent' && <b>+{it.price}%</b>}
                           {it.priceKind === 'surcharge' && <b>+{fmtMoney(it.price)}</b>}
@@ -248,7 +306,7 @@ export default function CatalogPicker(props: {
               <div className="muted">Выберите позицию слева.<br /><br />Подсказки:<br />· «BLUM» — фурнитура Blum<br />· «петля» — все петли<br />· «эмаль глянец» — фасады эмаль<br />· «600*3000» — столешницы</div>
             ) : (
               <>
-                <h3>{sel.name}</h3>
+                <div className="picker-selected-head"><h3>{sel.name}</h3><button className={`favorite-toggle big ${favoriteIds.includes(sel.id) ? 'active' : ''}`} onClick={() => toggleFavorite(sel.id)}>{favoriteIds.includes(sel.id) ? '★ В избранном' : '☆ В избранное'}</button></div>
                 <div className="muted small">
                   {sel.category}{sel.subcategory ? ` · ${sel.subcategory}` : ''}
                   {sel.article ? ` · арт. ${sel.article}` : ''} · источник: лист «{sel.source.sheet}», стр. {sel.source.row}

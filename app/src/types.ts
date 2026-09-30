@@ -142,6 +142,20 @@ export interface ClientOfferSettings {
   showDetailPrices?: boolean;
 }
 
+/** Снимок КП для истории согласований: не хранит весь проект, только контрольные цифры и контекст. */
+export interface ClientOfferSnapshot {
+  id: string;
+  createdAt: string;
+  name: string;
+  clientTotal: number;
+  costTotal: number;
+  modulesCount: number;
+  linesCount: number;
+  issuesCount: number;
+  variantId?: string | null;
+  note?: string;
+}
+
 export interface MeasurementWall {
   id: string;
   name: string;
@@ -324,6 +338,8 @@ export interface Project {
   variants?: CalculationVariant[];
   selectedVariantId?: string;
   clientOffer?: ClientOfferSettings;
+  /** История сохранённых версий КП для сравнения и повторных согласований. */
+  clientOfferSnapshots?: ClientOfferSnapshot[];
   measurement?: MeasurementData;
   /** Подтверждённые пользователем «сознательные отсутствия» обязательных элементов кухни
    *  (например, кухня без стеновой панели и без плинтуса). Зафиксированное подтверждение

@@ -16,6 +16,7 @@ import ProjectCheckCenter from './ProjectCheckCenter';
 import VariantsPanel from './VariantsPanel';
 import MeasurementPanel from './MeasurementPanel';
 import KitchenChecklistPanel from './KitchenChecklistPanel';
+import OrderCenterPanel from './OrderCenterPanel';
 import { exportInternalXlsx, exportClientXlsx, exportInternalCsv, exportProjectJson } from '../lib/exporters';
 import QRCode from 'qrcode';
 import { makeProjectShareUrl } from '../lib/sync';
@@ -35,7 +36,7 @@ export default function ProjectEditor(props: {
   onOpenFactoryBlank?: () => void;
 }) {
   const { project, pricebook } = props;
-  const [tab, setTab] = useState<'modules' | 'sketch' | 'lines' | 'photos' | 'settings' | 'client' | 'check' | 'variants' | 'measurement'>(
+  const [tab, setTab] = useState<'modules' | 'sketch' | 'order' | 'lines' | 'photos' | 'settings' | 'client' | 'check' | 'variants' | 'measurement'>(
     () => ((project.modules?.length ?? 0) > 0 || project.lines.length === 0 ? 'modules' : 'lines'),
   );
   const [editorMode, setEditorMode] = useState<'wizard' | 'advanced'>(() => project.wizardMode ?? 'advanced');
@@ -206,6 +207,7 @@ export default function ProjectEditor(props: {
         </button>
         <button className={tab === 'sketch' ? 'active' : ''} onClick={() => setTab('sketch')}>🎨 Эскиз PRO</button>
         <button className={tab === 'check' ? 'active' : ''} onClick={() => setTab('check')}>✓ Проверка</button>
+        <button className={tab === 'order' ? 'active' : ''} onClick={() => setTab('order')}>📦 Центр заказа</button>
         <button className={tab === 'variants' ? 'active' : ''} onClick={() => setTab('variants')}>Варианты</button>
         <button className={tab === 'measurement' ? 'active' : ''} onClick={() => setTab('measurement')}>📏 Замер</button>
         <button className={tab === 'lines' ? 'active' : ''} onClick={() => setTab('lines')}>Доп. позиции и строки</button>
@@ -228,6 +230,17 @@ export default function ProjectEditor(props: {
         />
       )}
 
+      {tab === 'order' && (
+        <OrderCenterPanel
+          project={project}
+          pricebook={pricebook}
+          onChange={props.onChange}
+          onOpenClient={() => setTab('client')}
+          onOpenFactoryBlank={props.onOpenFactoryBlank}
+          onSelectModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
+          onSelectLine={(id) => { setFocusLineId(id); setTab('lines'); window.setTimeout(() => document.getElementById(`project-line-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0); }}
+        />
+      )}
       {tab === 'variants' && <VariantsPanel project={project} pricebook={pricebook} onChange={props.onChange} />}
       {tab === 'measurement' && <MeasurementPanel project={project} onChange={props.onChange} />}
 
