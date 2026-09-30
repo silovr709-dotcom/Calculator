@@ -79,7 +79,7 @@ function DimensionPreview({ object: o }: { object: EskizDimensionObject }) {
   );
 }
 
-function ModulePreview({ object: o }: { object: EskizModuleObject }) {
+function ModulePreview({ object: o, projectId, active = false, linked = false, onModuleClick }: { object: EskizModuleObject; projectId: string; active?: boolean; linked?: boolean; onModuleClick?: (projectId: string, object: EskizModuleObject) => void }) {
   const sourceLines = [o.number, ...o.description.split('\n').filter(Boolean)];
   const autoWidth = Math.max(72, ...sourceLines.map((text) => text.length * o.fontSize * .6)) + 22;
   const width = o.width ? Math.max(60, o.width) : autoWidth;
@@ -90,8 +90,20 @@ function ModulePreview({ object: o }: { object: EskizModuleObject }) {
   const textBlockHeight = lines.length * (o.fontSize + 5) - 5;
   const textY = Math.max(8, (height - textBlockHeight) / 2);
   return (
-    <g className="eskiz-preview-object eskiz-preview-label" transform={`translate(${o.x} ${o.y})`}>
+    <g
+      className={`eskiz-preview-object eskiz-preview-label eskiz-preview-module ${onModuleClick ? 'clickable' : ''} ${active ? 'active' : ''} ${linked ? 'linked' : ''}`}
+      transform={`translate(${o.x} ${o.y})`}
+      role={onModuleClick ? 'button' : undefined}
+      tabIndex={onModuleClick ? 0 : undefined}
+      onClick={(event) => { event.stopPropagation(); onModuleClick?.(projectId, o); }}
+      onKeyDown={(event) => {
+        if (!onModuleClick || (event.key !== 'Enter' && event.key !== ' ')) return;
+        event.preventDefault();
+        onModuleClick(projectId, o);
+      }}
+    >
       <rect x="0" y="0" width={width} height={height} rx={o.borderRadius ?? 6} fill={o.fill ?? 'white'} fillOpacity={o.fillOpacity ?? 1} stroke={o.color} strokeWidth="2" />
+      <circle className="eskiz-preview-module-point" cx="0" cy="0" r="7" fill={o.color} stroke="#fff" strokeWidth="3" />
       {lines.map((line, index) => <text key={index} x={width / 2} y={textY + index * (o.fontSize + 5)} dominantBaseline="hanging" textAnchor="middle" fontSize={o.fontSize} fontWeight={index === 0 ? 800 : 500} fill={o.color}>{line}</text>)}
     </g>
   );
@@ -136,16 +148,27 @@ function TextPreview({ object: o }: { object: EskizTextObject }) {
   );
 }
 
-function ObjectPreview({ object }: { object: EskizObject }) {
+function ObjectPreview({ object, projectId, activeModuleKey, moduleBindings, onModuleClick }: { object: EskizObject; projectId: string; activeModuleKey?: string | null; moduleBindings?: Record<string, string>; onModuleClick?: (projectId: string, object: EskizModuleObject) => void }) {
   if (object.hidden) return null;
   if (object.type === 'dimension') return <DimensionPreview object={object} />;
-  if (object.type === 'module') return <ModulePreview object={object} />;
+  if (object.type === 'module') {
+    const key = `${projectId}:${object.id}`;
+    return <ModulePreview object={object} projectId={projectId} active={activeModuleKey === key} linked={Boolean(moduleBindings?.[key])} onModuleClick={onModuleClick} />;
+  }
   if (object.type === 'callout') return <CalloutPreview object={object} />;
   if (object.type === 'comment' || object.type === 'link' || object.type === 'equipment') return <TextPreview object={object} />;
   return null;
 }
 
-export default function EskizProjectPreview({ project, compact = false }: { project: EskizProject; compact?: boolean }) {
+type EskizProjectPreviewProps = {
+  project: EskizProject;
+  compact?: boolean;
+  activeModuleKey?: string | null;
+  moduleBindings?: Record<string, string>;
+  onModuleClick?: (projectId: string, object: EskizModuleObject) => void;
+};
+
+export default function EskizProjectPreview({ project, compact = false, activeModuleKey = null, moduleBindings, onModuleClick }: EskizProjectPreviewProps) {
   const width = Math.max(1, project.image.width);
   const height = Math.max(1, project.image.height);
   return (
@@ -173,7 +196,7 @@ export default function EskizProjectPreview({ project, compact = false }: { proj
             </marker>
           </defs>
           <image href={project.image.dataUrl} x="0" y="0" width={width} height={height} preserveAspectRatio="none" style={{ filter: imageFilter(project) }} />
-          {project.objects.map((object) => <ObjectPreview key={object.id} object={object} />)}
+          {project.objects.map((object) => <ObjectPreview key={object.id} object={object} projectId={project.id} activeModuleKey={activeModuleKey} moduleBindings={moduleBindings} onModuleClick={onModuleClick} />)}
         </svg>
       </div>
     </article>
