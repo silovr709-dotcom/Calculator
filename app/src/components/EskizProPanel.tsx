@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { EskizProIntegration, KitchenModule, Pricebook, PriceItem, Project, SlotKey } from '../types';
+import type { EskizProIntegration, ExtraFacadePart, FacadePart, KitchenModule, Pricebook, PriceItem, Project, SlotKey } from '../types';
 import {
   ESKIZ_PRO_URL,
   collectEskizModuleMarkers,
@@ -15,9 +15,12 @@ import {
   type EskizProject,
   type EskizProjectSummary,
 } from '../lib/eskizPro';
-import { MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moduleToLines, slotNeed } from '../lib/modules';
+import { MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moduleToLines, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
+import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalFacadeSpecOutdated, isTechnicalHingeSpecOutdated } from '../lib/facades';
+import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surcharges';
 import { calcLines } from '../lib/engine';
 import { fmtMoney, fmtNum } from '../lib/format';
+import CatalogPicker from './CatalogPicker';
 import EskizProjectPreview from './EskizProjectPreview';
 
 const EMPTY_LINKS: string[] = [];
@@ -40,10 +43,6 @@ function sameGithubPagesOrigin() {
   return typeof window !== 'undefined' && window.location.hostname === 'silovr709-dotcom.github.io';
 }
 
-function itemTitle(item: PriceItem) {
-  return `${item.name}${item.article ? ` · ${item.article}` : ''}${item.price != null ? ` · ${fmtMoney(item.price)}` : ''}`;
-}
-
 function numberValue(value: string): number | null {
   if (value.trim() === '') return null;
   const parsed = Number(value);
@@ -63,55 +62,110 @@ function EskizMarkerModuleEditor(props: {
   onOpenFull?: (moduleId: string) => void;
 }) {
   const { marker, module, pricebook, defaults } = props;
-  const slotOptions = useMemo(() => Object.fromEntries(QUICK_SLOTS.map((slot) => [
-    slot,
-    pricebook.items
-      .filter(SLOT_POOLS[slot])
-      .filter((item) => item.priceKind === 'fixed')
-      .sort((a, b) => `${a.category} ${a.name}`.localeCompare(`${b.category} ${b.name}`, 'ru')),
-  ])) as Record<SlotKey, PriceItem[]>, [pricebook]);
-  const [slotQueries, setSlotQueries] = useState<Partial<Record<SlotKey, string>>>({});
+  const [pickSlot, setPickSlot] = useState<SlotKey | null>(null);
+  const [pickSurcharge, setPickSurcharge] = useState(false);
   const check = useMemo(() => checkModule(module, defaults, pricebook), [module, defaults, pricebook]);
   const lines = useMemo(() => moduleToLines(module, defaults, pricebook), [module, defaults, pricebook]);
   const lineCalcs = useMemo(() => calcLines(lines), [lines]);
   const cost = lines.reduce((sum, line) => sum + (lineCalcs.get(line.id)?.sum ?? 0), 0);
+  const selectedBody = resolveSlot(module, 'body', defaults, pricebook).item;
+  const facadeInference = selectedBody ? inferFacadeSpec(module, selectedBody) : null;
+  const hingeInference = selectedBody ? inferHingeSpec(module, selectedBody) : null;
+  const facadeNeedsUpdate = Boolean(selectedBody && (module.facadeSpecStatus === 'outdated' || isTechnicalFacadeSpecOutdated(module, selectedBody)));
+  const hingeNeedsUpdate = Boolean(selectedBody && (module.hingeSpecStatus === 'outdated' || isTechnicalHingeSpecOutdated(module, selectedBody)));
+  const dimensionSurchargeRecommendations = selectedBody ? inferDimensionSurcharges(module, selectedBody, pricebook) : [];
+  const pendingDimensionSurcharges = dimensionSurchargeRecommendations.filter((item) => !(module.surcharges ?? []).includes(item.itemId));
+  const facadePartsForEditor = module.facadeParts ?? facadeInference?.parts ?? [];
+
   const update = (patch: Partial<KitchenModule>) => props.onModuleChange(module.id, patch);
-  const updateNum = (key: keyof KitchenModule, value: string) => update({ [key]: numberValue(value) } as Partial<KitchenModule>);
-  const updateCount = (key: keyof KitchenModule, value: string) => update({ [key]: Number(value) || 0 } as Partial<KitchenModule>);
-  const updateSlot = (slot: SlotKey, value: string) => update({
-    slots: {
-      ...module.slots,
-      [slot]: value === '__default__' ? { mode: 'default', itemId: null } : { mode: 'manual', itemId: value || null },
-    },
+  const updateDimension = (key: 'widthMm' | 'heightMm' | 'depthMm', value: string) => {
+    const patch: Partial<KitchenModule> = { [key]: numberValue(value) };
+    if (key !== 'depthMm') {
+      patch.facadeSpecStatus = module.facadeSpecStatus === 'applied' ? 'outdated' : module.facadeSpecStatus;
+      patch.hingeSpecStatus = module.hingeSpecStatus === 'applied' ? 'outdated' : module.hingeSpecStatus;
+    }
+    update(patch);
+  };
+  const updateNum = (key: 'facadeWmm' | 'facadeHmm', value: string) => update({
+    [key]: numberValue(value),
+    facadeParts: undefined,
+    facadeSpecStatus: 'manual',
+    hingeSpecStatus: module.hingeSpecStatus === 'applied' ? 'outdated' : module.hingeSpecStatus,
   });
-  const selectedItem = (slot: SlotKey) => {
-    const choice = module.slots[slot] ?? { mode: 'default' as const, itemId: null };
-    const id = choice.mode === 'manual' ? choice.itemId : (defaults[slot] ?? null);
-    return id ? pricebook.items.find((item) => item.id === id) ?? null : null;
+  const updateCount = (key: 'qty' | 'facades' | 'drawers' | 'shelves' | 'hinges' | 'handles' | 'lifts' | 'legs', value: string) => {
+    const patch: Partial<KitchenModule> = { [key]: Number(value) || 0 };
+    if (key === 'facades' || key === 'drawers') {
+      patch.facadeParts = undefined;
+      patch.facadeSpecStatus = 'manual';
+      patch.hingeSpecStatus = module.hingeSpecStatus === 'applied' ? 'outdated' : module.hingeSpecStatus;
+    }
+    if (key === 'hinges') patch.hingeSpecStatus = 'manual';
+    update(patch);
   };
-  const visibleSlotOptions = (slot: SlotKey) => {
-    const query = (slotQueries[slot] ?? '').trim().toLocaleLowerCase('ru').replace(/ё/g, 'е');
-    const options = slotOptions[slot];
-    if (!query) return options.slice(0, slot === 'body' ? 120 : 180);
-    const words = query.split(/\s+/).filter(Boolean);
-    return options.filter((item) => {
-      const text = `${item.name} ${item.article ?? ''} ${item.category} ${item.subcategory ?? ''}`.toLocaleLowerCase('ru').replace(/ё/g, 'е');
-      return words.every((word) => text.includes(word));
-    }).slice(0, 160);
+  const updateSlot = (slot: SlotKey, value: string) => {
+    const slots = {
+      ...module.slots,
+      [slot]: value === '__default__' ? { mode: 'default' as const, itemId: null } : { mode: 'manual' as const, itemId: value || null },
+    };
+    if (slot === 'body') {
+      update({
+        slots,
+        facadeSpecStatus: module.facadeParts?.length ? 'outdated' : 'recommended',
+        hingeSpecStatus: module.hingeSpecStatus === 'applied' ? 'outdated' : module.hingeSpecStatus,
+      });
+    } else update({ slots });
   };
+  const setFacadeParts = (parts: FacadePart[]) => update({
+    facadeParts: parts.length ? parts : undefined,
+    facades: parts.length,
+    drawers: parts.filter((part) => part.kind === 'drawer').length,
+    facadeWmm: parts[0]?.widthMm ?? null,
+    facadeHmm: parts[0]?.heightMm ?? null,
+    facadeSpecStatus: 'manual',
+    hingeSpecStatus: module.hingeSpecStatus === 'applied' ? 'outdated' : module.hingeSpecStatus,
+  });
+  const updateFacadePart = (index: number, patch: Partial<FacadePart>) => {
+    const parts = [...(module.facadeParts ?? [])];
+    if (!parts[index]) return;
+    parts[index] = { ...parts[index], ...patch, source: 'manual' };
+    setFacadeParts(parts);
+  };
+  const addFacadePart = () => {
+    const fallbackWidth = module.facadeWmm ?? (module.widthMm && module.facades > 0 ? Math.max(1, Math.round(module.widthMm / module.facades) - 4) : module.widthMm ?? 600);
+    setFacadeParts([...(module.facadeParts ?? []), { widthMm: fallbackWidth, heightMm: module.facadeHmm ?? module.heightMm ?? 720, kind: 'door', source: 'manual' }]);
+  };
+  const updateExtraPart = (index: number, patch: Partial<ExtraFacadePart>) => {
+    const parts = [...(module.extraFacadeParts ?? [])];
+    if (!parts[index]) return;
+    parts[index] = { ...parts[index], ...patch, source: 'manual' };
+    update({ extraFacadeParts: parts });
+  };
+  const addExtraPart = (side = false) => update({
+    extraFacadeParts: [
+      ...(module.extraFacadeParts ?? []),
+      { widthMm: side ? module.depthMm ?? 560 : 596, heightMm: module.heightMm ?? 720, kind: 'panel', qty: 1, label: side ? 'Боковина' : '', source: 'manual' },
+    ],
+  });
+  const priceMeta = (item: PriceItem) => `${item.category}${item.subcategory ? ` · ${item.subcategory}` : ''}${item.article ? ` · арт. ${item.article}` : ''}${item.price != null ? ` · ${fmtMoney(item.price)}` : ''}${item.unit ? `/${item.unit}` : ''}`;
+  const dimensionLabel = (dimension: 'width' | 'height' | 'depth') => ({ width: 'ширине', height: 'высоте', depth: 'глубине' }[dimension]);
+
   return (
     <div className="eskiz-marker-editor">
       <div className="eskiz-marker-editor-head">
-        <div><span className="eyebrow">Маркер {marker.number}</span><h4>{module.name}</h4><p className="muted small">Выберите конкретный корпус и комплектующие из прайса — эти позиции сразу становятся составом модуля и участвуют в просчёте.</p></div>
-        {props.onOpenFull && <button className="btn tiny ghost" onClick={() => props.onOpenFull?.(module.id)}>Полная карточка</button>}
+        <div><span className="eyebrow">Маркер {marker.number}</span><h4>{module.name}</h4><p className="muted small">Редактируйте модуль прямо рядом с эскизом: корпус, габариты, фасады, фурнитура, надбавки и проверка сразу попадают в просчёт.</p></div>
+        {props.onOpenFull && <button className="btn tiny ghost" onClick={() => props.onOpenFull?.(module.id)}>Открыть в общей таблице</button>}
       </div>
+
+      <h4>Основные параметры</h4>
       <div className="eskiz-module-form-grid">
         <label>Название<input value={module.name} onChange={(event) => update({ name: event.target.value })} /></label>
-        <label>Тип<select value={module.type} onChange={(event) => update({ type: event.target.value })}>{MODULE_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}{!MODULE_TYPES.some((type) => type === module.type) && <option value={module.type}>{module.type}</option>}</select></label>
+        <label>Тип<input list={`eskiz-mod-types-${module.id}`} value={module.type} onChange={(event) => update({ type: event.target.value })} />
+          <datalist id={`eskiz-mod-types-${module.id}`}>{MODULE_TYPES.map((type) => <option key={type} value={type} />)}</datalist>
+        </label>
         <label>Кол-во<input type="number" min="0" step="1" value={module.qty} onChange={(event) => updateCount('qty', event.target.value)} /></label>
-        <label>Ширина, мм<input type="number" value={module.widthMm ?? ''} onChange={(event) => updateNum('widthMm', event.target.value)} /></label>
-        <label>Высота, мм<input type="number" value={module.heightMm ?? ''} onChange={(event) => updateNum('heightMm', event.target.value)} /></label>
-        <label>Глубина, мм<input type="number" value={module.depthMm ?? ''} onChange={(event) => updateNum('depthMm', event.target.value)} /></label>
+        <label>Ширина, мм<input type="number" value={module.widthMm ?? ''} onChange={(event) => updateDimension('widthMm', event.target.value)} /></label>
+        <label>Высота, мм<input type="number" value={module.heightMm ?? ''} onChange={(event) => updateDimension('heightMm', event.target.value)} /></label>
+        <label>Глубина, мм<input type="number" value={module.depthMm ?? ''} onChange={(event) => updateDimension('depthMm', event.target.value)} /></label>
         <label>Фасады<input type="number" min="0" value={module.facades} onChange={(event) => updateCount('facades', event.target.value)} /></label>
         <label>Ящики<input type="number" min="0" value={module.drawers} onChange={(event) => updateCount('drawers', event.target.value)} /></label>
         <label>Полки<input type="number" min="0" value={module.shelves} onChange={(event) => updateCount('shelves', event.target.value)} /></label>
@@ -121,39 +175,146 @@ function EskizMarkerModuleEditor(props: {
         <label>Опоры<input type="number" min="0" value={module.legs ?? 0} onChange={(event) => updateCount('legs', event.target.value)} /></label>
         <label>Фасад Ш, мм<input type="number" value={module.facadeWmm ?? ''} onChange={(event) => updateNum('facadeWmm', event.target.value)} /></label>
         <label>Фасад В, мм<input type="number" value={module.facadeHmm ?? ''} onChange={(event) => updateNum('facadeHmm', event.target.value)} /></label>
+        <label className="wide">Заметка<input value={module.note ?? ''} placeholder="что важно учесть в КП / заказе" onChange={(event) => update({ note: event.target.value })} /></label>
       </div>
-      <div className="eskiz-slot-picker">
+
+      <h4>Прайс и комплектующие</h4>
+      <div className="eskiz-slot-picker improved">
         {QUICK_SLOTS.map((slot) => {
           const choice = module.slots[slot] ?? { mode: 'default' as const, itemId: null };
-          const current = selectedItem(slot);
-          const value = choice.mode === 'default' ? '__default__' : choice.itemId ?? '';
+          const { item, source } = resolveSlot(module, slot, defaults, pricebook);
+          const need = slotNeed(module, slot);
           return (
-            <label key={slot} className={slot === 'body' ? 'primary-slot' : ''}>
-              <span>{SLOT_LABELS[slot]} <em>×{slotNeed(module, slot)}</em></span>
-              <input className="slot-search" value={slotQueries[slot] ?? ''} onChange={(event) => setSlotQueries((current) => ({ ...current, [slot]: event.target.value }))} placeholder={slot === 'body' ? 'Быстрый поиск корпуса: НБ 800, мойка, пенал…' : 'Фильтр по прайсу…'} />
-              <select value={value} onChange={(event) => updateSlot(slot, event.target.value)}>
-                {slot !== 'body' && <option value="__default__">Из настроек проекта{defaults[slot] ? ` · ${shortLine(pricebook.items.find((item) => item.id === defaults[slot])?.name ?? 'позиция')}` : ' · не задано'}</option>}
-                <option value="">— не использовать —</option>
-                {visibleSlotOptions(slot).map((item) => <option key={item.id} value={item.id}>{shortLine(itemTitle(item), 118)}</option>)}
-              </select>
-              {current && <small>{current.category}{current.subcategory ? ` · ${current.subcategory}` : ''}{current.priceBasis ? ` · ${current.priceBasis}` : ''}</small>}
-            </label>
+            <article className={`eskiz-slot-card ${slot === 'body' ? 'primary-slot' : ''}`} key={slot}>
+              <div className="eskiz-slot-card-head">
+                <span>{SLOT_LABELS[slot]} <em>×{need}</em></span>
+                {source && <b>{source === 'manual' ? 'вручную' : 'проект'}</b>}
+              </div>
+              <button className={item ? 'slot-pick-button selected' : 'slot-pick-button'} type="button" onClick={() => setPickSlot(slot)}>
+                {item ? <><strong>{shortLine(item.name, 86)}</strong><small>{priceMeta(item)}</small></> : <><strong>{slot === 'body' ? 'Выбрать корпус из прайса' : 'Выбрать позицию из прайса'}</strong><small>Откроется общий поиск по прайсу, без отдельного поля над выпадающим списком.</small></>}
+              </button>
+              <div className="eskiz-slot-actions">
+                <button className="btn tiny" type="button" onClick={() => setPickSlot(slot)}>{item ? 'Заменить' : 'Выбрать'}</button>
+                {slot !== 'body' && choice.mode === 'manual' && <button className="btn tiny ghost" type="button" onClick={() => updateSlot(slot, '__default__')}>К настройкам проекта</button>}
+                {choice.mode === 'manual' && choice.itemId && <button className="btn tiny ghost" type="button" onClick={() => updateSlot(slot, '')}>Очистить</button>}
+              </div>
+            </article>
           );
         })}
       </div>
+
+      {(selectedBody || module.facades > 0 || module.facadeParts?.length || hingeInference) && (
+        <section className="eskiz-tech-card">
+          <div className="eskiz-tech-head"><h4>Фасады и петли по техничке</h4>{selectedBody && <span className="badge tech-suggest">корпус выбран</span>}</div>
+          <div className="eskiz-tech-block">
+            <div className="muted small">{facadeInference ? `${facadeInference.source} · ${facadeInference.note}` : 'Можно задать ручную разбивку фасадов даже без выбранного корпуса. После выбора корпуса появятся рекомендации по техничке.'}</div>
+            {facadePartsForEditor.length > 0 && (
+              <div className="facade-parts-mini">
+                {facadePartsForEditor.map((part, index) => (
+                  <div className="facade-part-mini" key={`${part.kind}-${index}`}>
+                    <select value={part.kind} disabled={!module.facadeParts} onChange={(event) => updateFacadePart(index, { kind: event.target.value as FacadePart['kind'] })}>
+                      <option value="door">дверь</option><option value="drawer">ящик</option><option value="panel">панель</option>
+                    </select>
+                    <input type="number" value={part.widthMm} disabled={!module.facadeParts} onChange={(event) => updateFacadePart(index, { widthMm: Number(event.target.value) || 0 })} />×
+                    <input type="number" value={part.heightMm} disabled={!module.facadeParts} onChange={(event) => updateFacadePart(index, { heightMm: Number(event.target.value) || 0 })} /> мм
+                    {module.facadeParts && <button className="btn tiny danger" type="button" onClick={() => setFacadeParts(module.facadeParts!.filter((_, i) => i !== index))}>✕</button>}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="eskiz-mini-actions">
+              {selectedBody && facadeInference && <button className="btn tiny add" type="button" onClick={() => update(applyTechnicalFacadeSpec(module, selectedBody, true))}>{facadeNeedsUpdate ? 'Обновить фасады по техничке' : module.facadeParts ? 'Заменить рекомендацией' : 'Применить размеры фасадов'}</button>}
+              <button className="btn tiny ghost" type="button" onClick={addFacadePart}>＋ Ручной фасад</button>
+            </div>
+          </div>
+          {hingeInference && (
+            <div className="eskiz-tech-block">
+              <div className="muted small">Петли: рекомендуется {hingeInference.hinges} шт. · {hingeInference.note}</div>
+              {(hingeNeedsUpdate || module.hinges !== hingeInference.hinges || module.hingeSpecStatus === 'manual') && (
+                <button className="btn tiny add" type="button" onClick={() => update({ hinges: hingeInference.hinges, hingeSpecStatus: 'applied' })}>Подставить количество петель</button>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      <section className="eskiz-tech-card">
+        <div className="eskiz-tech-head"><h4>Отдельные фасадные детали</h4><span className="badge man">вручную</span></div>
+        {(module.extraFacadeParts ?? []).length > 0 && (
+          <div className="extra-facade-mini-list">
+            {(module.extraFacadeParts ?? []).map((part, index) => (
+              <div className="extra-facade-mini" key={index}>
+                <input value={part.label ?? ''} placeholder="Название детали" onChange={(event) => updateExtraPart(index, { label: event.target.value })} />
+                <select value={part.kind} onChange={(event) => updateExtraPart(index, { kind: event.target.value as ExtraFacadePart['kind'] })}><option value="panel">панель</option><option value="door">дверь</option><option value="drawer">ящик</option></select>
+                <span><input type="number" value={part.widthMm} onChange={(event) => updateExtraPart(index, { widthMm: Number(event.target.value) || 0 })} />×<input type="number" value={part.heightMm} onChange={(event) => updateExtraPart(index, { heightMm: Number(event.target.value) || 0 })} /> мм × <input type="number" value={part.qty} onChange={(event) => updateExtraPart(index, { qty: Number(event.target.value) || 0 })} /> шт</span>
+                <button className="btn tiny danger" type="button" onClick={() => update({ extraFacadeParts: (module.extraFacadeParts ?? []).filter((_, i) => i !== index) })}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="eskiz-mini-actions"><button className="btn tiny add" type="button" onClick={() => addExtraPart(true)}>＋ Боковина</button><button className="btn tiny ghost" type="button" onClick={() => addExtraPart(false)}>＋ Любая деталь</button></div>
+      </section>
+
+      <section className="eskiz-tech-card">
+        <div className="eskiz-tech-head"><h4>Надбавки корпуса</h4><span className="muted small">проценты считаются от корпуса</span></div>
+        {dimensionSurchargeRecommendations.length > 0 && (
+          <div className="surcharge-mini-list">
+            {dimensionSurchargeRecommendations.map((item) => {
+              const applied = (module.surcharges ?? []).includes(item.itemId);
+              const priceItem = pricebook.items.find((candidate) => candidate.id === item.itemId);
+              return <div className="surcharge-mini" key={`${item.dimension}-${item.itemId}`}><span><b>+{item.percent}% по {dimensionLabel(item.dimension)}</b><small>{item.rule}{priceItem ? ` · ${priceItem.name}` : ''}</small></span><em>{applied ? 'применено' : 'рекомендация'}</em></div>;
+            })}
+          </div>
+        )}
+        {pendingDimensionSurcharges.length > 0 && selectedBody && <button className="btn tiny add" type="button" onClick={() => update(applyDimensionSurcharges(module, selectedBody, pricebook))}>✓ Применить рекомендации по габаритам</button>}
+        {(module.surcharges ?? []).map((id) => {
+          const item = pricebook.items.find((candidate) => candidate.id === id);
+          return <div className="surcharge-mini manual" key={id}><span><b>{item ? item.name : 'Позиция не найдена'}</b><small>{item ? `+${item.price}% · ${item.category}` : id}</small></span><button className="btn tiny danger" type="button" onClick={() => update({ surcharges: (module.surcharges ?? []).filter((itemId) => itemId !== id), automaticSurcharges: (module.automaticSurcharges ?? []).filter((itemId) => itemId !== id) })}>✕</button></div>;
+        })}
+        <button className="btn tiny ghost" type="button" onClick={() => setPickSurcharge(true)}>＋ Добавить надбавку из прайса</button>
+      </section>
+
       <div className={`eskiz-module-check ${check.level}`}>
         <b>{check.level === 'ok' ? 'Готово к расчёту' : check.level === 'warn' ? 'Есть предупреждения' : 'Нужно заполнить'}</b>
-        {[...check.errors, ...check.warnings].slice(0, 5).map((text) => <span key={text}>• {text}</span>)}
+        {check.errors.map((text) => <span key={text}>⛔ {text}</span>)}
+        {check.openWarnings.map((warning) => <span key={warning.code}>⚠ {warning.text} <button className="btn tiny" type="button" onClick={() => update(setWarningConfirmed(module, warning.code, true))}>Подтвердить</button></span>)}
+        {check.confirmedWarnings.map((warning) => <span key={warning.code}>✅ {warning.text} <button className="btn tiny ghost" type="button" onClick={() => update(setWarningConfirmed(module, warning.code, false))}>Отменить</button></span>)}
       </div>
       <div className="eskiz-module-lines">
         <b>В состав уйдёт: {lines.length} строк · {fmtMoney(cost)}</b>
         {lines.slice(0, 6).map((line) => <span key={line.id}>{shortLine(line.name, 54)} · {fmtNum(lineCalcs.get(line.id)?.qtyEffective ?? line.qty)} {line.unit ?? ''}</span>)}
         {lines.length > 6 && <span>+ ещё {lines.length - 6} строк</span>}
       </div>
+
+      {pickSlot && (
+        <CatalogPicker
+          pricebook={pricebook}
+          pickOnly
+          poolFilter={SLOT_POOLS[pickSlot]}
+          title={`${SLOT_LABELS[pickSlot]} — маркер ${marker.number}, «${module.name}»`}
+          onAdd={(item) => {
+            updateSlot(pickSlot, item.id);
+            setPickSlot(null);
+          }}
+          onClose={() => setPickSlot(null)}
+        />
+      )}
+      {pickSurcharge && (
+        <CatalogPicker
+          pricebook={pricebook}
+          pickOnly
+          poolFilter={(item) => item.priceKind === 'percent'}
+          title={`Процентная надбавка — маркер ${marker.number}, «${module.name}»`}
+          onAdd={(item) => {
+            update({ surcharges: unique([...(module.surcharges ?? []), item.id]) });
+            setPickSurcharge(false);
+          }}
+          onClose={() => setPickSurcharge(false)}
+        />
+      )}
     </div>
   );
 }
-
 export default function EskizProPanel(props: { project: Project; pricebook: Pricebook; onChange: (project: Project) => void; onOpenModule?: (moduleId: string) => void }) {
   const { project, pricebook, onChange } = props;
   const eskizPro = project.eskizPro ?? EMPTY_ESKIZ_PRO;
