@@ -5,9 +5,9 @@
 // Ничего не придумываем: поля и обязательность — из бланков, значения из калькулятора
 // подставляются только там, где это однозначно. Ручные значения хранятся в
 // project.factoryBlankDrafts, молча данные пользователя не исправляются.
-import type { FactoryFieldSource, KitchenModule, Pricebook, Project } from '../types';
+import type { FactoryFieldSource, KitchenModule, Pricebook, Project, SlotKey } from '../types';
 import { lineMatchesChecklistKey } from './checklist';
-import { checkModule, moduleStandsOnFloor, resolveSlot } from './modules';
+import { checkModule, moduleStandsOnFloor, resolveSlot, slotNeed } from './modules';
 
 // ---------- Модель спецификации ----------
 
@@ -207,13 +207,52 @@ function modeOf(values: number[]): number | null {
   return best;
 }
 
-function itemNameOf(module: KitchenModule, slot: Parameters<typeof resolveSlot>[1], project: Project, pricebook: Pricebook): string | null {
-  const item = resolveSlot(module, slot, project.moduleDefaults ?? {}, pricebook).item;
-  return item ? item.name : null;
-}
-
 /** Сокращённое имя позиции прайса для бланка (без служебного хвоста). */
 const shortName = (name: string) => name.replace(/\s+/g, ' ').trim();
+
+interface SlotSummaryGroup { name: string; qty: number }
+
+function fmtQty(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(Math.round(value * 1000) / 1000).replace('.', ',');
+}
+
+/**
+ * Для бланка фабрики лучше сразу давать технологу разбивку по моделям,
+ * а не «модели разные — расписать вручную». Ничего не придумываем: если модель
+ * не выбрана, это явно остаётся в тексте и дополнительно ловится проверкой.
+ */
+function summarizeSlotItems(
+  modules: KitchenModule[],
+  project: Project,
+  pricebook: Pricebook,
+  slot: SlotKey,
+  unit: string,
+  need: (module: KitchenModule) => number,
+): string {
+  const groups = new Map<string, SlotSummaryGroup>();
+  let missing = 0;
+  let total = 0;
+
+  for (const module of modules) {
+    const qty = need(module) * module.qty;
+    if (qty <= 0) continue;
+    total += qty;
+    const item = resolveSlot(module, slot, project.moduleDefaults ?? {}, pricebook).item;
+    if (!item) {
+      missing += qty;
+      continue;
+    }
+    const name = shortName(item.name);
+    const group = groups.get(name) ?? { name, qty: 0 };
+    group.qty += qty;
+    groups.set(name, group);
+  }
+
+  if (total <= 0) return '';
+  const parts = [...groups.values()].map((group) => `${group.name} — ${fmtQty(group.qty)} ${unit}`);
+  if (missing > 0) parts.push(`модель не выбрана — ${fmtQty(missing)} ${unit}`);
+  return parts.join('; ');
+}
 
 export function autofillValue(kind: BlankAutoFrom, project: Project, pricebook: Pricebook): string {
   const modules = project.modules ?? [];
@@ -240,45 +279,31 @@ export function autofillValue(kind: BlankAutoFrom, project: Project, pricebook: 
       // Инструкция: В*Ш*Г с h цоколя, количество. Пример: 2400*1600*600 — 1 шт
       return modules
         .filter((m) => m.heightMm != null && m.widthMm != null && m.depthMm != null)
-        .map((m) => `${m.heightMm}*${m.widthMm}*${m.depthMm} — ${m.qty} шт`)
+        .map((m) => `${m.name}: ${m.heightMm}*${m.widthMm}*${m.depthMm} — ${m.qty} шт`)
         .join(';\n');
     }
     case 'facadeMaterial': {
-      const names = new Set(modules.map((m) => itemNameOf(m, 'facade', project, pricebook)).filter((n): n is string => Boolean(n)));
-      if (names.size !== 1) return '';
-      const name = [...names][0];
-      return name ? shortName(name) : '';
+      return summarizeSlotItems(modules, project, pricebook, 'facade', 'фас.', (m) => slotNeed(m, 'facade'));
     }
     case 'hinges': {
-      const total = modules.reduce((sum, m) => sum + m.hinges * m.qty, 0);
-      if (total === 0) return '';
-      const names = new Set(modules.filter((m) => m.hinges > 0).map((m) => itemNameOf(m, 'hinge', project, pricebook)).filter((n): n is string => Boolean(n)));
-      return names.size === 1 ? `${shortName([...names][0])} — ${total} шт` : `${total} шт (модели разные — расписать вручную)`;
+      return summarizeSlotItems(modules, project, pricebook, 'hinge', 'шт', (m) => m.hinges);
     }
     case 'handles': {
-      const total = modules.reduce((sum, m) => sum + m.handles * m.qty, 0);
-      if (total === 0) return '';
-      const names = new Set(modules.filter((m) => m.handles > 0).map((m) => itemNameOf(m, 'handle', project, pricebook)).filter((n): n is string => Boolean(n)));
-      return names.size === 1 ? `${shortName([...names][0])} — ${total} шт, сверловка по эскизу` : `${total} шт (модели разные — расписать вручную)`;
+      const summary = summarizeSlotItems(modules, project, pricebook, 'handle', 'шт', (m) => m.handles);
+      return summary ? `${summary}; сверловка по эскизу` : '';
     }
     case 'drawerGuides': {
-      const total = modules.reduce((sum, m) => sum + m.drawers * m.qty, 0);
-      if (total === 0) return '';
-      const names = new Set(modules.filter((m) => m.drawers > 0).map((m) => itemNameOf(m, 'drawerSys', project, pricebook)).filter((n): n is string => Boolean(n)));
-      return names.size === 1 ? `${shortName([...names][0])} — ${total} компл.` : `${total} компл. (модели разные — расписать вручную)`;
+      return summarizeSlotItems(modules, project, pricebook, 'drawerSys', 'компл.', (m) => m.drawers);
     }
     case 'legs': {
       const stands = modules.filter((m) => moduleStandsOnFloor(m.type) && (m.legs ?? 0) > 0);
       if (!stands.length) return '';
+      const summary = summarizeSlotItems(stands, project, pricebook, 'legs', 'шт', (m) => m.legs ?? 0);
       const height = legsHeightMm(modules, project, pricebook);
-      const total = stands.reduce((sum, m) => sum + (m.legs ?? 0) * m.qty, 0);
-      return `Н=${height} мм — ${total} шт`;
+      return summary ? `${summary}; Н=${height} мм` : `Н=${height} мм — ${stands.reduce((sum, m) => sum + (m.legs ?? 0) * m.qty, 0)} шт`;
     }
     case 'lifts': {
-      const total = modules.reduce((sum, m) => sum + m.lifts * m.qty, 0);
-      if (total === 0) return '';
-      const names = new Set(modules.filter((m) => m.lifts > 0).map((m) => itemNameOf(m, 'lift', project, pricebook)).filter((n): n is string => Boolean(n)));
-      return names.size === 1 ? `${shortName([...names][0])} — ${total} шт` : `${total} шт`;
+      return summarizeSlotItems(modules, project, pricebook, 'lift', 'шт', (m) => m.lifts);
     }
     case 'worktop': {
       const line = project.lines.find((l) => lineMatchesChecklistKey('worktop', l));

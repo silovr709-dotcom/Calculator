@@ -128,12 +128,18 @@ export interface ProjectSettings {
 
 export type WizardStepId = 'data' | 'shape' | 'materials' | 'modules' | 'review' | 'total';
 
+export type ClientOfferPresentationMode = 'brief' | 'detailed' | 'technical';
+
 export interface ClientOfferSettings {
   validUntil?: string;
   paymentTerms?: string;
   installation?: string;
   delivery?: string;
   notes?: string;
+  /** Режим детализации клиентского КП: короткое письмо, рабочая детализация или техническое приложение. */
+  presentationMode?: ClientOfferPresentationMode;
+  /** false — скрыть суммы внутри комплектации и оставить только итоги модулей/проекта. */
+  showDetailPrices?: boolean;
 }
 
 export interface MeasurementWall {

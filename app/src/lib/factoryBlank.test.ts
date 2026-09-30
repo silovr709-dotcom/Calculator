@@ -28,7 +28,8 @@ describe('бланк на фабрику (РЕцепт PRO)', () => {
   it('подставляет из калькулятора: высоты, ножки, петли, направляющие из слотов', () => {
     const project = makeProject({ modules: [baseModule] });
     expect(autofillValue('hBase', project, pb)).toBe('820'); // 720 + 100
-    expect(autofillValue('legs', project, pb)).toBe('Н=100 мм — 4 шт');
+    expect(autofillValue('legs', project, pb)).toContain('4 шт');
+    expect(autofillValue('legs', project, pb)).toContain('Н=100 мм');
     const hinges = autofillValue('hinges', project, pb);
     expect(hinges).toContain('2 шт');
     // ручки: слот не назначен и модели ручки в прайсе может не быть → не молчим
@@ -68,9 +69,9 @@ describe('бланк на фабрику (РЕцепт PRO)', () => {
   it('корпусный бланк: размеры модулей «В*Ш*Г — N шт» подставляются из проекта', () => {
     const project = makeProject({ modules: [{ ...baseModule, heightMm: 2400, widthMm: 1600, depthMm: 600 }] });
     const value = autofillValue('moduleSizesVHD', project, pb);
-    expect(value).toBe('2400*1600*600 — 1 шт');
+    expect(value).toBe('Тестовый стол 600: 2400*1600*600 — 1 шт');
     const draft = draftFactoryBlank(project, pb, VISMA_CORPUS_BLANK);
-    expect(draft.find((d) => d.field.key === 'corpusSizes')!.value).toBe('2400*1600*600 — 1 шт');
+    expect(draft.find((d) => d.field.key === 'corpusSizes')!.value).toBe('Тестовый стол 600: 2400*1600*600 — 1 шт');
     expect(draft.some((d) => d.field.required && d.value === '')).toBe(true); // цвет корпуса не придумываем
   });
 

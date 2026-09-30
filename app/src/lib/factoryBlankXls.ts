@@ -129,6 +129,29 @@ const SHEET_MAPS: Record<string, BlankSheetMap> = {
 
 export const getBlankSheetMap = (specId: string): BlankSheetMap | undefined => SHEET_MAPS[specId];
 
+/** Все клетки шаблона, куда попадёт конкретное поле (основная + дубли на листе 2). */
+export function blankCellRefsForField(map: BlankSheetMap, key: string): string[] {
+  return [map.cells[key], map.prefixed?.[key]?.cell, map.mirrors?.[key]].filter((cell): cell is string => Boolean(cell));
+}
+
+/** Короткая подпись для UI: пользователь сразу видит, куда попадёт значение в шаблоне. */
+export function blankCellRefLabel(map: BlankSheetMap, key: string): string {
+  const refs = blankCellRefsForField(map, key);
+  return refs.length ? refs.join(' / ') : '';
+}
+
+/** Клетки таблицы столешницы, которые нужно очистить перед новой записью. */
+export function worktopAreaCells(map: BlankSheetMap): string[] {
+  const wt = map.worktop;
+  if (!wt) return [];
+  const cells = [wt.titleCell, wt.summaryCell];
+  const cols = Object.values(wt.columns);
+  for (let row = wt.firstRow; row <= wt.firstRow + wt.maxRows; row += 1) {
+    for (const col of cols) cells.push(`${col}${row}`);
+  }
+  return cells;
+}
+
 /** Одна запись «в клетку X положить значение Y». */
 export interface BlankCellWrite { cell: string; value: string }
 
@@ -188,7 +211,8 @@ export function buildWorktopWrites(map: BlankSheetMap, pieces: WorktopPiece[], s
 /** Текстовая сводка по столешнице для клетки шаблона. */
 export function worktopSummary(draft: BlankDraftField[]): string {
   const get = (key: string) => draft.find((d) => d.field.key === key)?.value.trim() ?? '';
-  return [get('worktopType'), get('worktopColor')].filter(Boolean).join('. ');
+  const parts = [get('worktopType'), get('worktopColor')].filter(Boolean);
+  return [...new Set(parts)].join('. ');
 }
 
 /** Безопасное имя файла: без служебных символов, с датой. */
@@ -219,10 +243,22 @@ export async function buildFactoryBlankWorkbook(
   const ws = wb.getWorksheet(map.sheet);
   if (!ws) throw new Error(`В шаблоне нет листа «${map.sheet}»`);
 
-  // 1) убираем примеры заполнения, которые лежат в шаблоне
-  for (const cell of map.clear) ws.getCell(cell).value = null;
-  // 2) пишем свои значения
-  for (const w of writes) ws.getCell(w.cell).value = w.value === '' ? null : w.value;
+  // 1) убираем примеры заполнения, которые лежат в шаблоне, включая старые строки листа 2
+  for (const cell of [...map.clear, ...worktopAreaCells(map)]) ws.getCell(cell).value = null;
+  // 2) пишем свои значения; длинные тексты сразу включаем с переносом строк,
+  // чтобы технолог видел весь состав без ручного растягивания ячеек.
+  for (const w of writes) {
+    const cell = ws.getCell(w.cell);
+    cell.value = w.value === '' ? null : w.value;
+    if (w.value !== '') {
+      const lineCount = Math.max(w.value.split('\n').length, Math.ceil(w.value.length / 46));
+      cell.alignment = { ...(cell.alignment ?? {}), wrapText: true, vertical: 'top' };
+      if (lineCount > 1) {
+        const row = ws.getRow(Number(cell.row));
+        row.height = Math.max(row.height ?? 15, Math.min(90, 15 + (lineCount - 1) * 12));
+      }
+    }
+  }
 
   return wb.xlsx.writeBuffer() as Promise<ArrayBuffer>;
 }

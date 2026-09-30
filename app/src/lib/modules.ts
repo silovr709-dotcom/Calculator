@@ -1,5 +1,6 @@
 import type { KitchenModule, ModuleDefaults, Pricebook, PriceItem, ProjectLine, SlotChoice, SlotKey } from '../types';
 import { lineFromItem } from './engine';
+import { moduleLinePrefix } from './clientOffer';
 import { inferDimensionSurcharges } from './surcharges';
 import { uid } from './storage';
 
@@ -347,7 +348,7 @@ export function checkModule(m: KitchenModule, defaults: ModuleDefaults, priceboo
 export function moduleToLines(m: KitchenModule, defaults: ModuleDefaults, pricebook: Pricebook): ProjectLine[] {
   const out: ProjectLine[] = [];
   const pbId = pricebook.meta.id;
-  const tag = `Модуль: ${m.name}`;
+  const tag = moduleLinePrefix(m.name, m.id);
   const push = (item: PriceItem | null, qty: number, params?: { widthMm: number; heightMm: number }, extra?: string) => {
     if (!item || qty <= 0 || item.priceKind !== 'fixed') return;
     const line = lineFromItem(item, pbId, qty, params ?? {});

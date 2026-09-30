@@ -4,7 +4,7 @@ import { checkFactoryBlank, draftFactoryBlank, FACTORY_BLANK_SPECS, factoryBlank
 import { checkDictRules, dictSuggestions, loadFactoryDicts, type FactoryDicts } from '../lib/factoryDicts';
 import { BACK_EDGE_NOTE, checkWorktopPlan, edgeKindLabel, suggestWorktopPlan, WORKTOP_EDGE_KINDS } from '../lib/worktopPlan';
 import { lineMatchesChecklistKey } from '../lib/checklist';
-import { exportFactoryBlankXlsx, getBlankSheetMap } from '../lib/factoryBlankXls';
+import { blankCellRefLabel, exportFactoryBlankXlsx, getBlankSheetMap } from '../lib/factoryBlankXls';
 import { uid } from '../lib/storage';
 import type { WorktopEdgeKind, WorktopPiece } from '../types';
 
@@ -27,6 +27,7 @@ export default function FactoryBlankView(props: {
   const [specId, setSpecId] = useState<string>(FACTORY_BLANK_SPECS[0].id);
   const [dicts, setDicts] = useState<FactoryDicts | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [showOnlyIssues, setShowOnlyIssues] = useState(false);
 
   useEffect(() => {
     loadFactoryDicts(import.meta.env.BASE_URL).then(setDicts);
@@ -99,11 +100,32 @@ export default function FactoryBlankView(props: {
     else drafts[spec.id] = perSpec;
     props.onChangeProject({ ...project, factoryBlankDrafts: drafts });
   };
+  const clearDraftValues = () => {
+    if (!confirm('Удалить все ручные правки этого бланка и вернуться к автоподстановке из проекта?')) return;
+    const drafts = { ...(project.factoryBlankDrafts ?? {}) };
+    delete drafts[spec.id];
+    props.onChangeProject({ ...project, factoryBlankDrafts: drafts });
+  };
+  const scrollToField = (key: string) => {
+    const el = document.getElementById(`blank-field-${key}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    window.setTimeout(() => el.querySelector('textarea')?.focus(), 250);
+  };
 
   const sections = [...new Set(spec.fields.map((f) => f.section))];
   const errors = issues.filter((i) => i.level === 'error');
   const warns = issues.filter((i) => i.level === 'warn');
-  const hasTemplate = Boolean(getBlankSheetMap(spec.id));
+  const sheetMap = getBlankSheetMap(spec.id);
+  const hasTemplate = Boolean(sheetMap);
+  const issueKeys = new Set(issues.map((i) => i.fieldKey));
+  const fieldKeys = new Set(draft.map((d) => d.field.key));
+  const shownSections = sections
+    .map((section) => ({
+      section,
+      fields: draft.filter((d) => d.field.section === section && (!showOnlyIssues || issueKeys.has(d.field.key) || (d.field.required && d.value.trim() === ''))),
+    }))
+    .filter((section) => section.fields.length > 0);
 
   /** Заполняет настоящий шаблон фабрики и скачивает его. */
   const downloadXlsx = async () => {
@@ -161,6 +183,19 @@ export default function FactoryBlankView(props: {
           Подставлено из проекта: <b>{progress.auto}</b> · заполнено вручную: <b>{progress.draftCount}</b> · пустых: <b>{progress.empty}</b>
           {progress.requiredEmpty > 0 && <> · <b className="blank-bad">обязательных не заполнено: {progress.requiredEmpty}</b></>}
         </span>
+        <div className="blank-control-actions">
+          <button className={`btn tiny ${showOnlyIssues ? 'primary' : 'ghost'}`} disabled={issues.length === 0} onClick={() => setShowOnlyIssues(!showOnlyIssues)}>
+            {showOnlyIssues ? 'Показать все поля' : `Только проблемные (${issues.length})`}
+          </button>
+          {progress.draftCount > 0 && <button className="btn tiny ghost" onClick={clearDraftValues}>Сбросить ручные правки</button>}
+        </div>
+      </div>
+
+      <div className="card blank-export-preview no-print">
+        <div><b>Выгрузка в официальный шаблон</b><span>{sheetMap ? `Файл: ${sheetMap.template} · лист: ${sheetMap.sheet}` : 'Для этого бланка нет Excel-шаблона'}</span></div>
+        <div><b>{errors.length}</b><span>критичных ошибок</span></div>
+        <div><b>{warns.length}</b><span>предупреждений</span></div>
+        <div><b>{hasWorktopPlanSection ? pieces.length : '—'}</b><span>деталей столешницы на лист 2</span></div>
       </div>
 
       {issues.length > 0 && (
@@ -168,8 +203,8 @@ export default function FactoryBlankView(props: {
           <h3>Проверка перед отправкой на фабрику</h3>
           <div className="muted small">Мы не исправляем ваши данные молча — проверьте и поправьте сами (в проекте или в полях ниже).</div>
           <ul>
-            {errors.map((i) => <li key={`${i.fieldKey}-${i.text}`} className="blank-issue err">🔴 {i.text}</li>)}
-            {warns.map((i) => <li key={`${i.fieldKey}-${i.text}`} className="blank-issue warn">🟡 {i.text}</li>)}
+            {errors.map((i) => <li key={`${i.fieldKey}-${i.text}`} className="blank-issue err"><span>🔴 {i.text}</span>{fieldKeys.has(i.fieldKey) && <button className="btn tiny ghost" onClick={() => scrollToField(i.fieldKey)}>к полю</button>}</li>)}
+            {warns.map((i) => <li key={`${i.fieldKey}-${i.text}`} className="blank-issue warn"><span>🟡 {i.text}</span>{fieldKeys.has(i.fieldKey) && <button className="btn tiny ghost" onClick={() => scrollToField(i.fieldKey)}>к полю</button>}</li>)}
           </ul>
         </div>
       )}
@@ -180,15 +215,19 @@ export default function FactoryBlankView(props: {
       )}
 
       {/* Редактируемый бланк: каждая секция — как на бумажном бланке фабрики */}
-      {sections.map((section) => (
+      {shownSections.map(({ section, fields }) => (
         <div className="card blank-section" key={section}>
           <h3>{section}</h3>
           <div className="blank-grid">
-            {draft.filter((d) => d.field.section === section).map((d) => (
-              <label key={d.field.key} className={`blank-field src-${d.source}${d.field.required ? ' required' : ''}`}>
+            {fields.map((d) => {
+              const cellLabel = sheetMap ? blankCellRefLabel(sheetMap, d.field.key) : '';
+              const hasIssue = issueKeys.has(d.field.key) || (d.field.required && d.value.trim() === '');
+              return (
+              <label id={`blank-field-${d.field.key}`} key={d.field.key} className={`blank-field src-${d.source}${d.field.required ? ' required' : ''}${hasIssue ? ' has-issue' : ''}`}>
                 <span className="blank-label">
                   {d.field.label}
                   {d.field.required && <span className="blank-req" title="Обязательное поле по инструкции фабрики">*</span>}
+                  {cellLabel && <span className="blank-cell" title="Клетка в официальном шаблоне Excel">{cellLabel}</span>}
                   <span className={`blank-src ${d.source}`} title={
                     d.source === 'project' ? 'Подставлено автоматически из проекта'
                       : d.source === 'draft' ? 'Заполнено вручную (черновик бланка)'
@@ -196,6 +235,7 @@ export default function FactoryBlankView(props: {
                   }>
                     {d.source === 'project' ? '⚙ авто' : d.source === 'draft' ? '✍ вручную' : '—'}
                   </span>
+                  {d.source === 'draft' && <button type="button" className="blank-reset" onClick={() => setDraftValue(d.field.key, '')}>вернуть авто</button>}
                 </span>
                 <textarea
                   rows={Math.min(3, 1 + Math.floor(d.value.length / 60))}
@@ -220,7 +260,8 @@ export default function FactoryBlankView(props: {
                 )}
                 {d.field.hint && <span className="muted small">{d.field.hint}</span>}
               </label>
-            ))}
+              );
+            })}
           </div>
         </div>
       ))}

@@ -12,6 +12,7 @@ import WallPlanner from './WallPlanner';
 import BulkEditPanel from './BulkEditPanel';
 import { fillFromAbove } from '../lib/bulkEdit';
 import { KITCHEN_SETS, modulesFromKitchenSet } from '../lib/kitchenSets';
+import { stripModuleNote } from '../lib/clientOffer';
 
 const DEFAULT_SLOTS: SlotKey[] = ['facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf', 'legs'];
 /** Предупреждение → слот, который можно сразу открыть кнопкой-действием. */
@@ -466,7 +467,7 @@ export default function ModulesPanel(props: {
                 {selectedModuleLines.map((line) => {
                   const calculation = selectedModuleCalculation.lineCalcs.get(line.id);
                   return <div className="module-formula-row" key={line.id}>
-                    <span>{line.name.slice(0, 55)}<small>{line.note?.replace(`Модуль: ${sel.name} — `, '')}</small></span>
+                    <span>{line.name.slice(0, 55)}<small>{stripModuleNote(line.note)}</small></span>
                     <b>{calculation?.sum != null ? `${fmtNum(calculation.qtyEffective)} × ${fmtMoney(line.price)} = ${fmtMoney(calculation.sum)}` : 'нет цены'}</b>
                   </div>;
                 })}
