@@ -1,36 +1,118 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { KbArticle, KbCategory, Pricebook } from '../types';
+import type { KbArticle, KbCategory, Pricebook, PriceItem } from '../types';
 import { createKbArticle, filterKbArticles, KB_CATEGORIES, kbCategoryLabel, removeKbArticle, seedKbArticles, upsertKbArticle } from '../lib/knowledge';
-import { loadKnowledgeDocs, searchDocs, type DocHit, type KnowledgeDocs } from '../lib/knowledgeDocs';
+import { loadKnowledgeDocs, normalize, searchDocs, tokenize, tokenMatches, type DocHit, type KnowledgeDocs } from '../lib/knowledgeDocs';
 import { loadFactoryDicts, millingsOf, type FactoryDicts } from '../lib/factoryDicts';
 import { millingPriceFrom, millingPrices, searchMillings, MILLING_CATEGORIES, type Milling } from '../lib/millings';
 import { hardwareCounts, hardwareEntries, HARDWARE_GROUPS, searchHardware } from '../lib/hardware';
 import { fmtMoney } from '../lib/format';
 
 /**
- * База знаний РЕцепта: три вкладки.
- *  📄 Документы — свои статьи + полные тексты инструкций и техничек фабрики
- *                 (поиск по самим текстам, прощает опечатки, показывает источник).
- *  🎨 Разбивки  — те самые разбивки цветов: ЛДСП, плёнки ПВХ, пластики, с фильтрами.
- *  🪚 Фрезеровки — каталог фрезеровок 2026 с картинками, размерами и ценой м² из прайса.
+ * База знаний РЕцепта: рабочий центр знаний.
+ *  🏠 Обзор — состояние базы, быстрые переходы и критичные правила.
+ *  🔎 Всё сразу — единый поиск по статьям, PDF-документам, разбивкам, фрезеровкам, фурнитуре и прайсу.
+ *  📄 Документы — свои статьи + полные тексты инструкций и техничек фабрики.
+ *  🎨 Разбивки  — ЛДСП, плёнки ПВХ, пластики, с фильтрами.
+ *  🪚 Фрезеровки — каталог 2026 с картинками, размерами и ценой м² из прайса.
  *  🔩 Фурнитура — справочник из актуального прайса по группам.
+ *  💰 Прайс — быстрый каталог всех позиций Висма с фильтрами.
+ *  ⚡ Шпаргалки — короткие рабочие инструкции без поиска по PDF.
  */
 
-type Tab = 'docs' | 'colors' | 'millings' | 'hardware';
+type Tab = 'overview' | 'search' | 'docs' | 'colors' | 'millings' | 'hardware' | 'pricebook' | 'cheatsheets';
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'overview', label: '🏠 Обзор' },
+  { id: 'search', label: '🔎 Всё сразу' },
   { id: 'docs', label: '📄 Документы' },
-  { id: 'colors', label: '🎨 Разбивки цветов' },
+  { id: 'colors', label: '🎨 Разбивки' },
   { id: 'millings', label: '🪚 Фрезеровки' },
   { id: 'hardware', label: '🔩 Фурнитура' },
+  { id: 'pricebook', label: '💰 Прайс' },
+  { id: 'cheatsheets', label: '⚡ Шпаргалки' },
 ];
+
+const QUICK_SEARCHES = ['бланк кухни', 'столешница', 'эмаль 1 м2', 'петля 110', 'фрезеровка мыло', 'кромка ЛДСП', 'GOLA', 'Эскиз PRO'];
+
+const CRITICAL_RULES = [
+  { title: 'Корпус в бланке', text: 'Размеры корпуса указываются по каркасу, без фасадов и накладных деталей. Цвет ЛДСП берём из разбивки.' },
+  { title: 'Эмаль меньше 1 м²', text: 'Если площадь фасадов эмали меньше 1 м² — включается правило прайса +30%.' },
+  { title: 'Фрезеровка 2026', text: 'Категория фрезеровки определяет цену м²: ПВХ и эмаль ищутся разными строками прайса.' },
+  { title: 'Маркер Эскиз PRO', text: 'Модуль на скрине — это точка/сноска. Нажмите её в snapshot и выберите корпус/фурнитуру из прайса.' },
+  { title: 'Текстура «!»', text: 'Для позиций разбивки с восклицательным знаком текстуру обязательно переносим в бланк.' },
+];
+
+const CHEATSHEETS = [
+  {
+    group: 'Оформление заказа',
+    title: 'Кухня: что проверить перед отправкой бланка',
+    tags: ['бланк', 'заказ', 'висма'],
+    steps: ['Шапка проекта: клиент, дата, салон, комментарий.', 'Корпус: цвет ЛДСП, размеры, кромка, цоколь/опоры.', 'Фасады: материал, фрезеровка, размеры, открывание, ручки/GOLA.', 'Столешница и стеновая панель: длины, кромки, еврозапилы, вырезы.', 'Фурнитура: петли, системы ящиков, подъёмники, сушки, карго, подсветка.'],
+  },
+  {
+    group: 'Расчёт',
+    title: 'Как модуль превращается в строки расчёта',
+    tags: ['модули', 'просчет', 'прайс'],
+    steps: ['Выбранный корпус идёт одной строкой на количество модулей.', 'Фасады считаются по площади: размер фасада × количество.', 'Петли, ручки, опоры, подъёмники и ящики считаются по штукам.', 'Процентные надбавки применяются только к корпусу, если выбрана база.', 'Предупреждения не блокируют работу, ошибки — блокируют корректный расчёт модуля.'],
+  },
+  {
+    group: 'Эскиз PRO',
+    title: 'Скрин → маркеры → модули → КП',
+    tags: ['эскиз', 'модули', 'КП'],
+    steps: ['В Эскиз PRO загрузите скрин проекта и вручную нанесите размеры.', 'Поставьте объект «Модуль» как точку/сноску на нужном месте.', 'В Calculator привяжите snapshot и нажмите маркер на preview.', 'Выберите корпус и комплектующие из прайса.', 'Модуль попадёт в просчёт, проверку, КП и бланк.'],
+  },
+  {
+    group: 'Фасады',
+    title: 'Фасады, фрезеровки и эмаль',
+    tags: ['фасады', 'эмаль', 'фрезеровка'],
+    steps: ['Уточните материал фасада: ПВХ, эмаль, пластик, стекло/рамка.', 'Проверьте категорию фрезеровки по каталогу 2026.', 'Для эмали контролируйте правило заказа меньше 1 м².', 'Для рамочных/витринных фасадов проверьте рамку и стекло.', 'Если есть боковины/накладки — добавьте их как отдельные фасадные детали.'],
+  },
+  {
+    group: 'Замер',
+    title: 'Минимальный чек-лист замера',
+    tags: ['замер', 'размеры', 'коммуникации'],
+    steps: ['Длины стен, высота помещения, диагонали/углы.', 'Окна, двери, подоконники: отступ, ширина, высота.', 'Вода, канализация, газ, вентиляция, электрика: отступ и высота.', 'Фото помещения и проблемных мест.', 'Отдельно зафиксировать ограничения доставки и монтажа.'],
+  },
+];
+
+function priceText(item: PriceItem) {
+  if (item.price != null) return fmtMoney(item.price);
+  return item.priceRaw || '—';
+}
+
+function itemSearchText(item: PriceItem) {
+  return `${item.name} ${item.article ?? ''} ${item.category} ${item.subcategory ?? ''} ${item.unit ?? ''} ${item.priceRaw ?? ''} ${Object.values(item.attrs).join(' ')}`;
+}
+
+function matchesQuery(text: string, query: string) {
+  const qTokens = tokenize(query);
+  if (qTokens.length === 0) return true;
+  const hay = normalize(text);
+  const tokens = hay.split(' ').filter(Boolean);
+  return qTokens.every((q) => hay.includes(q) || tokens.some((t) => tokenMatches(q, t)));
+}
+
+function scoreText(text: string, query: string, boost = 1) {
+  const qTokens = tokenize(query);
+  if (qTokens.length === 0) return 0;
+  const hay = normalize(text);
+  const tokens = hay.split(' ').filter(Boolean);
+  let score = 0;
+  let matched = 0;
+  for (const q of qTokens) {
+    if (hay.includes(q)) { score += 6; matched += 1; }
+    else if (tokens.some((t) => tokenMatches(q, t))) { score += 2; matched += 1; }
+  }
+  return matched === qTokens.length ? score * boost : 0;
+}
 
 export default function KnowledgeView(props: {
   articles: KbArticle[];
   pricebooks: Pricebook[];
   onChange: (articles: KbArticle[]) => void;
 }) {
-  const [tab, setTab] = useState<Tab>('docs');
+  const [tab, setTab] = useState<Tab>('overview');
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [docs, setDocs] = useState<KnowledgeDocs | null>(null);
   const [dicts, setDicts] = useState<FactoryDicts | null>(null);
 
@@ -39,12 +121,17 @@ export default function KnowledgeView(props: {
     loadFactoryDicts(import.meta.env.BASE_URL).then(setDicts);
   }, []);
 
+  const openGlobalSearch = (query = '') => {
+    setGlobalSearchQuery(query);
+    setTab('search');
+  };
+
   return (
     <div className="page">
       <header className="page-head">
         <div>
-          <h1>База знаний</h1>
-          <div className="muted">Документы фабрики, разбивки цветов и фурнитура — в одном месте, с поиском.</div>
+          <h1>База знаний PRO</h1>
+          <div className="muted">Единый центр: документы, инструкции, прайс, разбивки, фрезеровки, фурнитура и рабочие шпаргалки.</div>
         </div>
       </header>
 
@@ -62,11 +149,180 @@ export default function KnowledgeView(props: {
         ))}
       </div>
 
+      {tab === 'overview' && <OverviewTab articles={props.articles} docs={docs} dicts={dicts} pricebooks={props.pricebooks} onOpenTab={setTab} onQuickSearch={openGlobalSearch} onSeed={() => props.onChange(seedKbArticles())} />}
+      {tab === 'search' && <AllSearchTab key={globalSearchQuery} articles={props.articles} docs={docs} dicts={dicts} pricebooks={props.pricebooks} initialQuery={globalSearchQuery} onOpenTab={setTab} />}
       {tab === 'docs' && <DocsTab articles={props.articles} onChange={props.onChange} docs={docs} />}
       {tab === 'colors' && <ColorsTab dicts={dicts} />}
       {tab === 'millings' && <MillingsTab dicts={dicts} pricebooks={props.pricebooks} />}
       {tab === 'hardware' && <HardwareTab pricebooks={props.pricebooks} />}
+      {tab === 'pricebook' && <PricebookTab pricebooks={props.pricebooks} />}
+      {tab === 'cheatsheets' && <CheatsheetsTab />}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------- Обзор и единый поиск
+
+function OverviewTab(props: {
+  articles: KbArticle[];
+  docs: KnowledgeDocs | null;
+  dicts: FactoryDicts | null;
+  pricebooks: Pricebook[];
+  onOpenTab: (tab: Tab) => void;
+  onQuickSearch: (query?: string) => void;
+  onSeed: () => void;
+}) {
+  const pricebook = props.pricebooks[0];
+  const docsCount = props.docs?.docs.length ?? 0;
+  const sectionsCount = props.docs?.docs.reduce((sum, doc) => sum + doc.sections.length, 0) ?? 0;
+  const colorsCount = props.dicts ? props.dicts.groups.ldspColors.items.length + props.dicts.groups.films.items.length + props.dicts.groups.plastics.items.length : 0;
+  const millingsCount = millingsOf(props.dicts).length;
+  const hardwareCount = hardwareEntries(pricebook).length;
+  const priceCount = pricebook?.items.length ?? 0;
+  return (
+    <>
+      <section className="kb-hero card">
+        <div>
+          <span className="eyebrow">MAX база знаний</span>
+          <h2>Ищем не по памяти, а по единому источнику: PDF, прайс, справочники и свои статьи</h2>
+          <p>Начинайте с «Всё сразу», если не знаете, где лежит ответ. Для точной работы используйте отдельные разделы: прайс, фрезеровки, разбивки, фурнитуру и документы.</p>
+        </div>
+        <div className="kb-hero-actions">
+          <button className="btn primary" onClick={() => props.onQuickSearch()}>🔎 Искать везде</button>
+          <button className="btn ghost" onClick={() => props.onOpenTab('cheatsheets')}>⚡ Шпаргалки</button>
+          {props.articles.length === 0 && <button className="btn ghost" onClick={props.onSeed}>Загрузить стартовые статьи</button>}
+        </div>
+      </section>
+
+      <section className="kb-metrics">
+        <button onClick={() => props.onOpenTab('docs')}><b>{docsCount}</b><span>PDF-документов</span><em>{sectionsCount} разделов</em></button>
+        <button onClick={() => props.onOpenTab('docs')}><b>{props.articles.length}</b><span>своих статей</span><em>редактируются вручную</em></button>
+        <button onClick={() => props.onOpenTab('colors')}><b>{colorsCount}</b><span>цветов / покрытий</span><em>ЛДСП, ПВХ, пластики</em></button>
+        <button onClick={() => props.onOpenTab('millings')}><b>{millingsCount}</b><span>фрезеровок</span><em>каталог 2026</em></button>
+        <button onClick={() => props.onOpenTab('hardware')}><b>{hardwareCount}</b><span>позиций фурнитуры</span><em>из прайса</em></button>
+        <button onClick={() => props.onOpenTab('pricebook')}><b>{priceCount}</b><span>строк прайса</span><em>{pricebook?.meta.name ?? 'прайс не загружен'}</em></button>
+      </section>
+
+      <section className="card kb-section">
+        <h3>Быстрый поиск</h3>
+        <div className="kb-quick-searches">
+          {QUICK_SEARCHES.map((q) => <button key={q} className="chip" onClick={() => props.onQuickSearch(q)}>{q}</button>)}
+        </div>
+      </section>
+
+      <section className="kb-overview-grid">
+        <div className="card kb-section">
+          <h3>Критичные правила</h3>
+          <div className="kb-rule-list">
+            {CRITICAL_RULES.map((rule) => <div key={rule.title}><b>{rule.title}</b><span>{rule.text}</span></div>)}
+          </div>
+        </div>
+        <div className="card kb-section">
+          <h3>Куда идти за ответом</h3>
+          <div className="kb-route-list">
+            <button onClick={() => props.onOpenTab('docs')}><b>Инструкции / техничка</b><span>формулировки из PDF, страницы и разделы</span></button>
+            <button onClick={() => props.onOpenTab('pricebook')}><b>Цена / артикул</b><span>любая строка прайса, категория, единица, источник</span></button>
+            <button onClick={() => props.onOpenTab('colors')}><b>Цвет / разбивка</b><span>ЛДСП, плёнки, пластики, текстуры «!»</span></button>
+            <button onClick={() => props.onOpenTab('millings')}><b>Фрезеровка</b><span>картинка, категория, размеры, цена м²</span></button>
+            <button onClick={() => props.onOpenTab('hardware')}><b>Фурнитура</b><span>петли, ручки, ящики, подъёмники, GOLA</span></button>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+interface GlobalHit {
+  id: string;
+  kind: string;
+  title: string;
+  meta: string;
+  text: string;
+  score: number;
+  tab: Tab;
+}
+
+function AllSearchTab(props: { articles: KbArticle[]; docs: KnowledgeDocs | null; dicts: FactoryDicts | null; pricebooks: Pricebook[]; initialQuery: string; onOpenTab: (tab: Tab) => void }) {
+  const [query, setQuery] = useState(props.initialQuery);
+  const [kind, setKind] = useState<string>('all');
+  const pricebook = props.pricebooks[0];
+  const millings = useMemo(() => millingsOf(props.dicts), [props.dicts]);
+  const hardware = useMemo(() => hardwareEntries(pricebook), [pricebook]);
+  const colorRows = useMemo(() => {
+    if (!props.dicts) return [] as { group: string; row: Record<string, unknown> }[];
+    return (['ldspColors', 'films', 'plastics'] as const).flatMap((key) => props.dicts!.groups[key].items.map((row) => ({ group: props.dicts!.groups[key].label, row: row as unknown as Record<string, unknown> })));
+  }, [props.dicts]);
+
+  const hits = useMemo(() => {
+    const q = query.trim();
+    if (q.length < 2) return [] as GlobalHit[];
+    const out: GlobalHit[] = [];
+    for (const article of props.articles) {
+      const score = scoreText(`${article.title} ${article.tags.join(' ')} ${article.body}`, q, 1.4);
+      if (score) out.push({ id: article.id, kind: 'Статья', title: article.title, meta: kbCategoryLabel(article.category), text: article.body.slice(0, 220), score, tab: 'docs' });
+    }
+    if (props.docs) {
+      for (const h of searchDocs(props.docs.docs, q, 18)) {
+        out.push({ id: h.section.id, kind: 'PDF', title: h.section.heading, meta: `${h.doc.title} · стр. ${h.section.page}`, text: h.snippet, score: h.score, tab: 'docs' });
+      }
+    }
+    for (const m of searchMillings(millings, q).slice(0, 12)) {
+      out.push({ id: m.slug, kind: 'Фрезеровка', title: m.name, meta: `${m.categoryLabel} · ${m.coatings.join(', ')}`, text: [m.faska, m.note, `МДФ ${m.mdfThicknessMm} мм`].filter(Boolean).join(' · '), score: scoreText(`${m.name} ${m.categoryLabel} ${m.coatings.join(' ')} ${m.note ?? ''}`, q, 1.1) || 4, tab: 'millings' });
+    }
+    for (const entry of searchHardware(hardware, q, null, 18)) {
+      out.push({ id: entry.item.id, kind: 'Фурнитура', title: entry.item.name, meta: `${entry.group.label} · ${entry.item.article ?? 'без артикула'} · ${priceText(entry.item)}`, text: `${entry.item.category}${entry.item.subcategory ? ` · ${entry.item.subcategory}` : ''}`, score: scoreText(itemSearchText(entry.item), q, 1.05) || 3, tab: 'hardware' });
+    }
+    for (const { group, row } of colorRows) {
+      const text = `${row.name ?? ''} ${row.code ?? ''} ${row.article ?? ''} ${row.brand ?? ''} ${row.category ?? ''}`;
+      const score = scoreText(text, q, 1);
+      if (score) out.push({ id: `${group}-${row.code ?? row.article ?? row.name}`, kind: 'Разбивка', title: String(row.name ?? row.code ?? row.article ?? 'Цвет'), meta: `${group} · ${row.brand ?? 'бренд не указан'}`, text: `${row.category ?? ''}${row.texture ? ' · текстура «!»' : ''}${row.status ? ` · ${row.status}` : ''}`, score, tab: 'colors' });
+    }
+    for (const item of (pricebook?.items ?? [])) {
+      const score = scoreText(itemSearchText(item), q, .9);
+      if (score) out.push({ id: item.id, kind: 'Прайс', title: item.name, meta: `${item.category} · ${item.article ?? 'без артикула'} · ${priceText(item)}`, text: `${item.subcategory ?? ''}${item.unit ? ` · ${item.unit}` : ''}${item.source ? ` · ${item.source.sheet} строка ${item.source.row}` : ''}`, score, tab: 'pricebook' });
+    }
+    return out
+      .filter((hit) => kind === 'all' || hit.kind === kind)
+      .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title, 'ru'))
+      .slice(0, 80);
+  }, [query, kind, props.articles, props.docs, millings, hardware, colorRows, pricebook]);
+
+  const counts = hits.reduce<Record<string, number>>((acc, hit) => ({ ...acc, [hit.kind]: (acc[hit.kind] ?? 0) + 1 }), {});
+
+  return (
+    <>
+      <div className="card kb-command">
+        <label className="dashboard-search">Искать во всей базе знаний
+          <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Например: петля 110, эмаль меньше 1 м2, цвет дуб, столешница 4100…" />
+        </label>
+        <div className="kb-quick-searches">
+          {QUICK_SEARCHES.map((q) => <button key={q} className="chip" onClick={() => setQuery(q)}>{q}</button>)}
+        </div>
+      </div>
+      <div className="kb-subtabs">
+        {['all', 'PDF', 'Статья', 'Прайс', 'Разбивка', 'Фрезеровка', 'Фурнитура'].map((item) => (
+          <button key={item} className={`chip${kind === item ? ' active' : ''}`} onClick={() => setKind(item)}>
+            {item === 'all' ? 'Все' : item} <b>{item === 'all' ? hits.length : counts[item] ?? 0}</b>
+          </button>
+        ))}
+      </div>
+      {query.trim().length < 2 ? (
+        <div className="empty">Введите минимум 2 символа — поиск пройдёт по документам, статьям, прайсу, разбивкам, фрезеровкам и фурнитуре.</div>
+      ) : hits.length === 0 ? (
+        <div className="empty">Ничего не найдено. Попробуйте другое слово или более короткий запрос.</div>
+      ) : (
+        <div className="kb-global-results">
+          {hits.map((hit) => (
+            <article className="card kb-global-hit" key={`${hit.kind}-${hit.id}`}>
+              <div className="kb-hit-head"><span className="kb-chip">{hit.kind}</span><b>{hit.title}</b></div>
+              <div className="muted small">{hit.meta}</div>
+              <p>{hit.text}</p>
+              <button className="btn tiny ghost" onClick={() => props.onOpenTab(hit.tab)}>Открыть раздел</button>
+            </article>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -597,6 +853,126 @@ function HardwareTab(props: { pricebooks: Pricebook[] }) {
       </table>
       {found.length > 400 && <p className="muted small">Показаны первые 400 — уточните запрос.</p>}
       {found.length === 0 && <div className="empty small">Ничего не найдено. Попробуйте другое слово — поиск прощает опечатки.</div>}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- Прайс
+
+function PricebookTab(props: { pricebooks: Pricebook[] }) {
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('');
+  const [subcategory, setSubcategory] = useState('');
+  const [kind, setKind] = useState('');
+  const [basis, setBasis] = useState('');
+  const [onlyPriced, setOnlyPriced] = useState(false);
+  const pricebook = props.pricebooks[0];
+
+  const categories = useMemo(() => [...new Set((pricebook?.items ?? []).map((item) => item.category))].sort((a, b) => a.localeCompare(b, 'ru')), [pricebook]);
+  const subcategories = useMemo(() => [...new Set((pricebook?.items ?? []).filter((item) => !category || item.category === category).map((item) => item.subcategory ?? '').filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru')), [pricebook, category]);
+  const kinds = useMemo(() => [...new Set((pricebook?.items ?? []).map((item) => item.priceKind))].sort(), [pricebook]);
+  const bases = useMemo(() => [...new Set((pricebook?.items ?? []).map((item) => item.priceBasis ?? '—'))].sort(), [pricebook]);
+
+  const found = useMemo(() => {
+    if (!pricebook) return [] as PriceItem[];
+    return pricebook.items.filter((item) => {
+      if (category && item.category !== category) return false;
+      if (subcategory && item.subcategory !== subcategory) return false;
+      if (kind && item.priceKind !== kind) return false;
+      if (basis && (item.priceBasis ?? '—') !== basis) return false;
+      if (onlyPriced && item.price == null) return false;
+      return matchesQuery(itemSearchText(item), query);
+    }).slice(0, 800);
+  }, [pricebook, query, category, subcategory, kind, basis, onlyPriced]);
+
+  if (!pricebook) return <div className="empty">Прайс пока не загружен.</div>;
+
+  return (
+    <>
+      <div className="card kb-pricebook-head">
+        <div><span className="eyebrow">Прайс</span><h3>{pricebook.meta.name}</h3><p className="muted small">{pricebook.meta.itemCount} позиций · источник: {pricebook.meta.sourceFile} · импорт: {new Date(pricebook.meta.importedAt).toLocaleDateString('ru-RU')}</p></div>
+        <div className="kb-pricebook-stats">
+          <div><b>{pricebook.meta.categories.length}</b><span>категорий</span></div>
+          <div><b>{Object.values(pricebook.meta.stats.byCategory).reduce((sum, stat) => sum + stat.priced, 0)}</b><span>с ценой</span></div>
+          <div><b>{pricebook.issues.length}</b><span>замечаний</span></div>
+        </div>
+      </div>
+
+      <div className="card blank-controls">
+        <label className="dashboard-search">Поиск по прайсу
+          <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Название, артикул, категория, размер, материал…" />
+        </label>
+        <label>Категория<select value={category} onChange={(e) => { setCategory(e.target.value); setSubcategory(''); }}><option value="">Все</option>{categories.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+        <label>Подкатегория<select value={subcategory} onChange={(e) => setSubcategory(e.target.value)}><option value="">Все</option>{subcategories.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+        <label>Тип цены<select value={kind} onChange={(e) => setKind(e.target.value)}><option value="">Все</option>{kinds.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+        <label>База<select value={basis} onChange={(e) => setBasis(e.target.value)}><option value="">Все</option>{bases.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+        <label className="kb-check"><input type="checkbox" checked={onlyPriced} onChange={(e) => setOnlyPriced(e.target.checked)} /> только с числовой ценой</label>
+        {(query || category || subcategory || kind || basis || onlyPriced) && <button className="btn tiny ghost" onClick={() => { setQuery(''); setCategory(''); setSubcategory(''); setKind(''); setBasis(''); setOnlyPriced(false); }}>Сбросить</button>}
+        <div className="dashboard-filter-count muted small">Показано: {found.length} из {pricebook.items.length}</div>
+      </div>
+
+      <div className="kb-subtabs">
+        {categories.slice(0, 18).map((item) => (
+          <button key={item} className={`chip${category === item ? ' active' : ''}`} onClick={() => { setCategory(category === item ? '' : item); setSubcategory(''); }}>
+            {item} <b>{pricebook.meta.stats.byCategory[item]?.count ?? 0}</b>
+          </button>
+        ))}
+      </div>
+
+      <table className="table kb-price-table">
+        <thead>
+          <tr><th>Категория</th><th>Позиция</th><th>Артикул</th><th>Ед.</th><th>База</th><th className="num">Цена</th><th>Источник</th></tr>
+        </thead>
+        <tbody>
+          {found.map((item) => (
+            <tr key={item.id}>
+              <td className="small"><b>{item.category}</b>{item.subcategory && <div className="muted">{item.subcategory}</div>}</td>
+              <td>{item.name}{item.note && <div className="muted small">{item.note}</div>}</td>
+              <td className="small">{item.article ?? '—'}</td>
+              <td className="small">{item.unit ?? '—'}</td>
+              <td className="small">{item.priceBasis ?? '—'}</td>
+              <td className="num">{priceText(item)}</td>
+              <td className="small muted">{item.source.sheet}, строка {item.source.row}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {found.length === 0 && <div className="empty small">Ничего не найдено. Попробуйте снять фильтры или изменить запрос.</div>}
+      {found.length >= 800 && <p className="muted small">Показаны первые 800 строк — уточните поиск или фильтр.</p>}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- Шпаргалки
+
+function CheatsheetsTab() {
+  const [query, setQuery] = useState('');
+  const [group, setGroup] = useState('');
+  const groups = useMemo(() => [...new Set(CHEATSHEETS.map((item) => item.group))], []);
+  const found = useMemo(() => CHEATSHEETS.filter((item) => {
+    if (group && item.group !== group) return false;
+    return matchesQuery(`${item.group} ${item.title} ${item.tags.join(' ')} ${item.steps.join(' ')}`, query);
+  }), [query, group]);
+  return (
+    <>
+      <div className="card blank-controls">
+        <label className="dashboard-search">Поиск по шпаргалкам
+          <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Например: фасады, бланк, замер, эскиз…" />
+        </label>
+        <label>Раздел<select value={group} onChange={(e) => setGroup(e.target.value)}><option value="">Все</option>{groups.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+        {(query || group) && <button className="btn tiny ghost" onClick={() => { setQuery(''); setGroup(''); }}>Сбросить</button>}
+        <div className="dashboard-filter-count muted small">Найдено: {found.length}</div>
+      </div>
+      <div className="kb-cheatsheet-grid">
+        {found.map((sheet) => (
+          <article key={sheet.title} className="card kb-cheatsheet">
+            <div className="kb-meta"><span className="kb-chip">{sheet.group}</span>{sheet.tags.map((tag) => <span key={tag} className="kb-tag">#{tag}</span>)}</div>
+            <h3>{sheet.title}</h3>
+            <ol>{sheet.steps.map((step) => <li key={step}>{step}</li>)}</ol>
+          </article>
+        ))}
+      </div>
+      {found.length === 0 && <div className="empty small">Ничего не найдено.</div>}
     </>
   );
 }
