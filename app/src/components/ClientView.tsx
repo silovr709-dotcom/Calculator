@@ -116,6 +116,8 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const linkedEskizProjects = eskizClientMode === 'all' ? allLinkedEskizProjects : (activeEskizProject ? [activeEskizProject] : allLinkedEskizProjects.slice(0, 1));
   const clientSketchVisible = linkedEskizProjects.length > 0 && project.eskizPro?.showInClient !== false;
   const newestEskiz = allLinkedEskizProjects.reduce<NonNullable<typeof activeEskizProject> | null>((latest, item) => (!latest || item.updatedAt > latest.updatedAt ? item : latest), null);
+  const eskizModuleIds = new Set(Object.values(project.eskizPro?.moduleBindings ?? {}));
+  const eskizModules = (project.modules ?? []).filter((module) => eskizModuleIds.has(module.id));
   const updateEskizPro = (patch: Partial<EskizProIntegration>) => onEskizProChange?.({ ...(project.eskizPro ?? {}), ...patch });
   const visibleVariants = (project.variants ?? []).filter((variant) => variant.clientVisible || variant.id === project.selectedVariantId);
   const groupLineIds = (group: ClientModuleGroup) => selectedVariant
@@ -235,6 +237,12 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           <section className="cd-sketch-pro">
             <div className="cd-section-head"><h3>Эскиз PRO</h3><span>{isTechnical ? 'внешний эскиз со скрином проекта и размерными аннотациями' : 'схема из внешнего Эскиз PRO'}</span></div>
             {linkedEskizProjects.map((eskiz) => <EskizProjectPreview key={eskiz.id} project={eskiz} compact={!isTechnical} />)}
+            {eskizModules.length > 0 && (
+              <div className="cd-eskiz-modules">
+                <b>Модули, добавленные с эскиза</b>
+                <div>{eskizModules.map((module) => <span key={module.id}>{module.name}{module.widthMm ? ` · ${module.widthMm}×${module.heightMm ?? '—'}${module.depthMm ? `×${module.depthMm}` : ''} мм` : ''}</span>)}</div>
+              </div>
+            )}
           </section>
         )}
 

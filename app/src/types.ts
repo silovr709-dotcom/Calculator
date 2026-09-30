@@ -278,6 +278,8 @@ export interface EskizProIntegration {
   showInClient?: boolean;
   /** active — вставлять в КП только главный эскиз; all — вставлять все связанные snapshot. */
   clientMode?: 'active' | 'all';
+  /** Связка: ключ маркера Эскиз PRO (`eskizId:objectId`) → id KitchenModule в расчёте. */
+  moduleBindings?: Record<string, string>;
   snapshots?: EskizProSnapshot[];
 }
 

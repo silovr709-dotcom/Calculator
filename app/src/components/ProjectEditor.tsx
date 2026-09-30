@@ -216,7 +216,7 @@ export default function ProjectEditor(props: {
 
       {tab === 'photos' && <PhotosPanel project={project} onChange={props.onChange} />}
 
-      {tab === 'sketch' && <EskizProPanel project={project} onChange={props.onChange} />}
+      {tab === 'sketch' && <EskizProPanel project={project} onChange={props.onChange} onOpenModule={(id) => { setFocusModuleId(id); setTab('modules'); }} />}
 
       {tab === 'check' && (
         <ProjectCheckCenter

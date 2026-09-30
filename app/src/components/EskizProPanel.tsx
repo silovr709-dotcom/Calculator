@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EskizProIntegration, Project } from '../types';
 import {
   ESKIZ_PRO_URL,
+  collectEskizModuleMarkers,
   listEskizProjects,
   loadEskizProject,
   readEskizFile,
   snapshotProject,
+  syncEskizModulesToCalculation,
   upsertEskizSnapshot,
   type EskizProjectSummary,
 } from '../lib/eskizPro';
@@ -28,7 +30,7 @@ function sameGithubPagesOrigin() {
   return typeof window !== 'undefined' && window.location.hostname === 'silovr709-dotcom.github.io';
 }
 
-export default function EskizProPanel(props: { project: Project; onChange: (project: Project) => void }) {
+export default function EskizProPanel(props: { project: Project; onChange: (project: Project) => void; onOpenModule?: (moduleId: string) => void }) {
   const { project } = props;
   const eskizPro = project.eskizPro ?? {};
   const linkedIds = eskizPro.linkedProjectIds ?? EMPTY_LINKS;
@@ -44,6 +46,9 @@ export default function EskizProPanel(props: { project: Project; onChange: (proj
   const activeId = eskizPro.activeProjectId && linkedIds.includes(eskizPro.activeProjectId) ? eskizPro.activeProjectId : linkedIds[0] ?? null;
   const showInClient = eskizPro.showInClient !== false;
   const clientMode = eskizPro.clientMode ?? 'active';
+  const moduleMarkers = useMemo(() => collectEskizModuleMarkers(linkedProjects), [linkedProjects]);
+  const moduleBindings = eskizPro.moduleBindings ?? {};
+  const linkedModuleCount = moduleMarkers.filter((marker) => Boolean(moduleBindings[marker.key])).length;
 
   const updateEskizPro = (patch: Partial<EskizProIntegration>) => props.onChange({ ...project, eskizPro: { ...eskizPro, ...patch } });
 
@@ -104,9 +109,11 @@ export default function EskizProPanel(props: { project: Project; onChange: (proj
 
   const detach = (id: string) => {
     const nextIds = linkedIds.filter((item) => item !== id);
+    const nextBindings = Object.fromEntries(Object.entries(moduleBindings).filter(([key]) => !key.startsWith(`${id}:`)));
     updateEskizPro({
       linkedProjectIds: nextIds,
       activeProjectId: activeId === id ? nextIds[0] ?? null : activeId,
+      moduleBindings: nextBindings,
       snapshots: snapshots.filter((item) => item.id !== id),
     });
   };
@@ -133,13 +140,21 @@ export default function EskizProPanel(props: { project: Project; onChange: (proj
     }
   };
 
+  const syncModulesToCalculation = () => {
+    const result = syncEskizModulesToCalculation(project, linkedProjects);
+    props.onChange(result.project);
+    setMessage(result.markers.length
+      ? `Модули из Эскиз PRO синхронизированы: создано ${result.created}, обновлено ${result.updated}. Они уже участвуют в просчёте, КП и проверке.`
+      : 'В связанных эскизах нет объектов «Модуль». Добавьте в Эскиз PRO модуль как маркер/плашку и заполните его описание.');
+  };
+
   return (
     <section className="eskiz-pro-workspace">
       <div className="card eskiz-pro-intro no-print">
         <div>
           <span className="eyebrow">ЭСКИЗ PRO</span>
-          <h3>Внешний инструмент для скрина проекта и размерных аннотаций</h3>
-          <p className="muted small">Здесь больше нет автоотрисовки шкафов из модулей. Откройте настоящий Эскиз PRO, загрузите скрин проекта, нанесите размеры/подписи и привяжите сохранённый эскиз к расчёту и КП.</p>
+          <h3>Внешний инструмент для скрина проекта, размеров и модулей-маркеров</h3>
+          <p className="muted small">Откройте настоящий Эскиз PRO, загрузите скрин, нанесите размеры/подписи и добавьте объекты «Модуль» как точки/плашки. После синхронизации эти модули станут обычными позициями расчёта.</p>
         </div>
         <div className="actions">
           <a className="btn ghost" href={ESKIZ_PRO_URL} target="_blank" rel="noreferrer">Открыть в новой вкладке</a>
@@ -177,6 +192,22 @@ export default function EskizProPanel(props: { project: Project; onChange: (proj
               <input ref={fileRef} type="file" accept=".eskiz,application/json" hidden onChange={(event) => void importFile(event.target.files?.[0] ?? null)} />
             </div>
             {message && <div className="eskiz-pro-message muted small">{message}</div>}
+          </section>
+
+          <section className="card no-print eskiz-pro-module-sync">
+            <div className="section-head"><div><h3>Модули с эскиза → просчёт</h3><p className="muted small">Используйте объект «Модуль» в Эскиз PRO как точку или сноску. Описание можно писать свободно: «Низ 800 800×720×560, фасады 2, ящики 0».</p></div></div>
+            <div className="eskiz-pro-module-stats"><div><b>{moduleMarkers.length}</b><span>маркеров</span></div><div><b>{linkedModuleCount}</b><span>уже связаны</span></div><div><b>{Math.max(0, moduleMarkers.length - linkedModuleCount)}</b><span>новые</span></div></div>
+            <button className="btn primary block" disabled={moduleMarkers.length === 0} onClick={syncModulesToCalculation}>Создать / обновить модули в расчёте</button>
+            {moduleMarkers.length === 0 ? <div className="empty small">В привязанных эскизах пока нет объектов «Модуль».</div> : (
+              <div className="eskiz-pro-marker-list">
+                {moduleMarkers.slice(0, 8).map((marker) => {
+                  const moduleId = moduleBindings[marker.key];
+                  const linkedModule = moduleId ? project.modules?.find((module) => module.id === moduleId) : null;
+                  return <div key={marker.key}><b>{marker.number}</b><span>{marker.description || 'без описания'}{linkedModule ? ` → ${linkedModule.name}` : ' → будет создан'}</span>{linkedModule && props.onOpenModule && <button className="btn tiny ghost" onClick={() => props.onOpenModule?.(linkedModule.id)}>Открыть настройки</button>}</div>;
+                })}
+                {moduleMarkers.length > 8 && <div><b>+{moduleMarkers.length - 8}</b><span>ещё модулей</span></div>}
+              </div>
+            )}
           </section>
 
           <section className="card no-print">
