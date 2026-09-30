@@ -112,12 +112,12 @@ button:focus-visible, .chip:focus-visible, .wall-plan:focus-visible, summary:foc
 .empty.small { padding: 16px; }
 
 /* Стеклянные поверхности поверх фонового свечения */
-.card, .table, .totals-card, .empty, .client-doc, .kitchen-sketch, .dashboard-filters {
+.card, .table, .totals-card, .empty, .client-doc, .dashboard-filters {
   backdrop-filter: blur(14px) saturate(1.18);
   -webkit-backdrop-filter: blur(14px) saturate(1.18);
 }
 @media print {
-  .card, .table, .totals-card, .empty, .client-doc, .kitchen-sketch, .dashboard-filters {
+  .card, .table, .totals-card, .empty, .client-doc, .dashboard-filters {
     backdrop-filter: none; -webkit-backdrop-filter: none; background: #fff;
   }
   body { background: #fff !important; }
@@ -284,8 +284,6 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 /* ---------- client view ---------- */
 .client-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
 .client-toolbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.client-sketch-toggle { width: auto; flex-direction: row; align-items: center; gap: 5px; white-space: nowrap; color: var(--accent); }
-.client-sketch-toggle input { width: auto; }
 .client-doc { background: #fff; border-radius: var(--radius); padding: 34px 40px; max-width: 900px; box-shadow: var(--shadow-sm); }
 .cd-head { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
 .cd-brand { font-size: 26px; font-weight: 800; color: var(--accent); }
@@ -343,35 +341,7 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .cd-component-bodySurcharge .cd-component-kind { background: #fff2d8; color: #8a5a07; }
 .cd-component-handle .cd-component-kind, .cd-component-legs .cd-component-kind, .cd-component-shelf .cd-component-kind { background: #f4f0ea; color: #755b35; }
 
-/* ---------- kitchen sketch ---------- */
-.kitchen-sketch { background: #fff; border: 1px solid var(--line); border-radius: 13px; box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 16px; }
-.sketch-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 16px 18px 10px; flex-wrap: wrap; }
-.sketch-head h3 { margin: 0; color: #3b2565; font-size: 17px; }
-.sketch-head p { margin: 4px 0 0; max-width: 650px; color: var(--muted); font-size: 12px; }
-.sketch-segmented, .sketch-compact-switch { display: inline-flex; border: 1px solid #cbd7d1; border-radius: 8px; overflow: hidden; background: #fff; }
-.sketch-segmented button, .sketch-compact-switch button { border: 0; background: #fff; color: #50645a; padding: 7px 10px; cursor: pointer; font-size: 12px; }
-.sketch-segmented button + button, .sketch-compact-switch button + button { border-left: 1px solid #cbd7d1; }
-.sketch-segmented button.active, .sketch-compact-switch button.active { background: var(--accent); color: #fff; font-weight: 700; }
-.sketch-controls { display: flex; justify-content: space-between; gap: 12px; padding: 9px 18px 12px; border-top: 1px solid #eff2f0; border-bottom: 1px solid #e5ebe7; flex-wrap: wrap; }
-.sketch-style-picker { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: #50645a; font-size: 12px; font-weight: 700; }
-.style-swatch { border: 1px solid #d2dbd6; background: #fff; border-radius: 6px; padding: 3px 5px; display: inline-flex; align-items: center; gap: 2px; cursor: pointer; font-size: 10.5px; color: #4b5c54; }
-.style-swatch i { display: block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); }
-.style-swatch b { font-weight: 600; margin-left: 3px; }
-.style-swatch.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(124,58,237,.14); color: var(--accent); }
-.sketch-shape-picker { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: #50645a; font-size: 12px; font-weight: 700; }
-.shape-btn { border: 1px solid #d2dbd6; background: #fff; border-radius: 6px; padding: 4px 9px; cursor: pointer; font-size: 11.5px; color: #4b5c54; font-weight: 600; }
-.shape-btn.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 800; }
-.sketch-export { display: flex; gap: 6px; align-items: center; }
-.sketch-export .btn { margin: 0; }
-.sketch-canvas { overflow: auto hidden; padding: 8px 8px 2px; background: linear-gradient(#fbfdfc, #f4f8f6); }
-.sketch-canvas svg { display: block; width: 100%; min-width: 720px; max-height: 690px; }
-.sketch-canvas--tall { max-height: 690px; overflow: auto; }
-.sketch-canvas--tall svg { max-height: none; }
-.sketch-foot { min-height: 38px; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 14px; border-top: 1px solid #e5ebe7; color: #52645c; font-size: 12px; flex-wrap: wrap; }
-.sketch-move { display: flex; align-items: center; gap: 4px; }
-.sketch-move .btn { margin: 0; }
-.sketch-notice { color: var(--accent); font-weight: 700; }
-.sketch-empty { text-align: center; color: var(--muted); padding: 42px 20px; background: #fbfdfc; }
+/* ---------- Sketch PRO ---------- */
 .sketch-pro-panel { border-left: 4px solid var(--accent); }
 .sketch-pro-head { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; margin-bottom: 10px; }
 .sketch-pro-head h3 { margin: 0 0 3px; color: #3b2565; }
@@ -400,20 +370,6 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .sketch-pro-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
 @media (max-width: 1260px) { .sketch-pro-grid, .sketch-pro-edit-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .sketch-pro-head { flex-direction: column; } .sketch-pro-grid, .sketch-pro-edit-grid { grid-template-columns: 1fr 1fr; } .sketch-wall-card { grid-template-columns: 1fr; } .sketch-wall-card .btn { grid-column: auto; justify-self: start; } }
-.kitchen-sketch--compact { margin: 0 0 14px; box-shadow: none; }
-.kitchen-sketch--compact .sketch-head { padding: 11px 13px 4px; }
-.kitchen-sketch--compact .sketch-head h3 { font-size: 14px; }
-.sketch-compact-switch { margin: 0 13px 8px; }
-.kitchen-sketch--compact .sketch-canvas { max-height: 370px; overflow: auto; }
-.kitchen-sketch--compact .sketch-canvas svg { max-height: 355px; }
-.cd-sketch-pack { margin: 8px 0 18px; }
-.kitchen-sketch--client { border: 0; border-radius: 0; box-shadow: none; margin: 6px 0 20px; page-break-inside: avoid; }
-.kitchen-sketch--client-secondary { margin-top: -6px; border-top: 1px solid #e5e9e7; padding-top: 8px; }
-.kitchen-sketch--client .sketch-canvas { padding: 0; background: #fff; }
-.kitchen-sketch--client .sketch-canvas svg { min-width: 0; max-height: 510px; }
-.kitchen-sketch--client .sketch-canvas--tall { max-height: none; overflow: visible; }
-.kitchen-sketch--client .sketch-canvas--tall svg { max-height: none; }
-.client-sketch-title { margin: 10px 0 5px; padding-top: 12px; border-top: 1px solid #e5e9e7; text-align: center; color: #5b21b6; font-size: 17px; font-weight: 800; }
 
 /* ---- Позиции кухни (модули) ---- */
 .defaults-card { border-left: 3px solid var(--accent); }
@@ -514,9 +470,6 @@ input.dim { width: 54px; font-size: 11.5px; padding: 3px 4px; text-align: center
   .sidebar, .no-print, .tabs, .page-head, .actions { display: none !important; }
   .page { padding: 0; }
   .client-doc { box-shadow: none; padding: 0; }
-  .kitchen-sketch { border: 0; }
-  .kitchen-sketch--client .sketch-canvas svg { max-height: none; }
-  .sketch-canvas--tall { max-height: none; overflow: visible; }
   body { background: #fff; }
 }
 
@@ -546,9 +499,6 @@ input.dim { width: 54px; font-size: 11.5px; padding: 3px 4px; text-align: center
   .cd-module-card-head strong { grid-column: 2; }
   .cd-component, .cd-component.no-price { grid-template-columns: 1fr; gap: 4px; }
   .cd-component-qty, .cd-component-sum { text-align: left; }
-  .sketch-controls { padding: 8px 10px; }
-  .style-swatch b { display: none; }
-  .sketch-canvas svg { min-width: 640px; }
 }
 
 /* ---- мастер пошаговой сборки ---- */

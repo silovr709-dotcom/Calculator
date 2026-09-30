@@ -5,7 +5,6 @@ import { calcTotals, lineFromItem } from '../lib/engine';
 import { fmtMoney, fmtNum, fmtDate } from '../lib/format';
 import CatalogPicker from './CatalogPicker';
 import ModulesPanel from './ModulesPanel';
-import KitchenSketch from './KitchenSketch';
 import SketchProPanel from './SketchProPanel';
 import PhotosPanel from './PhotosPanel';
 import { checkModule, moduleToLines, moveModule } from '../lib/modules';
@@ -211,7 +210,7 @@ export default function ProjectEditor(props: {
         <button className={tab === 'modules' ? 'active' : ''} onClick={() => setTab('modules')}>
           Позиции кухни{(project.modules?.length ?? 0) > 0 ? ` (${project.modules!.length})` : ''}{moduleCriticals > 0 ? ' ⛔' : ''}
         </button>
-        <button className={tab === 'sketch' ? 'active' : ''} onClick={() => setTab('sketch')}>🎨 Эскиз кухни</button>
+        <button className={tab === 'sketch' ? 'active' : ''} onClick={() => setTab('sketch')}>🎨 Эскиз PRO</button>
         <button className={tab === 'check' ? 'active' : ''} onClick={() => setTab('check')}>✓ Проверка</button>
         <button className={tab === 'variants' ? 'active' : ''} onClick={() => setTab('variants')}>Варианты</button>
         <button className={tab === 'measurement' ? 'active' : ''} onClick={() => setTab('measurement')}>📏 Замер</button>
@@ -224,23 +223,14 @@ export default function ProjectEditor(props: {
       {tab === 'photos' && <PhotosPanel project={project} onChange={props.onChange} />}
 
       {tab === 'sketch' && (
-        <>
-          <SketchProPanel
-            project={project}
-            onChange={props.onChange}
-            selectedModuleId={selectedSketchModuleId}
-            onSelectCreated={(id) => { setSelectedSketchModuleId(id); setFocusModuleId(id); }}
-            onOpenModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
-          />
-          <KitchenSketch
-            modules={project.modules ?? []}
-            settings={project.sketch}
-            selectedModuleId={selectedSketchModuleId}
-            onSettingsChange={(sketch) => props.onChange({ ...project, sketch })}
-            onSelectModule={(id) => setSelectedSketchModuleId(id)}
-            onReorder={reorderModule}
-          />
-        </>
+        <SketchProPanel
+          project={project}
+          onChange={props.onChange}
+          selectedModuleId={selectedSketchModuleId}
+          onSelectCreated={(id) => { setSelectedSketchModuleId(id); setFocusModuleId(id); }}
+          onOpenModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
+          onReorder={reorderModule}
+        />
       )}
 
       {tab === 'check' && (
@@ -273,8 +263,6 @@ export default function ProjectEditor(props: {
             project={outProject}
             pricebook={pricebook}
             onOfferChange={(clientOffer) => props.onChange({ ...project, clientOffer })}
-            onSketchVisibilityChange={(showInClient) => props.onChange({ ...project, sketch: { ...project.sketch, showInClient } })}
-            onSketchChange={(sketch) => props.onChange({ ...project, sketch })}
             moduleGroups={moduleGroups.map(({ module: m, lines }) => ({
               id: m.id,
               title: m.name,

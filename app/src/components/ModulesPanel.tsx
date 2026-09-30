@@ -7,7 +7,6 @@ import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surch
 import { fmtMoney, fmtNum } from '../lib/format';
 import { LAYOUT_SHAPES, WALL_LABELS, WALL_SHORT_LABELS, layoutWalls, moduleWall, normalizeLayoutShape } from '../lib/kitchenSketch';
 import CatalogPicker from './CatalogPicker';
-import KitchenSketch from './KitchenSketch';
 import WallPlanner from './WallPlanner';
 import BulkEditPanel from './BulkEditPanel';
 import { fillFromAbove } from '../lib/bulkEdit';
@@ -37,10 +36,9 @@ export default function ModulesPanel(props: {
   const { project, pricebook } = props;
   const mods = project.modules ?? EMPTY_MODULES;
   const defaults: ModuleDefaults = project.moduleDefaults ?? EMPTY_DEFAULTS;
-  // Панель монтируется при переходе с вкладки эскиза, поэтому значение focusModuleId
+  // Панель монтируется при переходе из Эскиз PRO, поэтому значение focusModuleId
   // можно безопасно использовать как начальное состояние без каскадного эффекта.
   const [selId, setSelId] = useState<string | null>(() => props.focusModuleId ?? null);
-  const [showSketch, setShowSketch] = useState(() => Boolean(props.focusModuleId));
   const [addOpen, setAddOpen] = useState(false);
   // выбор в каталоге: для настроек проекта или для слота конкретного модуля
   const [pick, setPick] = useState<{ slot: SlotKey; moduleId: string | null } | null>(null);
@@ -297,7 +295,6 @@ export default function ModulesPanel(props: {
             </div>
           )}
         </div>
-        <button className="btn ghost" onClick={() => setShowSketch((value) => !value)}>🎨 {showSketch ? 'Скрыть эскиз ▲' : 'Показать эскиз ▼'}</button>
         <button className="btn ghost" onClick={() => setShowPlanner((value) => !value)}>▦ Разложить по стене</button>
         <button className="btn ghost" disabled={selectedIds.length === 0} onClick={() => setShowBulkEdit((value) => !value)}>✎ Массовое редактирование ({selectedIds.length})</button>
         {(pendingDimensionModuleCount + pendingFacadeModuleCount + pendingHingeModuleCount) > 0 && (
@@ -327,17 +324,6 @@ export default function ModulesPanel(props: {
 
       {showPlanner && <WallPlanner project={project} onChange={props.onChange} onClose={() => setShowPlanner(false)} />}
       {showBulkEdit && <BulkEditPanel modules={mods} selectedIds={selectedIds} pricebook={pricebook} onApply={(next) => props.onChange({ ...project, modules: next })} onClose={() => setShowBulkEdit(false)} />}
-
-      {showSketch && (
-        <KitchenSketch
-          mode="compact"
-          modules={mods}
-          settings={project.sketch}
-          onSettingsChange={(sketch) => props.onChange({ ...project, sketch })}
-          onSelectModule={setSelId}
-          onReorder={(id, direction) => reorder(id, direction)}
-        />
-      )}
 
       {/* Таблица позиций */}
       {mods.length === 0 ? (

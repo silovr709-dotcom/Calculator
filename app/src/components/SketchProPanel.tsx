@@ -50,6 +50,7 @@ export default function SketchProPanel(props: {
   selectedModuleId?: string | null;
   onSelectCreated?: (id: string) => void;
   onOpenModule?: (id: string) => void;
+  onReorder?: (moduleId: string, direction: -1 | 1) => void;
 }) {
   const walls = layoutWalls(props.project.sketch?.shape);
   const [wall, setWall] = useState<KitchenWall>(walls[0] ?? 'back');
@@ -57,6 +58,7 @@ export default function SketchProPanel(props: {
   const modules = props.project.modules ?? EMPTY_MODULES;
   const currentWall = walls.includes(wall) ? wall : (walls[0] ?? 'back');
   const selected = modules.find((module) => module.id === props.selectedModuleId) ?? null;
+  const selectedIndex = selected ? modules.findIndex((module) => module.id === selected.id) : -1;
   const layout = useMemo(() => buildKitchenLayout(modules, props.project.sketch?.shape), [modules, props.project.sketch?.shape]);
 
   const setPreset = (preset: SketchDraftPreset) => {
@@ -142,6 +144,8 @@ export default function SketchProPanel(props: {
           <div className="sketch-pro-selected-head">
             <div><b>Выбран на эскизе: {selected.name}</b><span className="muted small">Правки ниже сразу меняют расчёт и КП.</span></div>
             <div className="actions">
+              {props.onReorder && <button className="btn tiny ghost" disabled={selectedIndex <= 0} onClick={() => props.onReorder?.(selected.id, -1)}>◀</button>}
+              {props.onReorder && <button className="btn tiny ghost" disabled={selectedIndex < 0 || selectedIndex >= modules.length - 1} onClick={() => props.onReorder?.(selected.id, 1)}>▶</button>}
               <button className="btn tiny ghost" onClick={() => props.onOpenModule?.(selected.id)}>Открыть карточку</button>
               <button className="btn tiny ghost" onClick={duplicateSelected}>Дублировать</button>
               <button className="btn tiny danger" onClick={deleteSelected}>Удалить</button>
