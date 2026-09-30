@@ -5,6 +5,7 @@ import { calculateVariant } from '../lib/variants';
 import { buildClientOfferDetails, isModuleLine, moduleNoteMatches, stripModuleNote } from '../lib/clientOffer';
 import { fmtMoney, fmtDate, fmtNum } from '../lib/format';
 import { exportClientXlsx } from '../lib/exporters';
+import SketchProCanvas from './SketchProCanvas';
 
 /** Строка модуля в клиентской версии — без закупочных цен и внутренних данных. */
 export interface ClientModuleGroup {
@@ -101,6 +102,9 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const showDetailPrices = project.clientOffer?.showDetailPrices !== false;
   const isBrief = presentationMode === 'brief';
   const isTechnical = presentationMode === 'technical';
+  const clientSketchVisible = (project.modules?.length ?? 0) > 0 && project.sketch?.showInClient !== false;
+  const clientSketchDimensions = project.sketch?.showDimensionsInClient !== false;
+  const clientSketchView = project.sketch?.view === 'plan' ? 'plan' : 'elevation';
   const visibleVariants = (project.variants ?? []).filter((variant) => variant.clientVisible || variant.id === project.selectedVariantId);
   const groupLineIds = (group: ClientModuleGroup) => selectedVariant
     ? activeCalculation.lines.filter((line) => moduleNoteMatches(line.note, group.title, group.id)).map((line) => line.id)
@@ -188,6 +192,14 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         </section>
 
         {(project.photos ?? []).some((photo) => photo.showToClient) && <div className="cd-photos">{(project.photos ?? []).filter((photo) => photo.showToClient).map((photo) => <figure key={photo.id}><img src={photo.dataUrl} alt={photo.name} /><figcaption>{photo.name}</figcaption></figure>)}</div>}
+
+        {clientSketchVisible && (
+          <section className="cd-sketch-pro">
+            <div className="cd-section-head"><h3>Схема Эскиз PRO</h3><span>{clientSketchDimensions ? 'с размерами по модулям и стенам' : 'визуальная раскладка модулей'}</span></div>
+            <SketchProCanvas modules={project.modules ?? []} settings={{ ...project.sketch, view: clientSketchView }} showDimensions={clientSketchDimensions} variant="client" />
+            {isTechnical && clientSketchView !== 'plan' && <SketchProCanvas modules={project.modules ?? []} settings={{ ...project.sketch, view: 'plan' }} showDimensions={clientSketchDimensions} variant="client" className="sketch-pro-canvas-secondary" />}
+          </section>
+        )}
 
         {variantSummaries.length > 1 && <section className="cd-variants"><h3>Варианты комплектации</h3>{variantSummaries.map(({ variant, totals: variantTotals }) => <div className={`cd-variant-row ${variant.id === project.selectedVariantId ? 'active' : ''}`} key={variant.id}><div><b>{variant.name}</b><span>{variant.description}</span></div><strong>{variantTotals ? fmtMoney(variantTotals.client) : '—'}</strong></div>)}</section>}
 

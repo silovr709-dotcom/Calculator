@@ -228,6 +228,7 @@ export default function ProjectEditor(props: {
           onChange={props.onChange}
           selectedModuleId={selectedSketchModuleId}
           onSelectCreated={(id) => { setSelectedSketchModuleId(id); setFocusModuleId(id); }}
+          onSelectModule={(id) => setSelectedSketchModuleId(id)}
           onOpenModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
           onReorder={reorderModule}
         />

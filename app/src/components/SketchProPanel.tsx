@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import type { KitchenModule, KitchenWall, Project } from '../types';
-import { buildKitchenLayout, layoutWalls, moduleWall, WALL_LABELS } from '../lib/kitchenSketch';
+import type { KitchenLayoutShape, KitchenModule, KitchenSketchSettings, KitchenSketchStyleId, KitchenSketchView, KitchenWall, Project } from '../types';
+import { buildKitchenLayout, layoutWalls, moduleWall, normalizeLayoutShape, LAYOUT_SHAPES, SKETCH_STYLES, WALL_LABELS } from '../lib/kitchenSketch';
 import { MODULE_TYPES, newModule } from '../lib/modules';
+import SketchProCanvas from './SketchProCanvas';
 
 interface SketchDraftPreset {
   id: string;
@@ -49,6 +50,7 @@ export default function SketchProPanel(props: {
   onChange: (project: Project) => void;
   selectedModuleId?: string | null;
   onSelectCreated?: (id: string) => void;
+  onSelectModule?: (id: string) => void;
   onOpenModule?: (id: string) => void;
   onReorder?: (moduleId: string, direction: -1 | 1) => void;
 }) {
@@ -60,6 +62,12 @@ export default function SketchProPanel(props: {
   const selected = modules.find((module) => module.id === props.selectedModuleId) ?? null;
   const selectedIndex = selected ? modules.findIndex((module) => module.id === selected.id) : -1;
   const layout = useMemo(() => buildKitchenLayout(modules, props.project.sketch?.shape), [modules, props.project.sketch?.shape]);
+  const sketch = props.project.sketch ?? {};
+  const sketchView: KitchenSketchView = sketch.view === 'plan' ? 'plan' : 'elevation';
+  const sketchShape = normalizeLayoutShape(sketch.shape);
+  const sketchStyle: KitchenSketchStyleId = sketch.styleId ?? 'white-oak';
+  const showInClient = sketch.showInClient !== false;
+  const showDimensionsInClient = sketch.showDimensionsInClient !== false;
 
   const setPreset = (preset: SketchDraftPreset) => {
     setDraft(draftFromPreset(preset));
@@ -67,6 +75,7 @@ export default function SketchProPanel(props: {
   };
   const patch = (next: Partial<typeof draft>) => setDraft((current) => ({ ...current, ...next }));
   const setModules = (next: KitchenModule[]) => props.onChange({ ...props.project, modules: next });
+  const setSketch = (next: Partial<KitchenSketchSettings>) => props.onChange({ ...props.project, sketch: { ...props.project.sketch, ...next } });
   const updateSelected = (patchValue: Partial<KitchenModule>) => {
     if (!selected) return;
     setModules(modules.map((module) => (module.id === selected.id ? { ...module, ...patchValue } : module)));
@@ -121,6 +130,16 @@ export default function SketchProPanel(props: {
         </div>
         <span className="sketch-pro-badge">единая модель проекта</span>
       </div>
+
+      <div className="sketch-pro-controls">
+        <label>Планировка<select value={sketchShape} onChange={(event) => setSketch({ shape: event.target.value as KitchenLayoutShape })}>{LAYOUT_SHAPES.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label>Вид<select value={sketchView} onChange={(event) => setSketch({ view: event.target.value as KitchenSketchView })}><option value="elevation">Развёртки стен</option><option value="plan">План сверху</option></select></label>
+        <label>Стиль<select value={sketchStyle} onChange={(event) => setSketch({ styleId: event.target.value as KitchenSketchStyleId })}>{SKETCH_STYLES.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label className="chk-row"><input type="checkbox" checked={showInClient} onChange={(event) => setSketch({ showInClient: event.target.checked })} /> Схема в КП</label>
+        <label className="chk-row"><input type="checkbox" checked={showDimensionsInClient} onChange={(event) => setSketch({ showDimensionsInClient: event.target.checked })} /> Размеры в КП</label>
+      </div>
+
+      <SketchProCanvas modules={modules} settings={{ ...props.project.sketch, view: sketchView }} selectedModuleId={props.selectedModuleId} onSelectModule={props.onSelectModule} />
 
       <div className="sketch-pro-wall-status">
         {walls.map((item) => {
