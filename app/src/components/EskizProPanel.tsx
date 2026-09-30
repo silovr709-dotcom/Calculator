@@ -43,6 +43,7 @@ export default function EskizProPanel(props: { project: Project; onChange: (proj
     .filter((item): item is NonNullable<typeof item> => Boolean(item)), [linkedIds, snapshots]);
   const activeId = eskizPro.activeProjectId && linkedIds.includes(eskizPro.activeProjectId) ? eskizPro.activeProjectId : linkedIds[0] ?? null;
   const showInClient = eskizPro.showInClient !== false;
+  const clientMode = eskizPro.clientMode ?? 'active';
 
   const updateEskizPro = (patch: Partial<EskizProIntegration>) => props.onChange({ ...project, eskizPro: { ...eskizPro, ...patch } });
 
@@ -75,6 +76,7 @@ export default function EskizProPanel(props: { project: Project; onChange: (proj
         linkedProjectIds: unique([id, ...linkedIds]),
         activeProjectId: id,
         showInClient,
+        clientMode,
         snapshots: upsertEskizSnapshot(snapshots, found),
       });
       setMessage(`Эскиз «${found.title}» привязан к проекту и сохранён в snapshot.`);
@@ -119,6 +121,7 @@ export default function EskizProPanel(props: { project: Project; onChange: (proj
         linkedProjectIds: unique([imported.id, ...linkedIds]),
         activeProjectId: imported.id,
         showInClient,
+        clientMode,
         snapshots: upsertEskizSnapshot(snapshots, imported),
       });
       setMessage(`Файл «${imported.title}» импортирован и привязан к проекту.`);
@@ -160,7 +163,15 @@ export default function EskizProPanel(props: { project: Project; onChange: (proj
         <aside className="eskiz-pro-side">
           <section className="card no-print">
             <div className="section-head"><div><h3>Связь с проектом</h3><p className="muted small">Snapshot сохраняется внутри проекта калькулятора, поэтому КП и экспорт проекта не зависят от локальной базы браузера.</p></div></div>
-            <label className="chk-row"><input type="checkbox" checked={showInClient} onChange={(event) => updateEskizPro({ showInClient: event.target.checked })} /> Показывать связанные эскизы в КП</label>
+            <div className="eskiz-pro-kp-controls">
+              <label className="chk-row"><input type="checkbox" checked={showInClient} onChange={(event) => updateEskizPro({ showInClient: event.target.checked })} /> Вставить Эскиз PRO в КП</label>
+              <label>Что вставлять<select value={clientMode} onChange={(event) => updateEskizPro({ clientMode: event.target.value as EskizProIntegration['clientMode'] })}><option value="active">Только главный эскиз</option><option value="all">Все связанные эскизы</option></select></label>
+            </div>
+            <div className="eskiz-pro-status-cards">
+              <div><b>{linkedIds.length}</b><span>привязано</span></div>
+              <div><b>{activeId ? 'Да' : 'Нет'}</b><span>главный эскиз</span></div>
+              <div><b>{showInClient ? 'Да' : 'Нет'}</b><span>в КП</span></div>
+            </div>
             <div className="actions eskiz-pro-import-actions">
               <button className="btn ghost" onClick={() => fileRef.current?.click()}>Импорт .eskiz</button>
               <input ref={fileRef} type="file" accept=".eskiz,application/json" hidden onChange={(event) => void importFile(event.target.files?.[0] ?? null)} />

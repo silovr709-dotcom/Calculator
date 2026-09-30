@@ -276,6 +276,8 @@ export interface EskizProIntegration {
   activeProjectId?: string | null;
   /** false — не показывать связанные эскизы в клиентском КП; отсутствие поля = показывать. */
   showInClient?: boolean;
+  /** active — вставлять в КП только главный эскиз; all — вставлять все связанные snapshot. */
+  clientMode?: 'active' | 'all';
   snapshots?: EskizProSnapshot[];
 }
 

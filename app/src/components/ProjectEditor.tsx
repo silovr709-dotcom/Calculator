@@ -248,6 +248,7 @@ export default function ProjectEditor(props: {
             project={outProject}
             pricebook={pricebook}
             onOfferChange={(clientOffer) => props.onChange({ ...project, clientOffer })}
+            onEskizProChange={(eskizPro) => props.onChange({ ...project, eskizPro })}
             moduleGroups={moduleGroups.map(({ module: m, lines }) => ({
               id: m.id,
               title: m.name,

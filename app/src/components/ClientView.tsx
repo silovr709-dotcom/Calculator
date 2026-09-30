@@ -1,4 +1,4 @@
-import type { ClientOfferPresentationMode, ClientOfferSettings, Pricebook, Project } from '../types';
+import type { ClientOfferPresentationMode, ClientOfferSettings, EskizProIntegration, Pricebook, Project } from '../types';
 import type { ClientOfferDetail, ClientOfferDetailKind } from '../lib/clientOffer';
 import { calcTotals } from '../lib/engine';
 import { calculateVariant } from '../lib/variants';
@@ -86,11 +86,12 @@ function DetailRow({ detail, showPrice, technical }: { detail: ClientOfferDetail
   );
 }
 
-export default function ClientView({ project, pricebook, moduleGroups, onOfferChange }: {
+export default function ClientView({ project, pricebook, moduleGroups, onOfferChange, onEskizProChange }: {
   project: Project;
   pricebook?: Pricebook;
   moduleGroups?: ClientModuleGroup[];
   onOfferChange?: (offer: ClientOfferSettings) => void;
+  onEskizProChange?: (eskizPro: EskizProIntegration) => void;
 }) {
   const groups = moduleGroups ?? [];
   const baseProjectForVariants: Project = { ...project, lines: project.lines.filter((line) => !isModuleLine(line)) };
@@ -105,10 +106,17 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const isTechnical = presentationMode === 'technical';
   const linkedEskizIds = project.eskizPro?.linkedProjectIds ?? [];
   const eskizSnapshots = project.eskizPro?.snapshots ?? [];
-  const linkedEskizProjects = linkedEskizIds
-    .map((id) => snapshotProject(eskizSnapshots.find((item) => item.id === id)))
+  const eskizById = new Map(eskizSnapshots.map((snapshot) => [snapshot.id, snapshotProject(snapshot)]));
+  const allLinkedEskizProjects = linkedEskizIds
+    .map((id) => eskizById.get(id))
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
+  const activeEskizId = project.eskizPro?.activeProjectId && linkedEskizIds.includes(project.eskizPro.activeProjectId) ? project.eskizPro.activeProjectId : linkedEskizIds[0] ?? null;
+  const activeEskizProject = activeEskizId ? eskizById.get(activeEskizId) : null;
+  const eskizClientMode = project.eskizPro?.clientMode ?? 'active';
+  const linkedEskizProjects = eskizClientMode === 'all' ? allLinkedEskizProjects : (activeEskizProject ? [activeEskizProject] : allLinkedEskizProjects.slice(0, 1));
   const clientSketchVisible = linkedEskizProjects.length > 0 && project.eskizPro?.showInClient !== false;
+  const newestEskiz = allLinkedEskizProjects.reduce<NonNullable<typeof activeEskizProject> | null>((latest, item) => (!latest || item.updatedAt > latest.updatedAt ? item : latest), null);
+  const updateEskizPro = (patch: Partial<EskizProIntegration>) => onEskizProChange?.({ ...(project.eskizPro ?? {}), ...patch });
   const visibleVariants = (project.variants ?? []).filter((variant) => variant.clientVisible || variant.id === project.selectedVariantId);
   const groupLineIds = (group: ClientModuleGroup) => selectedVariant
     ? activeCalculation.lines.filter((line) => moduleNoteMatches(line.note, group.title, group.id)).map((line) => line.id)
@@ -170,13 +178,32 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           <label className="client-detail-price-toggle"><input type="checkbox" checked={showDetailPrices} onChange={(event) => updateOffer({ showDetailPrices: event.target.checked })} /> Показывать суммы в детализации</label>
           <label className="span-2">Примечания для клиента<textarea rows={2} value={project.clientOffer?.notes ?? ''} onChange={(event) => updateOffer({ notes: event.target.value })} /></label>
         </div>
+        <div className="client-eskiz-control">
+          <div>
+            <b>Эскиз PRO в КП</b>
+            <span>{allLinkedEskizProjects.length > 0 ? `Привязано: ${allLinkedEskizProjects.length}. ${newestEskiz ? `Последний snapshot: ${fmtDate(newestEskiz.updatedAt)}` : ''}` : 'Эскиз ещё не привязан — добавьте его на вкладке «Эскиз PRO» или импортируйте .eskiz.'}</span>
+          </div>
+          <label className="chk-row"><input type="checkbox" disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} checked={project.eskizPro?.showInClient !== false && allLinkedEskizProjects.length > 0} onChange={(event) => updateEskizPro({ showInClient: event.target.checked })} /> Вставить в КП</label>
+          <label>Показывать<select disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} value={eskizClientMode} onChange={(event) => updateEskizPro({ clientMode: event.target.value as EskizProIntegration['clientMode'] })}><option value="active">Только главный эскиз</option><option value="all">Все связанные эскизы</option></select></label>
+        </div>
       </section>
 
       <div className={`client-doc client-doc-${presentationMode}`} id="client-doc">
-        <div className="cd-head">
-          <div><div className="cd-brand">РЕцепт</div><div className="cd-sub">мебельное ателье</div></div>
-          <div className="cd-title"><h2>Коммерческое предложение</h2><div>{project.name}</div><div className="muted">{project.client && <>Заказчик: {project.client} · </>}{fmtDate(project.date)}</div></div>
-        </div>
+        <header className="cd-hero">
+          <div className="cd-hero-main">
+            <div className="cd-brand">РЕцепт</div>
+            <div className="cd-sub">мебельное ателье · индивидуальная кухня</div>
+            <h2>Коммерческое предложение</h2>
+            <h1>{project.name}</h1>
+            <div className="cd-hero-meta">{project.client && <span>Заказчик: <b>{project.client}</b></span>}<span>Дата: {fmtDate(project.date)}</span>{selectedVariant && <span>Вариант: <b>{selectedVariant.name}</b></span>}</div>
+            <div className="cd-hero-tags"><span>{MODE_LABELS[presentationMode]}</span>{clientSketchVisible && <span>Эскиз PRO включён</span>}{groups.length > 0 && <span>{fmtNum(moduleQty, 3)} модулей</span>}</div>
+          </div>
+          <div className="cd-hero-price">
+            <span>Итоговая стоимость</span>
+            <b>{fmtMoney(totals.client)}</b>
+            <em>без внутренних закупочных цен</em>
+          </div>
+        </header>
 
         {project.clientOffer && <div className="cd-terms"><div><b>Действительно до</b><span>{project.clientOffer.validUntil ? fmtDate(project.clientOffer.validUntil) : 'не указано'}</span></div><div><b>Оплата</b><span>{project.clientOffer.paymentTerms || 'не указано'}</span></div><div><b>Монтаж</b><span>{project.clientOffer.installation || 'не указано'}</span></div><div><b>Доставка</b><span>{project.clientOffer.delivery || 'не указано'}</span></div></div>}
 
@@ -193,6 +220,13 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           </div>
           {includedChips.length > 0 && <div className="cd-included"><b>В предложение входит</b><div>{includedChips.map((chip) => <span key={chip}>{chip}</span>)}</div></div>}
           {materialHighlights.length > 0 && <div className="cd-materials"><b>Ключевые материалы</b><ul>{materialHighlights.map((item) => <li key={item}>{item}</li>)}</ul></div>}
+        </section>
+
+        <section className="cd-next-steps">
+          <div><b>1</b><span>Согласование КП и эскиза</span></div>
+          <div><b>2</b><span>Финальная проверка размеров</span></div>
+          <div><b>3</b><span>Производство комплекта</span></div>
+          <div><b>4</b><span>Доставка и монтаж</span></div>
         </section>
 
         {(project.photos ?? []).some((photo) => photo.showToClient) && <div className="cd-photos">{(project.photos ?? []).filter((photo) => photo.showToClient).map((photo) => <figure key={photo.id}><img src={photo.dataUrl} alt={photo.name} /><figcaption>{photo.name}</figcaption></figure>)}</div>}
