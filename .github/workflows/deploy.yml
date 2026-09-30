@@ -36,7 +36,7 @@ jobs:
   deploy:
     # Публикуем и main, и текущую рабочую ветку Arena, чтобы ссылку можно было
     # проверить до merge. Для других arena-веток достаточно проверки сборки.
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/01a0ecc5-calculator'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/01a0ee6f-calculator'
     needs: build
     runs-on: ubuntu-latest
     environment:
