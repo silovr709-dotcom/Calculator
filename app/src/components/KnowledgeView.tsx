@@ -12,7 +12,7 @@ import { fmtMoney } from '../lib/format';
  *  🏠 Обзор — состояние базы, быстрые переходы и критичные правила.
  *  🔎 Всё сразу — единый поиск по статьям, PDF-документам, разбивкам, фрезеровкам, фурнитуре и прайсу.
  *  📄 Документы — свои статьи + полные тексты инструкций и техничек фабрики.
- *  🎨 Разбивки  — ЛДСП, плёнки ПВХ, пластики, с фильтрами.
+ *  🎨 Разбивки  — ЛДСП, толщины, кромки, плёнки ПВХ, пластики, компакт Slotex, с фильтрами.
  *  🪚 Фрезеровки — каталог 2026 с картинками, размерами и ценой м² из прайса.
  *  🔩 Фурнитура — справочник из актуального прайса по группам.
  *  💰 Прайс — быстрый каталог всех позиций Висма с фильтрами.
@@ -175,7 +175,7 @@ function OverviewTab(props: {
   const pricebook = props.pricebooks[0];
   const docsCount = props.docs?.docs.length ?? 0;
   const sectionsCount = props.docs?.docs.reduce((sum, doc) => sum + doc.sections.length, 0) ?? 0;
-  const colorsCount = props.dicts ? props.dicts.groups.ldspColors.items.length + props.dicts.groups.films.items.length + props.dicts.groups.plastics.items.length : 0;
+  const colorsCount = props.dicts ? COLOR_GROUP_ORDER.reduce((sum, key) => sum + colorGroup(props.dicts!, key).items.length, 0) : 0;
   const millingsCount = millingsOf(props.dicts).length;
   const hardwareCount = hardwareEntries(pricebook).length;
   const priceCount = pricebook?.items.length ?? 0;
@@ -197,7 +197,7 @@ function OverviewTab(props: {
       <section className="kb-metrics">
         <button onClick={() => props.onOpenTab('docs')}><b>{docsCount}</b><span>PDF-документов</span><em>{sectionsCount} разделов</em></button>
         <button onClick={() => props.onOpenTab('docs')}><b>{props.articles.length}</b><span>своих статей</span><em>редактируются вручную</em></button>
-        <button onClick={() => props.onOpenTab('colors')}><b>{colorsCount}</b><span>цветов / покрытий</span><em>ЛДСП, ПВХ, пластики</em></button>
+        <button onClick={() => props.onOpenTab('colors')}><b>{colorsCount}</b><span>разбивок материалов</span><em>ЛДСП, ПВХ, HPL, компакт, кромки</em></button>
         <button onClick={() => props.onOpenTab('millings')}><b>{millingsCount}</b><span>фрезеровок</span><em>каталог 2026</em></button>
         <button onClick={() => props.onOpenTab('hardware')}><b>{hardwareCount}</b><span>позиций фурнитуры</span><em>из прайса</em></button>
         <button onClick={() => props.onOpenTab('pricebook')}><b>{priceCount}</b><span>строк прайса</span><em>{pricebook?.meta.name ?? 'прайс не загружен'}</em></button>
@@ -222,7 +222,7 @@ function OverviewTab(props: {
           <div className="kb-route-list">
             <button onClick={() => props.onOpenTab('docs')}><b>Инструкции / техничка</b><span>формулировки из PDF, страницы и разделы</span></button>
             <button onClick={() => props.onOpenTab('pricebook')}><b>Цена / артикул</b><span>любая строка прайса, категория, единица, источник</span></button>
-            <button onClick={() => props.onOpenTab('colors')}><b>Цвет / разбивка</b><span>ЛДСП, плёнки, пластики, текстуры «!»</span></button>
+            <button onClick={() => props.onOpenTab('colors')}><b>Цвет / разбивка</b><span>ЛДСП, толщины, кромки, плёнки, пластики, компакт Slotex, текстуры «!»</span></button>
             <button onClick={() => props.onOpenTab('millings')}><b>Фрезеровка</b><span>картинка, категория, размеры, цена м²</span></button>
             <button onClick={() => props.onOpenTab('hardware')}><b>Фурнитура</b><span>петли, ручки, ящики, подъёмники, GOLA</span></button>
           </div>
@@ -250,7 +250,10 @@ function AllSearchTab(props: { articles: KbArticle[]; docs: KnowledgeDocs | null
   const hardware = useMemo(() => hardwareEntries(pricebook), [pricebook]);
   const colorRows = useMemo(() => {
     if (!props.dicts) return [] as { group: string; row: Record<string, unknown> }[];
-    return (['ldspColors', 'films', 'plastics'] as const).flatMap((key) => props.dicts!.groups[key].items.map((row) => ({ group: props.dicts!.groups[key].label, row: row as unknown as Record<string, unknown> })));
+    return COLOR_GROUP_ORDER.flatMap((key) => {
+      const group = colorGroup(props.dicts!, key);
+      return group.items.map((row) => ({ group: group.label, row: row as unknown as Record<string, unknown> }));
+    });
   }, [props.dicts]);
 
   const hits = useMemo(() => {
@@ -273,9 +276,9 @@ function AllSearchTab(props: { articles: KbArticle[]; docs: KnowledgeDocs | null
       out.push({ id: entry.item.id, kind: 'Фурнитура', title: entry.item.name, meta: `${entry.group.label} · ${entry.item.article ?? 'без артикула'} · ${priceText(entry.item)}`, text: `${entry.item.category}${entry.item.subcategory ? ` · ${entry.item.subcategory}` : ''}`, score: scoreText(itemSearchText(entry.item), q, 1.05) || 3, tab: 'hardware' });
     }
     for (const { group, row } of colorRows) {
-      const text = `${row.name ?? ''} ${row.code ?? ''} ${row.article ?? ''} ${row.brand ?? ''} ${row.category ?? ''}`;
+      const text = JSON.stringify(row);
       const score = scoreText(text, q, 1);
-      if (score) out.push({ id: `${group}-${row.code ?? row.article ?? row.name}`, kind: 'Разбивка', title: String(row.name ?? row.code ?? row.article ?? 'Цвет'), meta: `${group} · ${row.brand ?? 'бренд не указан'}`, text: `${row.category ?? ''}${row.texture ? ' · текстура «!»' : ''}${row.status ? ` · ${row.status}` : ''}`, score, tab: 'colors' });
+      if (score) out.push({ id: `${group}-${row.code ?? row.article ?? row.name}`, kind: 'Разбивка', title: String(row.name ?? row.code ?? row.article ?? 'Цвет'), meta: `${group} · ${row.brand ?? 'бренд не указан'}`, text: `${row.category ?? ''}${row.collection ? ` · ${row.collection}` : ''}${row.texture ? ' · текстура «!»' : ''}${row.status ? ` · ${row.status}` : ''}`, score, tab: 'colors' });
     }
     for (const item of (pricebook?.items ?? [])) {
       const score = scoreText(itemSearchText(item), q, .9);
@@ -498,7 +501,97 @@ function DocsTab(props: { articles: KbArticle[]; onChange: (a: KbArticle[]) => v
 
 // ------------------------------------------------------------ Разбивки цветов
 
-type ColorKind = 'ldspColors' | 'films' | 'plastics';
+type ColorKind = 'ldspColors' | 'ldspThickness' | 'ldspEdges' | 'films' | 'plastics' | 'compactHpl';
+
+const COLOR_GROUP_ORDER: ColorKind[] = ['ldspColors', 'ldspThickness', 'ldspEdges', 'films', 'plastics', 'compactHpl'];
+
+type DictRow = Record<string, unknown>;
+
+function colorGroup(dicts: FactoryDicts, kind: ColorKind): { label: string; legend?: Record<string, string>; items: DictRow[] } {
+  const group = (dicts.groups as unknown as Record<string, { label: string; legend?: Record<string, string>; items: DictRow[] } | undefined>)[kind];
+  return group ?? { label: kind, items: [] };
+}
+
+function val(row: DictRow, key: string) {
+  const value = row[key];
+  if (value == null || value === '') return '';
+  return String(value);
+}
+
+function objEntries(row: DictRow, key: string) {
+  const value = row[key];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [] as [string, string][];
+  return Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v != null && v !== '')
+    .map(([k, v]) => [k, String(v)] as [string, string]);
+}
+
+function sourceText(row: DictRow) {
+  const sources = Array.isArray(row.sources) ? row.sources as Array<Record<string, unknown>> : [];
+  if (!sources.length) return '';
+  return sources
+    .slice(0, 3)
+    .map((s) => `${s.file ?? 'источник'}${s.sheet ? ` · ${s.sheet}` : ''}${s.row ? `:${s.row}` : ''}${s.pdfPage ? ` · стр. PDF ${s.pdfPage}` : ''}`)
+    .join(' / ') + (sources.length > 3 ? ` / ещё ${sources.length - 3}` : '');
+}
+
+function rowPrimary(row: DictRow, kind: ColorKind) {
+  if (kind === 'films') return val(row, 'code') || '—';
+  if (kind === 'compactHpl') return val(row, 'code') || '—';
+  return val(row, 'article') || val(row, 'code') || '—';
+}
+
+function rowCategory(row: DictRow) {
+  return [val(row, 'category'), val(row, 'status'), val(row, 'collection')].filter(Boolean).join(' · ');
+}
+
+function DetailPill(props: { label: string; value: string }) {
+  return <span className="kb-detail-pill"><b>{props.label}:</b> {props.value}</span>;
+}
+
+function DetailMap(props: { title: string; entries: [string, string][] }) {
+  if (!props.entries.length) return null;
+  return (
+    <div className="kb-detail-map">
+      <b>{props.title}</b>
+      <div>{props.entries.map(([k, v]) => <span key={`${props.title}-${k}`}>{k}: {v}</span>)}</div>
+    </div>
+  );
+}
+
+function RowDetails(props: { row: DictRow; kind: ColorKind }) {
+  const { row, kind } = props;
+  const pills: Array<{ label: string; value: string }> = [];
+  const push = (label: string, key: string) => {
+    const value = val(row, key);
+    if (value) pills.push({ label, value });
+  };
+  push('Формат', 'format');
+  push('Серия', 'series');
+  push('Коллекция', 'collection');
+  push('Тиснение', 'textureCode');
+  push('Поверхность', 'surfaceType');
+  push('Кромка GP', 'edgingArticle');
+  push('Кромка произв. 0,4', 'manufacturerEdge04');
+  push('Кромка произв. 1/2', 'manufacturerEdge1or2');
+  push('Кромка', 'edge');
+  push('Доплата', 'sheetSurcharge');
+  push('Перерасход', 'overuseRule');
+  push('Детали', 'details');
+  if (row.onlyMillingMilo) pills.push({ label: 'Правило', value: 'только фрезеровка «Мыло»' });
+  if (row.onlyMdf16) pills.push({ label: 'Правило', value: 'только МДФ 16 мм' });
+  if (row.texture && kind !== 'ldspThickness') pills.push({ label: 'Текстура', value: 'нужен знак «!» в бланке' });
+  const source = sourceText(row);
+  return (
+    <div className="kb-row-details">
+      {pills.map((pill) => <DetailPill key={`${pill.label}-${pill.value}`} label={pill.label} value={pill.value} />)}
+      <DetailMap title="Толщины" entries={objEntries(row, 'thicknesses')} />
+      <DetailMap title="Наличие кромок" entries={objEntries(row, 'edgeAvailability')} />
+      <DetailMap title="Кратность/наличие" entries={objEntries(row, 'availability')} />
+      {source && <small className="muted">Источник: {source}</small>}
+    </div>
+  );
+}
 
 function ColorsTab(props: { dicts: FactoryDicts | null }) {
   const [kind, setKind] = useState<ColorKind>('ldspColors');
@@ -509,121 +602,125 @@ function ColorsTab(props: { dicts: FactoryDicts | null }) {
   const [hideRetired, setHideRetired] = useState(true);
 
   const d = props.dicts;
+  const availableKinds = useMemo(() => {
+    if (!d) return [] as ColorKind[];
+    return COLOR_GROUP_ORDER.filter((k) => colorGroup(d, k).items.length > 0);
+  }, [d]);
   const rows = useMemo(() => {
-    if (!d) return [] as Record<string, unknown>[];
-    return d.groups[kind].items as unknown as Record<string, unknown>[];
+    if (!d) return [] as DictRow[];
+    return colorGroup(d, kind).items;
   }, [d, kind]);
 
-  const brands = useMemo(() => [...new Set(rows.map((r) => String(r.brand ?? '')).filter(Boolean))].sort(), [rows]);
-  const categories = useMemo(() => [...new Set(rows.map((r) => String(r.category ?? '')).filter(Boolean))].sort(), [rows]);
+  const brands = useMemo(() => [...new Set(rows.map((r) => val(r, 'brand')).filter(Boolean))].sort(), [rows]);
+  const categories = useMemo(() => [...new Set(rows.map(rowCategory).filter(Boolean))].sort(), [rows]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase().replace(/ё/g, 'е');
     return rows.filter((r) => {
-      if (brand && String(r.brand ?? '') !== brand) return false;
-      if (category && String(r.category ?? '') !== category) return false;
-      if (onlyTexture && !r.texture) return false;
-      const status = String(r.status ?? '');
+      if (brand && val(r, 'brand') !== brand) return false;
+      if (category && rowCategory(r) !== category) return false;
+      if (onlyTexture && !r.texture && !val(r, 'textureCode')) return false;
+      const status = val(r, 'status');
       if (hideRetired && (status === 'снята' || status === 'выведена')) return false;
       if (!q) return true;
-      const hay = `${r.name ?? ''} ${r.code ?? ''} ${r.article ?? ''} ${r.brand ?? ''} ${r.category ?? ''}`
-        .toLowerCase().replace(/ё/g, 'е');
+      const hay = JSON.stringify(r).toLowerCase().replace(/ё/g, 'е');
       return hay.includes(q);
     });
   }, [rows, query, brand, category, onlyTexture, hideRetired]);
 
   if (!d) return <div className="empty">Справочники разбивок загружаются…</div>;
 
-  const legend = (d.groups.films as unknown as { legend?: Record<string, string> }).legend;
+  const group = colorGroup(d, kind);
+  const legend = group.legend;
+  const totalRows = availableKinds.reduce((sum, k) => sum + colorGroup(d, k).items.length, 0);
 
   return (
     <>
+      <div className="kb-source-summary card">
+        <div>
+          <b>Полная база разбивок</b>
+          <p className="muted small">Загружено {totalRows} строк из {d.sources?.length ?? 0} документов: ЛДСП, толщины, кромки, ПВХ-плёнки, пластики ARPA/ABET/AGT/Rexay/FENIX и компакт Slotex.</p>
+        </div>
+        <span>{filtered.length} показано</span>
+      </div>
+
       <div className="kb-subtabs">
-        {(['ldspColors', 'films', 'plastics'] as ColorKind[]).map((k) => (
-          <button
-            key={k}
-            className={`chip${kind === k ? ' active' : ''}`}
-            onClick={() => { setKind(k); setBrand(''); setCategory(''); }}
-          >
-            {d.groups[k].label} <b>{d.groups[k].items.length}</b>
-          </button>
-        ))}
+        {availableKinds.map((k) => {
+          const g = colorGroup(d, k);
+          return (
+            <button
+              key={k}
+              className={`chip${kind === k ? ' active' : ''}`}
+              onClick={() => { setKind(k); setBrand(''); setCategory(''); setOnlyTexture(false); }}
+            >
+              {g.label} <b>{g.items.length}</b>
+            </button>
+          );
+        })}
       </div>
 
       <div className="card blank-controls">
         <label className="dashboard-search">Поиск
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Название, артикул или код цвета…" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Название, артикул, код, кромка, толщина, источник…" />
         </label>
-        <label>Бренд
+        <label>Бренд/поставщик
           <select value={brand} onChange={(e) => setBrand(e.target.value)}>
             <option value="">Все</option>
             {brands.map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
         </label>
         {categories.length > 0 && (
-          <label>Категория
+          <label>Категория / статус / коллекция
             <select value={category} onChange={(e) => setCategory(e.target.value)}>
               <option value="">Все</option>
               {categories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
         )}
-        {kind !== 'plastics' && (
-          <label className="kb-check">
-            <input type="checkbox" checked={onlyTexture} onChange={(e) => setOnlyTexture(e.target.checked)} /> только с текстурой «!»
-          </label>
-        )}
+        <label className="kb-check">
+          <input type="checkbox" checked={onlyTexture} onChange={(e) => setOnlyTexture(e.target.checked)} /> только текстурные/с тиснением
+        </label>
         <label className="kb-check">
           <input type="checkbox" checked={hideRetired} onChange={(e) => setHideRetired(e.target.checked)} /> скрыть снятые/выведенные
         </label>
         <div className="dashboard-filter-count muted small">Показано: {filtered.length} из {rows.length}</div>
       </div>
 
-      {kind === 'films' && legend && (
+      {legend && Object.keys(legend).length > 0 && (
         <div className="card kb-section">
           <b>Обозначения разбивки</b>
           <ul className="kb-legend">
-            {Object.values(legend).map((v) => <li key={v}>{v}</li>)}
+            {Object.entries(legend).map(([key, value]) => <li key={key}><b>{key}</b> — {value}</li>)}
           </ul>
         </div>
       )}
 
-      <table className="table">
+      <table className="table kb-breakdown-table">
         <thead>
           <tr>
-            <th>{kind === 'films' ? 'Код' : 'Артикул'}</th>
+            <th>Код / артикул</th>
             <th>Название</th>
             <th>Бренд</th>
-            <th>Категория</th>
-            {kind === 'ldspColors' && <th>Формат</th>}
-            {kind === 'ldspColors' && <th>Кромка</th>}
-            {kind !== 'ldspColors' && <th>Статус</th>}
+            <th>Категория / статус</th>
+            <th>Вся разбивка из источника</th>
           </tr>
         </thead>
         <tbody>
-          {filtered.slice(0, 500).map((r, i) => (
-            <tr key={`${r.code ?? r.article ?? r.name}-${i}`}>
-              <td>{String(r.code ?? r.article ?? '—')}</td>
+          {filtered.slice(0, 700).map((r, i) => (
+            <tr key={`${rowPrimary(r, kind)}-${val(r, 'name')}-${i}`}>
+              <td>{rowPrimary(r, kind)}</td>
               <td>
                 {r.texture ? <span className="kb-bang" title="Текстура: обязательно указывать «!» в бланке">!</span> : null}
-                {String(r.name ?? '')}
+                {val(r, 'name') || '—'}
               </td>
-              <td>{String(r.brand ?? '')}</td>
-              <td>{String(r.category ?? '')}</td>
-              {kind === 'ldspColors' && <td className="small">{String(r.format ?? '')}</td>}
-              {kind === 'ldspColors' && <td className="small">{r.edgingArticle ? `0,4мм ${r.edgingArticle} GP` : '—'}</td>}
-              {kind !== 'ldspColors' && (
-                <td className="small">
-                  {String(r.status ?? '')}
-                  {r.onlyMillingMilo ? ' · только «Мыло»' : ''}
-                  {r.onlyMdf16 ? ' · только МДФ 16' : ''}
-                </td>
-              )}
+              <td>{val(r, 'brand')}</td>
+              <td>{rowCategory(r) || '—'}</td>
+              <td><RowDetails row={r} kind={kind} /></td>
             </tr>
           ))}
         </tbody>
       </table>
-      {filtered.length > 500 && <p className="muted small">Показаны первые 500 — уточните поиск или фильтры.</p>}
+      {filtered.length > 700 && <p className="muted small">Показаны первые 700 — уточните поиск или фильтры.</p>}
       {filtered.length === 0 && <div className="empty small">Ничего не найдено. Снимите фильтры или измените запрос.</div>}
     </>
   );

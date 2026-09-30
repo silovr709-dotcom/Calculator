@@ -156,6 +156,27 @@ export interface ClientOfferSnapshot {
   note?: string;
 }
 
+export type OrderWorkflowStatus =
+  | 'draft'
+  | 'calculating'
+  | 'offerSent'
+  | 'clientThinking'
+  | 'approved'
+  | 'techCheck'
+  | 'factorySent'
+  | 'production'
+  | 'ready'
+  | 'delivered'
+  | 'rejected';
+
+export interface OrderWorkflow {
+  status: OrderWorkflowStatus;
+  nextAction?: string;
+  nextContactAt?: string;
+  managerComment?: string;
+  updatedAt?: string;
+}
+
 export interface MeasurementWall {
   id: string;
   name: string;
@@ -340,6 +361,8 @@ export interface Project {
   clientOffer?: ClientOfferSettings;
   /** История сохранённых версий КП для сравнения и повторных согласований. */
   clientOfferSnapshots?: ClientOfferSnapshot[];
+  /** Рабочий статус менеджера: следующий контакт, передача технологу/фабрике и комментарии. */
+  orderWorkflow?: OrderWorkflow;
   measurement?: MeasurementData;
   /** Подтверждённые пользователем «сознательные отсутствия» обязательных элементов кухни
    *  (например, кухня без стеновой панели и без плинтуса). Зафиксированное подтверждение

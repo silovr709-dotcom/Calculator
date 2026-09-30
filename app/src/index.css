@@ -1194,5 +1194,33 @@ input.dim { width: 54px; font-size: 11.5px; padding: 3px 4px; text-align: center
 .unresolved-issue.error { border-color: #f1b7aa; background: #fff4f1; }
 .unresolved-issue.warning { border-color: #f3d798; background: #fff9ea; }
 .unresolved-issue span { font-size: 11px; color: #42554d; }
-@media (max-width: 1180px) { .order-grid, .order-status-grid { grid-template-columns: 1fr 1fr; } .order-actions, .order-hero { flex-direction: column; } }
-@media (max-width: 760px) { .order-grid, .order-status-grid { grid-template-columns: 1fr; } .procurement-table div { grid-template-columns: 1fr; } .procurement-table em, .procurement-table strong { text-align: left; } }
+.order-workflow { display: flex; flex-direction: column; gap: 10px; }
+.order-status-pill { display: inline-flex; flex-direction: column; gap: 2px; align-items: flex-end; padding: 8px 10px; border-radius: 12px; background: #f3fbf5; color: #166534; font-weight: 900; }
+.order-status-pill small { color: #5d7469; font-weight: 700; font-size: 10px; }
+.order-status-strip { display: flex; flex-wrap: wrap; gap: 6px; }
+.order-status-strip button, .issue-filter button { border: 1px solid #d8e5df; background: #fff; color: #40554b; border-radius: 999px; padding: 7px 10px; font-weight: 800; font-size: 11px; cursor: pointer; }
+.order-status-strip button.active, .issue-filter button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.order-workflow-fields { display: grid; grid-template-columns: 1.2fr .7fr; gap: 10px; }
+.order-workflow-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 800; color: #55685d; }
+.order-workflow-fields .span-2 { grid-column: 1 / -1; }
+.quick-status-actions, .procurement-tools, .issue-filter { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.snapshot-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; min-width: min(620px, 100%); }
+.snapshot-delta b.up, .offer-version-list em.up { color: #b45309; }
+.snapshot-delta b.down, .offer-version-list em.down { color: #15803d; }
+.offer-version-list article { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+.offer-version-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.offer-version-main input, .offer-version-main textarea { width: 100%; }
+.procurement-tools { margin: 8px 0 10px; }
+.procurement-tools input { min-width: 280px; flex: 1; }
+.kb-source-summary { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin-bottom: 10px; }
+.kb-source-summary p { margin: 3px 0 0; }
+.kb-source-summary span { border-radius: 999px; background: var(--accent-soft); color: var(--accent); padding: 7px 10px; font-weight: 900; white-space: nowrap; }
+.kb-breakdown-table th:last-child { min-width: 340px; }
+.kb-row-details { display: flex; flex-direction: column; gap: 5px; }
+.kb-detail-pill { display: inline-flex; gap: 4px; width: fit-content; max-width: 100%; padding: 3px 7px; border-radius: 999px; background: #f5f8f6; border: 1px solid #e1ebe6; color: #40554b; font-size: 10.5px; }
+.kb-detail-map { padding: 6px 7px; border-radius: 9px; background: #fbfdfc; border: 1px solid #e8f0ec; }
+.kb-detail-map b { display: block; margin-bottom: 4px; color: #24382f; font-size: 10.5px; }
+.kb-detail-map div { display: flex; flex-wrap: wrap; gap: 4px; }
+.kb-detail-map span { display: inline-flex; padding: 2px 5px; border-radius: 7px; background: #fff; border: 1px solid #e1ebe6; font-size: 10px; color: #55685d; }
+@media (max-width: 1180px) { .order-grid, .order-status-grid { grid-template-columns: 1fr 1fr; } .order-actions, .order-hero { flex-direction: column; align-items: stretch; } .snapshot-form { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .order-grid, .order-status-grid, .order-workflow-fields { grid-template-columns: 1fr; } .procurement-table div { grid-template-columns: 1fr; } .procurement-table em, .procurement-table strong { text-align: left; } .procurement-tools input { min-width: 0; width: 100%; } .kb-source-summary { flex-direction: column; align-items: flex-start; } }

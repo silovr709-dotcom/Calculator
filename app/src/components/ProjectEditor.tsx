@@ -146,7 +146,6 @@ export default function ProjectEditor(props: {
           {props.onOpenFactoryBlank && (
             <button className="btn ghost" title="Калькулятор → данные проекта → бланк → проверка → документ" onClick={props.onOpenFactoryBlank}>📋 Бланк на фабрику</button>
           )}
-          <button className="btn ghost" title="Открыть этот проект на телефоне" onClick={() => setShowQrModal(true)}>📱 На телефон</button>
           <button className="btn ghost" onClick={props.onDuplicate}>Дублировать</button>
           <button className="btn ghost" onClick={() => { const n = prompt('Название шаблона:', project.name); if (n) props.onSaveTemplate(n); }}>В шаблон</button>
           <button className="btn danger ghost" onClick={props.onDelete}>Удалить</button>
@@ -191,7 +190,6 @@ export default function ProjectEditor(props: {
         <div><b>{editorMode === 'wizard' ? 'Мастер сборки' : 'Продвинутый режим'}</b><span className="muted small"> {editorMode === 'wizard' ? ' · шаги проведут по обязательным данным' : ' · все вкладки и быстрый доступ'}</span></div>
         <button className="btn tiny ghost" onClick={() => { const next = editorMode === 'wizard' ? 'advanced' : 'wizard'; setEditorMode(next); props.onChange({ ...project, wizardMode: next }); }}>{editorMode === 'wizard' ? 'Перейти к вкладкам' : 'Открыть мастер'}</button>
       </div>
-      <KitchenChecklistPanel project={project} pricebook={pricebook} onChange={props.onChange} />
       {editorMode === 'wizard' ? (
         <KitchenWizard
           project={project}
@@ -221,13 +219,16 @@ export default function ProjectEditor(props: {
       {tab === 'sketch' && <EskizProPanel project={project} pricebook={pricebook} onChange={props.onChange} onOpenModule={(id) => { setFocusModuleId(id); setTab('modules'); }} />}
 
       {tab === 'check' && (
-        <ProjectCheckCenter
-          project={project}
-          pricebook={pricebook}
-          onChange={props.onChange}
-          onSelectModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
-          onSelectLine={(id) => { setFocusLineId(id); setTab('lines'); window.setTimeout(() => document.getElementById(`project-line-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0); }}
-        />
+        <>
+          <KitchenChecklistPanel project={project} pricebook={pricebook} onChange={props.onChange} />
+          <ProjectCheckCenter
+            project={project}
+            pricebook={pricebook}
+            onChange={props.onChange}
+            onSelectModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
+            onSelectLine={(id) => { setFocusLineId(id); setTab('lines'); window.setTimeout(() => document.getElementById(`project-line-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0); }}
+          />
+        </>
       )}
 
       {tab === 'order' && (
@@ -236,6 +237,8 @@ export default function ProjectEditor(props: {
           pricebook={pricebook}
           onChange={props.onChange}
           onOpenClient={() => setTab('client')}
+          onOpenSketch={() => setTab('sketch')}
+          onOpenCheck={() => setTab('check')}
           onOpenFactoryBlank={props.onOpenFactoryBlank}
           onSelectModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
           onSelectLine={(id) => { setFocusLineId(id); setTab('lines'); window.setTimeout(() => document.getElementById(`project-line-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0); }}

@@ -1,19 +1,26 @@
 // Справочники разбивок Висма: извлечены ETL-скриптом tools/extract_factory_dicts.py
-// из реальных файлов репозитория (разбивка 2026 ЛДСП, разбивка ПВХ, разбивка 2026 пластиков).
+// из реальных файлов репозитория (все разбивки ЛДСП/толщин/кромок, ПВХ, пластиков, compact Slotex).
 // Ничего не придумываем: совпадение с бланком проверяем по данным самих разбивок.
 import type { BlankIssue, FactoryBlankField } from './factoryBlank';
 import { checkMillingValue, type Milling, type MillingsGroup } from './millings';
 
-export interface LdspColor { name: string; texture: boolean; brand: string; format: string; category: string; edgingArticle: string | null }
-export interface FilmColor { code: string; name: string; status: string; texture: boolean; brand: string; category: string; onlyMillingMilo?: boolean; onlyMdf16?: boolean }
-export interface PlasticItem { article: string; name: string; brand: string; format: string | null; category: string | null; status: string }
+export interface SourceRef { file: string; sheet?: string; row?: number; pdfPage?: number; printedPage?: number }
+export interface LdspColor { name: string; article?: string | null; texture: boolean; brand: string; format: string; category: string; edgingArticle: string | null; manufacturerEdge04?: string | null; manufacturerEdge1or2?: string | null; sheetSurcharge?: string | null; overuseRule?: string | null; sources?: SourceRef[] }
+export interface LdspThicknessItem { brand: string; name: string; article?: string | null; category?: string; textureCode?: string | null; thicknesses: Record<string, string>; edgeAvailability?: Record<string, string>; sources?: SourceRef[] }
+export interface LdspEdgeItem { brand: string; name: string; article?: string | null; edge: string; sources?: SourceRef[] }
+export interface FilmColor { code: string; name: string; status: string; texture: boolean; brand: string; category: string; onlyMillingMilo?: boolean; onlyMdf16?: boolean; sources?: SourceRef[] }
+export interface PlasticItem { article: string; name: string; brand: string; format: string | null; category: string | null; status: string; texture?: boolean; collection?: string | null; edge?: string | null; details?: string | null; sources?: SourceRef[] }
+export interface CompactHplItem { brand: string; collection?: string | null; series?: string | null; code: string; name: string; textureCode?: string | null; surfaceType?: string | null; availability: Record<string, string>; sources?: SourceRef[] }
 
 export interface FactoryDicts {
-  id: string; name: string;
+  id: string; name: string; sources?: string[];
   groups: {
-    ldspColors: { label: string; items: LdspColor[] };
-    films: { label: string; items: FilmColor[] };
-    plastics: { label: string; items: PlasticItem[] };
+    ldspColors: { label: string; legend?: Record<string, string>; items: LdspColor[] };
+    ldspThickness?: { label: string; legend?: Record<string, string>; items: LdspThicknessItem[] };
+    ldspEdges?: { label: string; legend?: Record<string, string>; items: LdspEdgeItem[] };
+    films: { label: string; legend?: Record<string, string>; items: FilmColor[] };
+    plastics: { label: string; legend?: Record<string, string>; items: PlasticItem[] };
+    compactHpl?: { label: string; legend?: Record<string, string>; items: CompactHplItem[] };
     /** Фрезеровки фасадов из «Каталога фрезеровок ВИСМА 2026». */
     millings: MillingsGroup;
   };
@@ -44,7 +51,10 @@ export function dictSuggestions(fieldKey: string, dicts: FactoryDicts, limit = 4
       return ldspColors.items.map((i) => `${i.texture ? '!' : ''}${i.name} (${i.brand}, ${i.category || i.format})`);
     case 'bodyEdging':
     case 'corpusEdging':
-      return uniq(ldspColors.items.map((i) => i.edgingArticle ? `0,4мм ${i.edgingArticle} GP` : null));
+      return uniq([
+        ...ldspColors.items.map((i) => i.edgingArticle ? `0,4мм ${i.edgingArticle} GP` : null),
+        ...(dicts.groups.ldspEdges?.items ?? []).map((i) => i.edge ? `${i.edge}${i.article ? ` (${i.article})` : ''}` : null),
+      ]);
     case 'facadeColor':
       return films.items.filter((i) => i.status === 'в работе').map((i) => `${i.texture ? '! ' : ''}${i.code} — ${i.name} (${i.brand})`);
     case 'facadeMilling':
@@ -75,15 +85,25 @@ function findDictMentions(value: string, dicts: FactoryDicts): DictHit[] {
   };
   for (const item of dicts.groups.ldspColors.items) {
     consider(item.name, { texture: item.texture }, `ЛДСП «${item.name}»`);
+    consider(item.article ?? null, { texture: item.texture }, `ЛДСП ${item.article}`);
     consider(item.edgingArticle, { texture: false }, `кромка GP «${item.edgingArticle}»`);
+  }
+  for (const item of dicts.groups.ldspEdges?.items ?? []) {
+    consider(item.article ?? null, { texture: false }, `подбор кромки ${item.article}`);
+    consider(item.edge, { texture: false }, `кромка «${item.edge}»`);
   }
   for (const item of dicts.groups.films.items) {
     consider(item.code, { texture: item.texture, status: item.status }, `плёнка ${item.code}`);
     consider(item.name, { texture: item.texture, status: item.status }, `плёнка «${item.name}»`);
   }
   for (const item of dicts.groups.plastics.items) {
-    consider(item.article, { texture: false, status: item.status }, `пластик ${item.article}`);
-    consider(item.name, { texture: false, status: item.status }, item.name.slice(0, 40));
+    consider(item.article, { texture: Boolean(item.texture), status: item.status }, `пластик ${item.article}`);
+    consider(item.name, { texture: Boolean(item.texture), status: item.status }, item.name.slice(0, 40));
+    consider(item.edge ?? null, { texture: false, status: item.status }, `кромка ${item.edge}`);
+  }
+  for (const item of dicts.groups.compactHpl?.items ?? []) {
+    consider(item.code, { texture: Boolean(item.textureCode) }, `компакт Slotex ${item.code}`);
+    consider(item.name, { texture: Boolean(item.textureCode) }, `компакт Slotex «${item.name}»`);
   }
   return hits;
 }

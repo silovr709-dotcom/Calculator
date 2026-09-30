@@ -12,9 +12,12 @@ const field = (key: string): FactoryBlankField => VISMA_KITCHEN_BLANK.fields.fin
 
 describe('справочники разбивок Висма', () => {
   it('загружаются с ожидаемым объёмом и структурой', () => {
-    expect(dicts.groups.ldspColors.items.length).toBeGreaterThan(150);
-    expect(dicts.groups.films.items.length).toBeGreaterThan(500);
-    expect(dicts.groups.plastics.items.length).toBeGreaterThan(100);
+    expect(dicts.groups.ldspColors.items.length).toBeGreaterThan(400);
+    expect(dicts.groups.films.items.length).toBeGreaterThan(900);
+    expect(dicts.groups.plastics.items.length).toBeGreaterThan(700);
+    expect(dicts.groups.ldspThickness?.items.length).toBeGreaterThan(200);
+    expect(dicts.groups.ldspEdges?.items.length).toBeGreaterThan(100);
+    expect(dicts.groups.compactHpl?.items.length).toBeGreaterThan(100);
     expect(dicts.groups.ldspColors.items.every((i) => i.name && i.brand)).toBe(true);
   });
 
