@@ -251,6 +251,8 @@ export interface KitchenSketchSettings {
   styleId?: KitchenSketchStyleId;
   /** false — не выводить эскиз в клиентском КП; отсутствие поля = выводить */
   showInClient?: boolean;
+  /** true — в КП принудительно выводить эскиз с размерными линиями; отсутствие поля = выводить размеры. */
+  showDimensionsInClient?: boolean;
   /** Планировка кухни; отсутствие поля = прямая (совместимость со старыми проектами). */
   shape?: KitchenLayoutShape;
   /** Вид эскиза по умолчанию; отсутствие поля = фасадные развёртки. */

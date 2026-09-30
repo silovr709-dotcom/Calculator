@@ -372,13 +372,27 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .sketch-move .btn { margin: 0; }
 .sketch-notice { color: var(--accent); font-weight: 700; }
 .sketch-empty { text-align: center; color: var(--muted); padding: 42px 20px; background: #fbfdfc; }
+.sketch-pro-panel { border-left: 4px solid var(--accent); }
+.sketch-pro-head { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; margin-bottom: 10px; }
+.sketch-pro-head h3 { margin: 0 0 3px; color: #3b2565; }
+.sketch-pro-head p { margin: 0; max-width: 760px; }
+.sketch-pro-badge { padding: 4px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 800; white-space: nowrap; }
+.sketch-pro-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.sketch-pro-grid { display: grid; grid-template-columns: 1.4fr 1fr repeat(10, minmax(76px, .72fr)); gap: 8px; align-items: end; }
+.sketch-pro-grid label { min-width: 0; }
+.sketch-pro-grid input, .sketch-pro-grid select { min-width: 0; }
+.sketch-pro-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+@media (max-width: 1260px) { .sketch-pro-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .sketch-pro-head { flex-direction: column; } .sketch-pro-grid { grid-template-columns: 1fr 1fr; } }
 .kitchen-sketch--compact { margin: 0 0 14px; box-shadow: none; }
 .kitchen-sketch--compact .sketch-head { padding: 11px 13px 4px; }
 .kitchen-sketch--compact .sketch-head h3 { font-size: 14px; }
 .sketch-compact-switch { margin: 0 13px 8px; }
 .kitchen-sketch--compact .sketch-canvas { max-height: 370px; overflow: auto; }
 .kitchen-sketch--compact .sketch-canvas svg { max-height: 355px; }
+.cd-sketch-pack { margin: 8px 0 18px; }
 .kitchen-sketch--client { border: 0; border-radius: 0; box-shadow: none; margin: 6px 0 20px; page-break-inside: avoid; }
+.kitchen-sketch--client-secondary { margin-top: -6px; border-top: 1px solid #e5e9e7; padding-top: 8px; }
 .kitchen-sketch--client .sketch-canvas { padding: 0; background: #fff; }
 .kitchen-sketch--client .sketch-canvas svg { min-width: 0; max-height: 510px; }
 .kitchen-sketch--client .sketch-canvas--tall { max-height: none; overflow: visible; }

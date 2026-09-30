@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ClientOfferPresentationMode, ClientOfferSettings, Pricebook, Project } from '../types';
+import type { ClientOfferPresentationMode, ClientOfferSettings, KitchenSketchSettings, Pricebook, Project } from '../types';
 import type { ClientOfferDetail, ClientOfferDetailKind } from '../lib/clientOffer';
 import { calcTotals } from '../lib/engine';
 import { calculateVariant } from '../lib/variants';
@@ -86,11 +86,12 @@ function DetailRow({ detail, showPrice, technical }: { detail: ClientOfferDetail
   );
 }
 
-export default function ClientView({ project, pricebook, moduleGroups, onSketchVisibilityChange, onOfferChange }: {
+export default function ClientView({ project, pricebook, moduleGroups, onSketchVisibilityChange, onSketchChange, onOfferChange }: {
   project: Project;
   pricebook?: Pricebook;
   moduleGroups?: ClientModuleGroup[];
   onSketchVisibilityChange?: (showInClient: boolean) => void;
+  onSketchChange?: (sketch: KitchenSketchSettings) => void;
   onOfferChange?: (offer: ClientOfferSettings) => void;
 }) {
   const groups = moduleGroups ?? [];
@@ -101,6 +102,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onSketchV
     : { ...calcTotals(project.lines, project.settings), lines: project.lines };
   const { lineCalcs, totals } = activeCalculation;
   const [showSketch, setShowSketch] = useState(project.sketch?.showInClient !== false);
+  const showDimensionsInClient = project.sketch?.showDimensionsInClient !== false;
   const presentationMode = project.clientOffer?.presentationMode ?? 'detailed';
   const showDetailPrices = project.clientOffer?.showDetailPrices !== false;
   const isBrief = presentationMode === 'brief';
@@ -145,6 +147,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onSketchV
         <div className="muted small">Клиент видит только этот документ: без себестоимости, закупочных цен и внутренних данных.{selectedVariant && <> Активен вариант: <b>{selectedVariant.name}</b>.</>}</div>
         <div className="client-toolbar-actions">
           {(project.modules?.length ?? 0) > 0 && <label className="client-sketch-toggle"><input type="checkbox" checked={showSketch} onChange={(event) => { const visible = event.target.checked; setShowSketch(visible); onSketchVisibilityChange?.(visible); }} /> Эскиз кухни</label>}
+          {(project.modules?.length ?? 0) > 0 && <label className="client-sketch-toggle"><input type="checkbox" checked={showDimensionsInClient} onChange={(event) => onSketchChange?.({ ...project.sketch, showDimensionsInClient: event.target.checked })} /> Размеры в КП</label>}
           <button className="btn ghost" onClick={() => exportClientXlsx({ ...project, lines: activeCalculation.lines, settings: selectedVariant?.settings ?? project.settings })}>Excel для клиента</button>
           <button className="btn primary" onClick={() => window.print()}>Печать / PDF</button>
         </div>
@@ -193,7 +196,25 @@ export default function ClientView({ project, pricebook, moduleGroups, onSketchV
         </section>
 
         {(project.photos ?? []).some((photo) => photo.showToClient) && <div className="cd-photos">{(project.photos ?? []).filter((photo) => photo.showToClient).map((photo) => <figure key={photo.id}><img src={photo.dataUrl} alt={photo.name} /><figcaption>{photo.name}</figcaption></figure>)}</div>}
-        {showSketch && (project.modules?.length ?? 0) > 0 && <KitchenSketch mode="client" modules={project.modules ?? []} settings={project.sketch} />}
+        {showSketch && (project.modules?.length ?? 0) > 0 && (
+          <div className="cd-sketch-pack">
+            <KitchenSketch
+              key={`client-${showDimensionsInClient ? 'dim-elevation' : project.sketch?.view ?? 'elevation'}`}
+              mode="client"
+              modules={project.modules ?? []}
+              settings={showDimensionsInClient ? { ...project.sketch, view: 'elevation' } : project.sketch}
+            />
+            {showDimensionsInClient && isTechnical && (
+              <KitchenSketch
+                key="client-dim-plan"
+                mode="client"
+                className="kitchen-sketch--client-secondary"
+                modules={project.modules ?? []}
+                settings={{ ...project.sketch, view: 'plan' }}
+              />
+            )}
+          </div>
+        )}
 
         {variantSummaries.length > 1 && <section className="cd-variants"><h3>Варианты комплектации</h3>{variantSummaries.map(({ variant, totals: variantTotals }) => <div className={`cd-variant-row ${variant.id === project.selectedVariantId ? 'active' : ''}`} key={variant.id}><div><b>{variant.name}</b><span>{variant.description}</span></div><strong>{variantTotals ? fmtMoney(variantTotals.client) : '—'}</strong></div>)}</section>}
 

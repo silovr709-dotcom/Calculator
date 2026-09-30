@@ -6,6 +6,7 @@ import { fmtMoney, fmtNum, fmtDate } from '../lib/format';
 import CatalogPicker from './CatalogPicker';
 import ModulesPanel from './ModulesPanel';
 import KitchenSketch from './KitchenSketch';
+import SketchProPanel from './SketchProPanel';
 import PhotosPanel from './PhotosPanel';
 import { checkModule, moduleToLines, moveModule } from '../lib/modules';
 import { validateProject } from '../lib/validation';
@@ -222,13 +223,20 @@ export default function ProjectEditor(props: {
       {tab === 'photos' && <PhotosPanel project={project} onChange={props.onChange} />}
 
       {tab === 'sketch' && (
-        <KitchenSketch
-          modules={project.modules ?? []}
-          settings={project.sketch}
-          onSettingsChange={(sketch) => props.onChange({ ...project, sketch })}
-          onSelectModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
-          onReorder={reorderModule}
-        />
+        <>
+          <SketchProPanel
+            project={project}
+            onChange={props.onChange}
+            onSelectCreated={(id) => setFocusModuleId(id)}
+          />
+          <KitchenSketch
+            modules={project.modules ?? []}
+            settings={project.sketch}
+            onSettingsChange={(sketch) => props.onChange({ ...project, sketch })}
+            onSelectModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
+            onReorder={reorderModule}
+          />
+        </>
       )}
 
       {tab === 'check' && (
@@ -262,6 +270,7 @@ export default function ProjectEditor(props: {
             pricebook={pricebook}
             onOfferChange={(clientOffer) => props.onChange({ ...project, clientOffer })}
             onSketchVisibilityChange={(showInClient) => props.onChange({ ...project, sketch: { ...project.sketch, showInClient } })}
+            onSketchChange={(sketch) => props.onChange({ ...project, sketch })}
             moduleGroups={moduleGroups.map(({ module: m, lines }) => ({
               id: m.id,
               title: m.name,
