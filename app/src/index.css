@@ -352,7 +352,7 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .sketch-pro-canvas { display: grid; gap: 10px; margin: 10px 0 12px; }
 .sketch-pro-canvas-empty { padding: 26px; border: 1px dashed #cbd7d1; border-radius: 12px; background: linear-gradient(135deg, #fbfffd, #f7f3ff); text-align: center; color: var(--muted); }
 .sketch-pro-canvas-empty b { display: block; margin-bottom: 4px; color: #3b2565; }
-.sketch-pro-wall-drawing, .sketch-pro-plan { overflow: hidden; border: 1px solid #dbe6e1; border-radius: 12px; background: #fff; page-break-inside: avoid; }
+.sketch-pro-wall-drawing, .sketch-pro-plan, .sketch-pro-3d { overflow: hidden; border: 1px solid #dbe6e1; border-radius: 12px; background: #fff; page-break-inside: avoid; }
 .sketch-pro-wall-drawing-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 9px 11px; border-bottom: 1px solid #edf2ef; background: linear-gradient(135deg, #fbfffd, #f8f3ff); }
 .sketch-pro-wall-drawing-head b { display: block; color: #332255; font-size: 13px; }
 .sketch-pro-wall-drawing-head span, .sketch-pro-wall-drawing-head em { color: var(--muted); font-size: 11px; font-style: normal; }
@@ -385,9 +385,25 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .sketch-pro-plan-module-upper rect { fill: rgba(255,255,255,.58); stroke-dasharray: 4 3; }
 .sketch-pro-plan-module-tall rect { fill: var(--sketch-body); }
 .sketch-pro-plan-module text, .sketch-pro-plan-wall-label { fill: #26362f; font-size: 11px; font-weight: 800; pointer-events: none; }
+.sketch-pro-3d svg { display: block; width: 100%; background: linear-gradient(#fff, #f5faf8); }
+.sketch-pro-3d-floor { fill: var(--sketch-floor); opacity: .42; stroke: rgba(0,0,0,.15); stroke-width: 1; }
+.sketch-pro-3d-wall { fill: var(--sketch-backsplash); opacity: .28; stroke: rgba(71, 85, 105, .2); stroke-width: 1; }
+.sketch-pro-3d-wall-right { opacity: .16; }
+.sketch-pro-3d-box { filter: drop-shadow(0 6px 5px rgba(38, 54, 47, .18)); }
+.sketch-pro-3d-box.interactive { cursor: pointer; }
+.sketch-pro-3d-face { stroke: var(--sketch-line); stroke-width: 1.1; }
+.sketch-pro-3d-face-front { fill: var(--sketch-facade); }
+.sketch-pro-3d-face-side { fill: var(--sketch-facade-dark); }
+.sketch-pro-3d-face-top { fill: color-mix(in srgb, var(--sketch-facade) 82%, white); }
+.sketch-pro-3d-box-tall .sketch-pro-3d-face-front { fill: var(--sketch-body); }
+.sketch-pro-3d-box-upper .sketch-pro-3d-face { opacity: .84; }
+.sketch-pro-3d-box.selected .sketch-pro-3d-face { stroke: var(--accent); stroke-width: 3; }
+.sketch-pro-3d-box.interactive:hover .sketch-pro-3d-face { stroke: var(--accent); stroke-width: 2; }
+.sketch-pro-3d-label { fill: #fff; stroke: rgba(0,0,0,.25); stroke-width: 2.5; paint-order: stroke; font-size: 13px; font-weight: 900; pointer-events: none; }
+.sketch-pro-3d-dim { fill: var(--accent); font-size: 11px; font-weight: 800; }
 .sketch-pro-canvas-client { margin: 4px 0 12px; }
 .sketch-pro-canvas-client .sketch-pro-wall-drawing-head { padding: 7px 9px; }
-.sketch-pro-canvas-client .sketch-pro-wall-drawing svg { max-height: 285px; }
+.sketch-pro-canvas-client .sketch-pro-wall-drawing svg, .sketch-pro-canvas-client .sketch-pro-3d svg { max-height: 285px; }
 .sketch-pro-canvas-secondary { margin-top: 6px; }
 .cd-sketch-pro { margin: 10px 0 16px; page-break-inside: avoid; }
 .sketch-pro-wall-status { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin: 10px 0 12px; }
@@ -403,7 +419,7 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .sketch-pro-selected { margin: 10px 0 12px; padding: 12px; border-radius: 11px; border: 1px solid #d8c9ff; background: linear-gradient(135deg, #fbf8ff, #f4fbf8); }
 .sketch-pro-selected-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 9px; flex-wrap: wrap; }
 .sketch-pro-selected-head b { display: block; color: #3b2565; }
-.sketch-pro-edit-grid { display: grid; grid-template-columns: 1.6fr 1fr repeat(6, minmax(76px, .75fr)); gap: 8px; align-items: end; }
+.sketch-pro-edit-grid { display: grid; grid-template-columns: minmax(180px, 1.6fr) minmax(130px, 1fr) repeat(auto-fit, minmax(76px, .75fr)); gap: 8px; align-items: end; }
 .sketch-pro-edit-grid label { min-width: 0; }
 .sketch-pro-edit-grid input, .sketch-pro-edit-grid select { min-width: 0; }
 .sketch-pro-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }

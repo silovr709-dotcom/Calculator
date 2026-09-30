@@ -104,7 +104,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const isTechnical = presentationMode === 'technical';
   const clientSketchVisible = (project.modules?.length ?? 0) > 0 && project.sketch?.showInClient !== false;
   const clientSketchDimensions = project.sketch?.showDimensionsInClient !== false;
-  const clientSketchView = project.sketch?.view === 'plan' ? 'plan' : 'elevation';
+  const clientSketchView = project.sketch?.view === 'plan' || project.sketch?.view === '3d' ? project.sketch.view : 'elevation';
   const visibleVariants = (project.variants ?? []).filter((variant) => variant.clientVisible || variant.id === project.selectedVariantId);
   const groupLineIds = (group: ClientModuleGroup) => selectedVariant
     ? activeCalculation.lines.filter((line) => moduleNoteMatches(line.note, group.title, group.id)).map((line) => line.id)

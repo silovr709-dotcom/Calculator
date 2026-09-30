@@ -63,7 +63,7 @@ export default function SketchProPanel(props: {
   const selectedIndex = selected ? modules.findIndex((module) => module.id === selected.id) : -1;
   const layout = useMemo(() => buildKitchenLayout(modules, props.project.sketch?.shape), [modules, props.project.sketch?.shape]);
   const sketch = props.project.sketch ?? {};
-  const sketchView: KitchenSketchView = sketch.view === 'plan' ? 'plan' : 'elevation';
+  const sketchView: KitchenSketchView = sketch.view === 'plan' || sketch.view === '3d' ? sketch.view : 'elevation';
   const sketchShape = normalizeLayoutShape(sketch.shape);
   const sketchStyle: KitchenSketchStyleId = sketch.styleId ?? 'white-oak';
   const showInClient = sketch.showInClient !== false;
@@ -133,7 +133,7 @@ export default function SketchProPanel(props: {
 
       <div className="sketch-pro-controls">
         <label>Планировка<select value={sketchShape} onChange={(event) => setSketch({ shape: event.target.value as KitchenLayoutShape })}>{LAYOUT_SHAPES.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label>Вид<select value={sketchView} onChange={(event) => setSketch({ view: event.target.value as KitchenSketchView })}><option value="elevation">Развёртки стен</option><option value="plan">План сверху</option></select></label>
+        <label>Вид<select value={sketchView} onChange={(event) => setSketch({ view: event.target.value as KitchenSketchView })}><option value="elevation">Развёртки стен</option><option value="plan">План сверху</option><option value="3d">3D · Объём</option></select></label>
         <label>Стиль<select value={sketchStyle} onChange={(event) => setSketch({ styleId: event.target.value as KitchenSketchStyleId })}>{SKETCH_STYLES.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label className="chk-row"><input type="checkbox" checked={showInClient} onChange={(event) => setSketch({ showInClient: event.target.checked })} /> Схема в КП</label>
         <label className="chk-row"><input type="checkbox" checked={showDimensionsInClient} onChange={(event) => setSketch({ showDimensionsInClient: event.target.checked })} /> Размеры в КП</label>
@@ -172,6 +172,7 @@ export default function SketchProPanel(props: {
           </div>
           <div className="sketch-pro-edit-grid">
             <label>Название<input value={selected.name} onChange={(event) => updateSelected({ name: event.target.value })} /></label>
+            <label>Тип<input list="sketch-pro-types" value={selected.type} onChange={(event) => updateSelected({ type: event.target.value })} /></label>
             <label>Стена<select value={moduleWall(selected, props.project.sketch?.shape)} onChange={(event) => updateSelected({ wall: event.target.value as KitchenWall })}>{walls.map((item) => <option key={item} value={item}>{WALL_LABELS[item]}</option>)}</select></label>
             <label>Кол-во<input type="number" min={1} value={selected.qty} onChange={(event) => updateSelected({ qty: n(event.target.value, 1) })} /></label>
             <label>Ширина<input type="number" min={1} value={selected.widthMm ?? ''} onChange={(event) => updateSelected({ widthMm: event.target.value ? Number(event.target.value) : null })} /></label>
@@ -179,6 +180,10 @@ export default function SketchProPanel(props: {
             <label>Глубина<input type="number" min={1} value={selected.depthMm ?? ''} onChange={(event) => updateSelected({ depthMm: event.target.value ? Number(event.target.value) : null })} /></label>
             <label>Фасады<input type="number" min={0} value={selected.facades} onChange={(event) => updateSelected({ facades: n(event.target.value) })} /></label>
             <label>Ящики<input type="number" min={0} value={selected.drawers} onChange={(event) => updateSelected({ drawers: n(event.target.value) })} /></label>
+            <label>Полки<input type="number" min={0} value={selected.shelves} onChange={(event) => updateSelected({ shelves: n(event.target.value) })} /></label>
+            <label>Петли<input type="number" min={0} value={selected.hinges} onChange={(event) => updateSelected({ hinges: n(event.target.value) })} /></label>
+            <label>Ручки<input type="number" min={0} value={selected.handles} onChange={(event) => updateSelected({ handles: n(event.target.value) })} /></label>
+            <label>Подъёмники<input type="number" min={0} value={selected.lifts} onChange={(event) => updateSelected({ lifts: n(event.target.value) })} /></label>
           </div>
         </div>
       )}

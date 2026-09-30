@@ -244,11 +244,89 @@ function PlanView(props: {
   );
 }
 
+interface IsoPoint { x: number; y: number }
+const polygonPoints = (items: IsoPoint[]) => items.map((item) => `${item.x.toFixed(1)},${item.y.toFixed(1)}`).join(' ');
+
+function ThreeDView(props: {
+  layout: KitchenLayout;
+  settings?: KitchenSketchSettings;
+  selectedModuleId?: string | null;
+  showDimensions: boolean;
+  onSelectModule?: (id: string) => void;
+}) {
+  const { layout, settings, selectedModuleId, showDimensions, onSelectModule } = props;
+  const room = roomBox(layout);
+  const style = getSketchStyle(settings?.styleId);
+  const roomHeight = Math.max(settings?.roomHeightMm ?? 0, layout.totalHeight, 2200);
+  const canvasWidth = 980;
+  const canvasHeight = 520;
+  const footprintWidth = room.width + room.depth * 0.58;
+  const footprintHeight = room.width * 0.18 + room.depth * 0.32;
+  const scale = Math.min((canvasWidth - 170) / footprintWidth, (canvasHeight - 120) / (footprintHeight + roomHeight * 0.45));
+  const zScale = scale * 0.45;
+  const originX = 70 + room.depth * 0.58 * scale;
+  const originY = 54 + roomHeight * zScale;
+  const runByWall = new Map(layout.walls.map((run) => [run.wall, run]));
+  const project = (x: number, y: number, z: number): IsoPoint => ({
+    x: originX + (x - y * 0.58) * scale,
+    y: originY + (x * 0.18 + y * 0.32) * scale - z * zScale,
+  });
+  const roomFloor = [project(0, 0, 0), project(room.width, 0, 0), project(room.width, room.depth, 0), project(0, room.depth, 0)];
+  const backWall = [project(0, 0, 0), project(room.width, 0, 0), project(room.width, 0, roomHeight), project(0, 0, roomHeight)];
+  const leftWall = [project(0, 0, 0), project(0, room.depth, 0), project(0, room.depth, roomHeight), project(0, 0, roomHeight)];
+  const rightWall = [project(room.width, 0, 0), project(room.width, room.depth, 0), project(room.width, room.depth, roomHeight), project(room.width, 0, roomHeight)];
+  const placedModules = [...layout.floor, ...layout.upper]
+    .map((placed) => ({ placed, rect: planRect(placed, layout) }))
+    .sort((a, b) => (a.rect.y1 + a.rect.x1 * 0.2) - (b.rect.y1 + b.rect.x1 * 0.2));
+
+  return (
+    <article className="sketch-pro-3d" style={sketchVars(style)}>
+      <div className="sketch-pro-wall-drawing-head"><div><b>3D · Объём</b><span>быстрая проверка массы, глубин и углов</span></div><em>{fmtMm(room.width)} × {fmtMm(room.depth)} · высота {fmtMm(roomHeight)}</em></div>
+      <svg viewBox={`0 0 ${canvasWidth} ${canvasHeight}`} role="img" aria-label="Эскиз PRO: 3D объём кухни">
+        <polygon className="sketch-pro-3d-wall sketch-pro-3d-wall-back" points={polygonPoints(backWall)} />
+        <polygon className="sketch-pro-3d-wall sketch-pro-3d-wall-left" points={polygonPoints(leftWall)} />
+        <polygon className="sketch-pro-3d-wall sketch-pro-3d-wall-right" points={polygonPoints(rightWall)} />
+        <polygon className="sketch-pro-3d-floor" points={polygonPoints(roomFloor)} />
+        {placedModules.map(({ placed, rect }) => {
+          const run = runByWall.get(placed.wall);
+          const z0 = placed.tier === 'upper' && run ? placedBottomMm(placed, run) : 0;
+          const z1 = z0 + (placed.tier === 'base' ? placed.height + 100 : placed.height);
+          const p100 = project(rect.x1, rect.y0, z0);
+          const p010 = project(rect.x0, rect.y1, z0);
+          const p110 = project(rect.x1, rect.y1, z0);
+          const p001 = project(rect.x0, rect.y0, z1);
+          const p101 = project(rect.x1, rect.y0, z1);
+          const p011 = project(rect.x0, rect.y1, z1);
+          const p111 = project(rect.x1, rect.y1, z1);
+          const label = project((rect.x0 + rect.x1) / 2, rect.y1, z1 + 65);
+          const selected = placed.sourceId === selectedModuleId;
+          const select = () => onSelectModule?.(placed.sourceId);
+          return (
+            <g
+              className={`sketch-pro-3d-box sketch-pro-3d-box-${placed.tier} ${selected ? 'selected' : ''} ${onSelectModule ? 'interactive' : ''}`}
+              key={`${placed.sourceId}-${placed.instance}-${placed.tier}`}
+              onClick={onSelectModule ? select : undefined}
+            >
+              <title>{moduleTitle(placed)}</title>
+              <polygon className="sketch-pro-3d-face sketch-pro-3d-face-side" points={polygonPoints([p100, p110, p111, p101])} />
+              <polygon className="sketch-pro-3d-face sketch-pro-3d-face-front" points={polygonPoints([p010, p110, p111, p011])} />
+              <polygon className="sketch-pro-3d-face sketch-pro-3d-face-top" points={polygonPoints([p001, p101, p111, p011])} />
+              <text className="sketch-pro-3d-label" x={label.x} y={label.y} textAnchor="middle">{moduleLabel(placed)}</text>
+            </g>
+          );
+        })}
+        {showDimensions && <text className="sketch-pro-3d-dim" x={project(room.width / 2, room.depth + 90, 0).x} y={project(room.width / 2, room.depth + 90, 0).y} textAnchor="middle">глубина помещения {fmtMm(room.depth)}</text>}
+        {showDimensions && <text className="sketch-pro-3d-dim" x={project(room.width / 2, -110, 0).x} y={project(room.width / 2, -110, 0).y} textAnchor="middle">ширина {fmtMm(room.width)}</text>}
+      </svg>
+    </article>
+  );
+}
+
 export default function SketchProCanvas(props: SketchProCanvasProps) {
   const { modules, settings, selectedModuleId, onSelectModule, className } = props;
   const layout = buildKitchenLayout(modules, settings?.shape);
   const showDimensions = props.showDimensions ?? true;
-  const view = settings?.view === 'plan' ? 'plan' : 'elevation';
+  const view = settings?.view === 'plan' || settings?.view === '3d' ? settings.view : 'elevation';
   const classes = ['sketch-pro-canvas', `sketch-pro-canvas-${props.variant ?? 'editor'}`, className].filter(Boolean).join(' ');
 
   if (layout.walls.length === 0) {
@@ -259,6 +337,14 @@ export default function SketchProCanvas(props: SketchProCanvasProps) {
     return (
       <div className={classes}>
         <PlanView layout={layout} settings={settings} selectedModuleId={selectedModuleId} showDimensions={showDimensions} onSelectModule={onSelectModule} />
+      </div>
+    );
+  }
+
+  if (view === '3d') {
+    return (
+      <div className={classes}>
+        <ThreeDView layout={layout} settings={settings} selectedModuleId={selectedModuleId} showDimensions={showDimensions} onSelectModule={onSelectModule} />
       </div>
     );
   }
