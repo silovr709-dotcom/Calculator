@@ -3396,3 +3396,45 @@ select option { background: #fff !important; color: #102037 !important; }
 .app :where(.blank-worktop-edge-buttons button.active b, .blank-worktop-piece-card.active b) {
   color: #ffffff !important;
 }
+
+/* ---------- Visibility sweep after daylight rollback ---------- */
+.app .main {
+  color: #102037 !important;
+  background: transparent !important;
+}
+.app .main :where(
+  .page, .section, .card, .totals-card, .modal, .table, .empty,
+  .quick-price-range, .quick-confidence, .quick-metrics span,
+  .finance-strip, .fin-item, .result, .line-card, .slot-row, .def-slot,
+  .wizard-step, .shape-choice, .wall-plan, .dict-card, .kb-hit, .kb-doc,
+  .procurement-group, .unresolved-issue, .offer-version-list article,
+  .blank-worktop-designer, .blank-worktop-piece-card, .blank-worktop-sketch,
+  .client-offer-editor, .embedded-eskiz-inspector, .eskiz-pro-export-card
+) {
+  color: #102037 !important;
+  background: rgba(255,255,255,.92) !important;
+  border-color: rgba(9,42,85,.16) !important;
+}
+.app .main :where(
+  .card, .totals-card, .modal, .table, .empty, .quick-price-range,
+  .quick-confidence, .finance-strip, .result, .line-card, .slot-row,
+  .def-slot, .wizard-step, .shape-choice, .wall-plan, .dict-card,
+  .kb-hit, .kb-doc, .procurement-group, .unresolved-issue,
+  .offer-version-list article, .blank-worktop-designer, .blank-worktop-piece-card,
+  .client-offer-editor, .eskiz-pro-export-card
+) :where(h1,h2,h3,h4,h5,h6,p,span,small,label,legend,li,td,th,summary,em,strong,b,div):not(button):not(.btn):not(.chip):not(.pin-code) {
+  color: inherit !important;
+  text-shadow: none !important;
+}
+.app .main :where(.muted, .sub, small, em, .hint, .qr-hint, .r-meta, .r-unit, .def-label, .slot-label, .fin-item span, .quick-price-range span, .quick-price-range em) {
+  color: #5f7088 !important;
+}
+.app .main :where(.card, .totals-card, .modal, .table, .blank-worktop-designer, .client-offer-editor) :where(svg text) {
+  fill: #0b2342;
+}
+.app .main :where(.btn.primary, button.primary, .tabs button.active, .chip.active, .kb-tab.active, .blank-worktop-edge-buttons button.active) :where(span,small,b,strong,em) {
+  color: #ffffff !important;
+}
+.blank-worktop-svg-dimension-label { cursor: move; }
+.blank-worktop-svg-dimension-label rect { filter: drop-shadow(0 2px 4px rgba(9,42,85,.14)); }
+.blank-worktop-svg-edge-label { cursor: pointer; }

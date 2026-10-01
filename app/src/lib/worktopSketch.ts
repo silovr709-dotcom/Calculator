@@ -7,8 +7,10 @@ export const WORKTOP_EDGE_SYMBOLS: Record<WorktopEdgeKind, string> = {
   pvc: 'Х',
   v: 'V',
   pf: 'ПФ',
-  eurozapil: '//',
-  eurostyk: '≈',
+  // Для стыков в официальном бланке используются синие пиктограммы.
+  // Эти строки — короткий fallback для текстовых мест интерфейса.
+  eurozapil: '⧖',
+  eurostyk: '↔',
 };
 
 export const WORKTOP_EDGE_SHORT_LABELS: Record<WorktopEdgeKind, string> = {
@@ -264,13 +266,23 @@ export function worktopDimensionPlacement(
     verticalSide = 'inside';
     verticalX = rect.x + rect.width - 32;
   }
+  const manualHorizontal = layout.piece.dimensionLabels?.horizontal;
+  const manualVertical = layout.piece.dimensionLabels?.vertical;
+  const toScreenPlacement = (manual: typeof manualHorizontal): WorktopLabelPlacement | null => {
+    if (!manual || !Number.isFinite(manual.xMm) || !Number.isFinite(manual.yMm)) return null;
+    return {
+      x: clamp(metrics.offsetX + Number(manual.xMm) * metrics.scale, 42, svgWidth - 42),
+      y: clamp(metrics.offsetY + Number(manual.yMm) * metrics.scale, 18, svgHeight - 60),
+      rotate: 0,
+    };
+  };
   return {
     horizontalValue: layout.rotated ? layout.piece.widthMm : layout.piece.lengthMm,
-    horizontal: { x: clamp(rect.centerX, 42, svgWidth - 42), y: clamp(horizontalY, 18, svgHeight - 60), rotate: 0 },
+    horizontal: toScreenPlacement(manualHorizontal) ?? { x: clamp(rect.centerX, 42, svgWidth - 42), y: clamp(horizontalY, 18, svgHeight - 60), rotate: 0 },
     verticalValue: layout.rotated ? layout.piece.lengthMm : layout.piece.widthMm,
     // Вертикальный размер ставим читаемой горизонтальной плашкой рядом со свободной стороной,
     // а не повернутым текстом на стыке — так длинные вертикальные детали не перекрывают соседей.
-    vertical: { x: clamp(verticalX, 42, svgWidth - 42), y: clamp(rect.centerY, 32, svgHeight - 62), rotate: 0 },
+    vertical: toScreenPlacement(manualVertical) ?? { x: clamp(verticalX, 42, svgWidth - 42), y: clamp(rect.centerY, 32, svgHeight - 62), rotate: 0 },
     verticalSide,
   };
 }
@@ -282,7 +294,7 @@ export function autoArrangeWorktopPieces(pieces: WorktopPiece[], mode: WorktopSk
     let x = 0;
     return pieces.map((piece) => {
       const length = num(piece.lengthMm, 1200);
-      const next = { ...piece, layoutXmm: x, layoutYmm: 0, rotated: false };
+      const next = { ...piece, layoutXmm: x, layoutYmm: 0, rotated: false, dimensionLabels: undefined };
       x += length + gap;
       return next;
     });
@@ -294,10 +306,10 @@ export function autoArrangeWorktopPieces(pieces: WorktopPiece[], mode: WorktopSk
     const leftSize = { width: num(first.widthMm, 600), height: num(first.lengthMm, 1600) };
     const topSize = { width: num(second.lengthMm, 1800), height: num(second.widthMm, 600) };
     const next = pieces.map((piece, index) => {
-      if (index === 0) return { ...piece, layoutXmm: 0, layoutYmm: topSize.height + gap, rotated: true };
-      if (index === 1) return { ...piece, layoutXmm: leftSize.width + gap, layoutYmm: 0, rotated: false };
-      if (index === 2) return { ...piece, layoutXmm: leftSize.width + gap + Math.max(0, topSize.width - num(third.widthMm, 600)), layoutYmm: topSize.height + gap, rotated: true };
-      return { ...piece, layoutXmm: leftSize.width + gap + (index - 2) * 240, layoutYmm: topSize.height + gap + leftSize.height + gap, rotated: false };
+      if (index === 0) return { ...piece, layoutXmm: 0, layoutYmm: topSize.height + gap, rotated: true, dimensionLabels: undefined };
+      if (index === 1) return { ...piece, layoutXmm: leftSize.width + gap, layoutYmm: 0, rotated: false, dimensionLabels: undefined };
+      if (index === 2) return { ...piece, layoutXmm: leftSize.width + gap + Math.max(0, topSize.width - num(third.widthMm, 600)), layoutYmm: topSize.height + gap, rotated: true, dimensionLabels: undefined };
+      return { ...piece, layoutXmm: leftSize.width + gap + (index - 2) * 240, layoutYmm: topSize.height + gap + leftSize.height + gap, rotated: false, dimensionLabels: undefined };
     });
     return next;
   }
@@ -305,9 +317,9 @@ export function autoArrangeWorktopPieces(pieces: WorktopPiece[], mode: WorktopSk
   const baseLength = num(base.lengthMm, 1600);
   const baseWidth = num(base.widthMm, 600);
   return pieces.map((piece, index) => {
-    if (index === 0) return { ...piece, layoutXmm: 0, layoutYmm: 0, rotated: false };
-    if (index === 1) return { ...piece, layoutXmm: Math.max(0, baseLength - num(piece.widthMm, 600)), layoutYmm: baseWidth + gap, rotated: true };
-    return { ...piece, layoutXmm: (index - 1) * (num(piece.lengthMm, 1200) + gap), layoutYmm: baseWidth + gap + num(pieces[1]?.lengthMm, 1200) + gap, rotated: false };
+    if (index === 0) return { ...piece, layoutXmm: 0, layoutYmm: 0, rotated: false, dimensionLabels: undefined };
+    if (index === 1) return { ...piece, layoutXmm: Math.max(0, baseLength - num(piece.widthMm, 600)), layoutYmm: baseWidth + gap, rotated: true, dimensionLabels: undefined };
+    return { ...piece, layoutXmm: (index - 1) * (num(piece.lengthMm, 1200) + gap), layoutYmm: baseWidth + gap + num(pieces[1]?.lengthMm, 1200) + gap, rotated: false, dimensionLabels: undefined };
   });
 }
 
@@ -329,12 +341,38 @@ export function worktopSketchMetrics(pieces: WorktopPiece[], widthPx: number, he
   return { layouts, minX, minY, maxX, maxY, contentWidth, contentHeight, scale: safeScale, offsetX, offsetY, widthPx, heightPx };
 }
 
+function edgeIconSvg(kind: WorktopEdgeKind): string {
+  const blue = '#4f86b7';
+  if (kind === 'eurozapil') {
+    // Пиктограмма как в бланке: две встречные «ласточкины» выборки.
+    return `<g fill="${blue}" stroke="${blue}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M -17 -7 L -7 -3 L -17 1 Z" />
+      <path d="M 17 -7 L 7 -3 L 17 1 Z" />
+      <line x1="-7" y1="-3" x2="7" y2="-3" />
+      <path d="M -17 1 L -7 5 L -17 9 Z" />
+      <path d="M 17 1 L 7 5 L 17 9 Z" />
+      <line x1="-7" y1="5" x2="7" y2="5" />
+    </g>`;
+  }
+  if (kind === 'eurostyk') {
+    // Пиктограмма «евростык»: двунаправленная стяжка с центральным соединением.
+    return `<g fill="none" stroke="${blue}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M -18 0 H 18" />
+      <path d="M -18 0 L -10 -6 M -18 0 L -10 6 M 18 0 L 10 -6 M 18 0 L 10 6" />
+      <path d="M -3 -8 H 3 V 8 H -3 Z" fill="#fff" />
+      <path d="M -3 -8 H 3 V 8 H -3 Z" />
+    </g>`;
+  }
+  return '';
+}
+
 function edgeLabel(kind: WorktopEdgeKind, x: number, y: number, rotate = 0) {
   const symbol = worktopEdgeSymbol(kind);
-  const w = Math.max(24, symbol.length * 8 + 12);
+  const icon = edgeIconSvg(kind);
+  const w = icon ? 46 : Math.max(24, symbol.length * 8 + 12);
   return `<g transform="translate(${x} ${y}) rotate(${rotate})">
     <rect x="${-w / 2}" y="-12" width="${w}" height="24" rx="6" fill="#fff" stroke="#1f6feb" stroke-width="1.4" />
-    <text text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="900" fill="#184f9e">${xml(symbol)}</text>
+    ${icon || `<text text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="900" fill="#184f9e">${xml(symbol)}</text>`}
   </g>`;
 }
 

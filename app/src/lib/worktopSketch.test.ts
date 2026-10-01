@@ -12,8 +12,8 @@ describe('worktopSketch', () => {
     expect(worktopEdgeSymbol('v')).toBe('V');
     expect(worktopEdgeSymbol('pvc')).toBe('Х');
     expect(worktopEdgeSymbol('pf')).toBe('ПФ');
-    expect(worktopEdgeSymbol('eurozapil')).toBe('//');
-    expect(worktopEdgeSymbol('eurostyk')).toBe('≈');
+    expect(worktopEdgeSymbol('eurozapil')).toBe('⧖');
+    expect(worktopEdgeSymbol('eurostyk')).toBe('↔');
   });
 
   it('строит SVG-схему с размерами и обозначениями кромок', () => {
@@ -41,6 +41,17 @@ describe('worktopSketch', () => {
     expect(leftLabel.y).toBeGreaterThan(0);
     expect(dims.verticalValue).toBe(1600);
     expect(dims.vertical.rotate).toBe(0);
+  });
+
+
+
+  it('учитывает ручное положение размера для бланка столешницы', () => {
+    const manual: WorktopPiece[] = [{ ...pieces[0], dimensionLabels: { vertical: { xMm: 320, yMm: 180 } } }];
+    const metrics = worktopSketchMetrics(manual, 900, 390, true);
+    const layout = metrics.layouts[0];
+    const dims = worktopDimensionPlacement(layout, metrics, 900, 390);
+    expect(Math.round((dims.vertical.x - metrics.offsetX) / metrics.scale)).toBe(320);
+    expect(Math.round((dims.vertical.y - metrics.offsetY) / metrics.scale)).toBe(180);
   });
 
   it('даёт быстрые схемы прямой и угловой раскладки', () => {

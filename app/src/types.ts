@@ -595,6 +595,12 @@ export interface Totals {
 /** Категории базы знаний. Список открытый — новые категории добавляются без миграций. */
 export type WorktopEdgeKind = 'pf' | 'pvc' | 'v' | 'eurozapil' | 'eurostyk';
 
+export interface WorktopDimensionLabelPosition {
+  /** Ручная позиция плашки размера в координатах схемы столешницы, мм. */
+  xMm: number;
+  yMm: number;
+}
+
 export interface WorktopPiece {
   id: string;
   name: string;
@@ -610,6 +616,8 @@ export interface WorktopPiece {
   layoutYmm?: number | null;
   /** Повернуть деталь на 90° на визуальной схеме. Размеры в таблице остаются длина×ширина. */
   rotated?: boolean;
+  /** Ручные позиции плашек размеров на схеме/в бланке столешницы. */
+  dimensionLabels?: Partial<Record<'horizontal' | 'vertical', WorktopDimensionLabelPosition>>;
 }
 
 export type KbCategory =
