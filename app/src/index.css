@@ -510,8 +510,9 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .embedded-eskiz-communication text { paint-order: stroke; stroke: rgba(255,255,255,.45); stroke-width: .35px; }
 .embedded-eskiz-communication.active > circle { filter: drop-shadow(0 0 8px rgba(124, 58, 237, .55)); }
 .embedded-eskiz-communication-distance text { paint-order: stroke; stroke: #fff; stroke-width: 3px; }
-.embedded-eskiz-distance-end-handle { pointer-events: all; cursor: grab; filter: drop-shadow(0 2px 4px rgba(15,23,42,.22)); }
-.embedded-eskiz-distance-end-handle:hover { stroke-width: 4; filter: drop-shadow(0 0 8px rgba(124, 58, 237, .36)); }
+.embedded-eskiz-distance-end-handle, .embedded-eskiz-communication-distance-label { pointer-events: all; cursor: grab; filter: drop-shadow(0 2px 4px rgba(15,23,42,.22)); }
+.embedded-eskiz-distance-end-handle:hover, .embedded-eskiz-communication-distance-label:hover { stroke-width: 4; filter: drop-shadow(0 0 8px rgba(124, 58, 237, .36)); }
+.embedded-eskiz-communication-distance-label:active { cursor: grabbing; }
 .embedded-eskiz-communication-catcher { cursor: crosshair; }
 .embedded-eskiz-communication-draft { filter: drop-shadow(0 3px 8px rgba(15, 23, 42, .22)); }
 .embedded-eskiz-communication-fields { padding-bottom: 14px; }

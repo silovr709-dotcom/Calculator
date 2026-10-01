@@ -215,6 +215,14 @@ function distanceAnchorPoint(distance: EskizCommunicationDistance, marker: Eskiz
   return { x: distance.anchorX ?? marker.x + 120, y: distance.anchorY ?? marker.y };
 }
 
+function distanceLabelPoint(distance: EskizCommunicationDistance, marker: EskizCommunicationMarker, width: number, height: number) {
+  const anchor = distanceAnchorPoint(distance, marker, width, height);
+  return {
+    x: distance.labelX ?? (marker.x + anchor.x) / 2,
+    y: distance.labelY ?? (marker.y + anchor.y) / 2 - 5,
+  };
+}
+
 function renderCommunicationIcon(marker: EskizCommunicationMarker, active = false) {
   const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
   const sockets = communicationSocketCount(marker.kind);
@@ -258,14 +266,13 @@ function renderCommunication(marker: EskizCommunicationMarker, width: number, he
     <title>${xml([marker.name || meta.label, size, marker.note].filter(Boolean).join(' · '))}</title>
     ${distances.map((distance) => {
       const anchor = distanceAnchorPoint(distance, marker, width, height);
-      const midX = (marker.x + anchor.x) / 2;
-      const midY = (marker.y + anchor.y) / 2 - 5;
+      const labelPoint = distanceLabelPoint(distance, marker, width, height);
       const text = `${distance.label || COMMUNICATION_ANCHOR_LABELS[distance.anchor]}: ${communicationDistanceText(distance.valueMm)}`;
       const textWidth = Math.max(74, Math.min(270, text.length * 5.6 + 14));
       return `<g>
         <line x1="${marker.x}" y1="${marker.y}" x2="${anchor.x}" y2="${anchor.y}" stroke="${meta.color}" stroke-width="2.1" stroke-dasharray="8 5" opacity=".88" marker-start="url(#eskizFactoryCommDistanceDot)" marker-end="url(#eskizFactoryCommDistanceArrow)" />
         ${distance.anchor === 'custom' ? `<line x1="${anchor.x - 8}" y1="${anchor.y}" x2="${anchor.x + 8}" y2="${anchor.y}" stroke="${meta.color}" stroke-width="2" /><line x1="${anchor.x}" y1="${anchor.y - 8}" x2="${anchor.x}" y2="${anchor.y + 8}" stroke="${meta.color}" stroke-width="2" />` : ''}
-        <g transform="translate(${midX} ${midY})"><rect x="${-textWidth / 2}" y="-10" width="${textWidth}" height="20" rx="10" fill="#fff" stroke="${meta.color}" stroke-width="1" opacity=".96" /><text text-anchor="middle" dominant-baseline="middle" font-size="10" font-weight="850" fill="${meta.color}">${xml(text)}</text></g>
+        <g transform="translate(${labelPoint.x} ${labelPoint.y})"><rect x="${-textWidth / 2}" y="-10" width="${textWidth}" height="20" rx="10" fill="#fff" stroke="${meta.color}" stroke-width="1" opacity=".96" /><text text-anchor="middle" dominant-baseline="middle" font-size="10" font-weight="850" fill="${meta.color}">${xml(text)}</text></g>
       </g>`;
     }).join('')}
     ${renderCommunicationIcon(marker)}

@@ -318,6 +318,9 @@ export interface EskizCommunicationDistance {
   /** Для anchor='custom' — точка на snapshot Эскиз PRO в координатах исходного изображения. */
   anchorX?: number | null;
   anchorY?: number | null;
+  /** Ручное положение плашки подписи линии расстояния на snapshot; если пусто — плашка по центру линии. */
+  labelX?: number | null;
+  labelY?: number | null;
   note?: string;
 }
 

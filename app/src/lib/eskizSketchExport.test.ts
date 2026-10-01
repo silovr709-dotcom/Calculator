@@ -64,6 +64,12 @@ describe('buildEskizSketchSvg', () => {
     expect(svg).toContain('от угла: 300 мм');
   });
 
+  it('сохраняет ручное положение плашки расстояния коммуникации в экспорте', () => {
+    const svg = buildEskizSketchSvg(project, { communications: [{ ...communication, distances: [{ ...communication.distances![0], labelX: 420, labelY: 180 }] }] });
+    expect(svg).toContain('translate(420 180)');
+    expect(svg).toContain('от угла: 300 мм');
+  });
+
   it('делает безопасное имя файла картинки', () => {
     expect(eskizSketchFileName({ ...project, title: 'Кухня / тест' }, 'png')).toBe('Кухня - тест.png');
   });
