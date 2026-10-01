@@ -35,7 +35,7 @@ function bodyWidthMm(body: PriceItem): number | null {
 
 function bodyHeightMm(body: PriceItem, module: KitchenModule): number {
   if (module.heightMm != null) return module.heightMm;
-  const fromName = body.name.match(/(?:Н|H)\s*=\s*(\d+)\s*мм?/iu)?.[1];
+  const fromName = body.name.match(/(?:Н|H)\s*=\s*(\d+)\s*(?:мм?)?/iu)?.[1];
   if (fromName) return Number(fromName);
   return 720;
 }
@@ -46,6 +46,10 @@ function isLowerBody(body: PriceItem): boolean {
 
 function isUpperBody(body: PriceItem): boolean {
   return /шкаф\s+настенный/iu.test(body.name);
+}
+
+function isTallBody(body: PriceItem): boolean {
+  return /пенал/iu.test(body.name);
 }
 
 function isDrawerUnderOven(body: PriceItem): boolean {
@@ -116,6 +120,19 @@ function lowerHeights(body: PriceItem, drawers: number, doors: number, totalHeig
   return { heights: Array.from({ length: drawers + doors }, () => Math.max(1, Math.floor((totalHeight - (drawers + doors + 1) * 4) / (drawers + doors)))), exact: false, note: 'Размеры смешанных фасадов рассчитаны предварительно; проверьте схему заказа.' };
 }
 
+function tallDoorParts(body: PriceItem, bodyWidth: number, totalHeight: number, drawers: number, doors: number): { parts: FacadePart[]; exact: boolean; note: string } | null {
+  if (!isTallBody(body) || drawers > 0 || doors < 4) return null;
+  const columns = bodyWidth >= 700 ? 2 : 1;
+  const rows = Math.max(1, Math.ceil(doors / columns));
+  const doorWidth = columns > 1 ? dividedFacadeWidth(bodyWidth, columns) : Math.max(1, bodyWidth - 4);
+  const doorHeight = Math.max(1, Math.floor((totalHeight - rows * 4) / rows));
+  return {
+    parts: Array.from({ length: doors }, () => ({ widthMm: doorWidth, heightMm: doorHeight, kind: 'door' as const, source: 'technical' as const })),
+    exact: false,
+    note: `Пенал ${doors} двер.: фасады разложены как ${columns} колонк. × ${rows} ряд.; ${doorWidth}×${doorHeight} мм. Проверьте высоты секций/ниш по схеме фабрики.`,
+  };
+}
+
 function mixedDoorDrawerParts(body: PriceItem, bodyWidth: number, totalHeight: number, drawers: number, doors: number, lower: boolean): { parts: FacadePart[]; exact: boolean; note: string } | null {
   if (drawers <= 0 || doors <= 0) return null;
   const drawerHeight = isDrawerUnderOven(body) ? 120 : 176;
@@ -160,15 +177,16 @@ export function inferFacadeSpec(module: KitchenModule, body: PriceItem): FacadeI
   if (!bodyWidth || count <= 0) return null;
 
   const height = bodyHeightMm(body, module);
-  const mixed = mixedDoorDrawerParts(body, bodyWidth, height, drawers, doors, lower);
-  const heightSpec = mixed ? null : lower
+  const tall = tallDoorParts(body, bodyWidth, height, drawers, doors);
+  const mixed = tall ? null : mixedDoorDrawerParts(body, bodyWidth, height, drawers, doors, lower);
+  const heightSpec = tall || mixed ? null : lower
     ? lowerHeights(body, drawers, doors, height)
     : { heights: Array.from({ length: count }, () => Math.max(1, height - 4)), exact: Boolean(upper), note: 'Зазор 4 мм учтён по техничке; для нестандартной высоты проверьте заказ.' };
-  const width = mixed ? null : facadeWidth(body, bodyWidth, count, lower, drawers, doors);
-  const parts: FacadePart[] = mixed?.parts ?? heightSpec!.heights.map((heightMm, index) => ({ widthMm: width!, heightMm, kind: index < drawers ? 'drawer' : 'door', source: 'technical' }));
+  const width = tall || mixed ? null : facadeWidth(body, bodyWidth, count, lower, drawers, doors);
+  const parts: FacadePart[] = tall?.parts ?? mixed?.parts ?? heightSpec!.heights.map((heightMm, index) => ({ widthMm: width!, heightMm, kind: index < drawers ? 'drawer' : 'door', source: 'technical' }));
   const source = lower ? 'Техничка, стр. 2–3, 31–32' : 'Техничка, стр. 3, 31–32';
   const note = [
-    mixed?.note ?? heightSpec!.note,
+    tall?.note ?? mixed?.note ?? heightSpec!.note,
     structure.manual ? ' Структура фасадов взята из ручных полей модуля, потому что она отличается от названия выбранного корпуса.' : '',
   ].join('').trim();
   return {
@@ -176,7 +194,7 @@ export function inferFacadeSpec(module: KitchenModule, body: PriceItem): FacadeI
     parts,
     bodyWidthMm: bodyWidth,
     bodyHeightMm: height,
-    confidence: (mixed?.exact ?? heightSpec!.exact) && !structure.manual ? 'exact' : 'suggestion',
+    confidence: (tall?.exact ?? mixed?.exact ?? heightSpec!.exact) && !structure.manual ? 'exact' : 'suggestion',
     note,
     source,
   };

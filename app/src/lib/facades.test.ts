@@ -67,6 +67,14 @@ describe('размеры фасадов по техничке Висмы', () =>
     expect(result.confidence).toBe('suggestion');
   });
 
+  it('для пенала 4 двери не делит ширину фасада на все 4 створки подряд', () => {
+    const result = inferFacadeSpec(newModule('Пенал'), body('302'))!;
+    expect(result.confidence).toBe('suggestion');
+    expect(result.parts.map((part) => [part.widthMm, part.heightMm, part.kind])).toEqual([
+      [346, 1006, 'door'], [346, 1006, 'door'], [346, 1006, 'door'], [346, 1006, 'door'],
+    ]);
+  });
+
   it('видит устаревшую техническую разбивку даже без статуса outdated', () => {
     const applied = applyTechnicalFacadeSpec(newModule('Нижний шкаф'), body('251'));
     const changed = { ...applied, widthMm: 650, facadeSpecStatus: undefined };

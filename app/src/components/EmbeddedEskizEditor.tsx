@@ -1094,6 +1094,9 @@ export default function EmbeddedEskizEditor(props: Props) {
   const visibleCommunications = communicationLayerVisible(showAnnotations, layerVisibility) ? props.communications : [];
   const activeCommunicationMeta = props.communicationAddKind ? COMMUNICATION_KIND_META[props.communicationAddKind] : activeCommunication ? COMMUNICATION_KIND_META[activeCommunication.kind] : null;
   const inlineCommunication = communicationQuickEdit ? props.communications.find((marker) => marker.id === communicationQuickEdit.communicationId && marker.eskizId === project.id) ?? null : null;
+  const canvasHeaderHeight = project.header.enabled ? 58 : 0;
+  const scaledCanvasWidth = project.image.width * zoom;
+  const scaledCanvasHeight = (project.image.height + canvasHeaderHeight) * zoom;
 
   return <div className={`embedded-eskiz-editor ${communicationMode ? 'communication-mode' : ''}`}>
     <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={onFileInput((file) => void openImage(file))} />
@@ -1155,9 +1158,11 @@ export default function EmbeddedEskizEditor(props: Props) {
         onPointerCancel={() => { panRef.current = null; }}
         onWheel={handleViewportWheel}
       >
-        {project.header.enabled && <div className="embedded-eskiz-canvas-header" style={{ width: project.image.width * zoom }}><strong>РЕцепт <i>/</i> Эскиз PRO</strong><span>Проект: {project.header.project || '—'}</span><small>Помещение: {project.header.room || '—'} · Дата: {project.header.date} · Вариант: {project.header.variant}</small></div>}
-        <div className="embedded-eskiz-stage" style={{ width: project.image.width * zoom, height: project.image.height * zoom }}>
-          <svg ref={svgRef} viewBox={`0 0 ${project.image.width} ${project.image.height}`} width="100%" height="100%" className={`embedded-eskiz-surface tool-${tool}`} onPointerDown={onStageDown} onPointerMove={onStageMove} onPointerUp={onStageUp}>
+        <div className="embedded-eskiz-canvas-shell" style={{ width: scaledCanvasWidth, height: scaledCanvasHeight }}>
+          <div className="embedded-eskiz-canvas-content" style={{ width: project.image.width, transform: `scale(${zoom})` }}>
+            {project.header.enabled && <div className="embedded-eskiz-canvas-header" style={{ width: project.image.width }}><strong>РЕцепт <i>/</i> Эскиз PRO</strong><span>Проект: {project.header.project || '—'}</span><small>Помещение: {project.header.room || '—'} · Дата: {project.header.date} · Вариант: {project.header.variant}</small></div>}
+            <div className="embedded-eskiz-stage" style={{ width: project.image.width, height: project.image.height }}>
+              <svg ref={svgRef} viewBox={`0 0 ${project.image.width} ${project.image.height}`} width={project.image.width} height={project.image.height} className={`embedded-eskiz-surface tool-${tool}`} onPointerDown={onStageDown} onPointerMove={onStageMove} onPointerUp={onStageUp}>
             <defs>
               <marker id="embeddedDimArrow" markerWidth="9" markerHeight="9" refX="4.5" refY="4.5" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M 8 1 L 1 4.5 L 8 8" fill="none" stroke="context-stroke" strokeWidth="1.5" /></marker>
               <marker id="embeddedDimArrowClosed" markerWidth="9" markerHeight="9" refX="4.5" refY="4.5" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M 8 1 L 1 4.5 L 8 8 Z" fill="context-stroke" /></marker>
@@ -1173,7 +1178,9 @@ export default function EmbeddedEskizEditor(props: Props) {
             {snapIndicator && <g pointerEvents="none" className="embedded-eskiz-snap-marker"><circle cx={snapIndicator.x} cy={snapIndicator.y} r="11" fill="none" stroke={COLORS.blue} strokeWidth="2" /><path d={`M ${snapIndicator.x - 15} ${snapIndicator.y} H ${snapIndicator.x + 15} M ${snapIndicator.x} ${snapIndicator.y - 15} V ${snapIndicator.y + 15}`} stroke={COLORS.blue} strokeWidth="1" /></g>}
             {activeCommunication && communicationDraftEnd && <g pointerEvents="none" className="embedded-eskiz-communication-draft"><line x1={activeCommunication.x} y1={activeCommunication.y} x2={communicationDraftEnd.x} y2={communicationDraftEnd.y} stroke={COMMUNICATION_KIND_META[activeCommunication.kind]?.color ?? COLORS.accent} strokeWidth="3" strokeDasharray="10 7" /><circle cx={activeCommunication.x} cy={activeCommunication.y} r="7" fill={COMMUNICATION_KIND_META[activeCommunication.kind]?.color ?? COLORS.accent} /><circle cx={communicationDraftEnd.x} cy={communicationDraftEnd.y} r="7" fill="#fff" stroke={COMMUNICATION_KIND_META[activeCommunication.kind]?.color ?? COLORS.accent} strokeWidth="3" /></g>}
             {communicationMode && <rect className="embedded-eskiz-communication-catcher" x="0" y="0" width={project.image.width} height={project.image.height} fill="transparent" pointerEvents="all" onPointerMove={handleCommunicationStageMove} onPointerDown={handleCommunicationStagePoint} />}
-          </svg>
+              </svg>
+            </div>
+          </div>
         </div>
         {pendingDimension ? <div className="embedded-eskiz-hint"><b>Шаг 3 из 3</b> Отведите размерную линию и кликните для фиксации</div> : tool === 'chain' && <div className="embedded-eskiz-hint"><b>Цепочка</b> Укажите следующую точку · Esc — закончить</div>}
       </section>
@@ -1275,7 +1282,7 @@ function Inspector(props: {
   const currentSelectionKey = object?.id ?? communication?.id ?? '';
   const [tabState, setTabState] = useState<{ tab: 'object' | 'objects' | 'document'; selectionKey: string }>({ tab: object || communication ? 'object' : 'document', selectionKey: currentSelectionKey });
   const selectedJustChanged = Boolean(currentSelectionKey && currentSelectionKey !== tabState.selectionKey);
-  const activeTab = selectedJustChanged ? 'object' : (object || communication) && tabState.tab === 'document' ? 'object' : tabState.tab;
+  const activeTab = selectedJustChanged ? 'object' : tabState.tab;
   const setTab = (tab: 'object' | 'objects' | 'document') => setTabState({ tab, selectionKey: currentSelectionKey });
   return <aside className="embedded-eskiz-inspector">
     <div className="embedded-eskiz-tabs"><button className={activeTab === 'object' ? 'active' : ''} onClick={() => setTab('object')}>Объект</button><button className={activeTab === 'objects' ? 'active' : ''} onClick={() => setTab('objects')}>Список</button><button className={activeTab === 'document' ? 'active' : ''} onClick={() => setTab('document')}>Документ</button></div>
