@@ -1,12 +1,6 @@
 import type { EskizProSnapshot, KitchenModule, Project } from '../types';
 import { newModule } from './modules';
 
-export const ESKIZ_PRO_URL = 'https://silovr709-dotcom.github.io/ESCIZ/';
-const DB_NAME = 'recept-eskiz-pro';
-const STORE = 'projects';
-const REVISIONS = 'revisions';
-const DB_VERSION = 2;
-
 export type EskizPoint = { x: number; y: number };
 export type EskizEquipmentType = 'Холодильник' | 'Духовой шкаф' | 'СВЧ' | 'ПММ' | 'Варочная панель' | 'Вытяжка' | 'Стиральная машина' | 'Мойка' | 'Другое';
 
@@ -64,8 +58,6 @@ export interface EskizProject {
   integration: { projectId?: string; clientId?: string };
 }
 
-export type EskizProjectSummary = Pick<EskizProject, 'id' | 'title' | 'createdAt' | 'updatedAt'> & { thumbnail?: string; objectsCount?: number };
-
 export interface EskizModuleMarker {
   key: string;
   eskizId: string;
@@ -91,53 +83,6 @@ interface ParsedEskizModule {
   handles?: number;
   lifts?: number;
   note: string;
-}
-
-function db(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (typeof indexedDB === 'undefined') {
-      reject(new Error('IndexedDB недоступен в этом окружении'));
-      return;
-    }
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE, { keyPath: 'id' });
-      if (!request.result.objectStoreNames.contains(REVISIONS)) {
-        const revisions = request.result.createObjectStore(REVISIONS, { keyPath: 'id' });
-        revisions.createIndex('projectId', 'projectId', { unique: false });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error('Не удалось открыть базу Эскиз PRO'));
-  });
-}
-
-export async function listEskizProjects(): Promise<EskizProjectSummary[]> {
-  const database = await db();
-  return new Promise((resolve, reject) => {
-    const request = database.transaction(STORE).objectStore(STORE).getAll();
-    request.onsuccess = () => resolve((request.result as unknown[])
-      .filter(isEskizProject)
-      .map((project) => ({
-        id: project.id,
-        title: project.title,
-        createdAt: project.createdAt,
-        updatedAt: project.updatedAt,
-        thumbnail: project.image.dataUrl,
-        objectsCount: project.objects.length,
-      }))
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
-    request.onerror = () => reject(request.error ?? new Error('Не удалось прочитать эскизы'));
-  });
-}
-
-export async function loadEskizProject(id: string): Promise<EskizProject | null> {
-  const database = await db();
-  return new Promise((resolve, reject) => {
-    const request = database.transaction(STORE).objectStore(STORE).get(id);
-    request.onsuccess = () => resolve(isEskizProject(request.result) ? request.result : null);
-    request.onerror = () => reject(request.error ?? new Error('Не удалось открыть эскиз'));
-  });
 }
 
 export function snapshotFromEskizProject(project: EskizProject): EskizProSnapshot {

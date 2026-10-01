@@ -1,11 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizProIntegration, ExtraFacadePart, FacadePart, KitchenModule, Pricebook, PriceItem, Project, SlotKey } from '../types';
 import {
-  ESKIZ_PRO_URL,
   collectEskizModuleMarkers,
-  isEskizProject,
-  listEskizProjects,
-  loadEskizProject,
   readEskizFile,
   snapshotProject,
   syncEskizModulesToCalculation,
@@ -13,7 +9,6 @@ import {
   type EskizModuleMarker,
   type EskizModuleObject,
   type EskizProject,
-  type EskizProjectSummary,
 } from '../lib/eskizPro';
 import { MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moduleToLines, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
 import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalFacadeSpecOutdated, isTechnicalHingeSpecOutdated } from '../lib/facades';
@@ -23,6 +18,7 @@ import { fmtMoney, fmtNum } from '../lib/format';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, COMMUNICATION_KINDS, communicationDistanceText, communicationSizeText } from '../lib/eskizCommunications';
 import CatalogPicker from './CatalogPicker';
 import EskizProjectPreview, { type EskizModuleMarkerMode, type EskizModulePreviewStatus } from './EskizProjectPreview';
+import EmbeddedEskizEditor from './EmbeddedEskizEditor';
 
 const EMPTY_LINKS: string[] = [];
 const EMPTY_SNAPSHOTS: NonNullable<EskizProIntegration['snapshots']> = [];
@@ -31,7 +27,6 @@ const EMPTY_COMMUNICATIONS: NonNullable<EskizProIntegration['communications']> =
 const EMPTY_ESKIZ_PRO: EskizProIntegration = {};
 const QUICK_SLOTS: SlotKey[] = ['body', 'facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf', 'legs'];
 
-type EskizFrameSurface = { left: number; top: number; width: number; height: number; viewWidth: number; viewHeight: number };
 
 function unique(items: string[]): string[] {
   return Array.from(new Set(items.filter(Boolean)));
@@ -46,10 +41,6 @@ function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
   return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(date);
-}
-
-function sameGithubPagesOrigin() {
-  return typeof window !== 'undefined' && window.location.hostname === 'silovr709-dotcom.github.io';
 }
 
 function numberValue(value: string): number | null {
@@ -455,82 +446,6 @@ function formatPoint(value: number) {
   return Math.round(value).toString();
 }
 
-function communicationAnchorPoint(distance: EskizCommunicationDistance, marker: EskizCommunicationMarker, width: number, height: number) {
-  if (distance.anchor === 'left') return { x: 0, y: marker.y };
-  if (distance.anchor === 'right') return { x: width, y: marker.y };
-  if (distance.anchor === 'top') return { x: marker.x, y: 0 };
-  if (distance.anchor === 'bottom') return { x: marker.x, y: height };
-  return { x: distance.anchorX ?? marker.x + 120, y: distance.anchorY ?? marker.y };
-}
-
-function FrameCommunicationLayer(props: {
-  surface: EskizFrameSurface;
-  project: EskizProject;
-  communications: EskizCommunicationMarker[];
-  activeCommunicationId?: string | null;
-  placing: boolean;
-  onPoint: (eskizId: string, x: number, y: number) => void;
-  onCommunicationClick: (eskizId: string, marker: EskizCommunicationMarker) => void;
-}) {
-  const projectCommunications = props.communications.filter((marker) => marker.eskizId === props.project.id);
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!props.placing) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = Math.max(0, Math.min(props.surface.viewWidth, (event.clientX - rect.left) / rect.width * props.surface.viewWidth));
-    const y = Math.max(0, Math.min(props.surface.viewHeight, (event.clientY - rect.top) / rect.height * props.surface.viewHeight));
-    props.onPoint(props.project.id, Math.round(x), Math.round(y));
-  };
-  return (
-    <div
-      className={`eskiz-frame-communication-layer ${props.placing ? 'placing' : ''}`}
-      style={{ left: props.surface.left, top: props.surface.top, width: props.surface.width, height: props.surface.height }}
-      onPointerDown={handlePointerDown}
-    >
-      {props.placing && <div className="eskiz-frame-place-hint">Тапните по самому эскизу Эскиз PRO</div>}
-      <svg viewBox={`0 0 ${props.surface.viewWidth} ${props.surface.viewHeight}`}>
-        {projectCommunications.map((marker) => {
-          const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
-          const active = marker.id === props.activeCommunicationId;
-          const size = communicationSizeText(marker);
-          const label = marker.name || meta.label;
-          const labelWidth = Math.max(96, Math.min(260, [label, size].filter(Boolean).join(' · ').length * 6 + 18));
-          const labelX = marker.x + 18 > props.surface.viewWidth - labelWidth ? marker.x - labelWidth - 18 : marker.x + 18;
-          const labelY = Math.max(8, Math.min(props.surface.viewHeight - 36, marker.y - 16));
-          return (
-            <g
-              key={marker.id}
-              className={`eskiz-frame-communication-marker ${active ? 'active' : ''}`}
-              onPointerDown={(event) => { event.stopPropagation(); }}
-              onClick={(event) => { event.stopPropagation(); props.onCommunicationClick(props.project.id, marker); }}
-            >
-              {(marker.distances ?? []).map((distance) => {
-                const anchor = communicationAnchorPoint(distance, marker, props.surface.viewWidth, props.surface.viewHeight);
-                const text = `${distance.label || COMMUNICATION_ANCHOR_LABELS[distance.anchor]}: ${communicationDistanceText(distance.valueMm)}`;
-                const midX = (marker.x + anchor.x) / 2;
-                const midY = (marker.y + anchor.y) / 2;
-                return <g key={distance.id} className="eskiz-frame-communication-distance">
-                  <line x1={marker.x} y1={marker.y} x2={anchor.x} y2={anchor.y} stroke={meta.color} strokeWidth="2" strokeDasharray="7 5" />
-                  <text x={midX} y={midY - 5} textAnchor="middle" fontSize="10" fontWeight="800" fill={meta.color}>{text}</text>
-                </g>;
-              })}
-              <line x1={marker.x} y1={marker.y} x2={labelX < marker.x ? labelX + labelWidth : labelX} y2={labelY + 15} stroke={meta.color} strokeWidth="2" opacity=".72" />
-              <circle cx={marker.x} cy={marker.y} r={active ? 14 : 11} fill={meta.color} stroke="#fff" strokeWidth="4" />
-              <text x={marker.x} y={marker.y + 4} textAnchor="middle" fontSize="10" fontWeight="900" fill="#fff">{meta.icon}</text>
-              <g transform={`translate(${labelX} ${labelY})`}>
-                <rect width={labelWidth} height="32" rx="9" fill="#fff" fillOpacity=".96" stroke={meta.color} strokeWidth={active ? 2.5 : 1.7} />
-                <text x="9" y="13" fontSize="11" fontWeight="900" fill={meta.color}>{label}</text>
-                <text x="9" y="25" fontSize="9" fontWeight="650" fill="#40554b">{size || `${formatPoint(marker.x)}×${formatPoint(marker.y)}`}</text>
-              </g>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
-
 function CommunicationEditor(props: {
   marker: EskizCommunicationMarker;
   projectTitle?: string;
@@ -606,19 +521,13 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const eskizPro = project.eskizPro ?? EMPTY_ESKIZ_PRO;
   const linkedIds = eskizPro.linkedProjectIds ?? EMPTY_LINKS;
   const snapshots = eskizPro.snapshots ?? EMPTY_SNAPSHOTS;
-  const [summaries, setSummaries] = useState<EskizProjectSummary[]>([]);
-  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [frameKey, setFrameKey] = useState(0);
   const [activeMarkerKey, setActiveMarkerKey] = useState<string | null>(null);
   const [communicationAddKind, setCommunicationAddKind] = useState<EskizCommunicationKind | null>(null);
   const [activeCommunicationId, setActiveCommunicationId] = useState<string | null>(null);
   const [distancePointPick, setDistancePointPick] = useState<{ communicationId: string; distanceId: string } | null>(null);
-  const [frameSurface, setFrameSurface] = useState<EskizFrameSurface | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const frameRef = useRef<HTMLIFrameElement | null>(null);
-  const frameWrapRef = useRef<HTMLDivElement | null>(null);
-  const liveSyncRef = useRef('');
+  const editorCardRef = useRef<HTMLDivElement | null>(null);
   const linkedProjects = useMemo(() => linkedIds
     .map((id) => snapshotProject(snapshots.find((item) => item.id === id)))
     .filter((item): item is NonNullable<typeof item> => Boolean(item)), [linkedIds, snapshots]);
@@ -646,108 +555,19 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     return [marker.key, { level: 'ok', label: 'готов', summary: 'Модуль полностью участвует в просчёте.' } satisfies EskizModulePreviewStatus];
   })) as Record<string, EskizModulePreviewStatus>, [moduleMarkers, moduleBindings, project.modules, project.moduleDefaults, pricebook]);
 
-  const refreshFrameSurface = useCallback(() => {
-    const frame = frameRef.current;
-    const wrap = frameWrapRef.current;
-    if (!frame || !wrap || !activePreviewProject) { setFrameSurface(null); return; }
-    try {
-      const doc = frame.contentDocument;
-      const svg = doc?.querySelector('svg.drawing-surface') as SVGSVGElement | null;
-      if (!svg) { setFrameSurface(null); return; }
-      const frameRect = frame.getBoundingClientRect();
-      const wrapRect = wrap.getBoundingClientRect();
-      const svgRect = svg.getBoundingClientRect();
-      const viewBox = svg.viewBox.baseVal;
-      const next: EskizFrameSurface = {
-        left: frameRect.left + svgRect.left - wrapRect.left,
-        top: frameRect.top + svgRect.top - wrapRect.top,
-        width: svgRect.width,
-        height: svgRect.height,
-        viewWidth: viewBox?.width || activePreviewProject.image.width,
-        viewHeight: viewBox?.height || activePreviewProject.image.height,
-      };
-      if (next.width < 10 || next.height < 10) { setFrameSurface(null); return; }
-      setFrameSurface((current) => current
-        && Math.abs(current.left - next.left) < 1
-        && Math.abs(current.top - next.top) < 1
-        && Math.abs(current.width - next.width) < 1
-        && Math.abs(current.height - next.height) < 1
-        && Math.abs(current.viewWidth - next.viewWidth) < 1
-        && Math.abs(current.viewHeight - next.viewHeight) < 1
-        ? current
-        : next);
-    } catch {
-      setFrameSurface(null);
-    }
-  }, [activePreviewProject]);
-
   const updateEskizPro = useCallback((patch: Partial<EskizProIntegration>) => onChange({ ...project, eskizPro: { ...eskizPro, ...patch } }), [onChange, project, eskizPro]);
 
-  const refresh = async () => {
-    setLoading(true);
-    setMessage('');
-    try {
-      const next = await listEskizProjects();
-      setSummaries(next);
-      setMessage(next.length ? `Найдено эскизов: ${next.length}` : 'В IndexedDB Эскиз PRO пока нет сохранённых проектов. Создайте/сохраните эскиз в окне слева и нажмите «Обновить список».');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Не удалось прочитать проекты Эскиз PRO');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => { void refresh(); }, 0);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    const initialRefresh = window.requestAnimationFrame(refreshFrameSurface);
-    const interval = window.setInterval(refreshFrameSurface, 300);
-    window.addEventListener('resize', refreshFrameSurface);
-    return () => {
-      window.cancelAnimationFrame(initialRefresh);
-      window.clearInterval(interval);
-      window.removeEventListener('resize', refreshFrameSurface);
-    };
-  }, [refreshFrameSurface, frameKey]);
-
-  const attach = async (id: string) => {
-    setLoading(true);
-    setMessage('');
-    try {
-      const found = await loadEskizProject(id);
-      if (!found) throw new Error('Эскиз не найден. Откройте Эскиз PRO и сохраните проект ещё раз.');
-      updateEskizPro({
-        linkedProjectIds: unique([id, ...linkedIds]),
-        activeProjectId: id,
-        showInClient,
-        clientMode,
-        snapshots: upsertEskizSnapshot(snapshots, found),
-      });
-      setMessage(`Эскиз «${found.title}» привязан к проекту и сохранён в snapshot.`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Не удалось привязать эскиз');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const sync = async (id: string) => {
-    setLoading(true);
-    setMessage('');
-    try {
-      const found = await loadEskizProject(id);
-      if (!found) throw new Error('Эскиз не найден в локальной базе Эскиз PRO. Если вы на другом устройстве — импортируйте .eskiz файл.');
-      updateEskizPro({ snapshots: upsertEskizSnapshot(snapshots, found) });
-      setMessage(`Snapshot «${found.title}» обновлён.`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Не удалось обновить snapshot');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const saveEmbeddedProject = useCallback((embeddedProject: EskizProject) => {
+    const alreadyLinked = linkedIds.includes(embeddedProject.id);
+    updateEskizPro({
+      linkedProjectIds: unique([embeddedProject.id, ...linkedIds]),
+      activeProjectId: embeddedProject.id,
+      showInClient,
+      clientMode,
+      snapshots: upsertEskizSnapshot(snapshots, embeddedProject),
+    });
+    if (!alreadyLinked) setMessage(`Эскиз «${embeddedProject.title}» создан внутри калькулятора и привязан к проекту.`);
+  }, [clientMode, linkedIds, showInClient, snapshots, updateEskizPro]);
 
   const detach = (id: string) => {
     const nextIds = linkedIds.filter((item) => item !== id);
@@ -763,7 +583,6 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
 
   const importFile = async (file: File | null) => {
     if (!file) return;
-    setLoading(true);
     setMessage('');
     try {
       const imported = await readEskizFile(file);
@@ -778,7 +597,6 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Не удалось импортировать .eskiz');
     } finally {
-      setLoading(false);
       if (fileRef.current) fileRef.current.value = '';
     }
   };
@@ -790,30 +608,6 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       ? `Модули из Эскиз PRO синхронизированы: создано ${result.created}, обновлено ${result.updated}. Они уже участвуют в просчёте, КП и проверке.`
       : 'В связанных эскизах нет объектов «Модуль». Добавьте в Эскиз PRO модуль как маркер/плашку и заполните его описание.');
   };
-
-  const syncLiveProjectModule = useCallback((eskizProject: EskizProject, objectId?: string) => {
-    const liveMarkers = collectEskizModuleMarkers([eskizProject]);
-    const marker = liveMarkers.find((item) => item.objectId === objectId) ?? liveMarkers.at(-1);
-    if (!marker) {
-      setMessage('В живом Эскиз PRO выбран не модуль. Поставьте объект «Модуль» на скрин — он сразу появится в просчёте.');
-      return;
-    }
-    const baseProject: Project = {
-      ...project,
-      eskizPro: {
-        ...eskizPro,
-        linkedProjectIds: unique([eskizProject.id, ...linkedIds]),
-        activeProjectId: eskizProject.id,
-        showInClient,
-        clientMode,
-        snapshots: upsertEskizSnapshot(snapshots, eskizProject),
-      },
-    };
-    const result = syncEskizModulesToCalculation(baseProject, [eskizProject]);
-    onChange(result.project);
-    setActiveMarkerKey(marker.key);
-    setMessage(`Маркер «${marker.number}» выбран прямо в живом Эскиз PRO. Справа выберите корпус из прайса и комплектующие — модуль уже добавлен в просчёт.`);
-  }, [project, eskizPro, linkedIds, showInClient, clientMode, snapshots, onChange]);
 
   const openMarkerModule = (marker: EskizModuleMarker) => {
     const alreadyLinked = Boolean(moduleBindings[marker.key]);
@@ -874,13 +668,12 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       return;
     }
     if (!activePreviewProject) {
-      setMessage('Сначала привяжите или импортируйте snapshot Эскиз PRO — после этого коммуникации ставятся прямо на эскизе.');
+      setMessage('Сначала загрузите скрин или импортируйте .eskiz во встроенном Эскиз PRO — после этого коммуникации ставятся прямо на эскизе.');
       return;
     }
     setActiveMarkerKey(null);
-    refreshFrameSurface();
-    setMessage(`Выбран режим «${COMMUNICATION_KIND_META[nextKind].label}». Тапните по большому эскизу в окне Эскиз PRO слева — отметка появится прямо на нём.`);
-    window.setTimeout(() => frameWrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+    setMessage(`Выбран режим «${COMMUNICATION_KIND_META[nextKind].label}». Тапните по основному эскизу слева — отметка появится прямо на нём.`);
+    window.setTimeout(() => editorCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
   };
   const handleCommunicationClick = (_eskizId: string, marker: EskizCommunicationMarker) => {
     setActiveCommunicationId(marker.id);
@@ -919,55 +712,6 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     setMessage(`Добавлена отметка «${marker.name}». Теперь задайте размеры и расстояния до стены/пола/любой точки.`);
   };
 
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      const payload = event.data as { source?: string; type?: string; project?: unknown; objectId?: string; object?: { id?: string; type?: string } };
-      if (payload?.source !== 'recept-eskiz-pro') return;
-      if (payload.type !== 'module-selected' && payload.type !== 'project-saved') return;
-      if (!isEskizProject(payload.project)) return;
-      if (payload.type === 'project-saved') {
-        if (!linkedIds.includes(payload.project.id)) return;
-        updateEskizPro({ snapshots: upsertEskizSnapshot(snapshots, payload.project) });
-        return;
-      }
-      const objectId = payload.object?.type === 'module' ? payload.object.id : payload.objectId;
-      syncLiveProjectModule(payload.project, objectId);
-    };
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [linkedIds, snapshots, updateEskizPro, syncLiveProjectModule]);
-
-  useEffect(() => {
-    if (!sameGithubPagesOrigin()) return undefined;
-    let stopped = false;
-    const tick = async () => {
-      try {
-        const nextSummaries = await listEskizProjects();
-        if (stopped) return;
-        setSummaries(nextSummaries);
-        const candidates = unique([activeId ?? '', ...linkedIds, nextSummaries[0]?.id ?? '']);
-        for (const id of candidates) {
-          const found = await loadEskizProject(id);
-          if (stopped || !found) continue;
-          const markers = collectEskizModuleMarkers([found]);
-          if (markers.length === 0) continue;
-          const unbound = markers.find((marker) => !moduleBindings[marker.key]);
-          const marker = unbound ?? markers.at(-1);
-          const signature = `${found.id}:${found.updatedAt}:${markers.map((item) => item.objectId).join(',')}:${unbound?.objectId ?? ''}`;
-          if (liveSyncRef.current === signature || !marker) return;
-          liveSyncRef.current = signature;
-          syncLiveProjectModule(found, marker.objectId);
-          return;
-        }
-      } catch {
-        // В preview или при запрете IndexedDB живой режим просто молчит — остаётся ручной импорт .eskiz.
-      }
-    };
-    void tick();
-    const interval = window.setInterval(() => { void tick(); }, 2500);
-    return () => { stopped = true; window.clearInterval(interval); };
-  }, [activeId, linkedIds, moduleBindings, syncLiveProjectModule]);
-
   const updateModule = (moduleId: string, patch: Partial<KitchenModule>) => {
     onChange({
       ...project,
@@ -980,51 +724,45 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       <div className="card eskiz-pro-intro no-print">
         <div>
           <span className="eyebrow">ЭСКИЗ PRO</span>
-          <h3>Внешний инструмент для скрина проекта, размеров, модулей и коммуникаций</h3>
-          <p className="muted small">Откройте настоящий Эскиз PRO, загрузите скрин, нанесите размеры/подписи и добавьте объект «Модуль» как точку/сноску. Коммуникации ставятся поверх самого большого эскиза Эскиз PRO: выберите тип над окном и тапните нужное место.</p>
+          <h3>Встроенный инструмент для скрина проекта, размеров, модулей и коммуникаций</h3>
+          <p className="muted small">Код Эскиз PRO перенесён внутрь калькулятора: загрузите скрин, нанесите размеры/подписи, поставьте объект «Модуль» и добавляйте коммуникации на том же основном полотне без iframe и отдельного маленького превью.</p>
         </div>
         <div className="actions">
-          <a className="btn ghost" href={ESKIZ_PRO_URL} target="_blank" rel="noreferrer">Открыть в новой вкладке</a>
-          <button className="btn ghost" onClick={() => setFrameKey((value) => value + 1)}>Перезагрузить окно</button>
-          <button className="btn primary" disabled={loading} onClick={refresh}>Обновить список</button>
+          <button className="btn ghost" onClick={() => fileRef.current?.click()}>Импорт старого .eskiz</button>
+          <button className="btn primary" disabled={!activePreviewProject} onClick={syncModulesToCalculation}>Модули → просчёт</button>
         </div>
       </div>
 
-      {!sameGithubPagesOrigin() && (
-        <div className="note no-print">В live preview Эскиз PRO открыт с другого origin, поэтому браузер может не дать калькулятору читать его IndexedDB и полотно для коммуникаций. На основной ссылке GitHub Pages оба приложения находятся на <b>silovr709-dotcom.github.io</b>, и живое добавление модулей/коммуникаций работает напрямую. Для локальной проверки можно импортировать файл <b>.eskiz</b>.</div>
-      )}
-
       <div className="eskiz-pro-grid">
-        <div className="card eskiz-pro-frame-card no-print">
+        <div ref={editorCardRef} className="card eskiz-pro-frame-card no-print">
           <div className="section-head">
-            <div><h3>Окно Эскиз PRO</h3><p className="muted small">Загрузите скрин, поставьте объект «Модуль» на нужное место и кликните по нему. Коммуникации ставятся на этот же большой эскиз: выберите тип ниже и тапните прямо по полотну Эскиз PRO.</p></div>
+            <div><h3>Основной эскиз</h3><p className="muted small">Это рабочее полотно Эскиз PRO внутри расчёта. Коммуникации ставятся прямо здесь: выберите тип ниже и тапните по эскизу.</p></div>
           </div>
           <div className="eskiz-frame-communication-toolbar">
-            <div><b>Добавить коммуникацию на основной эскиз</b><span>{activePreviewProject ? `Главный snapshot: ${activePreviewProject.title}` : 'Сначала привяжите или импортируйте snapshot'}</span></div>
+            <div><b>Добавить коммуникацию на основной эскиз</b><span>{activePreviewProject ? `Главный snapshot: ${activePreviewProject.title}` : 'Сначала загрузите скрин или импортируйте .eskiz'}</span></div>
             <div className="eskiz-communication-kind-grid inline">
               {COMMUNICATION_KINDS.map((kind) => {
                 const meta = COMMUNICATION_KIND_META[kind];
                 return <button key={kind} className={communicationAddKind === kind ? 'active' : ''} style={{ '--comm-color': meta.color } as CSSProperties} onClick={() => startCommunicationPlacement(kind)}><span>{meta.icon}</span>{meta.label}</button>;
               })}
             </div>
-            {communicationAddKind && <div className="note small">Режим добавления: <b>{COMMUNICATION_KIND_META[communicationAddKind].label}</b>. Тапните по большому эскизу внутри Эскиз PRO. Чтобы отменить — нажмите тип ещё раз.</div>}
-            {distancePointPick && <div className="note small">Выберите точку расстояния на большом эскизе Эскиз PRO, затем укажите значение в мм.</div>}
-            {activePreviewProject && !frameSurface && <div className="note small">Жду загрузку полотна Эскиз PRO… Если эскиз ещё не открыт в левом окне, откройте/сохраните его и нажмите «Обновить список».</div>}
+            {communicationAddKind && <div className="note small">Режим добавления: <b>{COMMUNICATION_KIND_META[communicationAddKind].label}</b>. Тапните по основному эскизу. Чтобы отменить — нажмите тип ещё раз.</div>}
+            {distancePointPick && <div className="note small">Выберите точку расстояния на основном эскизе, затем укажите значение в мм.</div>}
           </div>
-          <div ref={frameWrapRef} className={`eskiz-pro-frame-wrap ${communicationAddKind || distancePointPick ? 'placing' : ''}`}>
-            <iframe ref={frameRef} key={frameKey} className="eskiz-pro-frame" src={ESKIZ_PRO_URL} title="Эскиз PRO" onLoad={refreshFrameSurface} />
-            {activePreviewProject && frameSurface && (
-              <FrameCommunicationLayer
-                surface={frameSurface}
-                project={activePreviewProject}
-                communications={communications}
-                activeCommunicationId={activeCommunicationId}
-                placing={Boolean(communicationAddKind || distancePointPick)}
-                onPoint={handlePreviewPointClick}
-                onCommunicationClick={handleCommunicationClick}
-              />
-            )}
-          </div>
+          <EmbeddedEskizEditor
+            key={activePreviewProject?.id ?? 'empty-eskiz'}
+            project={activePreviewProject}
+            calculatorProjectName={project.name}
+            calculatorProjectClient={project.client}
+            communications={communications}
+            activeCommunicationId={activeCommunicationId}
+            communicationAddKind={communicationAddKind}
+            pickingDistancePoint={Boolean(distancePointPick)}
+            onProjectChange={saveEmbeddedProject}
+            onCommunicationPoint={handlePreviewPointClick}
+            onCommunicationClick={handleCommunicationClick}
+          />
+          <input ref={fileRef} type="file" accept=".eskiz,application/json" hidden onChange={(event) => void importFile(event.target.files?.[0] ?? null)} />
         </div>
 
         <aside className="eskiz-pro-side">
@@ -1038,17 +776,16 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             <div className="eskiz-pro-status-cards">
               <div><b>{linkedIds.length}</b><span>привязано</span></div>
               <div><b>{activeId ? 'Да' : 'Нет'}</b><span>главный эскиз</span></div>
-              <div><b>{sameGithubPagesOrigin() ? 'Да' : 'Preview'}</b><span>живой режим</span></div>
+              <div><b>Да</b><span>встроен</span></div>
             </div>
             <div className="actions eskiz-pro-import-actions">
               <button className="btn ghost" onClick={() => fileRef.current?.click()}>Импорт .eskiz</button>
-              <input ref={fileRef} type="file" accept=".eskiz,application/json" hidden onChange={(event) => void importFile(event.target.files?.[0] ?? null)} />
             </div>
             {message && <div className="eskiz-pro-message muted small">{message}</div>}
           </section>
 
           <section className="card no-print eskiz-pro-module-sync">
-            <div className="section-head"><div><h3>Модули с эскиза → просчёт</h3><p className="muted small">Поставьте модуль в живом окне Эскиз PRO и кликните его: здесь сразу откроется карточка с поиском корпуса из прайса. Описание маркера можно оставить коротким — состав выбирается из прайса ниже.</p></div></div>
+            <div className="section-head"><div><h3>Модули с эскиза → просчёт</h3><p className="muted small">Поставьте объект «Модуль» на основном эскизе и кликните его в превью/списке: здесь откроется карточка с поиском корпуса из прайса. Описание маркера можно оставить коротким — состав выбирается из прайса ниже.</p></div></div>
             <div className="eskiz-pro-module-stats"><div><b>{moduleMarkers.length}</b><span>маркеров</span></div><div><b>{linkedModuleCount}</b><span>уже связаны</span></div><div><b>{Math.max(0, moduleMarkers.length - linkedModuleCount)}</b><span>новые</span></div></div>
             <button className="btn primary block" disabled={moduleMarkers.length === 0} onClick={syncModulesToCalculation}>Создать / обновить модули в расчёте</button>
             {moduleMarkers.length === 0 ? <div className="empty small">В привязанных эскизах пока нет объектов «Модуль».</div> : (
@@ -1101,24 +838,6 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             )}
           </section>
 
-          <section className="card no-print">
-            <div className="section-head"><div><h3>Найдено в Эскиз PRO</h3><p className="muted small">Проекты из IndexedDB инструмента.</p></div><button className="btn tiny ghost" disabled={loading} onClick={refresh}>↻</button></div>
-            {summaries.length === 0 ? <div className="empty small">Список пуст. Сохраните эскиз в инструменте или импортируйте .eskiz файл.</div> : (
-              <div className="eskiz-pro-list">
-                {summaries.map((summary) => {
-                  const linked = linkedIds.includes(summary.id);
-                  return (
-                    <article className={linked ? 'linked' : ''} key={summary.id}>
-                      {summary.thumbnail && <img src={summary.thumbnail} alt="" />}
-                      <div><b>{summary.title}</b><span>{formatDate(summary.updatedAt)} · объектов: {summary.objectsCount ?? '—'}</span></div>
-                      <button className="btn tiny ghost" disabled={loading} onClick={() => void attach(summary.id)}>{linked ? 'Обновить/привязать' : 'Привязать'}</button>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
           <section className="card">
             <div className="section-head"><div><h3>Привязано к расчёту</h3><p className="muted small">Эти эскизы попадут в клиентское КП.</p></div></div>
             {linkedIds.length === 0 ? <div className="empty small">Пока нет связанных эскизов.</div> : (
@@ -1131,7 +850,6 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
                       <div><b>{snapshot?.title ?? id}</b><span>{snapshot ? `snapshot ${formatDate(snapshot.updatedAt)}` : 'snapshot отсутствует'}</span></div>
                       <div className="actions">
                         <button className="btn tiny ghost" onClick={() => updateEskizPro({ activeProjectId: id })}>Главный</button>
-                        <button className="btn tiny ghost" disabled={loading} onClick={() => void sync(id)}>Синхр.</button>
                         <button className="btn tiny danger" onClick={() => detach(id)}>Убрать</button>
                       </div>
                       {previewProject && <EskizProjectPreview project={previewProject} compact activeModuleKey={activeMarkerKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} communicationMarkers={communications} activeCommunicationId={activeCommunicationId} onModuleClick={handlePreviewModuleClick} onCommunicationClick={handleCommunicationClick} />}
