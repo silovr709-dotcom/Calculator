@@ -19,11 +19,46 @@ export interface EskizSketchPngOptions extends EskizSketchSvgOptions {
   pixelRatio?: number;
 }
 
+export interface EskizSketchJpegOptions extends EskizSketchPngOptions {
+  quality?: number;
+}
+
+export interface EskizSketchDownloadOptions extends EskizSketchSvgOptions {
+  widthPx?: number;
+  heightPx?: number;
+  title?: string;
+  subtitle?: string;
+  pixelRatio?: number;
+  fileName?: string;
+}
+
+export interface EskizSketchPdfOptions extends EskizSketchSvgOptions {
+  title?: string;
+  subtitle?: string;
+  fileName?: string;
+  orientation?: 'auto' | 'portrait' | 'landscape';
+  quality?: number;
+}
+
 export interface EskizSketchPng {
   base64: string;
   extension: 'png';
   width: number;
   height: number;
+}
+
+export interface EskizSketchJpeg {
+  base64: string;
+  extension: 'jpg';
+  width: number;
+  height: number;
+}
+
+export interface EskizSketchPdf {
+  blob: Blob;
+  extension: 'pdf';
+  widthPt: number;
+  heightPt: number;
 }
 
 const xml = (value: string | number | null | undefined): string => String(value ?? '')
@@ -285,13 +320,58 @@ function loadSvgImage(svg: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error('Браузер не смог подготовить изображение Эскиз PRO для Excel'));
+    image.onerror = () => reject(new Error('Браузер не смог подготовить изображение Эскиз PRO для экспорта'));
     image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   });
 }
 
-/** Растеризует snapshot в PNG с белым полем и аккуратной шапкой под размер области Excel. */
-export async function renderEskizSketchPng(project: EskizProject, options: EskizSketchPngOptions): Promise<EskizSketchPng> {
+function defaultDownloadSize(project: EskizProject): { widthPx: number; heightPx: number } {
+  const sourceWidth = Math.max(1, project.image.width);
+  const sourceHeight = Math.max(1, project.image.height);
+  const ratio = sourceWidth / sourceHeight;
+  if (ratio >= 1) {
+    const widthPx = 2200;
+    return { widthPx, heightPx: Math.round(widthPx / ratio + 96) };
+  }
+  const heightPx = 2200;
+  return { widthPx: Math.round(heightPx * ratio), heightPx };
+}
+
+function safeFilePart(value: string): string {
+  return (value || 'eskiz')
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80) || 'eskiz';
+}
+
+export function eskizSketchFileName(project: EskizProject, extension: 'png' | 'pdf' | 'jpg'): string {
+  return `${safeFilePart(project.title || project.image.name || 'eskiz')}.${extension}`;
+}
+
+function downloadDataUrl(dataUrl: string, fileName: string): void {
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = fileName;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+async function renderEskizSketchCanvas(project: EskizProject, options: EskizSketchPngOptions): Promise<{ canvas: HTMLCanvasElement; width: number; height: number }> {
   if (typeof document === 'undefined') throw new Error('Экспорт картинки Эскиз PRO доступен только в браузере');
   const source = await loadSvgImage(buildEskizSketchSvg(project, options));
   const displayWidth = Math.max(240, Math.round(options.widthPx));
@@ -307,19 +387,19 @@ export async function renderEskizSketchPng(project: EskizProject, options: Eskiz
   ctx.fillRect(0, 0, displayWidth, displayHeight);
 
   const hasHeader = Boolean(options.title || options.subtitle);
-  const headerHeight = hasHeader ? 48 : 12;
+  const headerHeight = hasHeader ? 54 : 12;
   if (hasHeader) {
     ctx.fillStyle = '#f7fbf9';
     ctx.fillRect(0, 0, displayWidth, headerHeight);
     ctx.fillStyle = '#24382f';
     ctx.font = '700 18px Arial, sans-serif';
-    ctx.fillText(options.title || project.title, 16, 21);
+    ctx.fillText(options.title || project.title, 16, 22);
     ctx.fillStyle = '#6b7a73';
     ctx.font = '12px Arial, sans-serif';
-    ctx.fillText(options.subtitle || project.image.name, 16, 39);
+    ctx.fillText(options.subtitle || project.image.name, 16, 42);
   }
 
-  const margin = 12;
+  const margin = 14;
   const availableWidth = displayWidth - margin * 2;
   const availableHeight = displayHeight - headerHeight - margin * 1.5;
   const scale = Math.min(availableWidth / source.width, availableHeight / source.height);
@@ -336,5 +416,114 @@ export async function renderEskizSketchPng(project: EskizProject, options: Eskiz
   ctx.strokeStyle = '#d8e5df';
   ctx.strokeRect(.5, .5, displayWidth - 1, displayHeight - 1);
 
-  return { base64: canvas.toDataURL('image/png'), extension: 'png', width: displayWidth, height: displayHeight };
+  return { canvas, width: displayWidth, height: displayHeight };
+}
+
+/** Растеризует snapshot в PNG с белым полем и аккуратной шапкой под размер области Excel/экспорта. */
+export async function renderEskizSketchPng(project: EskizProject, options: EskizSketchPngOptions): Promise<EskizSketchPng> {
+  const { canvas, width, height } = await renderEskizSketchCanvas(project, options);
+  return { base64: canvas.toDataURL('image/png'), extension: 'png', width, height };
+}
+
+export async function renderEskizSketchJpeg(project: EskizProject, options: EskizSketchJpegOptions): Promise<EskizSketchJpeg> {
+  const { canvas, width, height } = await renderEskizSketchCanvas(project, options);
+  return { base64: canvas.toDataURL('image/jpeg', clamp(options.quality ?? .92, .5, .98)), extension: 'jpg', width, height };
+}
+
+function dataUrlToBytes(dataUrl: string): Uint8Array {
+  const base64 = dataUrl.split(',')[1] ?? '';
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+function concatBytes(parts: Uint8Array[]): Uint8Array {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
+}
+
+function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
+export function buildSingleImagePdf(jpegBytes: Uint8Array, imageWidth: number, imageHeight: number, pageWidthPt: number, pageHeightPt: number): Blob {
+  const encoder = new TextEncoder();
+  const parts: Uint8Array[] = [];
+  const offsets: number[] = [];
+  let offset = 0;
+  const pushString = (value: string) => {
+    const bytes = encoder.encode(value);
+    parts.push(bytes);
+    offset += bytes.length;
+  };
+  const pushBytes = (bytes: Uint8Array) => {
+    parts.push(bytes);
+    offset += bytes.length;
+  };
+  const startObject = (id: number) => {
+    offsets[id] = offset;
+    pushString(`${id} 0 obj\n`);
+  };
+
+  pushString('%PDF-1.4\n');
+  startObject(1);
+  pushString('<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+  startObject(2);
+  pushString('<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n');
+  startObject(3);
+  pushString(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidthPt.toFixed(2)} ${pageHeightPt.toFixed(2)}] /Resources << /XObject << /Im1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`);
+  startObject(4);
+  pushString(`<< /Type /XObject /Subtype /Image /Width ${imageWidth} /Height ${imageHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`);
+  pushBytes(jpegBytes);
+  pushString('\nendstream\nendobj\n');
+  const content = `q\n${pageWidthPt.toFixed(2)} 0 0 ${pageHeightPt.toFixed(2)} 0 0 cm\n/Im1 Do\nQ\n`;
+  const contentLength = encoder.encode(content).length;
+  startObject(5);
+  pushString(`<< /Length ${contentLength} >>\nstream\n${content}endstream\nendobj\n`);
+  const xrefOffset = offset;
+  pushString(`xref\n0 6\n0000000000 65535 f \n${[1, 2, 3, 4, 5].map((id) => `${String(offsets[id]).padStart(10, '0')} 00000 n `).join('\n')}\ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
+  return new Blob([bytesToArrayBuffer(concatBytes(parts))], { type: 'application/pdf' });
+}
+
+export async function renderEskizSketchPdf(project: EskizProject, options: EskizSketchPdfOptions = {}): Promise<EskizSketchPdf> {
+  if (typeof document === 'undefined') throw new Error('Экспорт PDF Эскиз PRO доступен только в браузере');
+  const sourceRatio = project.image.width / Math.max(1, project.image.height);
+  const orientation = options.orientation === 'portrait' || options.orientation === 'landscape'
+    ? options.orientation
+    : sourceRatio > 1.12 ? 'landscape' : 'portrait';
+  const page = orientation === 'landscape'
+    ? { widthPt: 841.89, heightPt: 595.28 }
+    : { widthPt: 595.28, heightPt: 841.89 };
+  const pxScale = 3;
+  const image = await renderEskizSketchJpeg(project, {
+    ...options,
+    widthPx: Math.round(page.widthPt * pxScale),
+    heightPx: Math.round(page.heightPt * pxScale),
+    pixelRatio: 1,
+    quality: options.quality ?? .92,
+  });
+  const blob = buildSingleImagePdf(dataUrlToBytes(image.base64), image.width, image.height, page.widthPt, page.heightPt);
+  return { blob, extension: 'pdf', widthPt: page.widthPt, heightPt: page.heightPt };
+}
+
+export async function downloadEskizSketchPng(project: EskizProject, options: EskizSketchDownloadOptions = {}): Promise<EskizSketchPng> {
+  const size = options.widthPx && options.heightPx ? { widthPx: options.widthPx, heightPx: options.heightPx } : defaultDownloadSize(project);
+  const image = await renderEskizSketchPng(project, { ...options, ...size, pixelRatio: options.pixelRatio ?? 2 });
+  downloadDataUrl(image.base64, options.fileName ?? eskizSketchFileName(project, 'png'));
+  return image;
+}
+
+export async function downloadEskizSketchPdf(project: EskizProject, options: EskizSketchPdfOptions = {}): Promise<EskizSketchPdf> {
+  const pdf = await renderEskizSketchPdf(project, options);
+  downloadBlob(pdf.blob, options.fileName ?? eskizSketchFileName(project, 'pdf'));
+  return pdf;
 }

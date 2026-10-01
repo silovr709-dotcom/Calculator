@@ -18,6 +18,7 @@ import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surch
 import { calcLines } from '../lib/engine';
 import { fmtMoney, fmtNum } from '../lib/format';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, defaultCommunicationDimensions } from '../lib/eskizCommunications';
+import { downloadEskizSketchPdf, downloadEskizSketchPng } from '../lib/eskizSketchExport';
 import CatalogPicker from './CatalogPicker';
 import EskizProjectPreview, { type EskizModuleMarkerMode, type EskizModulePreviewStatus } from './EskizProjectPreview';
 import EmbeddedEskizEditor from './EmbeddedEskizEditor';
@@ -509,6 +510,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const [distancePointPick, setDistancePointPick] = useState<{ communicationId: string; distanceId: string } | null>(null);
   const [fullScreenSketch, setFullScreenSketch] = useState(false);
   const [bulkMarkerKeys, setBulkMarkerKeys] = useState<string[]>([]);
+  const [exportingSketch, setExportingSketch] = useState<'png' | 'pdf' | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const editorCardRef = useRef<HTMLDivElement | null>(null);
   const linkedProjects = useMemo(() => linkedIds
@@ -622,6 +624,36 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     }
     downloadEskizFile(activePreviewProject, communications.filter((marker) => marker.eskizId === activePreviewProject.id));
     setMessage(`Файл «${activePreviewProject.title}.eskiz» экспортирован. Его можно импортировать обратно через «Импорт .eskiz».`);
+  };
+
+  const sketchExportOptions = (eskizProject: EskizProject) => ({
+    moduleMarkerMode,
+    communications,
+    showCommunicationSizeBadges,
+    title: 'Эскиз PRO',
+    subtitle: `${project.name}${project.client ? ` · ${project.client}` : ''} · ${eskizProject.title}`,
+  });
+
+  const exportEskizAs = async (format: 'png' | 'pdf', eskizProject = activePreviewProject) => {
+    if (!eskizProject) {
+      setMessage('Сначала загрузите или создайте эскиз в Эскиз PRO.');
+      return;
+    }
+    setExportingSketch(format);
+    setMessage(format === 'png' ? 'Готовлю картинку Эскиз PRO…' : 'Готовлю PDF Эскиз PRO…');
+    try {
+      if (format === 'png') {
+        await downloadEskizSketchPng(eskizProject, sketchExportOptions(eskizProject));
+        setMessage(`Картинка PNG «${eskizProject.title}» экспортирована. Настройки скрытия размеров коммуникаций сохранены.`);
+      } else {
+        await downloadEskizSketchPdf(eskizProject, sketchExportOptions(eskizProject));
+        setMessage(`PDF «${eskizProject.title}» экспортирован. Настройки скрытия размеров коммуникаций сохранены.`);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Не удалось экспортировать Эскиз PRO');
+    } finally {
+      setExportingSketch(null);
+    }
   };
 
   const syncModulesToCalculation = () => {
@@ -853,6 +885,8 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
         <div className="actions">
           <button className="btn ghost" onClick={() => fileRef.current?.click()}>Импорт старого .eskiz</button>
           <button className="btn ghost" disabled={!activePreviewProject} onClick={exportActiveEskizFile}>Экспорт файла Эскиз</button>
+          <button className="btn ghost" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('png')}>Экспорт PNG</button>
+          <button className="btn ghost" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('pdf')}>Экспорт PDF</button>
           <button className="btn ghost" onClick={() => setFullScreenSketch(true)}>Открыть Эскиз PRO на весь экран</button>
           <button className="btn primary" disabled={!activePreviewProject} onClick={syncModulesToCalculation}>Модули → просчёт</button>
         </div>
@@ -879,6 +913,9 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             onProjectChange={saveEmbeddedProject}
             onProjectImport={saveEmbeddedProject}
             onShowCommunicationSizeBadgesChange={(value) => updateEskizPro({ showCommunicationSizeBadges: value })}
+            onExportImage={(eskizProject) => void exportEskizAs('png', eskizProject)}
+            onExportPdf={(eskizProject) => void exportEskizAs('pdf', eskizProject)}
+            exportBusy={exportingSketch !== null}
             onModuleObjectClick={handlePreviewModuleClick}
             onStartCommunicationPlacement={startCommunicationPlacement}
             onStartCommunicationDistance={(communicationId) => startFreeCommunicationDistance(communicationId)}
@@ -927,8 +964,20 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             <div className="actions eskiz-pro-import-actions">
               <button className="btn ghost" onClick={() => fileRef.current?.click()}>Импорт .eskiz</button>
               <button className="btn ghost" disabled={!activePreviewProject} onClick={exportActiveEskizFile}>Экспорт .eskiz</button>
+              <button className="btn ghost" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('png')}>{exportingSketch === 'png' ? 'PNG…' : 'PNG-картинка'}</button>
+              <button className="btn ghost" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('pdf')}>{exportingSketch === 'pdf' ? 'PDF…' : 'PDF'}</button>
             </div>
             {message && <div className="eskiz-pro-message muted small">{message}</div>}
+          </section>
+
+          <section className="card no-print eskiz-pro-export-card">
+            <div className="section-head"><div><h3>Экспорт Эскиз PRO</h3><p className="muted small">Быстрые выгрузки текущего главного эскиза: рабочий .eskiz, картинка PNG и PDF A4. Скрытые плашки габаритов коммуникаций остаются скрытыми.</p></div></div>
+            <div className="eskiz-pro-export-actions">
+              <button className="btn ghost block" disabled={!activePreviewProject} onClick={exportActiveEskizFile}>Скачать .eskiz</button>
+              <button className="btn primary block" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('png')}>{exportingSketch === 'png' ? 'Готовлю PNG…' : 'Скачать картинку PNG'}</button>
+              <button className="btn primary block" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('pdf')}>{exportingSketch === 'pdf' ? 'Готовлю PDF…' : 'Скачать PDF'}</button>
+            </div>
+            <div className="eskiz-pro-export-hints"><span>Модули: {moduleMarkerMode === 'hidden' ? 'скрыты' : moduleMarkerMode === 'compact' ? 'компактно' : 'полностью'}</span><span>Коммуникаций: {activePreviewProject ? communications.filter((marker) => marker.eskizId === activePreviewProject.id).length : 0}</span><span>{showCommunicationSizeBadges ? 'Плашки размеров включены' : 'Плашки размеров скрыты'}</span></div>
           </section>
 
           <section className="card no-print eskiz-pro-module-sync">
@@ -960,6 +1009,8 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
                       <div><b>{snapshot?.title ?? id}</b><span>{snapshot ? `snapshot ${formatDate(snapshot.updatedAt)}` : 'snapshot отсутствует'}</span></div>
                       <div className="actions">
                         <button className="btn tiny ghost" onClick={() => updateEskizPro({ activeProjectId: id })}>Главный</button>
+                        {previewProject && <button className="btn tiny ghost" disabled={exportingSketch !== null} onClick={() => void exportEskizAs('png', previewProject)}>PNG</button>}
+                        {previewProject && <button className="btn tiny ghost" disabled={exportingSketch !== null} onClick={() => void exportEskizAs('pdf', previewProject)}>PDF</button>}
                         <button className="btn tiny danger" onClick={() => detach(id)}>Убрать</button>
                       </div>
                       {previewProject && <EskizProjectPreview project={previewProject} compact activeModuleKey={activeMarkerKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} communicationMarkers={communications} showCommunicationSizeBadges={showCommunicationSizeBadges} activeCommunicationId={activeCommunicationId} onModuleClick={handlePreviewModuleClick} onCommunicationClick={handleCommunicationClick} />}

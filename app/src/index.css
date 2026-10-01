@@ -605,6 +605,10 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .eskiz-module-lines { margin-top: 8px; padding: 8px; border-radius: 9px; background: #fff; border: 1px solid #e4ece7; }
 .eskiz-module-lines span { color: #4f6259; margin-top: 2px; }
 .eskiz-pro-import-actions { margin-top: 10px; }
+.eskiz-pro-export-card { border-top: 4px solid var(--accent); background: linear-gradient(180deg, #ffffff, #fbfffd); }
+.eskiz-pro-export-actions { display: grid; grid-template-columns: 1fr; gap: 7px; margin-top: 8px; }
+.eskiz-pro-export-hints { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.eskiz-pro-export-hints span { padding: 4px 7px; border: 1px solid #dce8e3; border-radius: 999px; background: #fff; color: #51665c; font-size: 10px; font-weight: 800; }
 .eskiz-pro-message { margin-top: 10px; padding: 8px 10px; background: #f3f8f6; border: 1px solid #d9ebe4; border-radius: 8px; }
 .eskiz-pro-list, .eskiz-pro-linked-list { display: flex; flex-direction: column; gap: 8px; }
 .eskiz-pro-list article { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: #fbfdfc; }

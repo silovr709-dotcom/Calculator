@@ -50,6 +50,9 @@ type Props = {
   onProjectChange: (project: EskizProject) => void;
   onProjectImport?: (project: EskizProject, communications: EskizCommunicationMarker[]) => void;
   onShowCommunicationSizeBadgesChange?: (value: boolean) => void;
+  onExportImage?: (project: EskizProject) => void;
+  onExportPdf?: (project: EskizProject) => void;
+  exportBusy?: boolean;
   onModuleObjectClick?: (projectId: string, object: EskizModuleObject) => void;
   onStartCommunicationPlacement: (kind: EskizCommunicationKind) => void;
   onStartCommunicationDistance: (communicationId: string) => void;
@@ -1125,6 +1128,8 @@ export default function EmbeddedEskizEditor(props: Props) {
         <button className="btn tiny ghost" onClick={() => imageInputRef.current?.click()}>Новый скрин</button>
         <button className="btn tiny ghost" onClick={() => projectInputRef.current?.click()}>Импорт .eskiz</button>
         <button className="btn tiny ghost" onClick={exportProject}>Экспорт .eskiz</button>
+        {props.onExportImage && <button className="btn tiny ghost" disabled={props.exportBusy} onClick={() => props.onExportImage?.(project)}>PNG</button>}
+        {props.onExportPdf && <button className="btn tiny ghost" disabled={props.exportBusy} onClick={() => props.onExportPdf?.(project)}>PDF</button>}
         <button className="btn tiny primary" onClick={saveNow}>Сохранить</button>
       </div>
     </header>

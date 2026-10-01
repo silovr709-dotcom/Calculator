@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EskizProject } from './eskizPro';
-import { buildEskizSketchSvg } from './eskizSketchExport';
+import { buildEskizSketchSvg, buildSingleImagePdf, eskizSketchFileName } from './eskizSketchExport';
 import type { EskizCommunicationMarker } from '../types';
 
 const project: EskizProject = {
@@ -62,5 +62,18 @@ describe('buildEskizSketchSvg', () => {
     expect(svg).not.toContain('70×70 мм');
     expect(svg).not.toMatch(/<text[^>]*>70×70<\/text>/);
     expect(svg).toContain('от угла: 300 мм');
+  });
+
+  it('делает безопасное имя файла картинки', () => {
+    expect(eskizSketchFileName({ ...project, title: 'Кухня / тест' }, 'png')).toBe('Кухня - тест.png');
+  });
+
+  it('собирает PDF-контейнер с JPEG-изображением', async () => {
+    const blob = buildSingleImagePdf(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), 10, 10, 595.28, 841.89);
+    const text = new TextDecoder().decode(await blob.arrayBuffer());
+    expect(text).toContain('%PDF-1.4');
+    expect(text).toContain('/Subtype /Image');
+    expect(text).toContain('/DCTDecode');
+    expect(text).toContain('xref');
   });
 });
