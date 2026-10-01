@@ -52,6 +52,13 @@ export interface WorktopSketchOptions {
   title?: string;
 }
 
+export interface WorktopSnapResult {
+  x: number;
+  y: number;
+  snapX?: 'left' | 'center' | 'right';
+  snapY?: 'top' | 'center' | 'bottom';
+}
+
 export interface WorktopSketchPng {
   base64: string;
   extension: 'png';
@@ -94,6 +101,59 @@ export function layoutWorktopPieces(pieces: WorktopPiece[]): WorktopSketchPieceL
     if (piece.layoutXmm == null) cursorX += size.width + 90;
     return { piece, x, y, width: size.width, height: size.height, rotated: size.rotated };
   });
+}
+
+function roundLayoutMm(value: number) {
+  return Math.round(value / 10) * 10;
+}
+
+export function snapWorktopPiecePosition(layouts: WorktopSketchPieceLayout[], pieceId: string, x: number, y: number, thresholdMm = 45): WorktopSnapResult {
+  const moving = layouts.find((layout) => layout.piece.id === pieceId);
+  if (!moving) return { x: roundLayoutMm(Math.max(0, x)), y: roundLayoutMm(Math.max(0, y)) };
+  let bestDx = 0;
+  let bestDy = 0;
+  let bestX = thresholdMm + 1;
+  let bestY = thresholdMm + 1;
+  let snapX: WorktopSnapResult['snapX'];
+  let snapY: WorktopSnapResult['snapY'];
+  const movingX = [
+    { edge: 'left' as const, value: x, offset: 0 },
+    { edge: 'center' as const, value: x + moving.width / 2, offset: moving.width / 2 },
+    { edge: 'right' as const, value: x + moving.width, offset: moving.width },
+  ];
+  const movingY = [
+    { edge: 'top' as const, value: y, offset: 0 },
+    { edge: 'center' as const, value: y + moving.height / 2, offset: moving.height / 2 },
+    { edge: 'bottom' as const, value: y + moving.height, offset: moving.height },
+  ];
+  const targetX = [0, ...layouts.filter((layout) => layout.piece.id !== pieceId).flatMap((layout) => [layout.x, layout.x + layout.width / 2, layout.x + layout.width])];
+  const targetY = [0, ...layouts.filter((layout) => layout.piece.id !== pieceId).flatMap((layout) => [layout.y, layout.y + layout.height / 2, layout.y + layout.height])];
+  for (const source of movingX) {
+    for (const target of targetX) {
+      const distance = Math.abs(source.value - target);
+      if (distance <= thresholdMm && distance < bestX) {
+        bestX = distance;
+        bestDx = target - source.value;
+        snapX = source.edge;
+      }
+    }
+  }
+  for (const source of movingY) {
+    for (const target of targetY) {
+      const distance = Math.abs(source.value - target);
+      if (distance <= thresholdMm && distance < bestY) {
+        bestY = distance;
+        bestDy = target - source.value;
+        snapY = source.edge;
+      }
+    }
+  }
+  return {
+    x: roundLayoutMm(Math.max(0, x + bestDx)),
+    y: roundLayoutMm(Math.max(0, y + bestDy)),
+    ...(snapX ? { snapX } : {}),
+    ...(snapY ? { snapY } : {}),
+  };
 }
 
 export function autoArrangeWorktopPieces(pieces: WorktopPiece[], mode: WorktopSketchLayoutMode): WorktopPiece[] {

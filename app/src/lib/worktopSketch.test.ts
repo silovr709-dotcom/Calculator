@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WorktopPiece } from '../types';
-import { autoArrangeWorktopPieces, buildWorktopPlanSvg, nextWorktopEdgeKind, worktopEdgeSymbol } from './worktopSketch';
+import { autoArrangeWorktopPieces, buildWorktopPlanSvg, layoutWorktopPieces, nextWorktopEdgeKind, snapWorktopPiecePosition, worktopEdgeSymbol } from './worktopSketch';
 
 const pieces: WorktopPiece[] = [
   { id: 'a', name: 'Основная', lengthMm: 2400, widthMm: 600, front: 'pf', left: 'v', right: 'eurozapil' },
@@ -33,6 +33,15 @@ describe('worktopSketch', () => {
     const corner = autoArrangeWorktopPieces(pieces, 'corner');
     expect(corner[1].rotated).toBe(true);
     expect(corner[1].layoutYmm).toBeGreaterThan(corner[0].layoutYmm ?? -1);
+  });
+
+  it('при перетаскивании прилипает краями и центрами к соседним деталям', () => {
+    const layouts = layoutWorktopPieces(autoArrangeWorktopPieces(pieces, 'line'));
+    const snappedToRight = snapWorktopPiecePosition(layouts, 'b', 2385, 12, 50);
+    expect(snappedToRight.x).toBe(2400);
+    expect(snappedToRight.y).toBe(0);
+    expect(snappedToRight.snapX).toBe('left');
+    expect(snappedToRight.snapY).toBe('top');
   });
 
   it('циклически переключает обозначение стороны', () => {

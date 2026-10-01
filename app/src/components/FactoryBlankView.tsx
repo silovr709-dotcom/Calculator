@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { Pricebook, Project } from '../types';
 import { checkFactoryBlank, draftFactoryBlank, FACTORY_BLANK_SPECS, factoryBlankProgress, type BlankIssue } from '../lib/factoryBlank';
 import { checkDictRules, factoryDictSuggestionGroups, loadFactoryDicts, type FactoryDicts } from '../lib/factoryDicts';
 import { BACK_EDGE_NOTE, checkWorktopPlan, edgeKindLabel, suggestWorktopPlan, WORKTOP_EDGE_KINDS } from '../lib/worktopPlan';
-import { autoArrangeWorktopPieces, buildWorktopPlanSvg, nextWorktopEdgeKind, renderWorktopPlanPng, WORKTOP_EDGE_SHORT_LABELS, worktopEdgeSymbol, type WorktopEdgeSide, type WorktopSketchLayoutMode } from '../lib/worktopSketch';
+import { autoArrangeWorktopPieces, nextWorktopEdgeKind, renderWorktopPlanPng, snapWorktopPiecePosition, WORKTOP_EDGE_SHORT_LABELS, worktopEdgeSymbol, worktopSketchMetrics, type WorktopEdgeSide, type WorktopSketchLayoutMode, type WorktopSketchPieceLayout } from '../lib/worktopSketch';
 import { lineMatchesChecklistKey } from '../lib/checklist';
 import { blankCellRefLabel, blankSketchRangeLabel, exportFactoryBlankXlsx, getBlankSheetMap, type FactoryTechPack } from '../lib/factoryBlankXls';
 import { buildFactoryTechCommunicationRows, buildFactoryTechModuleRows, buildFactoryTechReadinessRows, factoryTechReadinessSummary } from '../lib/factoryTechPack';
 import { uid } from '../lib/storage';
+import { evaluateNumericExpression } from '../lib/numericExpression';
 import type { WorktopEdgeKind, WorktopPiece } from '../types';
 import { snapshotProject, type EskizProject } from '../lib/eskizPro';
 import { renderEskizSketchPng, type EskizSketchModuleMarkerMode } from '../lib/eskizSketchExport';
@@ -31,6 +32,65 @@ const WORKTOP_EDGE_SIDES: { id: WorktopEdgeSide; label: string }[] = [
   { id: 'right', label: 'Правый / стык' },
 ];
 
+const WORKTOP_SKETCH_WIDTH = 900;
+const WORKTOP_SKETCH_HEIGHT = 390;
+
+function parseWorktopMm(value: string): number | null {
+  const source = value.replace(/мм/giu, '').trim();
+  if (!source) return null;
+  const calculated = evaluateNumericExpression(source);
+  const parsed = calculated ?? Number(source.replace(',', '.'));
+  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : null;
+}
+
+function WorktopMmInput(props: { value: number | null | undefined; onValue: (value: number | null) => void; placeholder?: string; className?: string }) {
+  const externalValue = props.value == null ? '' : String(props.value);
+  const [draftState, setDraftState] = useState(() => ({ externalValue, draft: externalValue }));
+  const draft = draftState.externalValue === externalValue ? draftState.draft : externalValue;
+  const setDraft = (nextDraft: string) => setDraftState({ externalValue, draft: nextDraft });
+  const commit = (input: HTMLInputElement) => {
+    const raw = input.value.trim();
+    if (!raw) {
+      setDraft('');
+      props.onValue(null);
+      return;
+    }
+    const parsed = parseWorktopMm(raw);
+    if (parsed == null) {
+      setDraft(externalValue);
+      return;
+    }
+    setDraft(String(parsed));
+    props.onValue(parsed);
+  };
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      data-number-calculator="true"
+      data-number-calculator-commit="blur"
+      className={props.className}
+      value={draft}
+      placeholder={props.placeholder}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={(event) => commit(event.currentTarget)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') { event.preventDefault(); commit(event.currentTarget); event.currentTarget.blur(); }
+        if (event.key === 'Escape') { event.preventDefault(); setDraft(externalValue); event.currentTarget.blur(); }
+      }}
+    />
+  );
+}
+
+function WorktopSvgEdgeLabel(props: { kind: WorktopEdgeKind; x: number; y: number; rotate?: number; onClick: () => void }) {
+  const symbol = worktopEdgeSymbol(props.kind);
+  const width = Math.max(24, symbol.length * 8 + 12);
+  return <g className="blank-worktop-svg-edge-label" transform={`translate(${props.x} ${props.y}) rotate(${props.rotate ?? 0})`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); props.onClick(); }}>
+    <rect x={-width / 2} y={-10} width={width} height={20} rx={5} fill="#fff" stroke="#1f6feb" strokeWidth={1.4} />
+    <text textAnchor="middle" dominantBaseline="middle" fontSize={11} fontWeight={900} fill="#184f9e">{symbol}</text>
+  </g>;
+}
+
 function WorktopPlanDesigner(props: {
   pieces: WorktopPiece[];
   onPiece: (id: string, patch: Partial<WorktopPiece>) => void;
@@ -38,14 +98,72 @@ function WorktopPlanDesigner(props: {
   onAdd: () => void;
   onRemove: (id: string) => void;
 }) {
-  const svg = useMemo(() => buildWorktopPlanSvg(props.pieces, { widthPx: 900, heightPx: 390, showLegend: true, title: 'Схема столешницы — как в листе 2 бланка' }), [props.pieces]);
+  const [selectedStateId, setSelectedId] = useState<string | null>(null);
+  const [snapHint, setSnapHint] = useState('');
+  const dragRef = useRef<{ id: string; startClientX: number; startClientY: number; originX: number; originY: number; scale: number; moved: boolean } | null>(null);
+  const metrics = useMemo(() => worktopSketchMetrics(props.pieces, WORKTOP_SKETCH_WIDTH, WORKTOP_SKETCH_HEIGHT, true), [props.pieces]);
+  const selectedId = props.pieces.some((piece) => piece.id === selectedStateId) ? selectedStateId : null;
+  const selectedPiece = props.pieces.find((piece) => piece.id === selectedId) ?? null;
+  const selectedLayout = metrics.layouts.find((layout) => layout.piece.id === selectedId) ?? null;
+
   const arrange = (mode: WorktopSketchLayoutMode) => props.onReplace(autoArrangeWorktopPieces(props.pieces, mode));
   const cycleEdge = (piece: WorktopPiece, side: WorktopEdgeSide) => props.onPiece(piece.id, { [side]: nextWorktopEdgeKind(piece[side]) } as Partial<WorktopPiece>);
+  const nudgeSelected = (dx: number, dy: number) => {
+    if (!selectedLayout) return;
+    props.onPiece(selectedLayout.piece.id, { layoutXmm: Math.max(0, Math.round((selectedLayout.x + dx) / 10) * 10), layoutYmm: Math.max(0, Math.round((selectedLayout.y + dy) / 10) * 10) });
+  };
+  const selectedScreen = selectedLayout ? {
+    x: metrics.offsetX + selectedLayout.x * metrics.scale,
+    y: metrics.offsetY + selectedLayout.y * metrics.scale,
+    width: selectedLayout.width * metrics.scale,
+    height: selectedLayout.height * metrics.scale,
+  } : null;
+  const editorLeftPx = selectedScreen
+    ? (selectedScreen.x + selectedScreen.width + 310 > WORKTOP_SKETCH_WIDTH ? selectedScreen.x - 320 : selectedScreen.x + selectedScreen.width + 14)
+    : 16;
+  const editorTopPx = selectedScreen ? selectedScreen.y : 18;
+  const editorStyle = {
+    left: `${Math.max(1, Math.min(64, editorLeftPx / WORKTOP_SKETCH_WIDTH * 100))}%`,
+    top: `${Math.max(3, Math.min(58, editorTopPx / WORKTOP_SKETCH_HEIGHT * 100))}%`,
+  };
+
+  const startDrag = (event: ReactPointerEvent<SVGGElement>, layout: WorktopSketchPieceLayout) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedId(layout.piece.id);
+    dragRef.current = {
+      id: layout.piece.id,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      originX: layout.x,
+      originY: layout.y,
+      scale: metrics.scale || 1,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const onPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    event.preventDefault();
+    const dx = (event.clientX - drag.startClientX) / drag.scale;
+    const dy = (event.clientY - drag.startClientY) / drag.scale;
+    if (Math.abs(event.clientX - drag.startClientX) > 2 || Math.abs(event.clientY - drag.startClientY) > 2) drag.moved = true;
+    const snapped = snapWorktopPiecePosition(metrics.layouts, drag.id, drag.originX + dx, drag.originY + dy, 55);
+    props.onPiece(drag.id, { layoutXmm: snapped.x, layoutYmm: snapped.y });
+    setSnapHint(snapped.snapX || snapped.snapY ? `Прилипло: ${[snapped.snapX ? 'по вертикали' : '', snapped.snapY ? 'по горизонтали' : ''].filter(Boolean).join(' и ')}` : '');
+  };
+  const finishDrag = () => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    window.setTimeout(() => setSnapHint(''), 700);
+  };
+
   return <div className="blank-worktop-designer">
     <div className="blank-worktop-designer-head">
       <div>
         <b>Визуальная схема столешницы</b>
-        <span>В карточке детали кликайте по сторонам: — → Х → V → ПФ → // → ≈. Эти же знаки попадут в Excel-бланк.</span>
+        <span>Тяните детали мышью/пальцем — края и центры прилипают друг к другу. Клик по детали открывает быстрые размеры, кромки и поворот.</span>
       </div>
       <div className="blank-worktop-layout-buttons">
         <button type="button" onClick={() => arrange('line')}>Прямая</button>
@@ -54,18 +172,89 @@ function WorktopPlanDesigner(props: {
         <button type="button" onClick={props.onAdd}>+ деталь</button>
       </div>
     </div>
-    <div className="blank-worktop-sketch" dangerouslySetInnerHTML={{ __html: svg }} />
+    <div className="blank-worktop-sketch blank-worktop-sketch-interactive">
+      <svg width={WORKTOP_SKETCH_WIDTH} height={WORKTOP_SKETCH_HEIGHT} viewBox={`0 0 ${WORKTOP_SKETCH_WIDTH} ${WORKTOP_SKETCH_HEIGHT}`} onPointerMove={onPointerMove} onPointerUp={finishDrag} onPointerCancel={finishDrag}>
+        <rect x="0" y="0" width={WORKTOP_SKETCH_WIDTH} height={WORKTOP_SKETCH_HEIGHT} fill="#ffffff" />
+        <text x="14" y="22" fontSize="13" fontWeight="900" fill="#24382f">Схема столешницы — как в листе 2 бланка</text>
+        {metrics.layouts.map((layout, index) => {
+          const piece = layout.piece;
+          const x = metrics.offsetX + layout.x * metrics.scale;
+          const y = metrics.offsetY + layout.y * metrics.scale;
+          const width = layout.width * metrics.scale;
+          const height = layout.height * metrics.scale;
+          const centerX = x + width / 2;
+          const centerY = y + height / 2;
+          const selected = selectedId === piece.id;
+          const name = piece.name || `Деталь ${index + 1}`;
+          const size = `${piece.lengthMm ?? '—'}×${piece.widthMm ?? '—'} мм${layout.rotated ? ' · повернута' : ''}`;
+          return <g key={piece.id} className={`blank-worktop-svg-piece ${selected ? 'selected' : ''}`} onPointerDown={(event) => startDrag(event, layout)} onClick={() => setSelectedId(piece.id)}>
+            <rect x={x} y={y} width={width} height={height} rx="3" fill="#ffffff" stroke={selected ? '#ff5c35' : '#7a8380'} strokeWidth={selected ? 2.8 : 1.8} strokeDasharray={selected ? '0' : '9 6'} />
+            <text x={centerX} y={centerY - 8} textAnchor="middle" fontSize="13" fontWeight="900" fill="#1f2f29">{name}</text>
+            <text x={centerX} y={centerY + 10} textAnchor="middle" fontSize="11" fontWeight="700" fill="#55685d">{size}</text>
+            <text x={centerX} y={Math.max(18, y - 8)} textAnchor="middle" fontSize="11" fontWeight="800" fill="#111827">{piece.lengthMm ? `${piece.lengthMm} мм` : ''}</text>
+            <text x={Math.min(WORKTOP_SKETCH_WIDTH - 10, x + width + 24)} y={centerY} textAnchor="middle" fontSize="11" fontWeight="800" fill="#111827" transform={`rotate(90 ${Math.min(WORKTOP_SKETCH_WIDTH - 10, x + width + 24)} ${centerY})`}>{piece.widthMm ? `${piece.widthMm} мм` : ''}</text>
+            {piece.front && <><line x1={x} y1={y + height} x2={x + width} y2={y + height} stroke="#1f6feb" strokeWidth="3.2" strokeLinecap="round" /><WorktopSvgEdgeLabel kind={piece.front} x={centerX} y={y + height + 18} onClick={() => cycleEdge(piece, 'front')} /></>}
+            {piece.left && <><line x1={x} y1={y} x2={x} y2={y + height} stroke="#1f6feb" strokeWidth="3.2" strokeLinecap="round" /><WorktopSvgEdgeLabel kind={piece.left} x={x - 18} y={centerY} rotate={-90} onClick={() => cycleEdge(piece, 'left')} /></>}
+            {piece.right && <><line x1={x + width} y1={y} x2={x + width} y2={y + height} stroke="#1f6feb" strokeWidth="3.2" strokeLinecap="round" /><WorktopSvgEdgeLabel kind={piece.right} x={x + width + 18} y={centerY} rotate={90} onClick={() => cycleEdge(piece, 'right')} /></>}
+            {selected && <>
+              <rect data-worktop-edge-hotspot="true" x={x} y={y + height - 16} width={width} height="32" className="blank-worktop-edge-hotspot" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); cycleEdge(piece, 'front'); }}><title>Перед: переключить обработку</title></rect>
+              <rect data-worktop-edge-hotspot="true" x={x - 16} y={y} width="32" height={height} className="blank-worktop-edge-hotspot" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); cycleEdge(piece, 'left'); }}><title>Левый торец: переключить обработку</title></rect>
+              <rect data-worktop-edge-hotspot="true" x={x + width - 16} y={y} width="32" height={height} className="blank-worktop-edge-hotspot" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); cycleEdge(piece, 'right'); }}><title>Правый торец/стык: переключить обработку</title></rect>
+            </>}
+          </g>;
+        })}
+        {props.pieces.length === 0 && <text x={WORKTOP_SKETCH_WIDTH / 2} y={WORKTOP_SKETCH_HEIGHT / 2} textAnchor="middle" fontSize="14" fontWeight="800" fill="#81918a">Добавьте деталь столешницы</text>}
+        <g transform={`translate(14 ${WORKTOP_SKETCH_HEIGHT - 44})`}>
+          <rect x="0" y="0" width={WORKTOP_SKETCH_WIDTH - 28} height="34" rx="8" fill="#f7fbf9" stroke="#d8e5df" />
+          <text x="12" y="22" fontSize="11" fontWeight="900" fill="#24382f">V — кромка в цвет</text>
+          <text x="155" y="22" fontSize="11" fontWeight="900" fill="#24382f">Х — кромка ПВХ</text>
+          <text x="292" y="22" fontSize="11" fontWeight="900" fill="#24382f">ПФ — постформинг</text>
+          <text x="448" y="22" fontSize="11" fontWeight="900" fill="#24382f">// — еврозапил</text>
+          <text x="575" y="22" fontSize="11" fontWeight="900" fill="#24382f">≈ — евростык</text>
+        </g>
+      </svg>
+      {snapHint && <div className="blank-worktop-snap-hint">{snapHint}</div>}
+      {selectedPiece && selectedLayout && <div className="blank-worktop-inline-editor" style={editorStyle} onPointerDown={(event) => event.stopPropagation()}>
+        <header><b>{selectedPiece.name || 'Деталь'}</b><button type="button" onClick={() => setSelectedId(null)}>×</button></header>
+        <label>Название<input value={selectedPiece.name} onChange={(event) => props.onPiece(selectedPiece.id, { name: event.target.value })} /></label>
+        <div className="blank-worktop-inline-sizes">
+          <label>Длина, мм<WorktopMmInput value={selectedPiece.lengthMm} onValue={(value) => props.onPiece(selectedPiece.id, { lengthMm: value })} placeholder="например 2400" /></label>
+          <label>Ширина, мм<WorktopMmInput value={selectedPiece.widthMm} onValue={(value) => props.onPiece(selectedPiece.id, { widthMm: value })} placeholder="600" /></label>
+        </div>
+        <div className="blank-worktop-edge-buttons compact">
+          {WORKTOP_EDGE_SIDES.map((side) => {
+            const kind = selectedPiece[side.id];
+            return <button key={side.id} type="button" className={kind ? 'active' : ''} onClick={() => cycleEdge(selectedPiece, side.id)} title={kind ? WORKTOP_EDGE_SHORT_LABELS[kind] : 'Не отмечено'}><small>{side.label}</small><b>{worktopEdgeSymbol(kind) || '—'}</b></button>;
+          })}
+        </div>
+        <div className="blank-worktop-nudge-grid">
+          <button type="button" onClick={() => nudgeSelected(-10, 0)}>← 10</button>
+          <button type="button" onClick={() => nudgeSelected(0, -10)}>↑ 10</button>
+          <button type="button" onClick={() => nudgeSelected(0, 10)}>↓ 10</button>
+          <button type="button" onClick={() => nudgeSelected(10, 0)}>→ 10</button>
+        </div>
+        <div className="blank-worktop-card-actions compact-actions">
+          <button type="button" onClick={() => props.onPiece(selectedPiece.id, { rotated: !selectedPiece.rotated })}>{selectedPiece.rotated ? 'Горизонтально' : 'Вертикально'}</button>
+          <button type="button" onClick={() => props.onPiece(selectedPiece.id, { layoutXmm: null, layoutYmm: null })}>Авто-позиция</button>
+          <button type="button" className="danger" onClick={() => props.onRemove(selectedPiece.id)}>Удалить</button>
+        </div>
+      </div>}
+    </div>
     <div className="blank-worktop-piece-grid">
       {props.pieces.length === 0 ? <div className="empty small">Добавьте деталь — схема появится здесь и уйдёт в лист 2 Excel.</div> : props.pieces.map((piece, index) => (
-        <div key={piece.id} className="blank-worktop-piece-card">
+        <div key={piece.id} className={`blank-worktop-piece-card ${selectedId === piece.id ? 'active' : ''}`} onClick={() => setSelectedId(piece.id)}>
           <header><b>{piece.name || `Деталь ${index + 1}`}</b><span>{piece.lengthMm ?? '—'}×{piece.widthMm ?? '—'} мм</span></header>
-          <div className="blank-worktop-edge-buttons">
+          <div className="blank-worktop-mini-sizes" onClick={(event) => event.stopPropagation()}>
+            <label>Длина<WorktopMmInput value={piece.lengthMm} onValue={(value) => props.onPiece(piece.id, { lengthMm: value })} placeholder="мм" /></label>
+            <label>Ширина<WorktopMmInput value={piece.widthMm} onValue={(value) => props.onPiece(piece.id, { widthMm: value })} placeholder="мм" /></label>
+          </div>
+          <div className="blank-worktop-edge-buttons" onClick={(event) => event.stopPropagation()}>
             {WORKTOP_EDGE_SIDES.map((side) => {
               const kind = piece[side.id];
               return <button key={side.id} type="button" className={kind ? 'active' : ''} onClick={() => cycleEdge(piece, side.id)} title={kind ? WORKTOP_EDGE_SHORT_LABELS[kind] : 'Не отмечено'}><small>{side.label}</small><b>{worktopEdgeSymbol(kind) || '—'}</b></button>;
             })}
           </div>
-          <div className="blank-worktop-card-actions">
+          <div className="blank-worktop-card-actions" onClick={(event) => event.stopPropagation()}>
             <button type="button" onClick={() => props.onPiece(piece.id, { rotated: !piece.rotated })}>{piece.rotated ? 'Повернуть горизонтально' : 'Повернуть вертикально'}</button>
             <button type="button" className="danger" onClick={() => props.onRemove(piece.id)}>Удалить</button>
           </div>
@@ -597,8 +786,8 @@ export default function FactoryBlankView(props: {
                 {pieces.map((piece) => (
                   <tr key={piece.id}>
                     <td><input value={piece.name} onChange={(e) => updatePiece(piece.id, { name: e.target.value })} /></td>
-                    <td><input type="number" min={1} value={piece.lengthMm ?? ''} onChange={(e) => updatePiece(piece.id, { lengthMm: e.target.value ? Number(e.target.value) : null })} /></td>
-                    <td><input type="number" min={1} value={piece.widthMm ?? ''} onChange={(e) => updatePiece(piece.id, { widthMm: e.target.value ? Number(e.target.value) : null })} /></td>
+                    <td><WorktopMmInput value={piece.lengthMm} onValue={(value) => updatePiece(piece.id, { lengthMm: value })} placeholder="мм" /></td>
+                    <td><WorktopMmInput value={piece.widthMm} onValue={(value) => updatePiece(piece.id, { widthMm: value })} placeholder="мм" /></td>
                     {(['front', 'left', 'right'] as const).map((side) => (
                       <td key={side}>
                         <select value={piece[side] ?? ''} onChange={(e) => updatePiece(piece.id, { [side]: (e.target.value || null) as WorktopEdgeKind | null })}>

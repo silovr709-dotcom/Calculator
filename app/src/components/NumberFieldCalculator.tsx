@@ -16,10 +16,16 @@ function isNumericInput(element: EventTarget | null): element is HTMLInputElemen
 }
 
 function setNativeInputValue(input: HTMLInputElement, value: string): void {
-  const prototype = Object.getPrototypeOf(input) as HTMLInputElement;
-  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
-  descriptor?.set?.call(input, value);
-  input.dispatchEvent(new Event('input', { bubbles: true }));
+  const prototype = window.HTMLInputElement.prototype;
+  const prototypeDescriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+  const ownDescriptor = Object.getOwnPropertyDescriptor(input, 'value');
+  const setter = prototypeDescriptor?.set ?? ownDescriptor?.set;
+  if (setter) setter.call(input, value);
+  else input.value = value;
+  const inputEvent = typeof InputEvent !== 'undefined'
+    ? new InputEvent('input', { bubbles: true, inputType: 'insertReplacementText', data: value })
+    : new Event('input', { bubbles: true });
+  input.dispatchEvent(inputEvent);
   input.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
@@ -34,16 +40,18 @@ const BUTTONS = ['7', '8', '9', '/', '4', '5', '6', '*', '1', '2', '3', '-', '0'
 
 export default function NumberFieldCalculator() {
   const [target, setTarget] = useState<CalculatorTarget | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const [expression, setExpression] = useState('');
   const [error, setError] = useState('');
-  const panelRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
   const expressionRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    const openFor = (input: HTMLInputElement) => {
+    const openFor = (input: HTMLInputElement, forceExpanded = false) => {
       const rect = input.getBoundingClientRect();
-      const nextExpression = input.value || input.getAttribute('placeholder') || '';
+      const nextExpression = input.value || '';
       setTarget({ input, rect, expression: nextExpression });
+      setExpanded(forceExpanded || input.dataset.numberCalculatorAuto === 'true');
       setExpression(nextExpression);
       setError('');
     };
@@ -69,8 +77,7 @@ export default function NumberFieldCalculator() {
       if (!isNumericInput(event.target)) return;
       if (event.altKey && (event.key === '=' || event.key === '+' || event.key.toLowerCase() === 'к')) {
         event.preventDefault();
-        openFor(event.target);
-        window.setTimeout(() => expressionRef.current?.focus(), 0);
+        openFor(event.target, true);
       }
     };
     document.addEventListener('focusin', onFocusIn);
@@ -87,6 +94,11 @@ export default function NumberFieldCalculator() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!target || !expanded) return;
+    window.setTimeout(() => expressionRef.current?.focus(), 0);
+  }, [expanded, target]);
+
   if (!target) return null;
   const pos = targetPosition(target.rect);
   const calculated = evaluateNumericExpression(expression);
@@ -100,11 +112,14 @@ export default function NumberFieldCalculator() {
     }
     const formatted = formatNumericExpressionResult(result);
     setNativeInputValue(target.input, formatted);
-    if (target.input.dataset.numberCalculatorCommit === 'blur') {
-      target.input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
-    }
     setExpression(formatted);
     setError('');
+    if (target.input.dataset.numberCalculatorCommit === 'blur') {
+      target.input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      target.input.blur();
+      setTarget(null);
+      return;
+    }
     target.input.focus();
     target.input.select();
   };
@@ -114,8 +129,24 @@ export default function NumberFieldCalculator() {
     window.setTimeout(() => expressionRef.current?.focus(), 0);
   };
 
+  if (!expanded) {
+    const left = Math.max(8, Math.min(target.rect.right - 30, window.innerWidth - 44));
+    const top = Math.max(8, Math.min(target.rect.top + (target.rect.height - 28) / 2, window.innerHeight - 40));
+    return (
+      <button
+        ref={(node) => { panelRef.current = node; }}
+        type="button"
+        className="number-field-calculator-trigger"
+        style={{ left, top }}
+        title="Открыть калькулятор поля (Alt+=)"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => setExpanded(true)}
+      >fx</button>
+    );
+  }
+
   return (
-    <div ref={panelRef} className="number-field-calculator" style={{ left: pos.left, top: pos.top, width: pos.width }}>
+    <div ref={(node) => { panelRef.current = node; }} className="number-field-calculator" style={{ left: pos.left, top: pos.top, width: pos.width }}>
       <div className="number-field-calculator-head"><b>Калькулятор поля</b><button type="button" onClick={() => setTarget(null)}>×</button></div>
       <input
         ref={expressionRef}
