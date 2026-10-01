@@ -356,6 +356,7 @@ const persistTemplates = useCallback((next: Template[]) => {
         {view.kind === 'quick' && (
           <QuickCalc
             pricebook={activePricebook}
+            settings={globalSettings}
             templates={templates}
             onDeleteTemplate={(id) => persistTemplates(templates.filter((t) => t.id !== id))}
             onCreateProject={createProject}

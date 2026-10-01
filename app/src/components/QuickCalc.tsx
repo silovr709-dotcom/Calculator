@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react';
-import type { Pricebook, PriceItem, ProjectLine, Template } from '../types';
+import type { Pricebook, PriceItem, ProjectLine, ProjectSettings, Template } from '../types';
 import { lineFromItem, calcTotals, sheetsFromLength, sheetLengthOf, unitIsHalfSheetAllowed } from '../lib/engine';
 import { defaultSettings, uid } from '../lib/storage';
 import { fmtMoney, fmtNum, todayISO } from '../lib/format';
+import { buildQuickEstimate, quickEstimateRange, type QuickEstimateInput } from '../lib/quickEstimate';
 
 /**
- * Быстрый расчёт. Два инструмента:
- * 1) Конструктор — собирает кухню из РЕАЛЬНЫХ позиций прайса по прозрачным правилам
+ * Быстрый расчёт. Три инструмента:
+ * 1) Экспресс-оценка — быстрый коридор цены по метражу и типовым позициям прайса.
+ * 2) Детальный подбор — собирает кухню из РЕАЛЬНЫХ позиций прайса по прозрачным правилам
  *    комплектации (все правила видимы и редактируемы, цены только из прайса).
- * 2) Шаблоны — сохранённые наборы позиций из прошлых проектов.
- * Все разделы — списки: любых позиций можно добавить сколько угодно строк.
+ * 3) Шаблоны — сохранённые наборы позиций из прошлых проектов.
+ * Все детальные разделы — списки: любых позиций можно добавить сколько угодно строк.
  */
 
 /** Кнопка-фильтр по типу материала (напр. «Плёнка ПВХ», «Эмаль») */
@@ -226,12 +228,29 @@ const BLUM_CHIPS = (sub: string, plain: string): Chip[] => [
 
 export default function QuickCalc(props: {
   pricebook: Pricebook;
+  settings: ProjectSettings;
   templates: Template[];
   onDeleteTemplate: (id: string) => void;
   onCreateProject: (d: { name: string; client: string; date: string; comment: string }, lines: ProjectLine[], modules?: Template['modules'], moduleDefaults?: Template['moduleDefaults']) => void;
 }) {
   const { pricebook } = props;
-  const [tab, setTab] = useState<'ctor' | 'templates'>('ctor');
+  const [tab, setTab] = useState<'express' | 'ctor' | 'templates'>('express');
+  const [express, setExpress] = useState<QuickEstimateInput>({
+    lowerLengthMm: 2400,
+    upperLengthMm: 2400,
+    avgModuleWidthMm: 600,
+    tallCount: 0,
+    drawerCount: 2,
+    worktopLengthMm: 2400,
+    facadeTier: 'pvc-standard',
+    worktopTier: 'postforming-38',
+    hardwareTier: 'soft-close',
+    includeHandles: true,
+    includeLegs: true,
+    includePlinth: true,
+    includeDryer: true,
+  });
+  const updateExpress = (patch: Partial<QuickEstimateInput>) => setExpress((current) => ({ ...current, ...patch }));
 
   // ---- подсказка по количеству модулей (не ограничивает выбор) ----
   const [lowLen, setLowLen] = useState(2400);
@@ -255,6 +274,13 @@ export default function QuickCalc(props: {
   const [sinkRows, setSinkRows] = useState<ExtraRow[]>([]);
   const [extraRows, setExtraRows] = useState<ExtraRow[]>([]);
 
+  const activeSettings = useMemo<ProjectSettings>(() => ({
+    ...defaultSettings(),
+    ...props.settings,
+    markupByGroup: props.settings.markupByGroup ?? {},
+    extraExpenses: props.settings.extraExpenses ?? [],
+    clientRounding: props.settings.clientRounding ?? 1,
+  }), [props.settings]);
   const byId = (id: string | null) => pricebook.items.find((i) => i.id === id) ?? null;
   const priced = (pred: (i: PriceItem) => boolean) => pricebook.items.filter((i) => i.priceKind === 'fixed' && pred(i));
 
@@ -277,7 +303,11 @@ export default function QuickCalc(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pricebook, lowRows, upRows, facadeRows, hingeRows, drawerRows, dryerRows, worktopRows, legRows, plinthRows, handleRows, sinkRows, extraRows]);
 
-  const { totals } = useMemo(() => calcTotals(lines, defaultSettings()), [lines]);
+  const { totals } = useMemo(() => calcTotals(lines, activeSettings), [lines, activeSettings]);
+  const expressEstimate = useMemo(() => buildQuickEstimate(express, pricebook), [express, pricebook]);
+  const { totals: expressTotals } = useMemo(() => calcTotals(expressEstimate.lines, activeSettings), [expressEstimate.lines, activeSettings]);
+  const expressRange = quickEstimateRange(expressTotals.client, expressEstimate.tolerancePct);
+  const hasClientMarkup = activeSettings.markupBasePct != null || Object.values(activeSettings.markupByGroup).some((value) => value != null);
 
   const create = (lns: ProjectLine[], name: string, modules?: Template['modules'], moduleDefaults?: Template['moduleDefaults']) => {
     props.onCreateProject({ name, client: '', date: todayISO(), comment: 'Создано из быстрого расчёта' },
@@ -289,13 +319,130 @@ export default function QuickCalc(props: {
       <header className="page-head">
         <div>
           <h1>Быстрый расчёт</h1>
-          <div className="muted">Ориентировочная стоимость из реальных позиций прайса. В каждом разделе можно добавить сколько угодно разных позиций.</div>
+          <div className="muted">Экспресс-оценка даёт коридор цены из реальных позиций прайса. Для точного КП всё равно нужен модульный расчёт.</div>
         </div>
       </header>
       <div className="tabs">
-        <button className={tab === 'ctor' ? 'active' : ''} onClick={() => setTab('ctor')}>Конструктор</button>
+        <button className={tab === 'express' ? 'active' : ''} onClick={() => setTab('express')}>Экспресс-оценка</button>
+        <button className={tab === 'ctor' ? 'active' : ''} onClick={() => setTab('ctor')}>Детальный подбор</button>
         <button className={tab === 'templates' ? 'active' : ''} onClick={() => setTab('templates')}>Шаблоны ({props.templates.length})</button>
       </div>
+
+      {tab === 'express' && (
+        <div className="editor-grid quick-express-grid">
+          <div className="lines-col">
+            <section className="card quick-express-hero">
+              <div>
+                <span className="eyebrow">быстрый коридор</span>
+                <h3>Считаем не «на глаз», а типовыми позициями прайса</h3>
+                <p className="muted">Введите только метраж, материал и уровень фурнитуры. Программа сама подберёт типовые корпуса, фасады м², столешницу хлыстами, петли, ручки, опоры и цоколь. Это не заменяет точный модульный расчёт, но даёт быструю актуальную вилку.</p>
+              </div>
+              <div className="quick-confidence">
+                <b>±{Math.round(expressEstimate.tolerancePct * 100)}%</b>
+                <span>ожидаемый разброс до детализации</span>
+              </div>
+            </section>
+
+            <section className="card">
+              <h3>1. Габариты кухни</h3>
+              <div className="quick-presets">
+                <button className="chip" type="button" onClick={() => setExpress({ ...express, lowerLengthMm: 1800, upperLengthMm: 1800, worktopLengthMm: 1800, tallCount: 0, drawerCount: 1 })}>Маленькая 1,8 м</button>
+                <button className="chip" type="button" onClick={() => setExpress({ ...express, lowerLengthMm: 2400, upperLengthMm: 2400, worktopLengthMm: 2400, tallCount: 0, drawerCount: 2 })}>Стандарт 2,4 м</button>
+                <button className="chip" type="button" onClick={() => setExpress({ ...express, lowerLengthMm: 3600, upperLengthMm: 3000, worktopLengthMm: 3600, tallCount: 1, drawerCount: 3 })}>Кухня 3,6 м + пенал</button>
+                <button className="chip" type="button" onClick={() => setExpress({ ...express, lowerLengthMm: 4200, upperLengthMm: 3600, worktopLengthMm: 4200, tallCount: 2, drawerCount: 4 })}>Большая 4,2 м</button>
+              </div>
+              <div className="grid3">
+                <label>Нижний ряд, мм<input type="number" min={0} step={50} value={express.lowerLengthMm} onChange={(event) => updateExpress({ lowerLengthMm: Number(event.target.value) || 0 })} /></label>
+                <label>Верхний ряд, мм<input type="number" min={0} step={50} value={express.upperLengthMm} onChange={(event) => updateExpress({ upperLengthMm: Number(event.target.value) || 0 })} /></label>
+                <label>Столешница, мм<input type="number" min={0} step={50} value={express.worktopLengthMm} onChange={(event) => updateExpress({ worktopLengthMm: Number(event.target.value) || 0 })} /></label>
+              </div>
+              <div className="grid3">
+                <label>Средняя ширина модуля<input type="number" min={300} step={50} value={express.avgModuleWidthMm} onChange={(event) => updateExpress({ avgModuleWidthMm: Number(event.target.value) || 600 })} /></label>
+                <label>Пеналы, шт<input type="number" min={0} step={1} value={express.tallCount} onChange={(event) => updateExpress({ tallCount: Number(event.target.value) || 0 })} /></label>
+                <label>Ящики/направляющие, к-т<input type="number" min={0} step={1} value={express.drawerCount} onChange={(event) => updateExpress({ drawerCount: Number(event.target.value) || 0 })} /></label>
+              </div>
+              <div className="quick-metrics">
+                <span><b>{expressEstimate.metrics.lowerModules}</b> нижних мод.</span>
+                <span><b>{expressEstimate.metrics.upperModules}</b> верхних мод.</span>
+                <span><b>{fmtNum(expressEstimate.metrics.facadeAreaM2)}</b> м² фасадов</span>
+                <span><b>{expressEstimate.metrics.hingeCount}</b> петель</span>
+              </div>
+            </section>
+
+            <section className="card">
+              <h3>2. Материалы и комплектация</h3>
+              <div className="grid3">
+                <label>Фасады
+                  <select value={express.facadeTier} onChange={(event) => updateExpress({ facadeTier: event.target.value as QuickEstimateInput['facadeTier'] })}>
+                    <option value="pvc-economy">Плёнка ПВХ · эконом</option>
+                    <option value="pvc-standard">Плёнка ПВХ · средняя категория</option>
+                    <option value="pvc-premium">Плёнка ПВХ · высокая категория</option>
+                    <option value="emal">Эмаль · базовая</option>
+                    <option value="plastic">Пластик HPL · средний</option>
+                    <option value="tss">TSS плита</option>
+                  </select>
+                </label>
+                <label>Столешница
+                  <select value={express.worktopTier} onChange={(event) => updateExpress({ worktopTier: event.target.value as QuickEstimateInput['worktopTier'] })}>
+                    <option value="postforming-26">Постформинг 26 мм</option>
+                    <option value="postforming-38">Постформинг 38 мм</option>
+                    <option value="compact">Компакт-плита</option>
+                    <option value="none">Не считать</option>
+                  </select>
+                </label>
+                <label>Фурнитура
+                  <select value={express.hardwareTier} onChange={(event) => updateExpress({ hardwareTier: event.target.value as QuickEstimateInput['hardwareTier'] })}>
+                    <option value="standard">Базовая</option>
+                    <option value="soft-close">С доводчиками</option>
+                    <option value="blum">Blum</option>
+                  </select>
+                </label>
+              </div>
+              <div className="quick-switches">
+                <label><input type="checkbox" checked={express.includeHandles} onChange={(event) => updateExpress({ includeHandles: event.target.checked })} /> Ручки по числу фасадов</label>
+                <label><input type="checkbox" checked={express.includeLegs} onChange={(event) => updateExpress({ includeLegs: event.target.checked })} /> Опоры 4 шт на напольный модуль</label>
+                <label><input type="checkbox" checked={express.includePlinth} onChange={(event) => updateExpress({ includePlinth: event.target.checked })} /> Цоколь по длине низа</label>
+                <label><input type="checkbox" checked={express.includeDryer} onChange={(event) => updateExpress({ includeDryer: event.target.checked })} /> Посудосушитель</label>
+              </div>
+            </section>
+
+            <section className="card">
+              <h3>Что учтено автоматически</h3>
+              <ul className="quick-assumptions">
+                {expressEstimate.assumptions.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+              {expressEstimate.warnings.map((warning) => <div className="warn small" key={warning}>{warning}</div>)}
+            </section>
+          </div>
+
+          <aside className="totals-col">
+            <div className="totals-card quick-total-card">
+              <h3>Экспресс-итог</h3>
+              {expressEstimate.lines.length === 0 ? <div className="muted small">Укажите габариты кухни.</div> : (
+                <>
+                  <div className="quick-price-range">
+                    <span>Ожидаемый коридор для клиента</span>
+                    <b>{fmtMoney(expressRange.low)} — {fmtMoney(expressRange.high)}</b>
+                    <em>центр расчёта: {fmtMoney(expressTotals.client)}</em>
+                  </div>
+                  <div className="t-row"><span>Себестоимость позиций</span><span>{fmtMoney(expressTotals.costLines)}</span></div>
+                  <div className="t-row"><span>Клиентская цена по настройкам</span><span>{fmtMoney(expressTotals.client)}</span></div>
+                  {!hasClientMarkup && <div className="warn small">В настройках не задана наценка — клиентская цена сейчас почти равна себестоимости. Для реальной цены задайте наценки в «Настройки».</div>}
+                  <div className="quick-line-list">
+                    {expressEstimate.lines.slice(0, 10).map((line) => {
+                      const c = calcTotals([line], defaultSettings()).totals.cost;
+                      return <div className="t-row small" key={line.id}><span>{line.name.slice(0, 38)}… × {fmtNum(line.qty)}</span><span>{fmtMoney(c)}</span></div>;
+                    })}
+                    {expressEstimate.lines.length > 10 && <div className="muted small">+ ещё {expressEstimate.lines.length - 10} строк</div>}
+                  </div>
+                  <button className="btn primary block" onClick={() => create(expressEstimate.lines, 'Экспресс-оценка кухни')}>Создать проект из экспресс-оценки</button>
+                  <button className="btn ghost block" onClick={() => setTab('ctor')}>Перейти к детальному подбору</button>
+                </>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
 
       {tab === 'templates' && (
         <div className="card">
@@ -421,8 +568,9 @@ export default function QuickCalc(props: {
                     const c = calcTotals([l], defaultSettings()).totals.cost;
                     return <div className="t-row small" key={l.id}><span>{l.name.slice(0, 44)}… × {fmtNum(l.qty)}</span><span>{fmtMoney(c)}</span></div>;
                   })}
-                  <div className="t-row total"><span>Себестоимость (без наценки)</span><span>{fmtMoney(totals.cost)}</span></div>
-                  <div className="note">Наценка и цена клиента появятся в проекте согласно вашим настройкам.</div>
+                  <div className="t-row total"><span>Себестоимость</span><span>{fmtMoney(totals.cost)}</span></div>
+                  <div className="t-row total"><span>Клиентская цена по настройкам</span><span>{fmtMoney(totals.client)}</span></div>
+                  {!hasClientMarkup && <div className="warn small">Наценка не задана — клиентская цена сейчас считается без маржи.</div>}
                   <button className="btn primary block" onClick={() => create(lines, 'Быстрый расчёт')}>Создать проект из этого расчёта</button>
                 </>
               )}
