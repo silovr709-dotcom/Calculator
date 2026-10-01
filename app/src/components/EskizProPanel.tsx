@@ -782,6 +782,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       x,
       y,
       ...dimensions,
+      visualScale: 1,
       distances: [],
       showInClient: true,
       createdAt: now,

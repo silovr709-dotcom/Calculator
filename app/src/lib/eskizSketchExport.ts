@@ -1,6 +1,6 @@
 import type { EskizCommunicationDistance, EskizCommunicationMarker } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from './eskizPro';
-import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount } from './eskizCommunications';
+import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale } from './eskizCommunications';
 
 export type EskizSketchModuleMarkerMode = 'full' | 'compact' | 'hidden';
 
@@ -183,6 +183,7 @@ function renderCommunicationIcon(marker: EskizCommunicationMarker, active = fals
   const sockets = communicationSocketCount(marker.kind);
   const switches = communicationSwitchCount(marker.kind);
   const frameWidth = sockets > 0 ? Math.max(30, sockets * 18 + 12) : switches > 0 ? Math.max(30, switches * 16 + 12) : 32;
+  const scale = communicationVisualScale(marker);
   const socketNodes = sockets > 0 ? `<rect x="${-frameWidth / 2}" y="-14" width="${frameWidth}" height="28" rx="7" fill="#fff" stroke="${meta.color}" stroke-width="${active ? 3 : 2.2}" />${Array.from({ length: sockets }).map((_, index) => {
     const cx = (index - (sockets - 1) / 2) * 18;
     return `<g transform="translate(${cx} 0)"><circle r="6.2" fill="#eff6ff" stroke="${meta.color}" stroke-width="1.8" /><circle cx="-2.2" cy="0" r="1.05" fill="${meta.color}" /><circle cx="2.2" cy="0" r="1.05" fill="${meta.color}" /></g>`;
@@ -192,18 +193,19 @@ function renderCommunicationIcon(marker: EskizCommunicationMarker, active = fals
     return `<g transform="translate(${cx} 0)"><line x1="-5" y1="5" x2="5" y2="-5" stroke="${meta.color}" stroke-width="2.4" stroke-linecap="round" /><circle cx="-5" cy="5" r="1.9" fill="${meta.color}" /><circle cx="5" cy="-5" r="1.9" fill="${meta.color}" /></g>`;
   }).join('')}` : '';
   const otherNode = sockets === 0 && switches === 0 ? `<circle r="14" fill="#fff" stroke="${meta.color}" stroke-width="${active ? 3 : 2.4}" /><text y="4" text-anchor="middle" font-size="9" font-weight="900" fill="${meta.color}">${xml(meta.shortLabel)}</text>` : '';
-  return `<g transform="translate(${marker.x} ${marker.y})"><circle r="${active ? 22 : 18}" fill="${meta.color}" opacity="${active ? .18 : .1}" />${socketNodes}${switchNodes}${otherNode}</g>`;
+  return `<g transform="translate(${marker.x} ${marker.y})"><g transform="scale(${scale})"><circle r="${active ? 22 : 18}" fill="${meta.color}" opacity="${active ? .18 : .1}" />${socketNodes}${switchNodes}${otherNode}</g></g>`;
 }
 
 function renderCommunicationMeasureBadges(marker: EskizCommunicationMarker, width: number, height: number) {
   const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
   const values = [communicationCompactSizeText(marker), communicationElevationText(marker)].filter(Boolean);
   if (values.length === 0) return '';
-  let y = clamp(marker.y + 20, 4, Math.max(4, height - values.length * 18 - 4));
+  const scale = communicationVisualScale(marker);
+  let y = clamp(marker.y + 20 * scale, 4, Math.max(4, height - values.length * 18 - 4));
   return values.map((value) => {
     const label = String(value);
     const w = Math.max(44, Math.min(130, label.length * 5.8 + 14));
-    const x = clamp(marker.x + 18, 4, Math.max(4, width - w - 4));
+    const x = clamp(marker.x + 18 * scale, 4, Math.max(4, width - w - 4));
     const node = `<g transform="translate(${x} ${y})"><rect width="${w}" height="16" rx="8" fill="#fff" stroke="${meta.color}" stroke-width="1.2" fill-opacity=".96" /><text x="${w / 2}" y="11.5" text-anchor="middle" font-size="9" font-weight="850" fill="${meta.color}">${xml(label)}</text></g>`;
     y += 18;
     return node;

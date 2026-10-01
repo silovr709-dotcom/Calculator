@@ -34,6 +34,17 @@ export const COMMUNICATION_ANCHOR_LABELS: Record<EskizCommunicationAnchorKind, s
 };
 
 export const COMMUNICATION_KINDS = Object.keys(COMMUNICATION_KIND_META) as EskizCommunicationKind[];
+export const COMMUNICATION_VISUAL_SCALE_MIN = 0.55;
+export const COMMUNICATION_VISUAL_SCALE_MAX = 2.4;
+
+export function communicationVisualScale(marker: Pick<EskizCommunicationMarker, 'visualScale'>) {
+  const value = marker.visualScale ?? 1;
+  return Number.isFinite(value) ? Math.min(COMMUNICATION_VISUAL_SCALE_MAX, Math.max(COMMUNICATION_VISUAL_SCALE_MIN, value)) : 1;
+}
+
+export function normalizeCommunicationVisualScale(value: number) {
+  return Number(Math.min(COMMUNICATION_VISUAL_SCALE_MAX, Math.max(COMMUNICATION_VISUAL_SCALE_MIN, value)).toFixed(2));
+}
 
 export function communicationSocketCount(kind: EskizCommunicationKind) {
   if (kind === 'socket' || kind === 'socketDouble' || kind === 'socketTriple') return kind === 'socketTriple' ? 3 : kind === 'socketDouble' ? 2 : 1;

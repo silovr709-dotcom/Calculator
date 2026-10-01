@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ChangeEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ChangeEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizEquipmentType, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
 import { readEskizFile } from '../lib/eskizPro';
-import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, COMMUNICATION_KINDS, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, defaultCommunicationDimensions } from '../lib/eskizCommunications';
+import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, COMMUNICATION_KINDS, COMMUNICATION_VISUAL_SCALE_MAX, COMMUNICATION_VISUAL_SCALE_MIN, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale, defaultCommunicationDimensions, normalizeCommunicationVisualScale } from '../lib/eskizCommunications';
 
 type Tool = 'select' | 'free-dimension' | 'h-dimension' | 'v-dimension' | 'chain' | 'anchor' | 'h-guide' | 'v-guide' | 'module' | 'callout' | 'comment' | 'equipment' | 'link';
 type Drag = { mode: 'create' | 'move' | 'handle' | 'marquee'; start: Point; id?: string; end?: 'start' | 'end' | 'offset' | 'resize'; before: EskizProject; original?: EskizObject };
 type Point = { x: number; y: number };
 type QuickEdit = { id: string; value: string; left: number; top: number; repeatTool: Tool };
+type CommunicationQuickEdit = { mode: 'marker'; communicationId: string; left: number; top: number } | { mode: 'distance'; communicationId: string; distanceId: string; value: string; left: number; top: number };
 type ModuleSummary = { status: 'ok' | 'warn' | 'error' | 'new'; label: string; body?: string; cost?: string; lines?: number };
 type EskizLayerKey = 'dimensions' | 'modules' | 'communications' | 'callouts' | 'comments' | 'equipment' | 'links';
 type EskizLayerVisibility = Record<EskizLayerKey, boolean>;
@@ -230,34 +231,37 @@ function CommunicationMarkerIcon({ marker, active = false }: { marker: EskizComm
   const sockets = communicationSocketCount(marker.kind);
   const switches = communicationSwitchCount(marker.kind);
   const frameWidth = sockets > 0 ? Math.max(30, sockets * 18 + 12) : switches > 0 ? Math.max(30, switches * 16 + 12) : 32;
+  const scale = communicationVisualScale(marker);
   return <g className={`embedded-eskiz-communication-symbol ${active ? 'active' : ''}`} transform={`translate(${marker.x} ${marker.y})`}>
-    <circle className="embedded-eskiz-communication-halo" r={active ? 22 : 18} fill={meta.color} opacity={active ? .18 : .1} />
-    {sockets > 0 && <g>
-      <rect x={-frameWidth / 2} y="-14" width={frameWidth} height="28" rx="7" fill="#fff" stroke={meta.color} strokeWidth={active ? 3 : 2.2} />
-      {Array.from({ length: sockets }).map((_, index) => {
-        const cx = (index - (sockets - 1) / 2) * 18;
-        return <g key={index} transform={`translate(${cx} 0)`}>
-          <circle r="6.2" fill="#eff6ff" stroke={meta.color} strokeWidth="1.8" />
-          <circle cx="-2.2" cy="0" r="1.05" fill={meta.color} />
-          <circle cx="2.2" cy="0" r="1.05" fill={meta.color} />
-        </g>;
-      })}
-    </g>}
-    {switches > 0 && <g>
-      <rect x={-frameWidth / 2} y="-14" width={frameWidth} height="28" rx="7" fill="#fff" stroke={meta.color} strokeWidth={active ? 3 : 2.2} />
-      {Array.from({ length: switches }).map((_, index) => {
-        const cx = (index - (switches - 1) / 2) * 16;
-        return <g key={index} transform={`translate(${cx} 0)`}>
-          <line x1="-5" y1="5" x2="5" y2="-5" stroke={meta.color} strokeWidth="2.4" strokeLinecap="round" />
-          <circle cx="-5" cy="5" r="1.9" fill={meta.color} />
-          <circle cx="5" cy="-5" r="1.9" fill={meta.color} />
-        </g>;
-      })}
-    </g>}
-    {sockets === 0 && switches === 0 && <g>
-      <circle r="14" fill="#fff" stroke={meta.color} strokeWidth={active ? 3 : 2.4} />
-      <text y="4" textAnchor="middle" fontSize="9" fontWeight="900" fill={meta.color}>{meta.shortLabel}</text>
-    </g>}
+    <g transform={`scale(${scale})`}>
+      <circle className="embedded-eskiz-communication-halo" r={active ? 22 : 18} fill={meta.color} opacity={active ? .18 : .1} />
+      {sockets > 0 && <g>
+        <rect x={-frameWidth / 2} y="-14" width={frameWidth} height="28" rx="7" fill="#fff" stroke={meta.color} strokeWidth={active ? 3 : 2.2} />
+        {Array.from({ length: sockets }).map((_, index) => {
+          const cx = (index - (sockets - 1) / 2) * 18;
+          return <g key={index} transform={`translate(${cx} 0)`}>
+            <circle r="6.2" fill="#eff6ff" stroke={meta.color} strokeWidth="1.8" />
+            <circle cx="-2.2" cy="0" r="1.05" fill={meta.color} />
+            <circle cx="2.2" cy="0" r="1.05" fill={meta.color} />
+          </g>;
+        })}
+      </g>}
+      {switches > 0 && <g>
+        <rect x={-frameWidth / 2} y="-14" width={frameWidth} height="28" rx="7" fill="#fff" stroke={meta.color} strokeWidth={active ? 3 : 2.2} />
+        {Array.from({ length: switches }).map((_, index) => {
+          const cx = (index - (switches - 1) / 2) * 16;
+          return <g key={index} transform={`translate(${cx} 0)`}>
+            <line x1="-5" y1="5" x2="5" y2="-5" stroke={meta.color} strokeWidth="2.4" strokeLinecap="round" />
+            <circle cx="-5" cy="5" r="1.9" fill={meta.color} />
+            <circle cx="5" cy="-5" r="1.9" fill={meta.color} />
+          </g>;
+        })}
+      </g>}
+      {sockets === 0 && switches === 0 && <g>
+        <circle r="14" fill="#fff" stroke={meta.color} strokeWidth={active ? 3 : 2.4} />
+        <text y="4" textAnchor="middle" fontSize="9" fontWeight="900" fill={meta.color}>{meta.shortLabel}</text>
+      </g>}
+    </g>
   </g>;
 }
 
@@ -265,12 +269,13 @@ function CommunicationMeasureBadges({ marker, width, height }: { marker: EskizCo
   const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
   const values = [communicationCompactSizeText(marker), communicationElevationText(marker)].filter(Boolean);
   if (values.length === 0) return null;
-  let y = clamp(marker.y + 20, 4, Math.max(4, height - values.length * 18 - 4));
+  const scale = communicationVisualScale(marker);
+  let y = clamp(marker.y + 20 * scale, 4, Math.max(4, height - values.length * 18 - 4));
   return <g className="embedded-eskiz-communication-measures">
     {values.map((value) => {
       const label = String(value);
       const w = Math.max(44, Math.min(130, label.length * 5.8 + 14));
-      const x = clamp(marker.x + 18, 4, Math.max(4, width - w - 4));
+      const x = clamp(marker.x + 18 * scale, 4, Math.max(4, width - w - 4));
       const node = <g key={label} transform={`translate(${x} ${y})`}>
         <rect width={w} height="16" rx="8" fill="#fff" stroke={meta.color} strokeWidth="1.2" fillOpacity=".96" />
         <text x={w / 2} y="11.5" textAnchor="middle" fontSize="9" fontWeight="850" fill={meta.color}>{label}</text>
@@ -289,27 +294,39 @@ function CommunicationDistanceLabel({ text, x, y, color }: { text: string; x: nu
   </g>;
 }
 
-function CommunicationLayer({ project, communications, activeCommunicationId, onCommunicationClick, onCommunicationPointerDown, onDistanceEndPointerDown }: Pick<Props, 'project' | 'communications' | 'activeCommunicationId' | 'onCommunicationClick'> & { project: EskizProject; onCommunicationPointerDown: (event: ReactPointerEvent<SVGGElement>, marker: EskizCommunicationMarker) => void; onDistanceEndPointerDown: (event: ReactPointerEvent<SVGCircleElement>, marker: EskizCommunicationMarker, distance: EskizCommunicationDistance) => void }) {
+function CommunicationLayer({ project, communications, activeCommunicationId, onCommunicationClick, onCommunicationPointerDown, onCommunicationScalePointerDown, onDistanceClick, onDistanceEndPointerDown }: {
+  project: EskizProject;
+  communications: EskizCommunicationMarker[];
+  activeCommunicationId?: string | null;
+  onCommunicationClick: (event: ReactMouseEvent<SVGGElement>, marker: EskizCommunicationMarker) => void;
+  onCommunicationPointerDown: (event: ReactPointerEvent<SVGGElement>, marker: EskizCommunicationMarker) => void;
+  onCommunicationScalePointerDown: (event: ReactPointerEvent<SVGCircleElement>, marker: EskizCommunicationMarker) => void;
+  onDistanceClick: (event: ReactMouseEvent<SVGGElement>, marker: EskizCommunicationMarker, distance: EskizCommunicationDistance) => void;
+  onDistanceEndPointerDown: (event: ReactPointerEvent<SVGCircleElement>, marker: EskizCommunicationMarker, distance: EskizCommunicationDistance) => void;
+}) {
   const projectCommunications = communications.filter((marker) => marker.eskizId === project.id);
   return <g className="embedded-eskiz-communications">
     {projectCommunications.map((marker) => {
       const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
       const active = marker.id === activeCommunicationId;
-      return <g key={marker.id} className={`embedded-eskiz-communication ${active ? 'active' : ''}`} onPointerDown={(event) => onCommunicationPointerDown(event, marker)} onClick={(event) => { event.stopPropagation(); onCommunicationClick(project.id, marker); }}>
+      const scale = communicationVisualScale(marker);
+      return <g key={marker.id} className={`embedded-eskiz-communication ${active ? 'active' : ''}`} onPointerDown={(event) => onCommunicationPointerDown(event, marker)} onClick={(event) => onCommunicationClick(event, marker)}>
         <title>{[marker.name || meta.label, communicationSizeText(marker), marker.note].filter(Boolean).join(' · ')}</title>
         {(marker.distances ?? []).map((distance) => {
           const anchor = communicationAnchorPoint(distance, marker, project.image.width, project.image.height);
           const text = `${distance.label || COMMUNICATION_ANCHOR_LABELS[distance.anchor]}: ${communicationDistanceText(distance.valueMm)}`;
           const midX = (marker.x + anchor.x) / 2;
           const midY = (marker.y + anchor.y) / 2;
-          return <g key={distance.id} className="embedded-eskiz-communication-distance">
+          return <g key={distance.id} className="embedded-eskiz-communication-distance editable" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => onDistanceClick(event, marker, distance)}>
+            <line className="embedded-eskiz-communication-distance-hit" x1={marker.x} y1={marker.y} x2={anchor.x} y2={anchor.y} stroke="transparent" strokeWidth="18" pointerEvents="stroke" />
             <line x1={marker.x} y1={marker.y} x2={anchor.x} y2={anchor.y} stroke={meta.color} strokeWidth="2.2" strokeDasharray="8 5" markerStart="url(#embeddedEskizDistanceDot)" markerEnd="url(#embeddedEskizDistanceArrow)" />
             {distance.anchor === 'custom' && <g className="embedded-eskiz-distance-target"><line x1={anchor.x - 8} y1={anchor.y} x2={anchor.x + 8} y2={anchor.y} stroke={meta.color} strokeWidth="2" /><line x1={anchor.x} y1={anchor.y - 8} x2={anchor.x} y2={anchor.y + 8} stroke={meta.color} strokeWidth="2" /></g>}
             <CommunicationDistanceLabel text={text} x={midX} y={midY - 5} color={meta.color} />
-            {(active || distance.anchor === 'custom') && <circle className="embedded-eskiz-distance-end-handle" cx={anchor.x} cy={anchor.y} r="8" fill="#fff" stroke={meta.color} strokeWidth="3" onPointerDown={(event) => onDistanceEndPointerDown(event, marker, distance)} />}
+            {(active || distance.anchor === 'custom') && <circle className="embedded-eskiz-distance-end-handle" cx={anchor.x} cy={anchor.y} r="8" fill="#fff" stroke={meta.color} strokeWidth="3" onPointerDown={(event) => onDistanceEndPointerDown(event, marker, distance)} onClick={(event) => event.stopPropagation()} />}
           </g>;
         })}
         <CommunicationMarkerIcon marker={marker} active={active} />
+        {active && <circle className="embedded-eskiz-communication-scale-handle" cx={marker.x + 30 * scale} cy={marker.y + 22 * scale} r="7" fill="#fff" stroke={meta.color} strokeWidth="3" onPointerDown={(event) => onCommunicationScalePointerDown(event, marker)} onClick={(event) => event.stopPropagation()} />}
         <CommunicationMeasureBadges marker={marker} width={project.image.width} height={project.image.height} />
       </g>;
     })}
@@ -337,6 +354,7 @@ export default function EmbeddedEskizEditor(props: Props) {
   const [selectionBox, setSelectionBox] = useState<{ start: Point; end: Point } | null>(null);
   const [snapIndicator, setSnapIndicator] = useState<Point | null>(null);
   const [quickEdit, setQuickEdit] = useState<QuickEdit | null>(null);
+  const [communicationQuickEdit, setCommunicationQuickEdit] = useState<CommunicationQuickEdit | null>(null);
   const [communicationDraftPoint, setCommunicationDraftPoint] = useState<Point | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
   const [error, setError] = useState('');
@@ -345,7 +363,8 @@ export default function EmbeddedEskizEditor(props: Props) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const projectInputRef = useRef<HTMLInputElement>(null);
   const dragRef = useRef<Drag | null>(null);
-  const communicationDragRef = useRef<{ mode: 'marker' | 'distance-end'; communicationId: string; distanceId?: string; start: Point; originalMarker: EskizCommunicationMarker; originalDistance?: EskizCommunicationDistance; originalAnchor?: Point } | null>(null);
+  const communicationDragRef = useRef<{ mode: 'marker' | 'distance-end' | 'marker-scale'; communicationId: string; distanceId?: string; start: Point; originalMarker: EskizCommunicationMarker; originalDistance?: EskizCommunicationDistance; originalAnchor?: Point; originalScale?: number; startDistance?: number; moved?: boolean } | null>(null);
+  const communicationClickIgnoreRef = useRef(false);
   const panRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const past = useRef<EskizProject[]>([]);
   const future = useRef<EskizProject[]>([]);
@@ -581,7 +600,7 @@ export default function EmbeddedEskizEditor(props: Props) {
         const step = event.shiftKey ? 10 : 1;
         nudgeSelected(event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0, event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0);
       }
-      if (event.key === 'Escape') { setTool('select'); selectOnly(null); setChainLast(null); setChainAxis(null); setChainSessionId(null); setPendingDimension(null); onCancelCommunicationMode(); }
+      if (event.key === 'Escape') { setTool('select'); selectOnly(null); setChainLast(null); setChainAxis(null); setChainSessionId(null); setPendingDimension(null); setCommunicationQuickEdit(null); onCancelCommunicationMode(); }
       const found = TOOL_ITEMS.find((item) => item.hotkey?.toLowerCase() === event.key.toLowerCase());
       if (found && !event.ctrlKey && !event.metaKey) {
         setTool(found.id);
@@ -670,9 +689,15 @@ export default function EmbeddedEskizEditor(props: Props) {
     setCommunicationDraftPoint(point(event));
   }, [point, project, props.pickingDistancePoint]);
 
+  const popupPosition = (event: { clientX: number; clientY: number }) => ({
+    left: Math.min(event.clientX + 14, Math.max(16, window.innerWidth - 340)),
+    top: Math.min(event.clientY + 14, Math.max(16, window.innerHeight - 260)),
+  });
+
   const handleCommunicationPointerDown = useCallback((event: ReactPointerEvent<SVGGElement>, marker: EskizCommunicationMarker) => {
     event.preventDefault();
     event.stopPropagation();
+    setCommunicationQuickEdit(null);
     props.onCommunicationClick(marker.eskizId, marker);
     selectOnly(null);
     if (communicationMode) return;
@@ -680,9 +705,49 @@ export default function EmbeddedEskizEditor(props: Props) {
     svgRef.current?.setPointerCapture(event.pointerId);
   }, [communicationMode, point, props, selectOnly]);
 
+  const handleCommunicationMarkerClick = useCallback((event: ReactMouseEvent<SVGGElement>, marker: EskizCommunicationMarker) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (communicationClickIgnoreRef.current) {
+      communicationClickIgnoreRef.current = false;
+      return;
+    }
+    props.onCommunicationClick(marker.eskizId, marker);
+    selectOnly(null);
+    setCommunicationQuickEdit({ mode: 'marker', communicationId: marker.id, ...popupPosition(event) });
+  }, [props, selectOnly]);
+
+  const handleCommunicationDistanceClick = useCallback((event: ReactMouseEvent<SVGGElement>, marker: EskizCommunicationMarker, distance: EskizCommunicationDistance) => {
+    event.preventDefault();
+    event.stopPropagation();
+    props.onCommunicationClick(marker.eskizId, marker);
+    selectOnly(null);
+    setCommunicationQuickEdit({ mode: 'distance', communicationId: marker.id, distanceId: distance.id, value: distance.valueMm == null ? '' : String(distance.valueMm), ...popupPosition(event) });
+  }, [props, selectOnly]);
+
+  const handleCommunicationScalePointerDown = useCallback((event: ReactPointerEvent<SVGCircleElement>, marker: EskizCommunicationMarker) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setCommunicationQuickEdit(null);
+    props.onCommunicationClick(marker.eskizId, marker);
+    selectOnly(null);
+    if (communicationMode) return;
+    const start = point(event);
+    communicationDragRef.current = {
+      mode: 'marker-scale',
+      communicationId: marker.id,
+      start,
+      originalMarker: marker,
+      originalScale: communicationVisualScale(marker),
+      startDistance: Math.max(12, pointDistance(start, { x: marker.x, y: marker.y })),
+    };
+    svgRef.current?.setPointerCapture(event.pointerId);
+  }, [communicationMode, point, props, selectOnly]);
+
   const handleDistanceEndPointerDown = useCallback((event: ReactPointerEvent<SVGCircleElement>, marker: EskizCommunicationMarker, distance: EskizCommunicationDistance) => {
     event.preventDefault();
     event.stopPropagation();
+    setCommunicationQuickEdit(null);
     props.onCommunicationClick(marker.eskizId, marker);
     selectOnly(null);
     if (communicationMode) return;
@@ -708,6 +773,7 @@ export default function EmbeddedEskizEditor(props: Props) {
       setQuickEdit(null);
       setSaved(false);
     }
+    if (communicationQuickEdit) setCommunicationQuickEdit(null);
     if (communicationMode) return;
     if (spaceDown || event.button === 1) return;
     if (pendingDimension) {
@@ -766,8 +832,13 @@ export default function EmbeddedEskizEditor(props: Props) {
       const target = point(event);
       const dx = target.x - communicationDrag.start.x;
       const dy = target.y - communicationDrag.start.y;
+      if (Math.hypot(dx, dy) > 2) communicationDrag.moved = true;
       if (communicationDrag.mode === 'marker') {
         props.onCommunicationChange(communicationDrag.communicationId, { x: Math.round(clamp(communicationDrag.originalMarker.x + dx, 0, project.image.width)), y: Math.round(clamp(communicationDrag.originalMarker.y + dy, 0, project.image.height)) });
+      } else if (communicationDrag.mode === 'marker-scale') {
+        const distance = Math.max(1, pointDistance(target, { x: communicationDrag.originalMarker.x, y: communicationDrag.originalMarker.y }));
+        const ratio = distance / Math.max(1, communicationDrag.startDistance ?? distance);
+        props.onCommunicationChange(communicationDrag.communicationId, { visualScale: normalizeCommunicationVisualScale((communicationDrag.originalScale ?? 1) * ratio) });
       } else if (communicationDrag.distanceId && communicationDrag.originalDistance) {
         const originalAnchor = communicationDrag.originalAnchor ?? { x: communicationDrag.originalDistance.anchorX ?? communicationDrag.originalMarker.x + 120, y: communicationDrag.originalDistance.anchorY ?? communicationDrag.originalMarker.y };
         const anchorX = Math.round(clamp(originalAnchor.x + dx, 0, project.image.width));
@@ -836,7 +907,9 @@ export default function EmbeddedEskizEditor(props: Props) {
 
   const onStageUp = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (communicationDragRef.current) {
+      communicationClickIgnoreRef.current = Boolean(communicationDragRef.current.moved);
       communicationDragRef.current = null;
+      window.setTimeout(() => { communicationClickIgnoreRef.current = false; }, 0);
       return;
     }
     if (!project || communicationMode) return;
@@ -1017,6 +1090,7 @@ export default function EmbeddedEskizEditor(props: Props) {
   const visibleObjects = project.objects.filter((object) => !object.hidden && objectVisibleInLayers(object, showAnnotations, showHelpers, layerVisibility));
   const visibleCommunications = communicationLayerVisible(showAnnotations, layerVisibility) ? props.communications : [];
   const activeCommunicationMeta = props.communicationAddKind ? COMMUNICATION_KIND_META[props.communicationAddKind] : activeCommunication ? COMMUNICATION_KIND_META[activeCommunication.kind] : null;
+  const inlineCommunication = communicationQuickEdit ? props.communications.find((marker) => marker.id === communicationQuickEdit.communicationId && marker.eskizId === project.id) ?? null : null;
 
   return <div className={`embedded-eskiz-editor ${communicationMode ? 'communication-mode' : ''}`}>
     <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={onFileInput((file) => void openImage(file))} />
@@ -1089,7 +1163,7 @@ export default function EmbeddedEskizEditor(props: Props) {
             </defs>
             {showImage && <image href={project.image.dataUrl} x="0" y="0" width={project.image.width} height={project.image.height} preserveAspectRatio="none" pointerEvents="none" style={{ opacity: project.imageDisplay?.opacity ?? 1, filter: `brightness(${project.imageDisplay?.brightness ?? 1}) contrast(${project.imageDisplay?.contrast ?? 1}) saturate(${project.imageDisplay?.saturation ?? 1}) grayscale(${project.imageDisplay?.grayscale ? 1 : 0})` }} />}
             {visibleObjects.map((object) => <EmbeddedObjectView key={object.id} object={object} selected={selectedIds.includes(object.id)} primary={object.id === selected} onPointerDown={objectDown} onHandleDown={handleDown} />)}
-            <CommunicationLayer project={project} communications={visibleCommunications} activeCommunicationId={props.activeCommunicationId} onCommunicationClick={props.onCommunicationClick} onCommunicationPointerDown={handleCommunicationPointerDown} onDistanceEndPointerDown={handleDistanceEndPointerDown} />
+            <CommunicationLayer project={project} communications={visibleCommunications} activeCommunicationId={props.activeCommunicationId} onCommunicationClick={handleCommunicationMarkerClick} onCommunicationPointerDown={handleCommunicationPointerDown} onCommunicationScalePointerDown={handleCommunicationScalePointerDown} onDistanceClick={handleCommunicationDistanceClick} onDistanceEndPointerDown={handleDistanceEndPointerDown} />
             {selectionBox && <rect pointerEvents="none" x={Math.min(selectionBox.start.x, selectionBox.end.x)} y={Math.min(selectionBox.start.y, selectionBox.end.y)} width={Math.abs(selectionBox.end.x - selectionBox.start.x)} height={Math.abs(selectionBox.end.y - selectionBox.start.y)} fill="#2563eb" fillOpacity=".1" stroke="#2563eb" strokeWidth="1.5" strokeDasharray="7 5" />}
             {draftLine && <g pointerEvents="none" opacity=".9"><line x1={draftLine.start.x} y1={draftLine.start.y} x2={draftLine.end.x} y2={draftLine.end.y} stroke={COLORS.accent} strokeWidth="3" strokeDasharray="10 7" /><circle cx={draftLine.start.x} cy={draftLine.start.y} r="6" fill={COLORS.accent} /><circle cx={draftLine.end.x} cy={draftLine.end.y} r="6" fill={COLORS.accent} /></g>}
             {tool === 'chain' && chainLast && <g pointerEvents="none"><circle cx={chainLast.x} cy={chainLast.y} r="8" fill={COLORS.accent} /><circle cx={chainLast.x} cy={chainLast.y} r="16" fill="none" stroke={COLORS.accent} opacity=".35" /></g>}
@@ -1101,9 +1175,59 @@ export default function EmbeddedEskizEditor(props: Props) {
         {pendingDimension ? <div className="embedded-eskiz-hint"><b>Шаг 3 из 3</b> Отведите размерную линию и кликните для фиксации</div> : tool === 'chain' && <div className="embedded-eskiz-hint"><b>Цепочка</b> Укажите следующую точку · Esc — закончить</div>}
       </section>
       {quickEdit && <div className="embedded-eskiz-quick" style={{ left: Math.min(quickEdit.left + 14, window.innerWidth - 210), top: Math.min(quickEdit.top + 14, window.innerHeight - 105) }}><span>Размер</span><div><input autoFocus inputMode="decimal" value={quickEdit.value} onChange={(event) => setQuickEdit({ ...quickEdit, value: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); finishQuickEdit(false); } if (event.key === 'Tab') { event.preventDefault(); finishQuickEdit(true); } if (event.key === 'Escape') { event.preventDefault(); setQuickEdit(null); } }} /><b>мм</b></div><small>Enter — готово · Tab — следующий</small></div>}
-      {sidebarOpen && <Inspector project={project} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} moduleSummaries={props.moduleSummaries} onModuleObjectClick={(projectId, object) => { props.onProjectChange(project); props.onModuleObjectClick?.(projectId, object); }} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} layerVisibility={layerVisibility} onShowImage={setShowImage} onShowAnnotations={setShowAnnotations} onShowHelpers={setShowHelpers} onLayerVisibility={(key, value) => setLayerVisibility((current) => ({ ...current, [key]: value }))} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceAddSet={props.onCommunicationDistanceAddSet} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
+      {communicationQuickEdit && inlineCommunication && <CommunicationQuickPopover key={`${communicationQuickEdit.mode}-${communicationQuickEdit.communicationId}-${communicationQuickEdit.mode === 'distance' ? communicationQuickEdit.distanceId : 'marker'}`} edit={communicationQuickEdit} marker={inlineCommunication} onChange={(patch) => props.onCommunicationChange(inlineCommunication.id, patch)} onDistanceChange={(distanceId, patch) => props.onCommunicationDistanceChange(inlineCommunication.id, distanceId, patch)} onStartDistance={() => { startCommunicationDistance(inlineCommunication.id); setCommunicationQuickEdit(null); }} onClose={() => setCommunicationQuickEdit(null)} />}
+      {sidebarOpen && <Inspector project={project} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} moduleSummaries={props.moduleSummaries} onModuleObjectClick={(projectId, object) => { props.onProjectChange(project); props.onModuleObjectClick?.(projectId, object); }} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} layerVisibility={layerVisibility} onShowImage={setShowImage} onShowAnnotations={setShowAnnotations} onShowHelpers={setShowHelpers} onLayerVisibility={(key, value) => setLayerVisibility((current) => ({ ...current, [key]: value }))} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); setCommunicationQuickEdit(null); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceAddSet={props.onCommunicationDistanceAddSet} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
     </div>
     <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span>Ctrl/⌘ + колесо — точное приближение под курсором · Пробел — перемещение</span><div><button onClick={() => zoomTo((value) => value / ZOOM_FACTOR)}>−</button><button onClick={fit}>Вписать · {Math.round(zoom * 100)}%</button><button onClick={() => zoomTo((value) => value * ZOOM_FACTOR)}>+</button></div></footer>
+  </div>;
+}
+
+
+function CommunicationQuickPopover(props: {
+  edit: CommunicationQuickEdit;
+  marker: EskizCommunicationMarker;
+  onChange: (patch: Partial<EskizCommunicationMarker>) => void;
+  onDistanceChange: (distanceId: string, patch: Partial<EskizCommunicationDistance>) => void;
+  onStartDistance: () => void;
+  onClose: () => void;
+}) {
+  const { edit, marker } = props;
+  const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
+  const distances = marker.distances ?? [];
+  const distance = edit.mode === 'distance' ? distances.find((item) => item.id === edit.distanceId) ?? null : null;
+  const [distanceValue, setDistanceValue] = useState(edit.mode === 'distance' ? edit.value : '');
+  const scale = communicationVisualScale(marker);
+  const setScale = (value: number) => props.onChange({ visualScale: normalizeCommunicationVisualScale(value) });
+  const commitDistance = () => {
+    if (edit.mode !== 'distance' || !distance) return props.onClose();
+    props.onDistanceChange(distance.id, { valueMm: mmValue(distanceValue) });
+    props.onClose();
+  };
+
+  if (edit.mode === 'distance') {
+    const label = distance ? distance.label || COMMUNICATION_ANCHOR_LABELS[distance.anchor] : 'Линия расстояния';
+    return <div className="embedded-eskiz-communication-popover compact" style={{ left: edit.left, top: edit.top }} onPointerDown={(event) => event.stopPropagation()}>
+      <div className="embedded-eskiz-popover-head"><b>Редактировать размер</b><button type="button" onClick={props.onClose}>×</button></div>
+      <small>{meta.icon} {marker.name || meta.label} · {label}</small>
+      <label>Расстояние, мм<div className="embedded-eskiz-inline-mm"><input autoFocus inputMode="numeric" value={distanceValue} placeholder="650" onChange={(event) => setDistanceValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitDistance(); } if (event.key === 'Escape') { event.preventDefault(); props.onClose(); } }} /><span>мм</span></div></label>
+      <div className="embedded-eskiz-popover-actions"><button type="button" className="btn tiny primary" onClick={commitDistance}>Готово</button><button type="button" className="btn tiny ghost" onClick={() => { setDistanceValue(''); props.onDistanceChange(distance?.id ?? '', { valueMm: null }); props.onClose(); }} disabled={!distance}>Очистить</button></div>
+    </div>;
+  }
+
+  return <div className="embedded-eskiz-communication-popover" style={{ left: edit.left, top: edit.top, '--comm-color': meta.color } as CSSProperties} onPointerDown={(event) => event.stopPropagation()}>
+    <div className="embedded-eskiz-popover-head"><b>{meta.icon} {marker.name || meta.label}</b><button type="button" onClick={props.onClose}>×</button></div>
+    <div className="embedded-eskiz-popover-scale">
+      <span>Визуальный размер</span>
+      <div><button type="button" onClick={() => setScale(scale - .1)}>−</button><input type="range" min={COMMUNICATION_VISUAL_SCALE_MIN} max={COMMUNICATION_VISUAL_SCALE_MAX} step="0.05" value={scale} onChange={(event) => setScale(Number(event.currentTarget.value))} /><button type="button" onClick={() => setScale(scale + .1)}>+</button><output>{Math.round(scale * 100)}%</output></div>
+      <small>Можно также потянуть круглый маркер-ручку справа снизу от значка.</small>
+    </div>
+    <div className="embedded-eskiz-popover-sizes">
+      <label>Ширина<CommunicationMmInput value={marker.widthMm} onValue={(value) => props.onChange({ widthMm: value })} placeholder="80" /></label>
+      <label>Высота<CommunicationMmInput value={marker.heightMm} onValue={(value) => props.onChange({ heightMm: value })} placeholder="80" /></label>
+      <label>От пола<CommunicationMmInput value={marker.elevationMm} onValue={(value) => props.onChange({ elevationMm: value })} placeholder="1050" /></label>
+    </div>
+    <div className="embedded-eskiz-popover-head subtle"><b>Расстояния на эскизе</b><button type="button" onClick={props.onStartDistance}>+ линия</button></div>
+    {distances.length === 0 ? <div className="embedded-eskiz-list-empty">Нет линий. Нажмите «+ линия» или добавьте расстояния в правой панели.</div> : <div className="embedded-eskiz-popover-distances">{distances.map((item) => <label key={item.id}>{item.label || COMMUNICATION_ANCHOR_LABELS[item.anchor]}<CommunicationMmInput value={item.valueMm} onValue={(value) => props.onDistanceChange(item.id, { valueMm: value })} placeholder="650" /></label>)}</div>}
   </div>;
 }
 
@@ -1222,7 +1346,9 @@ function CommunicationFields(props: {
   return <div className="embedded-eskiz-fields embedded-eskiz-communication-fields">
     <div className="embedded-eskiz-fields-heading"><span>{meta.icon} Коммуникация</span><small>перетаскивается мышью</small></div>
     <div className="embedded-eskiz-helper-card"><b>Понятный маркер без текста</b><span>На эскизе теперь остаётся только условный значок. Размеры и привязки показываются отдельными размерными линиями/плашками, а не названием внутри маркера.</span></div>
-    <div className="embedded-eskiz-communication-symbol-preview"><svg viewBox="0 0 72 44" aria-hidden="true"><CommunicationMarkerIcon marker={{ ...marker, x: 36, y: 22 }} active /></svg><div><b>{meta.label}</b><span>{communicationSizeText(marker) || 'задайте размер ниже'}</span></div></div>
+    <div className="embedded-eskiz-communication-symbol-preview"><svg viewBox="0 0 112 72" aria-hidden="true"><CommunicationMarkerIcon marker={{ ...marker, x: 56, y: 36 }} active /></svg><div><b>{meta.label}</b><span>{communicationSizeText(marker) || 'задайте размер ниже'}</span></div></div>
+    <label>Визуальный размер значка<div className="embedded-eskiz-range-row"><input type="range" min={COMMUNICATION_VISUAL_SCALE_MIN} max={COMMUNICATION_VISUAL_SCALE_MAX} step="0.05" value={communicationVisualScale(marker)} onChange={(event) => props.onChange({ visualScale: normalizeCommunicationVisualScale(Number(event.currentTarget.value)) })} /><span>{Math.round(communicationVisualScale(marker) * 100)}%</span></div></label>
+    <div className="embedded-eskiz-preset-row compact"><button type="button" onClick={() => props.onChange({ visualScale: .75 })}>Меньше</button><button type="button" onClick={() => props.onChange({ visualScale: 1 })}>100%</button><button type="button" onClick={() => props.onChange({ visualScale: 1.35 })}>Больше</button></div>
     <label>Тип<select value={marker.kind} onChange={(event) => {
       const kind = event.target.value as EskizCommunicationKind;
       const nextMeta = COMMUNICATION_KIND_META[kind];

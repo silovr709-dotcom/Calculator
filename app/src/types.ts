@@ -347,6 +347,8 @@ export interface EskizCommunicationMarker {
   heightMm?: number | null;
   diameterMm?: number | null;
   depthMm?: number | null;
+  /** Визуальный масштаб условного значка на эскизе. 1 = стандартный размер. */
+  visualScale?: number | null;
   /** Высота центра/низа коммуникации от пола, если известна. */
   elevationMm?: number | null;
   distances?: EskizCommunicationDistance[];
