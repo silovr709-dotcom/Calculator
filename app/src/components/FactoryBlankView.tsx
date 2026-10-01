@@ -83,12 +83,41 @@ function WorktopMmInput(props: { value: number | null | undefined; onValue: (val
   );
 }
 
+function WorktopSvgEdgeMark({ kind }: { kind: WorktopEdgeKind }) {
+  if (kind === 'eurozapil') {
+    return <g fill="#4f86b7" stroke="#4f86b7" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round">
+      <path d="M -17 -7 L -7 -3 L -17 1 Z" />
+      <path d="M 17 -7 L 7 -3 L 17 1 Z" />
+      <line x1="-7" y1="-3" x2="7" y2="-3" />
+      <path d="M -17 1 L -7 5 L -17 9 Z" />
+      <path d="M 17 1 L 7 5 L 17 9 Z" />
+      <line x1="-7" y1="5" x2="7" y2="5" />
+    </g>;
+  }
+  if (kind === 'eurostyk') {
+    return <g fill="none" stroke="#4f86b7" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round">
+      <path d="M -18 0 H 18" />
+      <path d="M -18 0 L -10 -6 M -18 0 L -10 6 M 18 0 L 10 -6 M 18 0 L 10 6" />
+      <path d="M -3 -8 H 3 V 8 H -3 Z" fill="#fff" />
+      <path d="M -3 -8 H 3 V 8 H -3 Z" />
+    </g>;
+  }
+  return <text textAnchor="middle" dominantBaseline="middle" fontSize={11} fontWeight={900} fill="#184f9e">{worktopEdgeSymbol(kind)}</text>;
+}
+
+function WorktopEdgeButtonMark({ kind }: { kind: WorktopEdgeKind }) {
+  if (kind === 'eurozapil' || kind === 'eurostyk') {
+    return <svg className="blank-worktop-edge-icon" viewBox="-22 -13 44 28" aria-hidden="true"><WorktopSvgEdgeMark kind={kind} /></svg>;
+  }
+  return <>{worktopEdgeSymbol(kind)}</>;
+}
+
 function WorktopSvgEdgeLabel(props: { kind: WorktopEdgeKind; x: number; y: number; rotate?: number; onClick: () => void }) {
   const symbol = worktopEdgeSymbol(props.kind);
-  const width = Math.max(24, symbol.length * 8 + 12);
+  const width = props.kind === 'eurozapil' || props.kind === 'eurostyk' ? 46 : Math.max(24, symbol.length * 8 + 12);
   return <g className="blank-worktop-svg-edge-label" transform={`translate(${props.x} ${props.y}) rotate(${props.rotate ?? 0})`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); props.onClick(); }}>
-    <rect x={-width / 2} y={-10} width={width} height={20} rx={5} fill="#fff" stroke="#1f6feb" strokeWidth={1.4} />
-    <text textAnchor="middle" dominantBaseline="middle" fontSize={11} fontWeight={900} fill="#184f9e">{symbol}</text>
+    <rect x={-width / 2} y={-12} width={width} height={24} rx={6} fill="#fff" stroke="#1f6feb" strokeWidth={1.4} />
+    <WorktopSvgEdgeMark kind={props.kind} />
   </g>;
 }
 
@@ -239,7 +268,7 @@ function WorktopPlanDesigner(props: {
         <div className="blank-worktop-edge-buttons compact">
           {WORKTOP_EDGE_SIDES.map((side) => {
             const kind = selectedPiece[side.id];
-            return <button key={side.id} type="button" className={kind ? 'active' : ''} onClick={() => cycleEdge(selectedPiece, side.id)} title={kind ? WORKTOP_EDGE_SHORT_LABELS[kind] : 'Не отмечено'}><small>{side.label}</small><b>{worktopEdgeSymbol(kind) || '—'}</b></button>;
+            return <button key={side.id} type="button" className={kind ? 'active' : ''} onClick={() => cycleEdge(selectedPiece, side.id)} title={kind ? WORKTOP_EDGE_SHORT_LABELS[kind] : 'Не отмечено'}><small>{side.label}</small><b>{kind ? <WorktopEdgeButtonMark kind={kind} /> : '—'}</b></button>;
           })}
         </div>
         <div className="blank-worktop-nudge-grid">
@@ -267,7 +296,7 @@ function WorktopPlanDesigner(props: {
           <div className="blank-worktop-edge-buttons" onClick={(event) => event.stopPropagation()}>
             {WORKTOP_EDGE_SIDES.map((side) => {
               const kind = piece[side.id];
-              return <button key={side.id} type="button" className={kind ? 'active' : ''} onClick={() => cycleEdge(piece, side.id)} title={kind ? WORKTOP_EDGE_SHORT_LABELS[kind] : 'Не отмечено'}><small>{side.label}</small><b>{worktopEdgeSymbol(kind) || '—'}</b></button>;
+              return <button key={side.id} type="button" className={kind ? 'active' : ''} onClick={() => cycleEdge(piece, side.id)} title={kind ? WORKTOP_EDGE_SHORT_LABELS[kind] : 'Не отмечено'}><small>{side.label}</small><b>{kind ? <WorktopEdgeButtonMark kind={kind} /> : '—'}</b></button>;
             })}
           </div>
           <div className="blank-worktop-card-actions" onClick={(event) => event.stopPropagation()}>

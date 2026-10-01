@@ -7,8 +7,10 @@ export const WORKTOP_EDGE_SYMBOLS: Record<WorktopEdgeKind, string> = {
   pvc: 'Х',
   v: 'V',
   pf: 'ПФ',
-  eurozapil: '//',
-  eurostyk: '≈',
+  // Для стыков в официальном бланке используются не текстовые // / ≈, а синие пиктограммы.
+  // Эти строки оставлены только как короткий fallback для текстовых мест интерфейса.
+  eurozapil: '⧖',
+  eurostyk: '↔',
 };
 
 export const WORKTOP_EDGE_SHORT_LABELS: Record<WorktopEdgeKind, string> = {
@@ -210,12 +212,38 @@ export function worktopSketchMetrics(pieces: WorktopPiece[], widthPx: number, he
   return { layouts, minX, minY, maxX, maxY, contentWidth, contentHeight, scale: safeScale, offsetX, offsetY, widthPx, heightPx };
 }
 
+function edgeIconSvg(kind: WorktopEdgeKind): string {
+  const blue = '#4f86b7';
+  if (kind === 'eurozapil') {
+    // Пиктограмма как в бланке: две встречные «ласточкины» выборки, а не текстовые //.
+    return `<g fill="${blue}" stroke="${blue}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M -17 -7 L -7 -3 L -17 1 Z" />
+      <path d="M 17 -7 L 7 -3 L 17 1 Z" />
+      <line x1="-7" y1="-3" x2="7" y2="-3" />
+      <path d="M -17 1 L -7 5 L -17 9 Z" />
+      <path d="M 17 1 L 7 5 L 17 9 Z" />
+      <line x1="-7" y1="5" x2="7" y2="5" />
+    </g>`;
+  }
+  if (kind === 'eurostyk') {
+    // Пиктограмма «евростык»: двунаправленная стяжка с центральным соединением.
+    return `<g fill="none" stroke="${blue}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M -18 0 H 18" />
+      <path d="M -18 0 L -10 -6 M -18 0 L -10 6 M 18 0 L 10 -6 M 18 0 L 10 6" />
+      <path d="M -3 -8 H 3 V 8 H -3 Z" fill="#fff" />
+      <path d="M -3 -8 H 3 V 8 H -3 Z" />
+    </g>`;
+  }
+  return '';
+}
+
 function edgeLabel(kind: WorktopEdgeKind, x: number, y: number, rotate = 0) {
   const symbol = worktopEdgeSymbol(kind);
-  const w = Math.max(24, symbol.length * 8 + 12);
+  const icon = edgeIconSvg(kind);
+  const w = icon ? 46 : Math.max(24, symbol.length * 8 + 12);
   return `<g transform="translate(${x} ${y}) rotate(${rotate})">
-    <rect x="${-w / 2}" y="-10" width="${w}" height="20" rx="5" fill="#fff" stroke="#1f6feb" stroke-width="1.4" />
-    <text text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="900" fill="#184f9e">${xml(symbol)}</text>
+    <rect x="${-w / 2}" y="-12" width="${w}" height="24" rx="6" fill="#fff" stroke="#1f6feb" stroke-width="1.4" />
+    ${icon || `<text text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="900" fill="#184f9e">${xml(symbol)}</text>`}
   </g>`;
 }
 

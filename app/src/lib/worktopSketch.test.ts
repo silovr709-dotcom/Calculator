@@ -12,8 +12,8 @@ describe('worktopSketch', () => {
     expect(worktopEdgeSymbol('v')).toBe('V');
     expect(worktopEdgeSymbol('pvc')).toBe('Х');
     expect(worktopEdgeSymbol('pf')).toBe('ПФ');
-    expect(worktopEdgeSymbol('eurozapil')).toBe('//');
-    expect(worktopEdgeSymbol('eurostyk')).toBe('≈');
+    expect(worktopEdgeSymbol('eurozapil')).toBe('⧖');
+    expect(worktopEdgeSymbol('eurostyk')).toBe('↔');
   });
 
   it('строит SVG-схему с размерами и обозначениями кромок', () => {

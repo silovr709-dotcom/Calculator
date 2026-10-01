@@ -1,4 +1,4 @@
-import type { ClientOfferPresentationMode, ClientOfferSettings, EskizProIntegration, Pricebook, Project } from '../types';
+import type { ClientOfferPresentationMode, ClientOfferSettings, EskizExportViewSettings, EskizLayerKey, EskizProIntegration, Pricebook, Project } from '../types';
 import type { ClientOfferDetail, ClientOfferDetailKind } from '../lib/clientOffer';
 import { calcTotals } from '../lib/engine';
 import { calculateVariant } from '../lib/variants';
@@ -23,6 +23,16 @@ const MODE_LABELS: Record<ClientOfferPresentationMode, string> = {
   detailed: 'Подробно',
   technical: 'Техническое приложение',
 };
+
+const CLIENT_ESKIZ_LAYERS: { key: EskizLayerKey; label: string }[] = [
+  { key: 'dimensions', label: 'Размеры' },
+  { key: 'modules', label: 'Модули' },
+  { key: 'communications', label: 'Коммуникации' },
+  { key: 'callouts', label: 'Сноски' },
+  { key: 'comments', label: 'Комментарии' },
+  { key: 'equipment', label: 'Техника' },
+  { key: 'links', label: 'Ссылки' },
+];
 
 function detailQtyText(detail: ClientOfferDetail): string {
   const unit = detail.unit || 'шт';
@@ -120,6 +130,15 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const eskizModuleIds = new Set(Object.values(project.eskizPro?.moduleBindings ?? {}));
   const eskizModules = (project.modules ?? []).filter((module) => eskizModuleIds.has(module.id));
   const updateEskizPro = (patch: Partial<EskizProIntegration>) => onEskizProChange?.({ ...(project.eskizPro ?? {}), ...patch });
+  const eskizViewSettings = project.eskizPro?.exportView ?? {};
+  const eskizLayerVisibility = eskizViewSettings.layerVisibility ?? {};
+  const updateEskizView = (patch: EskizExportViewSettings) => updateEskizPro({
+    exportView: {
+      ...eskizViewSettings,
+      ...patch,
+      layerVisibility: { ...(eskizViewSettings.layerVisibility ?? {}), ...(patch.layerVisibility ?? {}) },
+    },
+  });
   const visibleVariants = (project.variants ?? []).filter((variant) => variant.clientVisible || variant.id === project.selectedVariantId);
   const groupLineIds = (group: ClientModuleGroup) => selectedVariant
     ? activeCalculation.lines.filter((line) => moduleNoteMatches(line.note, group.title, group.id)).map((line) => line.id)
@@ -188,6 +207,13 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           </div>
           <label className="chk-row"><input type="checkbox" disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} checked={project.eskizPro?.showInClient !== false && allLinkedEskizProjects.length > 0} onChange={(event) => updateEskizPro({ showInClient: event.target.checked })} /> Вставить в КП</label>
           <label>Показывать<select disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} value={eskizClientMode} onChange={(event) => updateEskizPro({ clientMode: event.target.value as EskizProIntegration['clientMode'] })}><option value="active">Только главный эскиз</option><option value="all">Все связанные эскизы</option></select></label>
+          <label>Маркеры модулей<select disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} value={project.eskizPro?.moduleMarkerMode ?? 'full'} onChange={(event) => updateEskizPro({ moduleMarkerMode: event.target.value as EskizProIntegration['moduleMarkerMode'] })}><option value="full">Полные</option><option value="compact">Точками</option><option value="hidden">Скрыть</option></select></label>
+          <label className="chk-row"><input type="checkbox" disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} checked={eskizViewSettings.showImage !== false} onChange={(event) => updateEskizView({ showImage: event.target.checked })} /> Фон/скрин</label>
+          <label className="chk-row"><input type="checkbox" disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} checked={eskizViewSettings.showAnnotations !== false} onChange={(event) => updateEskizView({ showAnnotations: event.target.checked })} /> Пометки</label>
+          <label className="chk-row"><input type="checkbox" disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} checked={showCommunicationSizeBadges} onChange={(event) => updateEskizPro({ showCommunicationSizeBadges: event.target.checked })} /> Размеры коммуникаций</label>
+          <div className="client-eskiz-layer-controls">
+            {CLIENT_ESKIZ_LAYERS.map((layer) => <button key={layer.key} type="button" disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange || eskizViewSettings.showAnnotations === false} className={eskizLayerVisibility[layer.key] === false ? '' : 'active'} onClick={() => updateEskizView({ layerVisibility: { [layer.key]: !(eskizLayerVisibility[layer.key] !== false) } })}>{layer.label}</button>)}
+          </div>
         </div>
       </section>
 
@@ -237,7 +263,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         {clientSketchVisible && (
           <section className="cd-sketch-pro">
             <div className="cd-section-head"><h3>Эскиз PRO</h3><span>{isTechnical ? 'внешний эскиз со скрином проекта и размерными аннотациями' : 'схема из внешнего Эскиз PRO'}</span></div>
-            {linkedEskizProjects.map((eskiz) => <EskizProjectPreview key={eskiz.id} project={eskiz} compact={!isTechnical} moduleMarkerMode={project.eskizPro?.moduleMarkerMode ?? 'full'} communicationMarkers={(project.eskizPro?.communications ?? []).filter((marker) => marker.showInClient !== false)} showCommunicationSizeBadges={showCommunicationSizeBadges} />)}
+            {linkedEskizProjects.map((eskiz) => <EskizProjectPreview key={eskiz.id} project={eskiz} compact={!isTechnical} moduleMarkerMode={project.eskizPro?.moduleMarkerMode ?? 'full'} communicationMarkers={(project.eskizPro?.communications ?? []).filter((marker) => marker.showInClient !== false)} showCommunicationSizeBadges={showCommunicationSizeBadges} viewSettings={eskizViewSettings} />)}
             {eskizModules.length > 0 && (
               <div className="cd-eskiz-modules">
                 <b>Модули, добавленные с эскиза</b>

@@ -1,5 +1,5 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
-import type { EskizCommunicationDistance, EskizCommunicationMarker } from '../types';
+import type { EskizCommunicationDistance, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationColor, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale } from '../lib/eskizCommunications';
 
@@ -12,6 +12,33 @@ const STATUS_COLORS: Record<EskizModulePreviewStatus['level'], string> = {
   warn: '#d97706',
   ok: '#16a34a',
 };
+
+const DEFAULT_LAYER_VISIBILITY: EskizLayerVisibility = {
+  dimensions: true,
+  modules: true,
+  communications: true,
+  callouts: true,
+  comments: true,
+  equipment: true,
+  links: true,
+};
+
+function objectLayerKey(object: EskizObject): EskizLayerKey | 'helpers' {
+  if (object.type === 'dimension') return 'dimensions';
+  if (object.type === 'module') return 'modules';
+  if (object.type === 'callout') return 'callouts';
+  if (object.type === 'comment') return 'comments';
+  if (object.type === 'equipment') return 'equipment';
+  if (object.type === 'link') return 'links';
+  return 'helpers';
+}
+
+function visibleInPreview(object: EskizObject, viewSettings: EskizExportViewSettings, layers: EskizLayerVisibility) {
+  if (object.hidden) return false;
+  const layer = objectLayerKey(object);
+  if (layer === 'helpers') return viewSettings.showHelpers !== false;
+  return viewSettings.showAnnotations !== false && layers[layer] !== false;
+}
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -314,20 +341,25 @@ type EskizProjectPreviewProps = {
   moduleMarkerMode?: EskizModuleMarkerMode;
   communicationMarkers?: EskizCommunicationMarker[];
   showCommunicationSizeBadges?: boolean;
+  viewSettings?: EskizExportViewSettings;
   activeCommunicationId?: string | null;
   onModuleClick?: (projectId: string, object: EskizModuleObject) => void;
   onCommunicationClick?: (projectId: string, marker: EskizCommunicationMarker) => void;
 };
 
-export default function EskizProjectPreview({ project, compact = false, activeModuleKey = null, moduleBindings, moduleStatuses, moduleMarkerMode = 'full', communicationMarkers = [], showCommunicationSizeBadges = true, activeCommunicationId = null, onModuleClick, onCommunicationClick }: EskizProjectPreviewProps) {
+export default function EskizProjectPreview({ project, compact = false, activeModuleKey = null, moduleBindings, moduleStatuses, moduleMarkerMode = 'full', communicationMarkers = [], showCommunicationSizeBadges = true, viewSettings = {}, activeCommunicationId = null, onModuleClick, onCommunicationClick }: EskizProjectPreviewProps) {
   const width = Math.max(1, project.image.width);
   const height = Math.max(1, project.image.height);
-  const projectCommunications = communicationMarkers.filter((marker) => marker.eskizId === project.id);
+  const layers: EskizLayerVisibility = { ...DEFAULT_LAYER_VISIBILITY, ...(viewSettings.layerVisibility ?? {}) };
+  const showAnnotations = viewSettings.showAnnotations !== false;
+  const showCommunications = showAnnotations && layers.communications !== false;
+  const visibleObjects = project.objects.filter((object) => visibleInPreview(object, viewSettings, layers));
+  const projectCommunications = showCommunications ? communicationMarkers.filter((marker) => marker.eskizId === project.id) : [];
   const communicationLegend = [...new Map(projectCommunications.map((marker) => [marker.kind, marker])).values()];
   return (
     <article className={`eskiz-preview ${compact ? 'compact' : ''}`}>
       <div className="eskiz-preview-head">
-        <div><b>{project.title}</b><span>{project.image.name} · {project.objects.filter((item) => !item.hidden && item.type !== 'guide' && item.type !== 'anchor').length} объектов · коммуникаций: {projectCommunications.length}{moduleMarkerMode !== 'full' ? ` · модули: ${moduleMarkerMode === 'hidden' ? 'скрыты' : 'точками'}` : ''}</span></div>
+        <div><b>{project.title}</b><span>{project.image.name} · {visibleObjects.filter((item) => item.type !== 'guide' && item.type !== 'anchor').length} объектов · коммуникаций: {projectCommunications.length}{moduleMarkerMode !== 'full' ? ` · модули: ${moduleMarkerMode === 'hidden' ? 'скрыты' : 'точками'}` : ''}</span></div>
         <em>{new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(project.updatedAt))}</em>
       </div>
       {project.header?.enabled && (
@@ -354,8 +386,8 @@ export default function EskizProjectPreview({ project, compact = false, activeMo
               <circle cx="4" cy="4" r="2.3" fill="context-stroke" />
             </marker>
           </defs>
-          <image href={project.image.dataUrl} x="0" y="0" width={width} height={height} preserveAspectRatio="none" style={{ filter: imageFilter(project) }} />
-          {project.objects.map((object) => <ObjectPreview key={object.id} object={object} projectId={project.id} activeModuleKey={activeModuleKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} onModuleClick={onModuleClick} />)}
+          {viewSettings.showImage === false ? null : <image href={project.image.dataUrl} x="0" y="0" width={width} height={height} preserveAspectRatio="none" style={{ filter: imageFilter(project) }} />}
+          {visibleObjects.map((object) => <ObjectPreview key={object.id} object={object} projectId={project.id} activeModuleKey={activeModuleKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} onModuleClick={onModuleClick} />)}
           {projectCommunications.map((marker) => <CommunicationPreview key={marker.id} marker={marker} width={width} height={height} showSizeBadges={showCommunicationSizeBadges} active={marker.id === activeCommunicationId} onCommunicationClick={(item) => onCommunicationClick?.(project.id, item)} />)}
         </svg>
       </div>
