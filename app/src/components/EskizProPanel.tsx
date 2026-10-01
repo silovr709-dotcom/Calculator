@@ -15,7 +15,7 @@ import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalF
 import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surcharges';
 import { calcLines } from '../lib/engine';
 import { fmtMoney, fmtNum } from '../lib/format';
-import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, COMMUNICATION_KINDS, communicationDistanceText, communicationSizeText } from '../lib/eskizCommunications';
+import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META } from '../lib/eskizCommunications';
 import CatalogPicker from './CatalogPicker';
 import EskizProjectPreview, { type EskizModuleMarkerMode, type EskizModulePreviewStatus } from './EskizProjectPreview';
 import EmbeddedEskizEditor from './EmbeddedEskizEditor';
@@ -442,80 +442,6 @@ function EskizMarkerModuleEditor(props: {
   );
 }
 
-function formatPoint(value: number) {
-  return Math.round(value).toString();
-}
-
-function CommunicationEditor(props: {
-  marker: EskizCommunicationMarker;
-  projectTitle?: string;
-  onChange: (patch: Partial<EskizCommunicationMarker>) => void;
-  onAddDistance: () => void;
-  onDistanceChange: (distanceId: string, patch: Partial<EskizCommunicationDistance>) => void;
-  onPickDistancePoint: (distanceId: string) => void;
-  onDeleteDistance: (distanceId: string) => void;
-  onDelete: () => void;
-}) {
-  const marker = props.marker;
-  const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
-  const distances = marker.distances ?? [];
-  const updateNum = (key: 'x' | 'y' | 'widthMm' | 'heightMm' | 'diameterMm' | 'depthMm' | 'elevationMm', value: string) => props.onChange({ [key]: numberValue(value) } as Partial<EskizCommunicationMarker>);
-  return (
-    <div className="eskiz-communication-editor">
-      <div className="eskiz-marker-editor-head">
-        <div>
-          <span className="eyebrow">КОММУНИКАЦИЯ</span>
-          <h4>{meta.icon} {marker.name || meta.label}</h4>
-          <p className="muted small">{props.projectTitle ? `Эскиз: ${props.projectTitle}` : 'Отметка поверх snapshot'} · точка {formatPoint(marker.x)}×{formatPoint(marker.y)}</p>
-        </div>
-        <button className="btn tiny danger" onClick={props.onDelete}>Удалить</button>
-      </div>
-      <div className="eskiz-module-form-grid">
-        <label>Тип
-          <select value={marker.kind} onChange={(event) => {
-            const kind = event.target.value as EskizCommunicationKind;
-            const nextMeta = COMMUNICATION_KIND_META[kind];
-            props.onChange({ kind, name: marker.name === meta.defaultName ? nextMeta.defaultName : marker.name });
-          }}>
-            {COMMUNICATION_KINDS.map((kind) => <option key={kind} value={kind}>{COMMUNICATION_KIND_META[kind].label}</option>)}
-          </select>
-        </label>
-        <label>Название<input value={marker.name} onChange={(event) => props.onChange({ name: event.target.value })} /></label>
-        <label><input type="checkbox" checked={marker.showInClient !== false} onChange={(event) => props.onChange({ showInClient: event.target.checked })} /> в КП</label>
-        <label>X на эскизе<input type="number" value={marker.x} onChange={(event) => updateNum('x', event.target.value)} /></label>
-        <label>Y на эскизе<input type="number" value={marker.y} onChange={(event) => updateNum('y', event.target.value)} /></label>
-        <label>Высота от пола, мм<MmInput value={marker.elevationMm} onValue={(value) => props.onChange({ elevationMm: value })} placeholder="например 1050" /></label>
-        <label>Ширина, мм<MmInput value={marker.widthMm} onValue={(value) => props.onChange({ widthMm: value })} placeholder="например 80" /></label>
-        <label>Высота, мм<MmInput value={marker.heightMm} onValue={(value) => props.onChange({ heightMm: value })} placeholder="например 80" /></label>
-        <label>Диаметр, мм<MmInput value={marker.diameterMm} onValue={(value) => props.onChange({ diameterMm: value })} placeholder="для трубы/канала" /></label>
-        <label>Глубина/вынос, мм<MmInput value={marker.depthMm} onValue={(value) => props.onChange({ depthMm: value })} /></label>
-        <label className="wide">Примечание<textarea rows={2} value={marker.note ?? ''} onChange={(event) => props.onChange({ note: event.target.value })} placeholder="Например: двойная розетка, вывод под ПММ, смещение от чистового пола" /></label>
-      </div>
-      <div className="eskiz-communication-summary">
-        <b>{communicationSizeText(marker) || 'Размер коммуникации не задан'}</b>
-        <span>{distances.length ? `${distances.length} расстояний` : 'Добавьте расстояния до стены, пола или любой точки'}</span>
-      </div>
-      <div className="section-head compact"><div><h4>Расстояния до точек</h4><p className="muted small">Можно указать расстояние до края эскиза/пола/потолка или выбрать произвольную точку кликом по preview.</p></div><button className="btn tiny ghost" onClick={props.onAddDistance}>+ расстояние</button></div>
-      {distances.length === 0 ? <div className="empty small">Расстояния ещё не добавлены.</div> : (
-        <div className="eskiz-distance-list">
-          {distances.map((distance) => <div className="eskiz-distance-row" key={distance.id}>
-            <label>Подпись<input value={distance.label} onChange={(event) => props.onDistanceChange(distance.id, { label: event.target.value })} placeholder="например от угла мойки" /></label>
-            <label>Откуда
-              <select value={distance.anchor} onChange={(event) => props.onDistanceChange(distance.id, { anchor: event.target.value as EskizCommunicationAnchorKind })}>
-                {Object.entries(COMMUNICATION_ANCHOR_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-              </select>
-            </label>
-            <label>Расстояние, мм<input type="number" value={distance.valueMm ?? ''} onChange={(event) => props.onDistanceChange(distance.id, { valueMm: numberValue(event.target.value) })} placeholder="например 650" /></label>
-            {distance.anchor === 'custom' && <button className="btn tiny ghost" onClick={() => props.onPickDistancePoint(distance.id)}>Выбрать точку на эскизе</button>}
-            <span className="muted small">{communicationDistanceText(distance.valueMm)}{distance.anchor === 'custom' && distance.anchorX != null && distance.anchorY != null ? ` · точка ${formatPoint(distance.anchorX)}×${formatPoint(distance.anchorY)}` : ''}</span>
-            <button className="btn tiny danger" onClick={() => props.onDeleteDistance(distance.id)}>✕</button>
-          </div>)}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function EskizProPanel(props: { project: Project; pricebook: Pricebook; onChange: (project: Project) => void; onOpenModule?: (moduleId: string) => void }) {
   const { project, pricebook, onChange } = props;
   const eskizPro = project.eskizPro ?? EMPTY_ESKIZ_PRO;
@@ -543,8 +469,6 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const activeMarker = moduleMarkers.find((marker) => marker.key === activeMarkerKey) ?? null;
   const activeModuleId = activeMarker ? moduleBindings[activeMarker.key] : null;
   const activeModule = activeModuleId ? project.modules?.find((module) => module.id === activeModuleId) ?? null : null;
-  const activeCommunication = communications.find((marker) => marker.id === activeCommunicationId) ?? null;
-  const activeCommunicationProject = activeCommunication ? linkedProjects.find((item) => item.id === activeCommunication.eskizId) ?? null : null;
   const moduleStatuses = useMemo(() => Object.fromEntries(moduleMarkers.map((marker) => {
     const moduleId = moduleBindings[marker.key];
     const linkedModule = moduleId ? project.modules?.find((module) => module.id === moduleId) ?? null : null;
@@ -637,16 +561,36 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     if (activeCommunicationId === id) setActiveCommunicationId(null);
     if (distancePointPick?.communicationId === id) setDistancePointPick(null);
   };
-  const addCommunicationDistance = (communicationId: string) => {
+  const communicationProjectSize = (marker: EskizCommunicationMarker) => {
+    const markerProject = linkedProjects.find((item) => item.id === marker.eskizId) ?? activePreviewProject;
+    return markerProject?.image ?? null;
+  };
+  const autoCommunicationDistanceValue = (marker: EskizCommunicationMarker, anchor: EskizCommunicationAnchorKind) => {
+    const image = communicationProjectSize(marker);
+    if (anchor === 'left') return Math.max(0, Math.round(marker.x));
+    if (anchor === 'top') return Math.max(0, Math.round(marker.y));
+    if (anchor === 'right' && image) return Math.max(0, Math.round(image.width - marker.x));
+    if (anchor === 'bottom' && image) return Math.max(0, Math.round(image.height - marker.y));
+    return null;
+  };
+  const addCommunicationDistance = (communicationId: string, anchor: EskizCommunicationAnchorKind) => {
     const marker = communications.find((item) => item.id === communicationId);
     if (!marker) return;
     const distance: EskizCommunicationDistance = {
       id: uid('dist'),
-      label: 'Расстояние',
-      anchor: 'left',
-      valueMm: null,
+      label: anchor === 'custom' ? 'Свободное расстояние' : COMMUNICATION_ANCHOR_LABELS[anchor],
+      anchor,
+      valueMm: autoCommunicationDistanceValue(marker, anchor),
+      ...(anchor === 'custom' ? { anchorX: marker.x + 140, anchorY: marker.y } : {}),
     };
     updateCommunication(communicationId, { distances: [...(marker.distances ?? []), distance] });
+    setActiveCommunicationId(communicationId);
+    setCommunicationAddKind(null);
+    if (anchor === 'custom') {
+      setDistancePointPick({ communicationId, distanceId: distance.id });
+    } else {
+      setMessage(`Добавлена линия «${COMMUNICATION_ANCHOR_LABELS[anchor]}» в свойствах Эскиз PRO. Значение можно уточнить вручную.`);
+    }
   };
   const updateCommunicationDistance = (communicationId: string, distanceId: string, patch: Partial<EskizCommunicationDistance>) => {
     const marker = communications.find((item) => item.id === communicationId);
@@ -681,18 +625,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       setMessage('Сначала выберите коммуникацию на самом эскизе, затем нажмите «Линия расстояния».');
       return;
     }
-    const distance: EskizCommunicationDistance = {
-      id: uid('dist'),
-      label: 'Свободное расстояние',
-      anchor: 'custom',
-      valueMm: null,
-      anchorX: marker.x + 140,
-      anchorY: marker.y,
-    };
-    updateCommunication(communicationId, { distances: [...(marker.distances ?? []), distance] });
-    setActiveCommunicationId(communicationId);
-    setCommunicationAddKind(null);
-    setDistancePointPick({ communicationId, distanceId: distance.id });
+    addCommunicationDistance(communicationId, 'custom');
     setMessage('В Эскиз PRO включена свободная линия расстояния: ведите курсор от коммуникации и кликните конечную точку где угодно на эскизе.');
   };
   const cancelCommunicationMode = () => {
@@ -786,6 +719,11 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             onCancelCommunicationMode={cancelCommunicationMode}
             onCommunicationPoint={handlePreviewPointClick}
             onCommunicationClick={handleCommunicationClick}
+            onCommunicationChange={updateCommunication}
+            onCommunicationDelete={deleteCommunication}
+            onCommunicationDistanceAdd={addCommunicationDistance}
+            onCommunicationDistanceChange={updateCommunicationDistance}
+            onCommunicationDistanceDelete={deleteCommunicationDistance}
           />
           <input ref={fileRef} type="file" accept=".eskiz,application/json" hidden onChange={(event) => void importFile(event.target.files?.[0] ?? null)} />
         </div>
@@ -832,33 +770,6 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
                 modules={project.modules ?? []}
                 onModuleChange={updateModule}
                 onOpenFull={props.onOpenModule}
-              />
-            )}
-          </section>
-
-          <section className="card no-print eskiz-communications-card">
-            <div className="section-head"><div><h3>Свойства коммуникаций</h3><p className="muted small">Добавление и рисование линий расстояний находится внутри верхней панели самого Эскиз PRO. Здесь только список, размеры и точные значения.</p></div><b>{communications.length}</b></div>
-            {communicationAddKind && <div className="note small">В Эскиз PRO выбран тип <b>{COMMUNICATION_KIND_META[communicationAddKind].label}</b>: тапните по основному полотну.</div>}
-            {distancePointPick && <div className="note small">В Эскиз PRO включена свободная линия расстояния: кликните конечную точку на полотне.</div>}
-            {communications.length === 0 ? <div className="empty small">Коммуникаций пока нет. Используйте группу «Коммуникации» в верхней панели самого Эскиз PRO.</div> : (
-              <div className="eskiz-communication-list">
-                {communications.slice(0, 12).map((marker) => {
-                  const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
-                  const snapshot = snapshots.find((item) => item.id === marker.eskizId);
-                  return <button key={marker.id} className={activeCommunicationId === marker.id ? 'active' : ''} onClick={() => handleCommunicationClick(marker.eskizId, marker)}><b style={{ color: meta.color }}>{meta.icon} {marker.name || meta.label}</b><span>{snapshot?.title ?? marker.eskizId} · {communicationSizeText(marker) || 'размер не задан'} · {(marker.distances ?? []).length} расст.</span></button>;
-                })}
-              </div>
-            )}
-            {activeCommunication && (
-              <CommunicationEditor
-                marker={activeCommunication}
-                projectTitle={activeCommunicationProject?.title}
-                onChange={(patch) => updateCommunication(activeCommunication.id, patch)}
-                onAddDistance={() => addCommunicationDistance(activeCommunication.id)}
-                onDistanceChange={(distanceId, patch) => updateCommunicationDistance(activeCommunication.id, distanceId, patch)}
-                onPickDistancePoint={(distanceId) => { setDistancePointPick({ communicationId: activeCommunication.id, distanceId }); setCommunicationAddKind(null); }}
-                onDeleteDistance={(distanceId) => deleteCommunicationDistance(activeCommunication.id, distanceId)}
-                onDelete={() => deleteCommunication(activeCommunication.id)}
               />
             )}
           </section>
