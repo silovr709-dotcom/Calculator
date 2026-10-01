@@ -9,6 +9,30 @@ type Drag = { mode: 'create' | 'move' | 'handle' | 'marquee'; start: Point; id?:
 type Point = { x: number; y: number };
 type QuickEdit = { id: string; value: string; left: number; top: number; repeatTool: Tool };
 type ModuleSummary = { status: 'ok' | 'warn' | 'error' | 'new'; label: string; body?: string; cost?: string; lines?: number };
+type EskizLayerKey = 'dimensions' | 'modules' | 'communications' | 'callouts' | 'comments' | 'equipment' | 'links';
+type EskizLayerVisibility = Record<EskizLayerKey, boolean>;
+
+const DEFAULT_LAYER_VISIBILITY: EskizLayerVisibility = {
+  dimensions: true,
+  modules: true,
+  communications: true,
+  callouts: true,
+  comments: true,
+  equipment: true,
+  links: true,
+};
+
+const ESKIZ_LAYER_LABELS: Record<EskizLayerKey, { label: string; short: string; icon: string }> = {
+  dimensions: { label: 'Размеры', short: 'Размеры', icon: '↔' },
+  modules: { label: 'Модули', short: 'Модули', icon: 'М' },
+  communications: { label: 'Коммуникации', short: 'Комм.', icon: '⚡' },
+  callouts: { label: 'Сноски', short: 'Сноски', icon: '↗' },
+  comments: { label: 'Комментарии', short: 'Коммент.', icon: 'T' },
+  equipment: { label: 'Техника', short: 'Техника', icon: '◆' },
+  links: { label: 'Ссылки', short: 'Ссылки', icon: 'K' },
+};
+
+const ESKIZ_LAYER_KEYS = Object.keys(DEFAULT_LAYER_VISIBILITY) as EskizLayerKey[];
 
 const QUICK_TOOLS: Tool[] = ['select', 'free-dimension', 'module', 'callout', 'comment'];
 
@@ -165,6 +189,26 @@ function objectListLabel(object: EskizObject) {
   return object.text;
 }
 
+function objectLayerKey(object: EskizObject): EskizLayerKey | 'helpers' {
+  if (object.type === 'dimension') return 'dimensions';
+  if (object.type === 'module') return 'modules';
+  if (object.type === 'callout') return 'callouts';
+  if (object.type === 'comment') return 'comments';
+  if (object.type === 'equipment') return 'equipment';
+  if (object.type === 'link') return 'links';
+  return 'helpers';
+}
+
+function objectVisibleInLayers(object: EskizObject, showAnnotations: boolean, showHelpers: boolean, layers: EskizLayerVisibility) {
+  const layer = objectLayerKey(object);
+  if (layer === 'helpers') return showHelpers;
+  return showAnnotations && layers[layer];
+}
+
+function communicationLayerVisible(showAnnotations: boolean, layers: EskizLayerVisibility) {
+  return showAnnotations && layers.communications;
+}
+
 function communicationAnchorPoint(distance: EskizCommunicationDistance, marker: EskizCommunicationMarker, width: number, height: number) {
   if (distance.anchor === 'left') return { x: 0, y: marker.y };
   if (distance.anchor === 'right') return { x: width, y: marker.y };
@@ -273,6 +317,7 @@ export default function EmbeddedEskizEditor(props: Props) {
   const [showImage, setShowImage] = useState(true);
   const [showAnnotations, setShowAnnotations] = useState(true);
   const [showHelpers, setShowHelpers] = useState(true);
+  const [layerVisibility, setLayerVisibility] = useState<EskizLayerVisibility>(DEFAULT_LAYER_VISIBILITY);
   const [lastDrawingTool, setLastDrawingTool] = useState<Tool>('free-dimension');
   const [saved, setSaved] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -902,7 +947,8 @@ export default function EmbeddedEskizEditor(props: Props) {
     </div>;
   }
 
-  const visibleObjects = project.objects.filter((object) => !object.hidden && (showHelpers || (object.type !== 'anchor' && object.type !== 'guide')));
+  const visibleObjects = project.objects.filter((object) => !object.hidden && objectVisibleInLayers(object, showAnnotations, showHelpers, layerVisibility));
+  const visibleCommunications = communicationLayerVisible(showAnnotations, layerVisibility) ? props.communications : [];
   const activeCommunicationMeta = props.communicationAddKind ? COMMUNICATION_KIND_META[props.communicationAddKind] : activeCommunication ? COMMUNICATION_KIND_META[activeCommunication.kind] : null;
 
   return <div className={`embedded-eskiz-editor ${communicationMode ? 'communication-mode' : ''}`}>
@@ -965,8 +1011,8 @@ export default function EmbeddedEskizEditor(props: Props) {
               <marker id="embeddedEskizDistanceDot" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto" markerUnits="strokeWidth"><circle cx="4" cy="4" r="2.3" fill="context-stroke" /></marker>
             </defs>
             {showImage && <image href={project.image.dataUrl} x="0" y="0" width={project.image.width} height={project.image.height} preserveAspectRatio="none" pointerEvents="none" style={{ opacity: project.imageDisplay?.opacity ?? 1, filter: `brightness(${project.imageDisplay?.brightness ?? 1}) contrast(${project.imageDisplay?.contrast ?? 1}) saturate(${project.imageDisplay?.saturation ?? 1}) grayscale(${project.imageDisplay?.grayscale ? 1 : 0})` }} />}
-            {showAnnotations && visibleObjects.map((object) => <EmbeddedObjectView key={object.id} object={object} selected={selectedIds.includes(object.id)} primary={object.id === selected} onPointerDown={objectDown} onHandleDown={handleDown} />)}
-            <CommunicationLayer project={project} communications={props.communications} activeCommunicationId={props.activeCommunicationId} onCommunicationClick={props.onCommunicationClick} onCommunicationPointerDown={handleCommunicationPointerDown} onDistanceEndPointerDown={handleDistanceEndPointerDown} />
+            {visibleObjects.map((object) => <EmbeddedObjectView key={object.id} object={object} selected={selectedIds.includes(object.id)} primary={object.id === selected} onPointerDown={objectDown} onHandleDown={handleDown} />)}
+            <CommunicationLayer project={project} communications={visibleCommunications} activeCommunicationId={props.activeCommunicationId} onCommunicationClick={props.onCommunicationClick} onCommunicationPointerDown={handleCommunicationPointerDown} onDistanceEndPointerDown={handleDistanceEndPointerDown} />
             {selectionBox && <rect pointerEvents="none" x={Math.min(selectionBox.start.x, selectionBox.end.x)} y={Math.min(selectionBox.start.y, selectionBox.end.y)} width={Math.abs(selectionBox.end.x - selectionBox.start.x)} height={Math.abs(selectionBox.end.y - selectionBox.start.y)} fill="#2563eb" fillOpacity=".1" stroke="#2563eb" strokeWidth="1.5" strokeDasharray="7 5" />}
             {draftLine && <g pointerEvents="none" opacity=".9"><line x1={draftLine.start.x} y1={draftLine.start.y} x2={draftLine.end.x} y2={draftLine.end.y} stroke={COLORS.accent} strokeWidth="3" strokeDasharray="10 7" /><circle cx={draftLine.start.x} cy={draftLine.start.y} r="6" fill={COLORS.accent} /><circle cx={draftLine.end.x} cy={draftLine.end.y} r="6" fill={COLORS.accent} /></g>}
             {tool === 'chain' && chainLast && <g pointerEvents="none"><circle cx={chainLast.x} cy={chainLast.y} r="8" fill={COLORS.accent} /><circle cx={chainLast.x} cy={chainLast.y} r="16" fill="none" stroke={COLORS.accent} opacity=".35" /></g>}
@@ -978,7 +1024,7 @@ export default function EmbeddedEskizEditor(props: Props) {
         {pendingDimension ? <div className="embedded-eskiz-hint"><b>Шаг 3 из 3</b> Отведите размерную линию и кликните для фиксации</div> : tool === 'chain' && <div className="embedded-eskiz-hint"><b>Цепочка</b> Укажите следующую точку · Esc — закончить</div>}
       </section>
       {quickEdit && <div className="embedded-eskiz-quick" style={{ left: Math.min(quickEdit.left + 14, window.innerWidth - 210), top: Math.min(quickEdit.top + 14, window.innerHeight - 105) }}><span>Размер</span><div><input autoFocus inputMode="decimal" value={quickEdit.value} onChange={(event) => setQuickEdit({ ...quickEdit, value: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); finishQuickEdit(false); } if (event.key === 'Tab') { event.preventDefault(); finishQuickEdit(true); } if (event.key === 'Escape') { event.preventDefault(); setQuickEdit(null); } }} /><b>мм</b></div><small>Enter — готово · Tab — следующий</small></div>}
-      {sidebarOpen && <Inspector project={project} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} moduleSummaries={props.moduleSummaries} onModuleObjectClick={(projectId, object) => { props.onProjectChange(project); props.onModuleObjectClick?.(projectId, object); }} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} onShowImage={setShowImage} onShowAnnotations={setShowAnnotations} onShowHelpers={setShowHelpers} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceAddSet={props.onCommunicationDistanceAddSet} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
+      {sidebarOpen && <Inspector project={project} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} moduleSummaries={props.moduleSummaries} onModuleObjectClick={(projectId, object) => { props.onProjectChange(project); props.onModuleObjectClick?.(projectId, object); }} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} layerVisibility={layerVisibility} onShowImage={setShowImage} onShowAnnotations={setShowAnnotations} onShowHelpers={setShowHelpers} onLayerVisibility={(key, value) => setLayerVisibility((current) => ({ ...current, [key]: value }))} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceAddSet={props.onCommunicationDistanceAddSet} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
     </div>
     <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span>Стрелки — точный сдвиг · Shift — привязка угла · Пробел — перемещение</span><div><button onClick={() => setZoom((value) => Math.max(.1, value - .1))}>−</button><button onClick={fit}>{Math.round(zoom * 100)}%</button><button onClick={() => setZoom((value) => Math.min(3, value + .1))}>+</button></div></footer>
   </div>;
@@ -999,9 +1045,11 @@ function Inspector(props: {
   showImage: boolean;
   showAnnotations: boolean;
   showHelpers: boolean;
+  layerVisibility: EskizLayerVisibility;
   onShowImage: (value: boolean) => void;
   onShowAnnotations: (value: boolean) => void;
   onShowHelpers: (value: boolean) => void;
+  onLayerVisibility: (key: EskizLayerKey, value: boolean) => void;
   onProject: (patch: Partial<EskizProject>) => void;
   onObject: (patch: Partial<EskizObject>) => void;
   onPatchObject: (id: string, patch: Partial<EskizObject>) => void;
@@ -1024,7 +1072,7 @@ function Inspector(props: {
   const setTab = (tab: 'object' | 'objects' | 'document') => setTabState({ tab, selectionKey: currentSelectionKey });
   return <aside className="embedded-eskiz-inspector">
     <div className="embedded-eskiz-tabs"><button className={activeTab === 'object' ? 'active' : ''} onClick={() => setTab('object')}>Объект</button><button className={activeTab === 'objects' ? 'active' : ''} onClick={() => setTab('objects')}>Список</button><button className={activeTab === 'document' ? 'active' : ''} onClick={() => setTab('document')}>Документ</button></div>
-    {activeTab === 'object' ? selectedIds.length > 1 ? <div className="embedded-eskiz-fields"><div className="embedded-eskiz-fields-heading"><span>Выбрано объектов: {selectedIds.length}</span></div><div className="embedded-eskiz-section-label">Выравнивание</div><div className="embedded-eskiz-align-grid"><button onClick={() => props.onAlign('left')}>По левому</button><button onClick={() => props.onAlign('centerX')}>Центр X</button><button onClick={() => props.onAlign('right')}>По правому</button><button onClick={() => props.onAlign('top')}>По верху</button><button onClick={() => props.onAlign('centerY')}>Центр Y</button><button onClick={() => props.onAlign('bottom')}>По низу</button></div></div> : object ? <ObjectFields object={object} moduleSummary={object.type === 'module' ? props.moduleSummaries?.[`${project.id}:${object.id}`] : undefined} onOpenModule={object.type === 'module' ? () => props.onModuleObjectClick?.(project.id, object) : undefined} onObject={props.onObject} onSelectChain={props.onSelectChain} /> : communication ? <CommunicationFields marker={communication} imageWidth={project.image.width} imageHeight={project.image.height} onChange={(patch) => props.onCommunicationChange(communication.id, patch)} onDelete={() => props.onCommunicationDelete(communication.id)} onStartDistance={() => props.onStartCommunicationDistance(communication.id)} onDistanceAdd={(anchor) => props.onCommunicationDistanceAdd(communication.id, anchor)} onDistanceAddSet={(anchors) => props.onCommunicationDistanceAddSet(communication.id, anchors)} onDistanceChange={(distanceId, patch) => props.onCommunicationDistanceChange(communication.id, distanceId, patch)} onDistanceDelete={(distanceId) => props.onCommunicationDistanceDelete(communication.id, distanceId)} /> : <div className="embedded-eskiz-empty"><strong>Ничего не выбрано</strong><span>Выберите объект или коммуникацию на эскизе, чтобы изменить параметры.</span></div> : activeTab === 'objects' ? <InspectorObjectList project={project} selectedIds={selectedIds} communications={props.communications} activeCommunicationId={props.activeCommunicationId} onSelect={props.onSelect} onProject={props.onProject} onPatchObject={props.onPatchObject} onCommunicationSelect={props.onCommunicationSelect} onStartCommunicationDistance={props.onStartCommunicationDistance} /> : <DocumentFields project={project} showImage={props.showImage} showAnnotations={props.showAnnotations} showHelpers={props.showHelpers} onShowImage={props.onShowImage} onShowAnnotations={props.onShowAnnotations} onShowHelpers={props.onShowHelpers} onProject={props.onProject} />}
+    {activeTab === 'object' ? selectedIds.length > 1 ? <div className="embedded-eskiz-fields"><div className="embedded-eskiz-fields-heading"><span>Выбрано объектов: {selectedIds.length}</span></div><div className="embedded-eskiz-section-label">Выравнивание</div><div className="embedded-eskiz-align-grid"><button onClick={() => props.onAlign('left')}>По левому</button><button onClick={() => props.onAlign('centerX')}>Центр X</button><button onClick={() => props.onAlign('right')}>По правому</button><button onClick={() => props.onAlign('top')}>По верху</button><button onClick={() => props.onAlign('centerY')}>Центр Y</button><button onClick={() => props.onAlign('bottom')}>По низу</button></div></div> : object ? <ObjectFields object={object} moduleSummary={object.type === 'module' ? props.moduleSummaries?.[`${project.id}:${object.id}`] : undefined} onOpenModule={object.type === 'module' ? () => props.onModuleObjectClick?.(project.id, object) : undefined} onObject={props.onObject} onSelectChain={props.onSelectChain} /> : communication ? <CommunicationFields marker={communication} imageWidth={project.image.width} imageHeight={project.image.height} onChange={(patch) => props.onCommunicationChange(communication.id, patch)} onDelete={() => props.onCommunicationDelete(communication.id)} onStartDistance={() => props.onStartCommunicationDistance(communication.id)} onDistanceAdd={(anchor) => props.onCommunicationDistanceAdd(communication.id, anchor)} onDistanceAddSet={(anchors) => props.onCommunicationDistanceAddSet(communication.id, anchors)} onDistanceChange={(distanceId, patch) => props.onCommunicationDistanceChange(communication.id, distanceId, patch)} onDistanceDelete={(distanceId) => props.onCommunicationDistanceDelete(communication.id, distanceId)} /> : <div className="embedded-eskiz-empty"><strong>Ничего не выбрано</strong><span>Выберите объект или коммуникацию на эскизе, чтобы изменить параметры.</span></div> : activeTab === 'objects' ? <InspectorObjectList project={project} selectedIds={selectedIds} communications={props.communications} activeCommunicationId={props.activeCommunicationId} onSelect={props.onSelect} onProject={props.onProject} onPatchObject={props.onPatchObject} onCommunicationSelect={props.onCommunicationSelect} onStartCommunicationDistance={props.onStartCommunicationDistance} /> : <DocumentFields project={project} communications={props.communications} showImage={props.showImage} showAnnotations={props.showAnnotations} showHelpers={props.showHelpers} layerVisibility={props.layerVisibility} onShowImage={props.onShowImage} onShowAnnotations={props.onShowAnnotations} onShowHelpers={props.onShowHelpers} onLayerVisibility={props.onLayerVisibility} onProject={props.onProject} />}
     {activeTab === 'object' && selectedIds.length > 0 && <div className="embedded-eskiz-inspector-bottom"><button onClick={props.onDuplicate}>Дублировать</button><button className="danger" onClick={props.onDelete}>Удалить</button></div>}
   </aside>;
 }
@@ -1150,13 +1198,53 @@ function DimensionFields({ object, onObject, onSelectChain }: { object: EskizDim
   return <><label>Значение<input value={object.value} onChange={(event) => onObject({ value: event.target.value } as Partial<EskizObject>)} /></label><div className="embedded-eskiz-field-row"><label>Префикс<input placeholder="≈" value={object.prefix ?? ''} onChange={(event) => onObject({ prefix: event.target.value } as Partial<EskizObject>)} /></label><label>Допуск ±<input placeholder="2" value={object.tolerance ?? ''} onChange={(event) => onObject({ tolerance: event.target.value } as Partial<EskizObject>)} /></label></div><label>Примечание после размера<input placeholder="по факту" value={object.suffix ?? ''} onChange={(event) => onObject({ suffix: event.target.value } as Partial<EskizObject>)} /></label><label className="embedded-eskiz-toggle-row">Показывать единицы «мм»<input type="checkbox" checked={object.showUnit !== false} onChange={(event) => onObject({ showUnit: event.target.checked } as Partial<EskizObject>)} /><i /></label>{object.chainId && <div className="embedded-eskiz-chain-badge"><span>Сегмент цепочки</span><button onClick={() => onSelectChain(object.chainId!)}>Выделить цепочку</button></div>}<label>Ориентация<select value={object.orientation} onChange={(event) => { const orientation = event.target.value; onObject({ orientation, ...(orientation === 'horizontal' ? { y2: object.y } : orientation === 'vertical' ? { x2: object.x } : {}) } as Partial<EskizObject>); }}><option value="free">Свободная</option><option value="horizontal">Горизонтальная</option><option value="vertical">Вертикальная</option></select></label><label>Положение текста<select value={object.textOrientation ?? 'parallel'} onChange={(event) => onObject({ textOrientation: event.target.value } as Partial<EskizObject>)}><option value="parallel">Параллельно линии</option><option value="horizontal">Всегда горизонтально</option></select></label><label>Текст относительно линии<select value={object.textPosition ?? 'center'} onChange={(event) => onObject({ textPosition: event.target.value } as Partial<EskizObject>)}><option value="center">На линии</option><option value="above">Над линией</option><option value="below">Под линией</option></select></label><label>Отступ размерной линии, px<input type="number" value={Math.round(object.offset ?? 0)} onChange={(event) => onObject({ offset: +event.target.value } as Partial<EskizObject>)} /></label><label>Наконечники<select value={object.arrowStyle ?? 'open'} onChange={(event) => onObject({ arrowStyle: event.target.value } as Partial<EskizObject>)}><option value="open">Открытые стрелки</option><option value="closed">Закрытые стрелки</option><option value="tick">Засечки</option></select></label><label>Толщина линии<div className="embedded-eskiz-range-row"><input type="range" min="1" max="6" step=".5" value={object.lineWidth} onChange={(event) => onObject({ lineWidth: +event.target.value } as Partial<EskizObject>)} /><span>{object.lineWidth}px</span></div></label></>;
 }
 
-function DocumentFields(props: { project: EskizProject; showImage: boolean; showAnnotations: boolean; showHelpers: boolean; onShowImage: (value: boolean) => void; onShowAnnotations: (value: boolean) => void; onShowHelpers: (value: boolean) => void; onProject: (patch: Partial<EskizProject>) => void }) {
+function DocumentFields(props: {
+  project: EskizProject;
+  communications: EskizCommunicationMarker[];
+  showImage: boolean;
+  showAnnotations: boolean;
+  showHelpers: boolean;
+  layerVisibility: EskizLayerVisibility;
+  onShowImage: (value: boolean) => void;
+  onShowAnnotations: (value: boolean) => void;
+  onShowHelpers: (value: boolean) => void;
+  onLayerVisibility: (key: EskizLayerKey, value: boolean) => void;
+  onProject: (patch: Partial<EskizProject>) => void;
+}) {
   const header = props.project.header;
   const display = props.project.imageDisplay ?? { opacity: 1, brightness: 1, contrast: 1, saturation: 1, grayscale: false };
-  const helperCount = props.project.objects.filter((object) => object.type === 'anchor' || object.type === 'guide').length;
+  const layerCounts = props.project.objects.reduce((acc, object) => {
+    const key = objectLayerKey(object);
+    if (key === 'helpers') acc.helpers += 1;
+    else acc[key] += 1;
+    return acc;
+  }, { dimensions: 0, modules: 0, callouts: 0, comments: 0, equipment: 0, links: 0, communications: props.communications.length, helpers: 0 } as Record<EskizLayerKey | 'helpers', number>);
+  const annotationCount = ESKIZ_LAYER_KEYS.reduce((sum, key) => sum + layerCounts[key], 0);
   const updateHeader = (patch: Partial<typeof header>) => props.onProject({ header: { ...header, ...patch } });
   const updateDisplay = (patch: Partial<typeof display>) => props.onProject({ imageDisplay: { ...display, ...patch } });
-  return <div className="embedded-eskiz-fields"><div className="embedded-eskiz-fields-heading"><span>Документ</span></div><div className="embedded-eskiz-section-label">Слои</div><label className="embedded-eskiz-toggle-row">Изображение<input type="checkbox" checked={props.showImage} onChange={(event) => props.onShowImage(event.target.checked)} /><i /></label><label className="embedded-eskiz-toggle-row">Аннотации <small>{props.project.objects.length - helperCount}</small><input type="checkbox" checked={props.showAnnotations} onChange={(event) => props.onShowAnnotations(event.target.checked)} /><i /></label><label className="embedded-eskiz-toggle-row">Опорные точки/направляющие <small>{helperCount}</small><input type="checkbox" checked={props.showHelpers} onChange={(event) => props.onShowHelpers(event.target.checked)} /><i /></label><div className="embedded-eskiz-section-label embedded-eskiz-section-label-action"><span>Отображение изображения</span><button onClick={() => updateDisplay({ opacity: 1, brightness: 1, contrast: 1, saturation: 1, grayscale: false })}>Сбросить</button></div><label>Прозрачность<div className="embedded-eskiz-range-row"><input type="range" min=".15" max="1" step=".05" value={display.opacity} onChange={(event) => updateDisplay({ opacity: +event.target.value })} /><span>{Math.round(display.opacity * 100)}%</span></div></label><label>Яркость<div className="embedded-eskiz-range-row"><input type="range" min=".4" max="1.6" step=".05" value={display.brightness} onChange={(event) => updateDisplay({ brightness: +event.target.value })} /><span>{Math.round(display.brightness * 100)}%</span></div></label><label>Контраст<div className="embedded-eskiz-range-row"><input type="range" min=".4" max="1.8" step=".05" value={display.contrast} onChange={(event) => updateDisplay({ contrast: +event.target.value })} /><span>{Math.round(display.contrast * 100)}%</span></div></label><label>Насыщенность<div className="embedded-eskiz-range-row"><input type="range" min="0" max="1.5" step=".05" value={display.saturation} onChange={(event) => updateDisplay({ saturation: +event.target.value })} /><span>{Math.round(display.saturation * 100)}%</span></div></label><label className="embedded-eskiz-toggle-row">Чёрно-белый фон<input type="checkbox" checked={display.grayscale} onChange={(event) => updateDisplay({ grayscale: event.target.checked })} /><i /></label><div className="embedded-eskiz-section-label">Информационная шапка</div><label className="embedded-eskiz-toggle-row">Показывать шапку<input type="checkbox" checked={header.enabled} onChange={(event) => updateHeader({ enabled: event.target.checked })} /><i /></label>{header.enabled && <><label>Проект<input value={header.project} placeholder="Ивановы" onChange={(event) => updateHeader({ project: event.target.value })} /></label><label>Помещение<input value={header.room} onChange={(event) => updateHeader({ room: event.target.value })} /></label><div className="embedded-eskiz-field-row"><label>Дата<input value={header.date} onChange={(event) => updateHeader({ date: event.target.value })} /></label><label>Вариант<input value={header.variant} onChange={(event) => updateHeader({ variant: event.target.value })} /></label></div></>}</div>;
+  return <div className="embedded-eskiz-fields">
+    <div className="embedded-eskiz-fields-heading"><span>Документ</span></div>
+    <div className="embedded-eskiz-section-label">Слои</div>
+    <label className="embedded-eskiz-toggle-row">Изображение<input type="checkbox" checked={props.showImage} onChange={(event) => props.onShowImage(event.target.checked)} /><i /></label>
+    <label className="embedded-eskiz-toggle-row">Все рабочие пометки <small>{annotationCount}</small><input type="checkbox" checked={props.showAnnotations} onChange={(event) => props.onShowAnnotations(event.target.checked)} /><i /></label>
+    <div className="embedded-eskiz-layer-grid">
+      {ESKIZ_LAYER_KEYS.map((key) => {
+        const layer = ESKIZ_LAYER_LABELS[key];
+        return <label key={key} className={`embedded-eskiz-layer-toggle ${props.layerVisibility[key] ? 'active' : ''} ${!props.showAnnotations ? 'muted-layer' : ''}`}><input type="checkbox" checked={props.layerVisibility[key]} disabled={!props.showAnnotations} onChange={(event) => props.onLayerVisibility(key, event.target.checked)} /><span>{layer.icon}</span><b>{layer.short}</b><small>{layerCounts[key]}</small></label>;
+      })}
+    </div>
+    <div className="embedded-eskiz-layer-presets"><button type="button" onClick={() => ESKIZ_LAYER_KEYS.forEach((key) => props.onLayerVisibility(key, true))}>Показать всё</button><button type="button" onClick={() => { ESKIZ_LAYER_KEYS.forEach((key) => props.onLayerVisibility(key, false)); props.onLayerVisibility('modules', true); }}>Только модули</button><button type="button" onClick={() => { ESKIZ_LAYER_KEYS.forEach((key) => props.onLayerVisibility(key, false)); props.onLayerVisibility('communications', true); }}>Только коммуникации</button><button type="button" onClick={() => { ESKIZ_LAYER_KEYS.forEach((key) => props.onLayerVisibility(key, false)); props.onLayerVisibility('dimensions', true); props.onLayerVisibility('communications', true); }}>Монтаж</button><button type="button" onClick={() => { ESKIZ_LAYER_KEYS.forEach((key) => props.onLayerVisibility(key, false)); props.onLayerVisibility('modules', true); props.onLayerVisibility('callouts', true); }}>Клиент</button></div>
+    <label className="embedded-eskiz-toggle-row">Опорные точки/направляющие <small>{layerCounts.helpers}</small><input type="checkbox" checked={props.showHelpers} onChange={(event) => props.onShowHelpers(event.target.checked)} /><i /></label>
+    <div className="embedded-eskiz-section-label embedded-eskiz-section-label-action"><span>Отображение изображения</span><button onClick={() => updateDisplay({ opacity: 1, brightness: 1, contrast: 1, saturation: 1, grayscale: false })}>Сбросить</button></div>
+    <label>Прозрачность<div className="embedded-eskiz-range-row"><input type="range" min=".15" max="1" step=".05" value={display.opacity} onChange={(event) => updateDisplay({ opacity: +event.target.value })} /><span>{Math.round(display.opacity * 100)}%</span></div></label>
+    <label>Яркость<div className="embedded-eskiz-range-row"><input type="range" min=".4" max="1.6" step=".05" value={display.brightness} onChange={(event) => updateDisplay({ brightness: +event.target.value })} /><span>{Math.round(display.brightness * 100)}%</span></div></label>
+    <label>Контраст<div className="embedded-eskiz-range-row"><input type="range" min=".4" max="1.8" step=".05" value={display.contrast} onChange={(event) => updateDisplay({ contrast: +event.target.value })} /><span>{Math.round(display.contrast * 100)}%</span></div></label>
+    <label>Насыщенность<div className="embedded-eskiz-range-row"><input type="range" min="0" max="1.5" step=".05" value={display.saturation} onChange={(event) => updateDisplay({ saturation: +event.target.value })} /><span>{Math.round(display.saturation * 100)}%</span></div></label>
+    <label className="embedded-eskiz-toggle-row">Чёрно-белый фон<input type="checkbox" checked={display.grayscale} onChange={(event) => updateDisplay({ grayscale: event.target.checked })} /><i /></label>
+    <div className="embedded-eskiz-section-label">Информационная шапка</div>
+    <label className="embedded-eskiz-toggle-row">Показывать шапку<input type="checkbox" checked={header.enabled} onChange={(event) => updateHeader({ enabled: event.target.checked })} /><i /></label>
+    {header.enabled && <><label>Проект<input value={header.project} placeholder="Ивановы" onChange={(event) => updateHeader({ project: event.target.value })} /></label><label>Помещение<input value={header.room} onChange={(event) => updateHeader({ room: event.target.value })} /></label><div className="embedded-eskiz-field-row"><label>Дата<input value={header.date} onChange={(event) => updateHeader({ date: event.target.value })} /></label><label>Вариант<input value={header.variant} onChange={(event) => updateHeader({ variant: event.target.value })} /></label></div></>}
+  </div>;
 }
 
 function wrapLines(text: string, maxChars: number) {
