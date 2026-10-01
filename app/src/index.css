@@ -445,6 +445,28 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .eskiz-pro-linked-list article { padding: 9px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
 .eskiz-pro-linked-list article.active { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
 .eskiz-pro-linked-list article > .actions { margin: 7px 0; }
+.eskiz-communication-kind-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 8px 0; }
+.eskiz-communication-kind-grid button { display: flex; gap: 6px; align-items: center; min-height: 34px; padding: 7px 8px; border: 1px solid #dce8e3; border-radius: 9px; background: #fff; color: #40554b; font-weight: 800; font-size: 10.5px; cursor: pointer; text-align: left; }
+.eskiz-communication-kind-grid button span { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; color: #fff; background: var(--comm-color, var(--accent)); font-weight: 900; }
+.eskiz-communication-kind-grid button.active { border-color: var(--comm-color, var(--accent)); background: #fbf8ff; box-shadow: inset 3px 0 0 var(--comm-color, var(--accent)); }
+.eskiz-communication-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.eskiz-communication-list button { border: 1px solid #e1ebe6; border-radius: 9px; background: #fff; padding: 7px 8px; text-align: left; cursor: pointer; }
+.eskiz-communication-list button.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.eskiz-communication-list b, .eskiz-communication-list span { display: block; font-size: 11px; }
+.eskiz-communication-list span { margin-top: 2px; color: var(--muted); }
+.eskiz-communication-editor { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #d6e4de; }
+.eskiz-communication-summary { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin: 9px 0; padding: 8px; border-radius: 9px; background: #fbfdfc; border: 1px solid #e1ebe6; }
+.eskiz-communication-summary b, .eskiz-communication-summary span { font-size: 11px; }
+.eskiz-distance-list { display: flex; flex-direction: column; gap: 7px; }
+.eskiz-distance-row { display: grid; grid-template-columns: 1fr 1fr .8fr auto; gap: 6px; align-items: end; padding: 8px; border: 1px solid #e1ebe6; border-radius: 10px; background: #fff; }
+.eskiz-distance-row label { font-size: 10.5px; font-weight: 800; color: #55685d; }
+.eskiz-distance-row input, .eskiz-distance-row select { width: 100%; margin-top: 3px; min-height: 29px; padding: 5px 7px; border: 1px solid #d9e5df; border-radius: 8px; background: #fff; font: inherit; color: #1f2f29; }
+.eskiz-distance-row > span { grid-column: 1 / -2; }
+.eskiz-preview-communication { filter: drop-shadow(0 2px 3px rgba(15, 23, 42, .18)); }
+.eskiz-preview-communication.clickable { cursor: pointer; pointer-events: auto; }
+.eskiz-preview-communication.active circle { stroke-width: 6; }
+.eskiz-preview-communication text { paint-order: stroke; stroke: rgba(255,255,255,.28); stroke-width: .25px; }
+.eskiz-preview-stage svg.adding-communication { cursor: crosshair; }
 .eskiz-pro-project-preview { page-break-inside: avoid; }
 .cd-sketch-pro { margin: 10px 0 16px; page-break-inside: avoid; }
 .cd-eskiz-modules { margin-top: 8px; padding: 10px; border: 1px solid #e1ebe6; border-radius: 11px; background: linear-gradient(135deg, #fbfffd, #fff7f3); }
@@ -476,7 +498,7 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
   .eskiz-preview-stage svg { max-height: none; box-shadow: none; }
 }
 @media (max-width: 1180px) { .eskiz-pro-grid { grid-template-columns: 1fr; } .eskiz-pro-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .eskiz-pro-side section:last-child { grid-column: 1 / -1; } }
-@media (max-width: 760px) { .eskiz-pro-intro { flex-direction: column; } .eskiz-pro-side { display: flex; } .eskiz-pro-frame { min-height: 680px; } .eskiz-preview-meta { grid-template-columns: 1fr 1fr; } .eskiz-pro-list article { grid-template-columns: 48px minmax(0, 1fr); } .eskiz-pro-list article .btn { grid-column: 1 / -1; justify-self: start; } }
+@media (max-width: 760px) { .eskiz-pro-intro { flex-direction: column; } .eskiz-pro-side { display: flex; } .eskiz-pro-frame { min-height: 680px; } .eskiz-preview-meta { grid-template-columns: 1fr 1fr; } .eskiz-pro-list article { grid-template-columns: 48px minmax(0, 1fr); } .eskiz-pro-list article .btn { grid-column: 1 / -1; justify-self: start; } .eskiz-communication-kind-grid, .eskiz-distance-row { grid-template-columns: 1fr; } .eskiz-distance-row > span { grid-column: auto; } }
 
 /* ---- Позиции кухни (модули) ---- */
 .defaults-card { border-left: 3px solid var(--accent); }

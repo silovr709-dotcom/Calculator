@@ -1,4 +1,7 @@
+import type { MouseEvent } from 'react';
+import type { EskizCommunicationDistance, EskizCommunicationMarker } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
+import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationDistanceText, communicationSizeText } from '../lib/eskizCommunications';
 
 export type EskizModulePreviewStatus = { level: 'new' | 'error' | 'warn' | 'ok'; label: string; summary?: string };
 
@@ -162,6 +165,63 @@ function TextPreview({ object: o }: { object: EskizTextObject }) {
   );
 }
 
+function distanceAnchorPoint(distance: EskizCommunicationDistance, marker: EskizCommunicationMarker, width: number, height: number) {
+  if (distance.anchor === 'left') return { x: 0, y: marker.y };
+  if (distance.anchor === 'right') return { x: width, y: marker.y };
+  if (distance.anchor === 'top') return { x: marker.x, y: 0 };
+  if (distance.anchor === 'bottom') return { x: marker.x, y: height };
+  return { x: distance.anchorX ?? marker.x + 120, y: distance.anchorY ?? marker.y };
+}
+
+function CommunicationPreview(props: { marker: EskizCommunicationMarker; width: number; height: number; active?: boolean; onCommunicationClick?: (marker: EskizCommunicationMarker) => void }) {
+  const { marker, width, height, active = false, onCommunicationClick } = props;
+  const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
+  const size = communicationSizeText(marker);
+  const distances = marker.distances ?? [];
+  const label = [marker.name || meta.label, size].filter(Boolean).join(' · ');
+  const labelWidth = Math.max(90, Math.min(280, label.length * 6.1 + 18));
+  const labelX = marker.x + 18 > width - labelWidth ? marker.x - labelWidth - 18 : marker.x + 18;
+  const labelY = Math.max(8, Math.min(height - 38, marker.y - 18));
+  return (
+    <g
+      className={`eskiz-preview-communication ${active ? 'active' : ''} ${onCommunicationClick ? 'clickable' : ''}`}
+      role={onCommunicationClick ? 'button' : undefined}
+      tabIndex={onCommunicationClick ? 0 : undefined}
+      onClick={(event) => { event.stopPropagation(); onCommunicationClick?.(marker); }}
+      onKeyDown={(event) => {
+        if (!onCommunicationClick || (event.key !== 'Enter' && event.key !== ' ')) return;
+        event.preventDefault();
+        onCommunicationClick(marker);
+      }}
+    >
+      {distances.map((distance) => {
+        const anchor = distanceAnchorPoint(distance, marker, width, height);
+        const midX = (marker.x + anchor.x) / 2;
+        const midY = (marker.y + anchor.y) / 2;
+        const text = `${distance.label || COMMUNICATION_ANCHOR_LABELS[distance.anchor]}: ${communicationDistanceText(distance.valueMm)}`;
+        const textWidth = Math.max(74, Math.min(250, text.length * 5.6 + 14));
+        return <g className="eskiz-preview-communication-distance" key={distance.id}>
+          <line x1={marker.x} y1={marker.y} x2={anchor.x} y2={anchor.y} stroke={meta.color} strokeWidth="2" strokeDasharray="7 5" opacity=".82" />
+          {distance.anchor === 'custom' && <g><line x1={anchor.x - 8} y1={anchor.y} x2={anchor.x + 8} y2={anchor.y} stroke={meta.color} strokeWidth="2" /><line x1={anchor.x} y1={anchor.y - 8} x2={anchor.x} y2={anchor.y + 8} stroke={meta.color} strokeWidth="2" /></g>}
+          <g transform={`translate(${midX} ${midY})`}>
+            <rect x={-textWidth / 2} y="-10" width={textWidth} height="20" rx="10" fill="#fff" stroke={meta.color} strokeWidth="1" opacity=".96" />
+            <text textAnchor="middle" dominantBaseline="middle" fontSize="10" fontWeight="800" fill={meta.color}>{text}</text>
+          </g>
+        </g>;
+      })}
+      <line x1={marker.x} y1={marker.y} x2={labelX < marker.x ? labelX + labelWidth : labelX} y2={labelY + 17} stroke={meta.color} strokeWidth="2" opacity=".72" />
+      <circle cx={marker.x} cy={marker.y} r={active ? 13 : 10} fill={meta.color} stroke="#fff" strokeWidth="4" />
+      <text x={marker.x} y={marker.y + 4} textAnchor="middle" fontSize="10" fontWeight="900" fill="#fff">{meta.icon}</text>
+      <g className="eskiz-preview-communication-label" transform={`translate(${labelX} ${labelY})`}>
+        <rect width={labelWidth} height="34" rx="9" fill="#fff" fillOpacity=".96" stroke={meta.color} strokeWidth={active ? 2.5 : 1.7} />
+        <text x="9" y="13" fontSize="11" fontWeight="900" fill={meta.color}>{marker.name || meta.label}</text>
+        <text x="9" y="26" fontSize="9.5" fontWeight="650" fill="#40554b">{size || (marker.note ? marker.note.slice(0, 34) : meta.label)}</text>
+      </g>
+      {marker.note && <title>{marker.note}</title>}
+    </g>
+  );
+}
+
 function ObjectPreview({ object, projectId, activeModuleKey, moduleBindings, moduleStatuses, onModuleClick }: { object: EskizObject; projectId: string; activeModuleKey?: string | null; moduleBindings?: Record<string, string>; moduleStatuses?: Record<string, EskizModulePreviewStatus>; onModuleClick?: (projectId: string, object: EskizModuleObject) => void }) {
   if (object.hidden) return null;
   if (object.type === 'dimension') return <DimensionPreview object={object} />;
@@ -180,16 +240,29 @@ type EskizProjectPreviewProps = {
   activeModuleKey?: string | null;
   moduleBindings?: Record<string, string>;
   moduleStatuses?: Record<string, EskizModulePreviewStatus>;
+  communicationMarkers?: EskizCommunicationMarker[];
+  activeCommunicationId?: string | null;
+  communicationAddMode?: boolean;
   onModuleClick?: (projectId: string, object: EskizModuleObject) => void;
+  onCommunicationClick?: (projectId: string, marker: EskizCommunicationMarker) => void;
+  onStagePointClick?: (projectId: string, x: number, y: number) => void;
 };
 
-export default function EskizProjectPreview({ project, compact = false, activeModuleKey = null, moduleBindings, moduleStatuses, onModuleClick }: EskizProjectPreviewProps) {
+export default function EskizProjectPreview({ project, compact = false, activeModuleKey = null, moduleBindings, moduleStatuses, communicationMarkers = [], activeCommunicationId = null, communicationAddMode = false, onModuleClick, onCommunicationClick, onStagePointClick }: EskizProjectPreviewProps) {
   const width = Math.max(1, project.image.width);
   const height = Math.max(1, project.image.height);
+  const projectCommunications = communicationMarkers.filter((marker) => marker.eskizId === project.id);
+  const handleSvgClick = (event: MouseEvent<SVGSVGElement>) => {
+    if (!onStagePointClick) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(width, (event.clientX - rect.left) / rect.width * width));
+    const y = Math.max(0, Math.min(height, (event.clientY - rect.top) / rect.height * height));
+    onStagePointClick(project.id, Math.round(x), Math.round(y));
+  };
   return (
     <article className={`eskiz-preview ${compact ? 'compact' : ''}`}>
       <div className="eskiz-preview-head">
-        <div><b>{project.title}</b><span>{project.image.name} · {project.objects.filter((item) => !item.hidden && item.type !== 'guide' && item.type !== 'anchor').length} объектов</span></div>
+        <div><b>{project.title}</b><span>{project.image.name} · {project.objects.filter((item) => !item.hidden && item.type !== 'guide' && item.type !== 'anchor').length} объектов · коммуникаций: {projectCommunications.length}</span></div>
         <em>{new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(project.updatedAt))}</em>
       </div>
       {project.header?.enabled && (
@@ -201,7 +274,7 @@ export default function EskizProjectPreview({ project, compact = false, activeMo
         </div>
       )}
       <div className="eskiz-preview-stage">
-        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Эскиз PRO: ${project.title}`}>
+        <svg className={communicationAddMode ? 'adding-communication' : ''} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Эскиз PRO: ${project.title}`} onClick={handleSvgClick}>
           <defs>
             <marker id="eskizDimArrow" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto-start-reverse">
               <path d="M 9 5 L 1 1 M 9 5 L 1 9" fill="none" stroke="context-stroke" strokeWidth="1.7" strokeLinecap="round" />
@@ -212,6 +285,7 @@ export default function EskizProjectPreview({ project, compact = false, activeMo
           </defs>
           <image href={project.image.dataUrl} x="0" y="0" width={width} height={height} preserveAspectRatio="none" style={{ filter: imageFilter(project) }} />
           {project.objects.map((object) => <ObjectPreview key={object.id} object={object} projectId={project.id} activeModuleKey={activeModuleKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} onModuleClick={onModuleClick} />)}
+          {projectCommunications.map((marker) => <CommunicationPreview key={marker.id} marker={marker} width={width} height={height} active={marker.id === activeCommunicationId} onCommunicationClick={(item) => onCommunicationClick?.(project.id, item)} />)}
         </svg>
       </div>
     </article>

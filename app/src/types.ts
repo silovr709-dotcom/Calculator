@@ -306,6 +306,54 @@ export interface EskizProSnapshot {
   project: unknown;
 }
 
+export type EskizCommunicationKind =
+  | 'socket'
+  | 'switch'
+  | 'electricOutput'
+  | 'waterCold'
+  | 'waterHot'
+  | 'sewer'
+  | 'gas'
+  | 'ventilation'
+  | 'hood'
+  | 'other';
+
+export type EskizCommunicationAnchorKind = 'left' | 'right' | 'top' | 'bottom' | 'custom';
+
+export interface EskizCommunicationDistance {
+  id: string;
+  label: string;
+  anchor: EskizCommunicationAnchorKind;
+  valueMm: number | null;
+  /** Для anchor='custom' — точка на snapshot Эскиз PRO в координатах исходного изображения. */
+  anchorX?: number | null;
+  anchorY?: number | null;
+  note?: string;
+}
+
+export interface EskizCommunicationMarker {
+  id: string;
+  /** id snapshot Эскиз PRO, к которому относится отметка. */
+  eskizId: string;
+  kind: EskizCommunicationKind;
+  name: string;
+  /** Координаты на snapshot Эскиз PRO в пикселях исходного изображения. */
+  x: number;
+  y: number;
+  widthMm?: number | null;
+  heightMm?: number | null;
+  diameterMm?: number | null;
+  depthMm?: number | null;
+  /** Высота центра/низа коммуникации от пола, если известна. */
+  elevationMm?: number | null;
+  distances?: EskizCommunicationDistance[];
+  note?: string;
+  /** false — техническая отметка остаётся только внутри проекта и не попадает в КП. */
+  showInClient?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface EskizProIntegration {
   linkedProjectIds?: string[];
   activeProjectId?: string | null;
@@ -315,6 +363,8 @@ export interface EskizProIntegration {
   clientMode?: 'active' | 'all';
   /** Связка: ключ маркера Эскиз PRO (`eskizId:objectId`) → id KitchenModule в расчёте. */
   moduleBindings?: Record<string, string>;
+  /** Коммуникации, нанесённые поверх snapshot: розетки, вода, канализация, газ, вентиляция и расстояния до точек. */
+  communications?: EskizCommunicationMarker[];
   snapshots?: EskizProSnapshot[];
 }
 
