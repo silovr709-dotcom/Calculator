@@ -266,23 +266,14 @@ type EskizProjectPreviewProps = {
   moduleMarkerMode?: EskizModuleMarkerMode;
   communicationMarkers?: EskizCommunicationMarker[];
   activeCommunicationId?: string | null;
-  communicationAddMode?: boolean;
   onModuleClick?: (projectId: string, object: EskizModuleObject) => void;
   onCommunicationClick?: (projectId: string, marker: EskizCommunicationMarker) => void;
-  onStagePointClick?: (projectId: string, x: number, y: number) => void;
 };
 
-export default function EskizProjectPreview({ project, compact = false, activeModuleKey = null, moduleBindings, moduleStatuses, moduleMarkerMode = 'full', communicationMarkers = [], activeCommunicationId = null, communicationAddMode = false, onModuleClick, onCommunicationClick, onStagePointClick }: EskizProjectPreviewProps) {
+export default function EskizProjectPreview({ project, compact = false, activeModuleKey = null, moduleBindings, moduleStatuses, moduleMarkerMode = 'full', communicationMarkers = [], activeCommunicationId = null, onModuleClick, onCommunicationClick }: EskizProjectPreviewProps) {
   const width = Math.max(1, project.image.width);
   const height = Math.max(1, project.image.height);
   const projectCommunications = communicationMarkers.filter((marker) => marker.eskizId === project.id);
-  const handleSvgClick = (event: MouseEvent<SVGSVGElement>) => {
-    if (!onStagePointClick) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = Math.max(0, Math.min(width, (event.clientX - rect.left) / rect.width * width));
-    const y = Math.max(0, Math.min(height, (event.clientY - rect.top) / rect.height * height));
-    onStagePointClick(project.id, Math.round(x), Math.round(y));
-  };
   return (
     <article className={`eskiz-preview ${compact ? 'compact' : ''}`}>
       <div className="eskiz-preview-head">
@@ -297,9 +288,8 @@ export default function EskizProjectPreview({ project, compact = false, activeMo
           <span><b>Дата:</b> {project.header.date || '—'}</span>
         </div>
       )}
-      <div className={`eskiz-preview-stage ${communicationAddMode ? 'adding-communication' : ''}`}>
-        {communicationAddMode && <div className="eskiz-preview-placement-hint">Тапните по месту на эскизе — отметка добавится прямо сюда</div>}
-        <svg className={communicationAddMode ? 'adding-communication' : ''} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Эскиз PRO: ${project.title}`} onClick={handleSvgClick}>
+      <div className="eskiz-preview-stage">
+        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Эскиз PRO: ${project.title}`}>
           <defs>
             <marker id="eskizDimArrow" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto-start-reverse">
               <path d="M 9 5 L 1 1 M 9 5 L 1 9" fill="none" stroke="context-stroke" strokeWidth="1.7" strokeLinecap="round" />
@@ -309,8 +299,8 @@ export default function EskizProjectPreview({ project, compact = false, activeMo
             </marker>
           </defs>
           <image href={project.image.dataUrl} x="0" y="0" width={width} height={height} preserveAspectRatio="none" style={{ filter: imageFilter(project) }} />
-          {project.objects.map((object) => <ObjectPreview key={object.id} object={object} projectId={project.id} activeModuleKey={activeModuleKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} onModuleClick={communicationAddMode ? undefined : onModuleClick} />)}
-          {projectCommunications.map((marker) => <CommunicationPreview key={marker.id} marker={marker} width={width} height={height} active={marker.id === activeCommunicationId} onCommunicationClick={communicationAddMode ? undefined : (item) => onCommunicationClick?.(project.id, item)} />)}
+          {project.objects.map((object) => <ObjectPreview key={object.id} object={object} projectId={project.id} activeModuleKey={activeModuleKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} onModuleClick={onModuleClick} />)}
+          {projectCommunications.map((marker) => <CommunicationPreview key={marker.id} marker={marker} width={width} height={height} active={marker.id === activeCommunicationId} onCommunicationClick={(item) => onCommunicationClick?.(project.id, item)} />)}
         </svg>
       </div>
     </article>
