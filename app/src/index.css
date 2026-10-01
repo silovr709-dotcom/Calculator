@@ -381,16 +381,21 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .embedded-eskiz-title span { color: #f7b17a; font-size: 11px; white-space: nowrap; }
 .embedded-eskiz-title span.ok { color: #87e0a3; }
 .embedded-eskiz-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
-.embedded-eskiz-tools { display: flex; gap: 5px; align-items: stretch; padding: 8px; overflow-x: auto; background: #242a33; border-bottom: 1px solid rgba(255,255,255,.08); }
-.embedded-eskiz-tools button { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgba(255,255,255,.09); border-radius: 9px; padding: 7px 9px; background: rgba(255,255,255,.06); color: #e8edf0; font-size: 11px; font-weight: 850; cursor: pointer; }
+.embedded-eskiz-tools { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; padding: 8px; background: #242a33; border-bottom: 1px solid rgba(255,255,255,.08); }
+.embedded-eskiz-tools.compact { row-gap: 6px; }
+.embedded-eskiz-tools button { flex: 0 0 auto; min-height: 34px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgba(255,255,255,.09); border-radius: 9px; padding: 7px 9px; background: rgba(255,255,255,.06); color: #e8edf0; font-size: 11px; font-weight: 850; cursor: pointer; }
 .embedded-eskiz-tools button:hover { background: rgba(255,255,255,.12); }
 .embedded-eskiz-tools button.active { background: #ff5c35; border-color: #ff8a6d; color: #fff; }
 .embedded-eskiz-tools button:disabled { opacity: .45; cursor: not-allowed; }
 .embedded-eskiz-tools kbd { padding: 1px 4px; border-radius: 4px; background: rgba(0,0,0,.25); font-size: 9px; }
-.embedded-eskiz-tool-label { flex: 0 0 auto; align-self: center; margin-left: 8px; padding-left: 10px; border-left: 1px solid rgba(255,255,255,.14); color: #ffb38f; font-size: 10px; font-weight: 950; text-transform: uppercase; letter-spacing: .07em; }
-.embedded-eskiz-tools button.communication-tool { border-color: color-mix(in srgb, var(--comm-color, #ff5c35) 60%, rgba(255,255,255,.18)); box-shadow: inset 3px 0 0 var(--comm-color, #ff5c35); }
-.embedded-eskiz-tools button.communication-tool b { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; background: var(--comm-color, #ff5c35); color: #fff; font-size: 10px; }
-.embedded-eskiz-tools button.communication-tool.active { background: var(--comm-color, #ff5c35); border-color: #fff; color: #fff; }
+.embedded-eskiz-toolbar-select { flex: 0 1 210px; min-width: 170px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px; align-items: center; padding: 5px 7px; border: 1px solid rgba(255,255,255,.10); border-radius: 10px; background: rgba(255,255,255,.06); color: #dbe5e1; }
+.embedded-eskiz-toolbar-select span { color: #ffb38f; font-size: 9px; font-weight: 950; text-transform: uppercase; letter-spacing: .07em; white-space: nowrap; }
+.embedded-eskiz-toolbar-select select { min-width: 0; width: 100%; min-height: 29px; border: 1px solid rgba(255,255,255,.16); border-radius: 8px; padding: 4px 8px; background: #171a1f; color: #fff; font: inherit; font-size: 11px; font-weight: 850; }
+.embedded-eskiz-toolbar-select select:disabled { opacity: .55; cursor: not-allowed; }
+.embedded-eskiz-toolbar-select.communication-picker { flex-basis: 245px; border-color: color-mix(in srgb, var(--comm-color, #ff5c35) 55%, rgba(255,255,255,.16)); box-shadow: inset 3px 0 0 var(--comm-color, #ff5c35); }
+.embedded-eskiz-toolbar-select.communication-picker select { border-color: color-mix(in srgb, var(--comm-color, #ff5c35) 65%, rgba(255,255,255,.18)); }
+.embedded-eskiz-quick-tools { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.embedded-eskiz-tools button.tool-quick { min-height: 32px; padding: 6px 8px; }
 .embedded-eskiz-tools button.communication-distance-tool { background: rgba(124, 58, 237, .20); border-color: rgba(196, 181, 253, .35); color: #efe8ff; }
 .embedded-eskiz-tools button.communication-distance-tool.active { background: #7c3aed; border-color: #c4b5fd; }
 .embedded-eskiz-tools button.communication-cancel-tool { background: rgba(220, 38, 38, .20); border-color: rgba(248, 113, 113, .35); color: #ffd6d6; }
@@ -444,8 +449,12 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .embedded-eskiz-empty.small { margin: 0; padding: 12px; font-size: 11px; }
 .embedded-eskiz-empty strong, .embedded-eskiz-empty span { display: block; }
 .embedded-eskiz-object-list { gap: 5px; }
+.embedded-eskiz-list-heading { margin-top: 4px; color: var(--accent); font-size: 10px; font-weight: 950; text-transform: uppercase; letter-spacing: .06em; }
+.embedded-eskiz-list-empty { padding: 10px; border: 1px dashed #d4e1dc; border-radius: 9px; color: var(--muted); font-size: 10.5px; text-align: center; }
 .embedded-eskiz-object-list > div { display: grid; grid-template-columns: minmax(0, 1fr) repeat(4, 28px); gap: 4px; padding: 5px; border: 1px solid #e4ece8; border-radius: 9px; background: #fff; }
 .embedded-eskiz-object-list > div.active { border-color: var(--accent); background: var(--accent-soft); }
+.embedded-eskiz-object-list > div.embedded-eskiz-communication-list-row { grid-template-columns: minmax(0, 1fr) 32px; border-left: 3px solid var(--accent); }
+.embedded-eskiz-object-list > div.embedded-eskiz-communication-list-row.active { border-color: var(--accent); background: #fff7f2; }
 .embedded-eskiz-object-list-main { text-align: left; }
 .embedded-eskiz-object-list-main b, .embedded-eskiz-object-list-main span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .embedded-eskiz-object-list-main span { color: var(--muted); font-size: 10px; }
@@ -461,7 +470,8 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .embedded-eskiz-handle.resize-handle { fill: #2563eb; stroke: #fff; cursor: nwse-resize; }
 .embedded-eskiz-handle.offset-handle { fill: #ff5c35; }
 .embedded-eskiz-communications { pointer-events: auto; }
-.embedded-eskiz-communication { cursor: pointer; filter: drop-shadow(0 2px 4px rgba(15, 23, 42, .20)); }
+.embedded-eskiz-communication { cursor: grab; filter: drop-shadow(0 2px 4px rgba(15, 23, 42, .20)); }
+.embedded-eskiz-communication:active { cursor: grabbing; }
 .embedded-eskiz-communication text { paint-order: stroke; stroke: rgba(255,255,255,.45); stroke-width: .35px; }
 .embedded-eskiz-communication.active > circle { filter: drop-shadow(0 0 8px rgba(124, 58, 237, .55)); }
 .embedded-eskiz-communication-distance text { paint-order: stroke; stroke: #fff; stroke-width: 3px; }
