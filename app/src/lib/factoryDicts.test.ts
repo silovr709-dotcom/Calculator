@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { checkDictRules, dictSuggestions, type FactoryDicts } from './factoryDicts';
+import { checkDictRules, dictSuggestions, factoryDictSuggestionGroups, type FactoryDicts } from './factoryDicts';
 import { VISMA_KITCHEN_BLANK, type FactoryBlankField } from './factoryBlank';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -29,6 +29,14 @@ describe('справочники разбивок Висма', () => {
     expect(films.every((s) => !s.includes('выведена') && !s.includes('снята'))).toBe(true);
     expect(dictSuggestions('bodyEdging', dicts).some((s) => s.startsWith('0,4мм'))).toBe(true);
     expect(dictSuggestions('packNotes', dicts)).toEqual([]);
+  });
+
+  it('групповой поиск фасадов показывает не только плёнки, но и пластики/HPL, а кромки ищут Rehau', () => {
+    const facadeGroups = factoryDictSuggestionGroups('facadeColor', dicts, 'FENIX', 5, 20);
+    expect(facadeGroups.some((group) => group.title.includes('Пластики') && group.items.some((item) => item.value.includes('Пластик')))).toBe(true);
+    const rehauEdges = factoryDictSuggestionGroups('facadeEdging', dicts, 'rehau', 8, 20);
+    expect(rehauEdges.some((group) => group.title.includes('Rehau'))).toBe(true);
+    expect(dictSuggestions('facadeColor', dicts, 40).some((item) => item.includes('Пластик'))).toBe(true);
   });
 
   it('правила разбивки: текстура без «!» в значении — ошибка; с «!» — ок', () => {

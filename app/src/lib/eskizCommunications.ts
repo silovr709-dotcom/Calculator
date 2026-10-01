@@ -37,6 +37,13 @@ export const COMMUNICATION_KINDS = Object.keys(COMMUNICATION_KIND_META) as Eskiz
 export const COMMUNICATION_VISUAL_SCALE_MIN = 0.55;
 export const COMMUNICATION_VISUAL_SCALE_MAX = 2.4;
 
+const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
+
+export function communicationColor(marker: Pick<EskizCommunicationMarker, 'kind' | 'color'>) {
+  const custom = typeof marker.color === 'string' ? marker.color.trim() : '';
+  return HEX_COLOR_RE.test(custom) ? custom : COMMUNICATION_KIND_META[marker.kind]?.color ?? '#7c3aed';
+}
+
 export function communicationVisualScale(marker: Pick<EskizCommunicationMarker, 'visualScale'>) {
   const value = marker.visualScale ?? 1;
   return Number.isFinite(value) ? Math.min(COMMUNICATION_VISUAL_SCALE_MAX, Math.max(COMMUNICATION_VISUAL_SCALE_MIN, value)) : 1;

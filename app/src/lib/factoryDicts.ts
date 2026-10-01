@@ -26,6 +26,24 @@ export interface FactoryDicts {
   };
 }
 
+export interface FactoryDictSuggestion {
+  id: string;
+  value: string;
+  title: string;
+  subtitle: string;
+  badges: string[];
+  status?: 'ok' | 'warn' | 'bad';
+  search: string;
+}
+
+export interface FactoryDictSuggestionGroup {
+  id: string;
+  title: string;
+  subtitle?: string;
+  total: number;
+  items: FactoryDictSuggestion[];
+}
+
 /** Фрезеровки справочника (пустой список, если файл справочников старой версии). */
 export function millingsOf(dicts: FactoryDicts | null | undefined): Milling[] {
   return dicts?.groups?.millings?.items ?? [];
@@ -39,6 +57,136 @@ export async function loadFactoryDicts(baseUrl: string): Promise<FactoryDicts | 
   } catch {
     return null;
   }
+}
+
+const normText = (value: string) => value.toLocaleLowerCase('ru').replace(/ё/g, 'е').replace(/[\s_*]+/g, ' ').trim();
+
+const compact = (value: string | null | undefined) => value?.replace(/\s+/g, ' ').trim() || '';
+
+function groupSuggestions(items: FactoryDictSuggestion[], perGroup: number, groupLimit: number): FactoryDictSuggestionGroup[] {
+  const byGroup = new Map<string, FactoryDictSuggestionGroup>();
+  for (const item of items) {
+    const [id, title, subtitle] = item.id.split('|');
+    const key = `${id}|${title}|${subtitle ?? ''}`;
+    const group = byGroup.get(key) ?? { id, title, subtitle, total: 0, items: [] };
+    group.total += 1;
+    if (group.items.length < perGroup) group.items.push(item);
+    byGroup.set(key, group);
+  }
+  return [...byGroup.values()].filter((group) => group.items.length > 0).slice(0, groupLimit);
+}
+
+function searchMatches(item: FactoryDictSuggestion, query: string) {
+  const normalized = normText(query);
+  if (!normalized) return true;
+  return normalized.split(' ').every((part) => item.search.includes(part));
+}
+
+function ldspSuggestion(item: LdspColor): FactoryDictSuggestion {
+  const category = compact(item.category) || compact(item.format);
+  const value = `${item.texture ? '! ' : ''}${item.name}${item.article ? ` ${item.article}` : ''} (${item.brand}${category ? `, ${category}` : ''})`;
+  return {
+    id: `ldsp-${item.brand}-${category}|${item.brand}${category ? ` · ${category}` : ''}|ЛДСП: цвета, кромки, формат ${item.format}`,
+    value,
+    title: `${item.texture ? '! ' : ''}${item.name}`,
+    subtitle: [item.article, item.format, item.edgingArticle ? `кромка: ${item.edgingArticle}` : ''].filter(Boolean).join(' · '),
+    badges: [item.brand, category, item.texture ? 'текстура !' : '', item.sheetSurcharge ? `доплата ${item.sheetSurcharge}` : ''].filter(Boolean),
+    search: normText([item.name, item.article, item.brand, item.category, item.format, item.edgingArticle].filter(Boolean).join(' ')),
+  };
+}
+
+function filmSuggestion(item: FilmColor): FactoryDictSuggestion {
+  return {
+    id: `film-${item.brand}-${item.category}|ПВХ плёнки · ${item.brand} · ${item.category}|${item.status === 'в работе' ? 'В работе' : item.status}`,
+    value: `${item.texture ? '! ' : ''}${item.code} — ${item.name} (${item.brand}, ${item.category})`,
+    title: `${item.code} — ${item.name}`,
+    subtitle: `${item.brand} · ${item.category}${item.onlyMillingMilo ? ' · только фрезеровка Мыло' : ''}${item.onlyMdf16 ? ' · только МДФ 16' : ''}`,
+    badges: [item.status, item.texture ? 'текстура !' : '', item.onlyMillingMilo ? 'только Мыло' : ''].filter(Boolean),
+    status: item.status === 'в работе' ? 'ok' : item.status === 'выведена' || item.status === 'снята' ? 'bad' : 'warn',
+    search: normText([item.code, item.name, item.brand, item.category, item.status].join(' ')),
+  };
+}
+
+function plasticSuggestion(item: PlasticItem): FactoryDictSuggestion {
+  const collection = compact(item.collection);
+  const category = compact(item.category);
+  const title = `${item.article} — ${item.name}`;
+  return {
+    id: `plastic-${item.brand}-${collection || category}|Пластики / HPL · ${item.brand}${collection ? ` · ${collection}` : category ? ` · ${category}` : ''}|ARPA, FENIX, AGT, Rexay, ABET и другие разбивки`,
+    value: `${item.texture ? '! ' : ''}Пластик ${item.brand} ${item.article} — ${item.name}${category ? ` (${category})` : ''}`,
+    title,
+    subtitle: [item.format, category, collection, item.edge ? `кромка: ${item.edge}` : '', item.details].filter(Boolean).join(' · '),
+    badges: [item.brand, category, item.status, item.texture ? 'текстура !' : ''].filter(Boolean),
+    status: item.status === 'в работе' ? 'ok' : item.status === 'выведена' || item.status === 'снята' ? 'bad' : 'warn',
+    search: normText([item.article, item.name, item.brand, item.category, item.collection, item.format, item.edge, item.status].filter(Boolean).join(' ')),
+  };
+}
+
+function compactSuggestion(item: CompactHplItem): FactoryDictSuggestion {
+  return {
+    id: `compact-${item.collection ?? 'slotex'}|Компакт Slotex · ${item.collection ?? 'без коллекции'}|HPL Compact / SolidTop`,
+    value: `${item.textureCode ? '! ' : ''}Компакт Slotex ${item.code} — ${item.name}${item.textureCode ? `, текстура ${item.textureCode}` : ''}`,
+    title: `${item.code} — ${item.name}`,
+    subtitle: [item.collection, item.series, item.surfaceType, item.textureCode ? `текстура ${item.textureCode}` : ''].filter(Boolean).join(' · '),
+    badges: ['Slotex', item.collection ?? '', item.textureCode ? 'текстура !' : ''].filter(Boolean),
+    search: normText([item.code, item.name, item.collection, item.series, item.surfaceType, item.textureCode].filter(Boolean).join(' ')),
+  };
+}
+
+function edgeMaker(value: string, title: string, subtitle: string, source: string, badges: string[]): FactoryDictSuggestion {
+  const maker = /рехау|rehau/i.test(value) ? 'Rehau' : /gp/i.test(value) ? 'GP Plast' : source;
+  return {
+    id: `edge-${maker}|Кромки · ${maker}|подбор кромок из разбивок ЛДСП/пластиков`,
+    value,
+    title,
+    subtitle,
+    badges: [maker, ...badges].filter(Boolean),
+    search: normText([value, title, subtitle, source, maker, ...badges].join(' ')),
+  };
+}
+
+export function factoryDictSuggestionGroups(fieldKey: string, dicts: FactoryDicts, query = '', perGroup = 7, groupLimit = 12): FactoryDictSuggestionGroup[] {
+  const { ldspColors, films, plastics } = dicts.groups;
+  let suggestions: FactoryDictSuggestion[] = [];
+  switch (fieldKey) {
+    case 'ldspColor':
+    case 'corpusColor':
+      suggestions = ldspColors.items.map(ldspSuggestion);
+      break;
+    case 'bodyEdging':
+    case 'corpusEdging':
+      suggestions = [
+        ...ldspColors.items.filter((i) => Boolean(i.edgingArticle)).map((i) => edgeMaker(`0,4мм ${i.edgingArticle}${/gp/i.test(i.edgingArticle ?? '') ? '' : ' GP'}`, i.edgingArticle!, `${i.name} · ${i.brand} · ${i.category || i.format}`, i.brand, [i.category])),
+        ...(dicts.groups.ldspEdges?.items ?? []).map((i) => edgeMaker(`${i.edge}${i.article ? ` (${i.article})` : ''}`, i.edge, [i.brand, i.article].filter(Boolean).join(' · '), i.brand, [i.edge])),
+      ];
+      break;
+    case 'facadeColor':
+      suggestions = [
+        ...films.items.filter((i) => i.status === 'в работе' || query.trim()).map(filmSuggestion),
+        ...plastics.items.filter((i) => i.status === 'в работе' || query.trim()).map(plasticSuggestion),
+        ...(dicts.groups.compactHpl?.items ?? []).map(compactSuggestion),
+      ];
+      break;
+    case 'facadeMilling':
+      suggestions = millingsOf(dicts).map((m) => ({
+        id: `milling-${m.categoryLabel}-${m.mdfThicknessMm}|Фрезеровки · ${m.categoryLabel}|МДФ ${m.mdfThicknessMm} мм · ${m.coatings.join('/')}`,
+        value: `${m.name} (${m.categoryLabel}, ${m.mdfThicknessMm} мм, ${m.coatings.join('/')})`,
+        title: m.name,
+        subtitle: [m.categoryLabel, `${m.mdfThicknessMm} мм`, m.coatings.join('/'), m.note ?? ''].filter(Boolean).join(' · '),
+        badges: [m.categoryLabel, `${m.mdfThicknessMm} мм`, ...m.coatings],
+        search: normText([m.name, m.categoryLabel, m.mdfThicknessMm, ...m.coatings, m.note ?? ''].join(' ')),
+      }));
+      break;
+    case 'facadeEdging':
+      suggestions = [
+        ...ldspColors.items.filter((i) => Boolean(i.edgingArticle)).map((i) => edgeMaker(`1мм ${i.edgingArticle}`, i.edgingArticle!, `${i.name} · ${i.brand} · ${i.category || i.format}`, i.brand, [i.category])),
+        ...plastics.items.map((i) => edgeMaker(i.edge ? `кромка ${i.edge} (${i.brand} ${i.article})` : `кромка ${i.brand} под ${i.article}`, i.edge || `${i.brand} ${i.article}`, [i.name, i.category, i.collection].filter(Boolean).join(' · '), i.brand, [i.category ?? '', i.status])),
+      ];
+      break;
+    default:
+      return [];
+  }
+  return groupSuggestions(suggestions.filter((item) => searchMatches(item, query)), perGroup, groupLimit);
 }
 
 /** Значение-подсказка для datalist конкретного поля бланка. */
@@ -55,21 +203,28 @@ export function dictSuggestions(fieldKey: string, dicts: FactoryDicts, limit = 4
         ...ldspColors.items.map((i) => i.edgingArticle ? `0,4мм ${i.edgingArticle} GP` : null),
         ...(dicts.groups.ldspEdges?.items ?? []).map((i) => i.edge ? `${i.edge}${i.article ? ` (${i.article})` : ''}` : null),
       ]);
-    case 'facadeColor':
-      return films.items.filter((i) => i.status === 'в работе').map((i) => `${i.texture ? '! ' : ''}${i.code} — ${i.name} (${i.brand})`);
+    case 'facadeColor': {
+      const filmLimit = Math.max(1, Math.ceil(limit * 0.5));
+      const plasticLimit = Math.max(1, Math.ceil(limit * 0.4));
+      const compactLimit = Math.max(0, limit - filmLimit - plasticLimit);
+      return [
+        ...films.items.filter((i) => i.status === 'в работе').slice(0, filmLimit).map((i) => `${i.texture ? '! ' : ''}${i.code} — ${i.name} (${i.brand})`),
+        ...plastics.items.filter((i) => i.status === 'в работе').slice(0, plasticLimit).map((i) => `${i.texture ? '! ' : ''}Пластик ${i.brand} ${i.article} — ${i.name}${i.category ? ` (${i.category})` : ''}`),
+        ...(dicts.groups.compactHpl?.items ?? []).slice(0, compactLimit).map((i) => `${i.textureCode ? '! ' : ''}Компакт Slotex ${i.code} — ${i.name}${i.textureCode ? `, текстура ${i.textureCode}` : ''}`),
+      ].slice(0, limit);
+    }
     case 'facadeMilling':
       return millingsOf(dicts).map((m) => `${m.name} (${m.categoryLabel}, ${m.mdfThicknessMm} мм, ${m.coatings.join('/')})`);
     case 'facadeEdging':
       return [
         ...uniq(ldspColors.items.map((i) => i.edgingArticle ? `1мм ${i.edgingArticle}` : null)),
-        ...uniq(plastics.items.map((i) => `кромка ${i.brand} под ${i.article}`)),
+        ...uniq(plastics.items.map((i) => i.edge ? `кромка ${i.edge} (${i.brand} ${i.article})` : `кромка ${i.brand} под ${i.article}`)),
       ].slice(0, limit);
     default:
       return [];
   }
 }
 
-const normText = (value: string) => value.toLocaleLowerCase('ru').replace(/ё/g, 'е').replace(/[\s_*]+/g, ' ').trim();
 
 interface DictHit { texture: boolean; status?: string; label: string }
 

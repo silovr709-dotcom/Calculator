@@ -70,6 +70,12 @@ describe('buildEskizSketchSvg', () => {
     expect(svg).toContain('от угла: 300 мм');
   });
 
+  it('использует пользовательский цвет коммуникации в SVG-экспорте', () => {
+    const svg = buildEskizSketchSvg(project, { communications: [{ ...communication, color: '#12abef' }] });
+    expect(svg).toContain('stroke="#12abef"');
+    expect(svg).toContain('fill="#12abef"');
+  });
+
   it('делает безопасное имя файла картинки', () => {
     expect(eskizSketchFileName({ ...project, title: 'Кухня / тест' }, 'png')).toBe('Кухня - тест.png');
   });

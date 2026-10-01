@@ -337,6 +337,8 @@ export interface EskizCommunicationMarker {
   heightMm?: number | null;
   diameterMm?: number | null;
   depthMm?: number | null;
+  /** Визуальный цвет маркера/линий коммуникации. Если пусто — используется цвет типа коммуникации. */
+  color?: string | null;
   /** Визуальный масштаб условного значка на эскизе. 1 = стандартный размер. */
   visualScale?: number | null;
   /** false — не показывать рядом с маркером плашку с габаритом/высотой; линии расстояний остаются. */

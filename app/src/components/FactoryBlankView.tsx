@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Pricebook, Project } from '../types';
 import { checkFactoryBlank, draftFactoryBlank, FACTORY_BLANK_SPECS, factoryBlankProgress, type BlankIssue } from '../lib/factoryBlank';
-import { checkDictRules, dictSuggestions, loadFactoryDicts, type FactoryDicts } from '../lib/factoryDicts';
+import { checkDictRules, factoryDictSuggestionGroups, loadFactoryDicts, type FactoryDicts } from '../lib/factoryDicts';
 import { BACK_EDGE_NOTE, checkWorktopPlan, edgeKindLabel, suggestWorktopPlan, WORKTOP_EDGE_KINDS } from '../lib/worktopPlan';
 import { lineMatchesChecklistKey } from '../lib/checklist';
 import { blankCellRefLabel, blankSketchRangeLabel, exportFactoryBlankXlsx, getBlankSheetMap, type FactoryTechPack } from '../lib/factoryBlankXls';
@@ -13,6 +13,81 @@ import { renderEskizSketchPng, type EskizSketchModuleMarkerMode } from '../lib/e
 import EskizProjectPreview from './EskizProjectPreview';
 
 const NO_PIECES: WorktopPiece[] = [];
+
+function FactoryDictPicker(props: {
+  fieldKey: string;
+  dicts: FactoryDicts;
+  query: string;
+  onQuery: (value: string) => void;
+  onInsert: (value: string) => void;
+}) {
+  const groups = useMemo(
+    () => factoryDictSuggestionGroups(props.fieldKey, props.dicts, props.query, 7, props.fieldKey === 'facadeColor' ? 18 : 14),
+    [props.dicts, props.fieldKey, props.query],
+  );
+  const shown = groups.reduce((sum, group) => sum + group.items.length, 0);
+  const total = groups.reduce((sum, group) => sum + group.total, 0);
+  if (shown === 0 && !props.query) return null;
+  const hint = props.fieldKey === 'facadeColor'
+    ? 'ПВХ-плёнки, пластики/HPL (ARPA, FENIX, AGT, Rexay, ABET) и Compact Slotex — с группировкой по производителю и коллекции.'
+    : props.fieldKey === 'ldspColor' || props.fieldKey === 'corpusColor'
+      ? 'ЛДСП сгруппированы по производителю и категории; текстурные позиции помечены «!». '
+      : 'Справочник сгруппирован по типу материала, производителю и категории.';
+  return (
+    <details className="dict-smart-picker">
+      <summary>
+        <span>+ справочник разбивок</span>
+        <small>{shown} показано{total > shown ? ` · ${total} найдено` : ''}</small>
+      </summary>
+      <div className="dict-search-row">
+        <input
+          value={props.query}
+          placeholder="поиск: код, цвет, Rehau, AGT, FENIX, категория…"
+          onChange={(e) => props.onQuery(e.target.value)}
+        />
+        {props.query && <button type="button" className="btn tiny ghost" onClick={() => props.onQuery('')}>очистить</button>}
+      </div>
+      <div className="dict-picker-hint">{hint}</div>
+      {shown === 0 ? (
+        <div className="empty small">Ничего не найдено. Попробуйте код, производителя или часть названия цвета.</div>
+      ) : (
+        <div className="dict-group-list">
+          {groups.map((group) => (
+            <section key={`${group.id}-${group.title}`} className="dict-group-block">
+              <header>
+                <div>
+                  <b>{group.title}</b>
+                  {group.subtitle && <span>{group.subtitle}</span>}
+                </div>
+                <em>{group.total}</em>
+              </header>
+              <div className="dict-card-grid">
+                {group.items.map((item) => (
+                  <button
+                    key={`${group.id}-${item.value}`}
+                    type="button"
+                    className={`dict-card status-${item.status ?? 'ok'}`}
+                    title={item.value}
+                    onClick={() => props.onInsert(item.value)}
+                  >
+                    <span className="dict-card-title">{item.title}</span>
+                    {item.subtitle && <span className="dict-card-subtitle">{item.subtitle}</span>}
+                    {item.badges.length > 0 && (
+                      <span className="dict-badges">
+                        {item.badges.slice(0, 4).map((badge) => <i key={badge}>{badge}</i>)}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              {group.total > group.items.length && <div className="dict-more-note">Ещё {group.total - group.items.length} — уточните поиск внутри этой группы.</div>}
+            </section>
+          ))}
+        </div>
+      )}
+    </details>
+  );
+}
 
 /**
  * Экран «Бланк на фабрику»: Калькулятор → Автоподстановка → Ручная корректура → Проверка → Печать.
@@ -30,6 +105,7 @@ export default function FactoryBlankView(props: {
   const [projectId, setProjectId] = useState<string | undefined>(props.initialProjectId ?? props.projects[0]?.id);
   const [specId, setSpecId] = useState<string>(FACTORY_BLANK_SPECS[0].id);
   const [dicts, setDicts] = useState<FactoryDicts | null>(null);
+  const [dictQueries, setDictQueries] = useState<Record<string, string>>({});
   const [exporting, setExporting] = useState(false);
   const [showOnlyIssues, setShowOnlyIssues] = useState(false);
 
@@ -379,20 +455,14 @@ export default function FactoryBlankView(props: {
                   placeholder={d.field.expected === 'dict' ? 'по разбивке/прайсу фабрики…' : 'заполнить…'}
                   onChange={(e) => setDraftValue(d.field.key, e.target.value)}
                 />
-                {d.field.expected === 'dict' && dicts && dictSuggestions(d.field.key, dicts, 60).length > 0 && (
-                  <select
-                    className="dict-picker"
-                    value=""
-                    title="Вставить позицию из справочника разбивок Висма (можно несколько)"
-                    onChange={(e) => {
-                      if (!e.target.value) return;
-                      setDraftValue(d.field.key, d.value.trim() === '' ? e.target.value : `${d.value.replace(/[;\s]+$/, '')}; ${e.target.value}`);
-                      e.target.value = '';
-                    }}
-                  >
-                    <option value="">+ вставить из справочника…</option>
-                    {dictSuggestions(d.field.key, dicts, 60).map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                {d.field.expected === 'dict' && dicts && (
+                  <FactoryDictPicker
+                    fieldKey={d.field.key}
+                    dicts={dicts}
+                    query={dictQueries[d.field.key] ?? ''}
+                    onQuery={(value) => setDictQueries((prev) => ({ ...prev, [d.field.key]: value }))}
+                    onInsert={(value) => setDraftValue(d.field.key, d.value.trim() === '' ? value : `${d.value.replace(/[;\s]+$/, '')}; ${value}`)}
+                  />
                 )}
                 {d.field.hint && <span className="muted small">{d.field.hint}</span>}
               </label>

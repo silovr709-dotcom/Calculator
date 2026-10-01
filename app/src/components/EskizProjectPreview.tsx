@@ -1,7 +1,7 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
 import type { EskizCommunicationDistance, EskizCommunicationMarker } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
-import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale } from '../lib/eskizCommunications';
+import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationColor, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale } from '../lib/eskizCommunications';
 
 export type EskizModulePreviewStatus = { level: 'new' | 'error' | 'warn' | 'ok'; label: string; summary?: string };
 export type EskizModuleMarkerMode = 'full' | 'compact' | 'hidden';
@@ -206,35 +206,36 @@ function distanceLabelPoint(distance: EskizCommunicationDistance, marker: EskizC
 
 function CommunicationMarkerIcon({ marker, active = false }: { marker: EskizCommunicationMarker; active?: boolean }) {
   const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
+  const color = communicationColor(marker);
   const sockets = communicationSocketCount(marker.kind);
   const switches = communicationSwitchCount(marker.kind);
   const frameWidth = sockets > 0 ? Math.max(30, sockets * 18 + 12) : switches > 0 ? Math.max(30, switches * 16 + 12) : 32;
   const scale = communicationVisualScale(marker);
   return <g className={`eskiz-preview-communication-symbol ${active ? 'active' : ''}`} transform={`translate(${marker.x} ${marker.y})`}>
     <g transform={`scale(${scale})`}>
-      <circle className="eskiz-preview-communication-halo" r={active ? 22 : 18} fill={meta.color} opacity={active ? .18 : .1} />
+      <circle className="eskiz-preview-communication-halo" r={active ? 22 : 18} fill={color} opacity={active ? .18 : .1} />
       {sockets > 0 && <g>
-      <rect x={-frameWidth / 2} y="-14" width={frameWidth} height="28" rx="7" fill="#fff" stroke={meta.color} strokeWidth={active ? 3 : 2.2} />
+      <rect x={-frameWidth / 2} y="-14" width={frameWidth} height="28" rx="7" fill="#fff" stroke={color} strokeWidth={active ? 3 : 2.2} />
       {Array.from({ length: sockets }).map((_, index) => {
         const cx = (index - (sockets - 1) / 2) * 18;
-        return <g key={index} transform={`translate(${cx} 0)`}><circle r="6.2" fill="#eff6ff" stroke={meta.color} strokeWidth="1.8" /><circle cx="-2.2" cy="0" r="1.05" fill={meta.color} /><circle cx="2.2" cy="0" r="1.05" fill={meta.color} /></g>;
+        return <g key={index} transform={`translate(${cx} 0)`}><circle r="6.2" fill="#eff6ff" stroke={color} strokeWidth="1.8" /><circle cx="-2.2" cy="0" r="1.05" fill={color} /><circle cx="2.2" cy="0" r="1.05" fill={color} /></g>;
       })}
     </g>}
     {switches > 0 && <g>
-      <rect x={-frameWidth / 2} y="-14" width={frameWidth} height="28" rx="7" fill="#fff" stroke={meta.color} strokeWidth={active ? 3 : 2.2} />
+      <rect x={-frameWidth / 2} y="-14" width={frameWidth} height="28" rx="7" fill="#fff" stroke={color} strokeWidth={active ? 3 : 2.2} />
       {Array.from({ length: switches }).map((_, index) => {
         const cx = (index - (switches - 1) / 2) * 16;
-        return <g key={index} transform={`translate(${cx} 0)`}><line x1="-5" y1="5" x2="5" y2="-5" stroke={meta.color} strokeWidth="2.4" strokeLinecap="round" /><circle cx="-5" cy="5" r="1.9" fill={meta.color} /><circle cx="5" cy="-5" r="1.9" fill={meta.color} /></g>;
+        return <g key={index} transform={`translate(${cx} 0)`}><line x1="-5" y1="5" x2="5" y2="-5" stroke={color} strokeWidth="2.4" strokeLinecap="round" /><circle cx="-5" cy="5" r="1.9" fill={color} /><circle cx="5" cy="-5" r="1.9" fill={color} /></g>;
       })}
     </g>}
-      {sockets === 0 && switches === 0 && <g><circle r="14" fill="#fff" stroke={meta.color} strokeWidth={active ? 3 : 2.4} /><text y="4" textAnchor="middle" fontSize="9" fontWeight="900" fill={meta.color}>{meta.shortLabel}</text></g>}
+      {sockets === 0 && switches === 0 && <g><circle r="14" fill="#fff" stroke={color} strokeWidth={active ? 3 : 2.4} /><text y="4" textAnchor="middle" fontSize="9" fontWeight="900" fill={color}>{meta.shortLabel}</text></g>}
     </g>
   </g>;
 }
 
 function CommunicationMeasureBadges({ marker, width, height, showSizeBadges }: { marker: EskizCommunicationMarker; width: number; height: number; showSizeBadges: boolean }) {
   if (!showSizeBadges || marker.showSizeBadge === false) return null;
-  const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
+  const color = communicationColor(marker);
   const values = [communicationCompactSizeText(marker), communicationElevationText(marker)].filter(Boolean);
   if (values.length === 0) return null;
   const scale = communicationVisualScale(marker);
@@ -243,7 +244,7 @@ function CommunicationMeasureBadges({ marker, width, height, showSizeBadges }: {
     const label = String(value);
     const w = Math.max(44, Math.min(130, label.length * 5.8 + 14));
     const x = clamp(marker.x + 18 * scale, 4, Math.max(4, width - w - 4));
-    const node = <g key={label} transform={`translate(${x} ${y})`}><rect width={w} height="16" rx="8" fill="#fff" stroke={meta.color} strokeWidth="1.2" fillOpacity=".96" /><text x={w / 2} y="11.5" textAnchor="middle" fontSize="9" fontWeight="850" fill={meta.color}>{label}</text></g>;
+    const node = <g key={label} transform={`translate(${x} ${y})`}><rect width={w} height="16" rx="8" fill="#fff" stroke={color} strokeWidth="1.2" fillOpacity=".96" /><text x={w / 2} y="11.5" textAnchor="middle" fontSize="9" fontWeight="850" fill={color}>{label}</text></g>;
     y += 18;
     return node;
   })}</g>;
@@ -252,6 +253,7 @@ function CommunicationMeasureBadges({ marker, width, height, showSizeBadges }: {
 function CommunicationPreview(props: { marker: EskizCommunicationMarker; width: number; height: number; active?: boolean; showSizeBadges: boolean; onCommunicationClick?: (marker: EskizCommunicationMarker) => void }) {
   const { marker, width, height, active = false, showSizeBadges, onCommunicationClick } = props;
   const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
+  const color = communicationColor(marker);
   const size = showSizeBadges && marker.showSizeBadge !== false ? communicationSizeText(marker) : '';
   const distances = marker.distances ?? [];
   const clickProps = onCommunicationClick ? {
@@ -276,11 +278,11 @@ function CommunicationPreview(props: { marker: EskizCommunicationMarker; width: 
         const text = `${distance.label || COMMUNICATION_ANCHOR_LABELS[distance.anchor]}: ${communicationDistanceText(distance.valueMm)}`;
         const textWidth = Math.max(74, Math.min(270, text.length * 5.6 + 14));
         return <g className="eskiz-preview-communication-distance" key={distance.id}>
-          <line x1={marker.x} y1={marker.y} x2={anchor.x} y2={anchor.y} stroke={meta.color} strokeWidth="2.1" strokeDasharray="8 5" opacity=".88" markerStart="url(#eskizCommDistanceDot)" markerEnd="url(#eskizCommDistanceArrow)" />
-          {distance.anchor === 'custom' && <g><line x1={anchor.x - 8} y1={anchor.y} x2={anchor.x + 8} y2={anchor.y} stroke={meta.color} strokeWidth="2" /><line x1={anchor.x} y1={anchor.y - 8} x2={anchor.x} y2={anchor.y + 8} stroke={meta.color} strokeWidth="2" /></g>}
+          <line x1={marker.x} y1={marker.y} x2={anchor.x} y2={anchor.y} stroke={color} strokeWidth="2.1" strokeDasharray="8 5" opacity=".88" markerStart="url(#eskizCommDistanceDot)" markerEnd="url(#eskizCommDistanceArrow)" />
+          {distance.anchor === 'custom' && <g><line x1={anchor.x - 8} y1={anchor.y} x2={anchor.x + 8} y2={anchor.y} stroke={color} strokeWidth="2" /><line x1={anchor.x} y1={anchor.y - 8} x2={anchor.x} y2={anchor.y + 8} stroke={color} strokeWidth="2" /></g>}
           <g transform={`translate(${labelPoint.x} ${labelPoint.y})`}>
-            <rect x={-textWidth / 2} y="-10" width={textWidth} height="20" rx="10" fill="#fff" stroke={meta.color} strokeWidth="1" opacity=".96" />
-            <text textAnchor="middle" dominantBaseline="middle" fontSize="10" fontWeight="850" fill={meta.color}>{text}</text>
+            <rect x={-textWidth / 2} y="-10" width={textWidth} height="20" rx="10" fill="#fff" stroke={color} strokeWidth="1" opacity=".96" />
+            <text textAnchor="middle" dominantBaseline="middle" fontSize="10" fontWeight="850" fill={color}>{text}</text>
           </g>
         </g>;
       })}
