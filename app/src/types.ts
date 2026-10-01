@@ -379,6 +379,8 @@ export interface FactoryBlankSketchSettings {
   moduleMarkerMode?: 'full' | 'compact' | 'hidden';
   /** false — не добавлять в картинку фабричного бланка розетки/воду/газ/вентиляцию. */
   showCommunications?: boolean;
+  /** false — не добавлять отдельный лист с крупным эскизом, расшифровкой маркеров и проверками. Отсутствие поля = добавлять. */
+  includeTechSheet?: boolean;
 }
 
 export type KitchenChecklistKey = 'plinth' | 'baseboard' | 'worktop' | 'wallPanel';

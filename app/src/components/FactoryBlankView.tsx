@@ -4,7 +4,8 @@ import { checkFactoryBlank, draftFactoryBlank, FACTORY_BLANK_SPECS, factoryBlank
 import { checkDictRules, dictSuggestions, loadFactoryDicts, type FactoryDicts } from '../lib/factoryDicts';
 import { BACK_EDGE_NOTE, checkWorktopPlan, edgeKindLabel, suggestWorktopPlan, WORKTOP_EDGE_KINDS } from '../lib/worktopPlan';
 import { lineMatchesChecklistKey } from '../lib/checklist';
-import { blankCellRefLabel, blankSketchRangeLabel, exportFactoryBlankXlsx, getBlankSheetMap } from '../lib/factoryBlankXls';
+import { blankCellRefLabel, blankSketchRangeLabel, exportFactoryBlankXlsx, getBlankSheetMap, type FactoryTechPack } from '../lib/factoryBlankXls';
+import { buildFactoryTechCommunicationRows, buildFactoryTechModuleRows, buildFactoryTechReadinessRows, factoryTechReadinessSummary } from '../lib/factoryTechPack';
 import { uid } from '../lib/storage';
 import type { WorktopEdgeKind, WorktopPiece } from '../types';
 import { snapshotProject } from '../lib/eskizPro';
@@ -142,7 +143,12 @@ export default function FactoryBlankView(props: {
   const sketchEnabled = sketchSettings.enabled ?? (eskizSnapshots.length > 0);
   const sketchMarkerMode: EskizSketchModuleMarkerMode = sketchSettings.moduleMarkerMode ?? project.eskizPro?.moduleMarkerMode ?? 'compact';
   const showSketchCommunications = sketchSettings.showCommunications ?? true;
+  const includeTechSheet = sketchSettings.includeTechSheet ?? true;
   const canInsertSketch = Boolean(sheetMap?.sketch && selectedSketch && sketchEnabled);
+  const techModuleRows = buildFactoryTechModuleRows(project, pricebook, selectedSketch);
+  const techCommunicationRows = showSketchCommunications ? buildFactoryTechCommunicationRows(project, selectedSketch) : [];
+  const techReadinessRows = buildFactoryTechReadinessRows({ project, pricebook, eskizProject: selectedSketch, blankIssues: issues, includeCommunications: showSketchCommunications });
+  const techSummary = factoryTechReadinessSummary(techReadinessRows);
   const issueKeys = new Set(issues.map((i) => i.fieldKey));
   const fieldKeys = new Set(draft.map((d) => d.field.key));
   const shownSections = sections
@@ -167,10 +173,33 @@ export default function FactoryBlankView(props: {
           subtitle: `${selectedSketch.title} · ${selectedSketch.image.name}`,
         })
         : null;
+      const techSketchImage = includeTechSheet && selectedSketch
+        ? await renderEskizSketchPng(selectedSketch, {
+          widthPx: 1500,
+          heightPx: 900,
+          moduleMarkerMode: sketchMarkerMode,
+          communications: showSketchCommunications ? (project.eskizPro?.communications ?? []) : [],
+          title: 'Эскиз PRO — технический лист',
+          subtitle: `${project.name}${project.client ? ` · ${project.client}` : ''}`,
+        })
+        : null;
+      const techPack: FactoryTechPack | null = includeTechSheet
+        ? {
+          projectName: project.name,
+          client: project.client,
+          generatedAt: new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(new Date()),
+          sketchTitle: selectedSketch?.title,
+          sketchImage: techSketchImage,
+          moduleRows: techModuleRows,
+          communicationRows: techCommunicationRows,
+          readinessRows: techReadinessRows,
+        }
+        : null;
       await exportFactoryBlankXlsx({
         baseUrl: import.meta.env.BASE_URL,
         project, spec, draft, pieces,
         sketchImage,
+        techPack,
       });
     } catch (e) {
       alert(`Не получилось собрать файл бланка: ${e instanceof Error ? e.message : String(e)}`);
@@ -233,6 +262,7 @@ export default function FactoryBlankView(props: {
         <div><b>{warns.length}</b><span>предупреждений</span></div>
         <div><b>{hasWorktopPlanSection ? pieces.length : '—'}</b><span>деталей столешницы на лист 2</span></div>
         <div><b>{canInsertSketch ? 'да' : '—'}</b><span>Эскиз PRO в {sheetMap ? blankSketchRangeLabel(sheetMap) || 'нет поля' : 'нет шаблона'}</span></div>
+        <div><b>{includeTechSheet ? 'да' : '—'}</b><span>отдельный лист: {techModuleRows.length} модулей · {techCommunicationRows.length} коммуникаций</span></div>
       </div>
 
       {sheetMap?.sketch && (
@@ -261,7 +291,14 @@ export default function FactoryBlankView(props: {
                     <option value="full">Полные плашки</option>
                   </select>
                 </label>
-                <label className="toggle"><input type="checkbox" checked={showSketchCommunications} disabled={!sketchEnabled} onChange={(e) => updateSketchSettings({ showCommunications: e.target.checked })} /> коммуникации и расстояния</label>
+                <label className="toggle"><input type="checkbox" checked={showSketchCommunications} onChange={(e) => updateSketchSettings({ showCommunications: e.target.checked })} /> коммуникации и расстояния</label>
+                <label className="toggle"><input type="checkbox" checked={includeTechSheet} onChange={(e) => updateSketchSettings({ includeTechSheet: e.target.checked })} /> отдельный лист «Эскиз PRO + расшифровка»</label>
+              </div>
+            )}
+            {includeTechSheet && (
+              <div className={`blank-tech-summary ${techSummary.errors > 0 ? 'bad' : techSummary.warnings > 0 ? 'warn' : 'ok'}`}>
+                <b>{techSummary.errors > 0 ? 'Нужна проверка перед фабрикой' : techSummary.warnings > 0 ? 'Можно выгружать, но есть предупреждения' : 'Техлист готов'}</b>
+                <span>{techSummary.errors} ошибок · {techSummary.warnings} предупреждений · {techModuleRows.length} строк модулей · {techCommunicationRows.length} коммуникаций</span>
               </div>
             )}
           </div>
@@ -282,8 +319,13 @@ export default function FactoryBlankView(props: {
 
       {sheetMap && !sheetMap.sketch && eskizSnapshots.length > 0 && (
         <div className="card blank-sketch-card no-print">
-          <b>Эскиз PRO найден, но у выбранного шаблона нет отдельного левого поля под картинку.</b>
-          <span className="muted small">Для кухонного бланка Висма картинка вставляется в A14:I47. В корпусном бланке такого места в официальной форме нет, поэтому файл не меняю самовольно.</span>
+          <div className="blank-sketch-main">
+            <b>Эскиз PRO найден, но у выбранного шаблона нет отдельного левого поля под картинку.</b>
+            <span className="muted small">Для кухонного бланка Висма картинка вставляется в A14:I47. В этом шаблоне не накладываю её поверх официальных полей, зато могу добавить отдельный лист «Эскиз PRO» с крупным эскизом, модулями, коммуникациями и проверками.</span>
+            <label className="toggle"><input type="checkbox" checked={includeTechSheet} onChange={(e) => updateSketchSettings({ includeTechSheet: e.target.checked })} /> добавить отдельный лист «Эскиз PRO + расшифровка»</label>
+            {includeTechSheet && <div className={`blank-tech-summary ${techSummary.errors > 0 ? 'bad' : techSummary.warnings > 0 ? 'warn' : 'ok'}`}><b>{techSummary.errors > 0 ? 'Нужна проверка перед фабрикой' : techSummary.warnings > 0 ? 'Есть предупреждения' : 'Техлист готов'}</b><span>{techSummary.errors} ошибок · {techSummary.warnings} предупреждений · {techModuleRows.length} строк модулей · {techCommunicationRows.length} коммуникаций</span></div>}
+          </div>
+          {selectedSketch && includeTechSheet && <div className="blank-sketch-preview"><EskizProjectPreview project={selectedSketch} compact moduleMarkerMode={sketchMarkerMode} communicationMarkers={showSketchCommunications ? (project.eskizPro?.communications ?? []) : []} /></div>}
         </div>
       )}
 

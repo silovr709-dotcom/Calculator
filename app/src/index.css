@@ -1023,6 +1023,13 @@ input.dim { width: 54px; font-size: 11.5px; padding: 3px 4px; text-align: center
 .blank-sketch-preview .eskiz-preview { margin: 0; }
 .blank-sketch-preview .eskiz-preview-stage svg { max-height: 340px; }
 .blank-sketch-placeholder { min-height: 180px; display: grid; place-items: center; border: 1px dashed #d8e5df; border-radius: 12px; color: var(--muted); background: #fbfdfc; font-weight: 700; text-align: center; padding: 16px; }
+.blank-tech-summary { margin-top: 10px; padding: 9px 10px; border-radius: 11px; border: 1px solid #d8e5df; background: #fbfdfc; display: flex; flex-direction: column; gap: 2px; }
+.blank-tech-summary b { color: #24382f; }
+.blank-tech-summary span { color: var(--muted); font-size: 11px; }
+.blank-tech-summary.ok { border-color: #bfe4cd; background: #f3fbf5; }
+.blank-tech-summary.warn { border-color: #f0d28a; background: #fff9ea; }
+.blank-tech-summary.bad { border-color: #efb3a7; background: #fff4f1; }
+.blank-tech-summary.bad b { color: #b3261e; }
 
 .kb-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
 .kb-card h3 { margin: 0; font-size: 15px; }
