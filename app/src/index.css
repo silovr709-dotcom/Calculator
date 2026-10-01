@@ -1228,9 +1228,14 @@ input.dim { width: 54px; font-size: 11.5px; padding: 3px 4px; text-align: center
 .dict-picker-hint { margin: 0 9px 8px; padding: 7px 8px; border-radius: 9px; background: #eef8f2; color: #34614b; font-size: 11px; line-height: 1.35; }
 .dict-group-list { display: flex; flex-direction: column; gap: 8px; max-height: 390px; overflow: auto; padding: 0 9px 9px; }
 .dict-group-block { border: 1px solid #e1ebe6; border-radius: 12px; background: #fff; padding: 8px; box-shadow: 0 3px 12px rgba(34, 55, 45, .04); }
+.dict-group-block.expanded { border-color: #bfa7ff; background: linear-gradient(135deg, #fff, #fbf8ff); }
 .dict-group-block header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
-.dict-group-block header b { display: block; color: #24382f; font-size: 12.5px; line-height: 1.25; }
-.dict-group-block header span { display: block; margin-top: 1px; color: var(--muted); font-size: 10.5px; line-height: 1.25; }
+.dict-group-title { flex: 1; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; align-items: flex-start; text-align: left; border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer; }
+.dict-group-title.static { cursor: default; }
+.dict-group-title.expandable:hover b { color: var(--accent); }
+.dict-group-title b { display: block; color: #24382f; font-size: 12.5px; line-height: 1.25; }
+.dict-group-title span span { display: block; margin-top: 1px; color: var(--muted); font-size: 10.5px; line-height: 1.25; }
+.dict-group-chevron { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 999px; background: #f1ecff; color: var(--accent); font-size: 11px; font-weight: 950; line-height: 1; }
 .dict-group-block header em { font-style: normal; flex: 0 0 auto; min-width: 24px; text-align: center; padding: 2px 6px; border-radius: 999px; background: #eef2ff; color: #4b3aa4; font-size: 10.5px; font-weight: 900; }
 .dict-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px; }
 .dict-card { text-align: left; border: 1px solid #dce8e1; border-radius: 10px; background: #fbfdfc; padding: 7px 8px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; min-height: 66px; }
@@ -1243,7 +1248,8 @@ input.dim { width: 54px; font-size: 11.5px; padding: 3px 4px; text-align: center
 .dict-badges i { font-style: normal; padding: 1px 5px; border-radius: 999px; background: #e7f0ec; color: #2f634d; font-size: 9.5px; font-weight: 800; }
 .dict-card.status-bad .dict-badges i:first-child { background: #ffe1dc; color: #9b281a; }
 .dict-card.status-warn .dict-badges i:first-child { background: #fff0c2; color: #785910; }
-.dict-more-note { margin-top: 5px; color: var(--muted); font-size: 10.5px; }
+.dict-more-note { width: 100%; margin-top: 6px; border: 1px dashed #cfdbd5; border-radius: 9px; background: #fbfdfc; color: var(--accent); font-size: 10.5px; font-weight: 900; padding: 6px 8px; cursor: pointer; }
+.dict-more-note:hover { border-color: var(--accent); background: var(--accent-soft); }
 
 .blank-plan-actions { display: flex; gap: 8px; margin: 8px 0; }
 .blank-plan-table input, .blank-plan-table select { width: 100%; min-height: 32px; }
