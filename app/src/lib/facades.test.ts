@@ -30,6 +30,22 @@ describe('размеры фасадов по техничке Висмы', () =>
     ]);
   });
 
+  it('для стола 2 двери + ящик не делает все фасады полноширинными', () => {
+    const result = inferFacadeSpec(newModule('Нижний шкаф'), body('261'))!;
+    expect(result.parts.map((part) => [part.kind, part.widthMm, part.heightMm])).toEqual([
+      ['drawer', 596, 176], ['door', 296, 536], ['door', 296, 536],
+    ]);
+  });
+
+  it('уважает ручное количество фасадов в Эскиз PRO при пересчёте рекомендации', () => {
+    const module = { ...newModule('Нижний шкаф'), facades: 1, drawers: 0, facadeSpecStatus: 'manual' as const };
+    const result = inferFacadeSpec(module, body('224'))!;
+    expect(result.confidence).toBe('suggestion');
+    expect(result.parts.map((part) => [part.kind, part.widthMm, part.heightMm])).toEqual([
+      ['door', 596, 716],
+    ]);
+  });
+
   it('для стола с 3 ящиками сохраняет ширину всех фасадов и техническую разбивку 176+176+356', () => {
     const result = inferFacadeSpec(newModule('Нижний шкаф'), body('251'))!;
     expect(result.parts.map((part) => [part.widthMm, part.heightMm, part.kind])).toEqual([

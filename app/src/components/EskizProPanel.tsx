@@ -22,7 +22,7 @@ import { calcLines } from '../lib/engine';
 import { fmtMoney, fmtNum } from '../lib/format';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, COMMUNICATION_KINDS, communicationDistanceText, communicationSizeText } from '../lib/eskizCommunications';
 import CatalogPicker from './CatalogPicker';
-import EskizProjectPreview, { type EskizModulePreviewStatus } from './EskizProjectPreview';
+import EskizProjectPreview, { type EskizModuleMarkerMode, type EskizModulePreviewStatus } from './EskizProjectPreview';
 
 const EMPTY_LINKS: string[] = [];
 const EMPTY_SNAPSHOTS: NonNullable<EskizProIntegration['snapshots']> = [];
@@ -52,8 +52,41 @@ function sameGithubPagesOrigin() {
 
 function numberValue(value: string): number | null {
   if (value.trim() === '') return null;
-  const parsed = Number(value);
+  const parsed = Number(value.replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function mmValue(value: string): number | null {
+  const direct = numberValue(value.replace(/мм/giu, '').trim());
+  if (direct != null) return Math.round(direct);
+  const match = value.replace(',', '.').match(/-?\d+(?:\.\d+)?/u);
+  if (!match) return null;
+  const parsed = Number(match[0]);
+  return Number.isFinite(parsed) ? Math.round(parsed) : null;
+}
+
+function MmInput(props: { value: number | null | undefined; onValue: (value: number | null) => void; placeholder?: string; className?: string; min?: number }) {
+  const initial = props.value == null ? '' : String(props.value);
+  const commit = (input: HTMLInputElement) => {
+    const parsed = mmValue(input.value);
+    const next = parsed == null ? null : Math.max(props.min ?? 1, parsed);
+    props.onValue(next);
+    input.value = next == null ? '' : String(next);
+  };
+  return (
+    <input
+      key={initial}
+      className={props.className}
+      inputMode="numeric"
+      defaultValue={initial}
+      placeholder={props.placeholder}
+      onBlur={(event) => commit(event.currentTarget)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') { event.currentTarget.blur(); }
+        if (event.key === 'Escape') event.currentTarget.value = initial;
+      }}
+    />
+  );
 }
 
 function shortLine(text: string, length = 76) {
@@ -160,16 +193,16 @@ function EskizMarkerModuleEditor(props: {
       automaticSurcharges: source.automaticSurcharges ? [...source.automaticSurcharges] : undefined,
     });
   };
-  const updateDimension = (key: 'widthMm' | 'heightMm' | 'depthMm', value: string) => {
-    const patch: Partial<KitchenModule> = { [key]: numberValue(value) };
+  const updateDimensionValue = (key: 'widthMm' | 'heightMm' | 'depthMm', value: number | null) => {
+    const patch: Partial<KitchenModule> = { [key]: value };
     if (key !== 'depthMm') {
       patch.facadeSpecStatus = module.facadeSpecStatus === 'applied' ? 'outdated' : module.facadeSpecStatus;
       patch.hingeSpecStatus = module.hingeSpecStatus === 'applied' ? 'outdated' : module.hingeSpecStatus;
     }
     update(patch);
   };
-  const updateNum = (key: 'facadeWmm' | 'facadeHmm', value: string) => update({
-    [key]: numberValue(value),
+  const updateFacadeSize = (key: 'facadeWmm' | 'facadeHmm', value: number | null) => update({
+    [key]: value,
     facadeParts: undefined,
     facadeSpecStatus: 'manual',
     hingeSpecStatus: module.hingeSpecStatus === 'applied' ? 'outdated' : module.hingeSpecStatus,
@@ -206,15 +239,18 @@ function EskizMarkerModuleEditor(props: {
     facadeSpecStatus: 'manual',
     hingeSpecStatus: module.hingeSpecStatus === 'applied' ? 'outdated' : module.hingeSpecStatus,
   });
+  const manualFacadePartsBase = () => (facadePartsForEditor.length ? facadePartsForEditor : [{ widthMm: module.facadeWmm ?? module.widthMm ?? 600, heightMm: module.facadeHmm ?? module.heightMm ?? 720, kind: 'door' as const, source: 'manual' as const }])
+    .map((part) => ({ ...part, source: 'manual' as const }));
   const updateFacadePart = (index: number, patch: Partial<FacadePart>) => {
-    const parts = [...(module.facadeParts ?? [])];
+    const parts = manualFacadePartsBase();
     if (!parts[index]) return;
     parts[index] = { ...parts[index], ...patch, source: 'manual' };
     setFacadeParts(parts);
   };
   const addFacadePart = () => {
     const fallbackWidth = module.facadeWmm ?? (module.widthMm && module.facades > 0 ? Math.max(1, Math.round(module.widthMm / module.facades) - 4) : module.widthMm ?? 600);
-    setFacadeParts([...(module.facadeParts ?? []), { widthMm: fallbackWidth, heightMm: module.facadeHmm ?? module.heightMm ?? 720, kind: 'door', source: 'manual' }]);
+    const base = module.facadeParts ? module.facadeParts : (facadePartsForEditor.length ? manualFacadePartsBase() : []);
+    setFacadeParts([...base, { widthMm: fallbackWidth, heightMm: module.facadeHmm ?? module.heightMm ?? 720, kind: 'door', source: 'manual' }]);
   };
   const updateExtraPart = (index: number, patch: Partial<ExtraFacadePart>) => {
     const parts = [...(module.extraFacadeParts ?? [])];
@@ -257,9 +293,9 @@ function EskizMarkerModuleEditor(props: {
           <datalist id={`eskiz-mod-types-${module.id}`}>{MODULE_TYPES.map((type) => <option key={type} value={type} />)}</datalist>
         </label>
         <label>Кол-во<input type="number" min="0" step="1" value={module.qty} onChange={(event) => updateCount('qty', event.target.value)} /></label>
-        <label>Ширина, мм<input type="number" value={module.widthMm ?? ''} onChange={(event) => updateDimension('widthMm', event.target.value)} /></label>
-        <label>Высота, мм<input type="number" value={module.heightMm ?? ''} onChange={(event) => updateDimension('heightMm', event.target.value)} /></label>
-        <label>Глубина, мм<input type="number" value={module.depthMm ?? ''} onChange={(event) => updateDimension('depthMm', event.target.value)} /></label>
+        <label>Ширина, мм<MmInput value={module.widthMm} onValue={(value) => updateDimensionValue('widthMm', value)} /></label>
+        <label>Высота, мм<MmInput value={module.heightMm} onValue={(value) => updateDimensionValue('heightMm', value)} /></label>
+        <label>Глубина, мм<MmInput value={module.depthMm} onValue={(value) => updateDimensionValue('depthMm', value)} /></label>
         <label>Фасады<input type="number" min="0" value={module.facades} onChange={(event) => updateCount('facades', event.target.value)} /></label>
         <label>Ящики<input type="number" min="0" value={module.drawers} onChange={(event) => updateCount('drawers', event.target.value)} /></label>
         <label>Полки<input type="number" min="0" value={module.shelves} onChange={(event) => updateCount('shelves', event.target.value)} /></label>
@@ -267,8 +303,8 @@ function EskizMarkerModuleEditor(props: {
         <label>Подъёмники<input type="number" min="0" value={module.lifts} onChange={(event) => updateCount('lifts', event.target.value)} /></label>
         <label>Ручки<input type="number" min="0" value={module.handles} onChange={(event) => updateCount('handles', event.target.value)} /></label>
         <label>Опоры<input type="number" min="0" value={module.legs ?? 0} onChange={(event) => updateCount('legs', event.target.value)} /></label>
-        <label>Фасад Ш, мм<input type="number" value={module.facadeWmm ?? ''} onChange={(event) => updateNum('facadeWmm', event.target.value)} /></label>
-        <label>Фасад В, мм<input type="number" value={module.facadeHmm ?? ''} onChange={(event) => updateNum('facadeHmm', event.target.value)} /></label>
+        <label>Фасад Ш, мм<MmInput value={module.facadeWmm} onValue={(value) => updateFacadeSize('facadeWmm', value)} /></label>
+        <label>Фасад В, мм<MmInput value={module.facadeHmm} onValue={(value) => updateFacadeSize('facadeHmm', value)} /></label>
         <label className="wide">Заметка<input value={module.note ?? ''} placeholder="что важно учесть в КП / заказе" onChange={(event) => update({ note: event.target.value })} /></label>
       </div>
 
@@ -306,11 +342,12 @@ function EskizMarkerModuleEditor(props: {
               <div className="facade-parts-mini">
                 {facadePartsForEditor.map((part, index) => (
                   <div className="facade-part-mini" key={`${part.kind}-${index}`}>
-                    <select value={part.kind} disabled={!module.facadeParts} onChange={(event) => updateFacadePart(index, { kind: event.target.value as FacadePart['kind'] })}>
+                    <select value={part.kind} onChange={(event) => updateFacadePart(index, { kind: event.target.value as FacadePart['kind'] })}>
                       <option value="door">дверь</option><option value="drawer">ящик</option><option value="panel">панель</option>
                     </select>
-                    <input type="number" value={part.widthMm} disabled={!module.facadeParts} onChange={(event) => updateFacadePart(index, { widthMm: Number(event.target.value) || 0 })} />×
-                    <input type="number" value={part.heightMm} disabled={!module.facadeParts} onChange={(event) => updateFacadePart(index, { heightMm: Number(event.target.value) || 0 })} /> мм
+                    <MmInput value={part.widthMm} onValue={(value) => updateFacadePart(index, { widthMm: value ?? part.widthMm })} />×
+                    <MmInput value={part.heightMm} onValue={(value) => updateFacadePart(index, { heightMm: value ?? part.heightMm })} /> мм
+                    <span className="facade-part-source">{module.facadeParts ? 'ручн.' : 'реком.'}</span>
                     {module.facadeParts && <button className="btn tiny danger" type="button" onClick={() => setFacadeParts(module.facadeParts!.filter((_, i) => i !== index))}>✕</button>}
                   </div>
                 ))}
@@ -340,7 +377,7 @@ function EskizMarkerModuleEditor(props: {
               <div className="extra-facade-mini" key={index}>
                 <input value={part.label ?? ''} placeholder="Название детали" onChange={(event) => updateExtraPart(index, { label: event.target.value })} />
                 <select value={part.kind} onChange={(event) => updateExtraPart(index, { kind: event.target.value as ExtraFacadePart['kind'] })}><option value="panel">панель</option><option value="door">дверь</option><option value="drawer">ящик</option></select>
-                <span><input type="number" value={part.widthMm} onChange={(event) => updateExtraPart(index, { widthMm: Number(event.target.value) || 0 })} />×<input type="number" value={part.heightMm} onChange={(event) => updateExtraPart(index, { heightMm: Number(event.target.value) || 0 })} /> мм × <input type="number" value={part.qty} onChange={(event) => updateExtraPart(index, { qty: Number(event.target.value) || 0 })} /> шт</span>
+                <span><MmInput value={part.widthMm} onValue={(value) => updateExtraPart(index, { widthMm: value ?? part.widthMm })} />×<MmInput value={part.heightMm} onValue={(value) => updateExtraPart(index, { heightMm: value ?? part.heightMm })} /> мм × <input type="number" value={part.qty} onChange={(event) => updateExtraPart(index, { qty: Number(event.target.value) || 0 })} /> шт</span>
                 <button className="btn tiny danger" type="button" onClick={() => update({ extraFacadeParts: (module.extraFacadeParts ?? []).filter((_, i) => i !== index) })}>✕</button>
               </div>
             ))}
@@ -454,11 +491,11 @@ function CommunicationEditor(props: {
         <label><input type="checkbox" checked={marker.showInClient !== false} onChange={(event) => props.onChange({ showInClient: event.target.checked })} /> в КП</label>
         <label>X на эскизе<input type="number" value={marker.x} onChange={(event) => updateNum('x', event.target.value)} /></label>
         <label>Y на эскизе<input type="number" value={marker.y} onChange={(event) => updateNum('y', event.target.value)} /></label>
-        <label>Высота от пола, мм<input type="number" value={marker.elevationMm ?? ''} onChange={(event) => updateNum('elevationMm', event.target.value)} placeholder="например 1050" /></label>
-        <label>Ширина, мм<input type="number" value={marker.widthMm ?? ''} onChange={(event) => updateNum('widthMm', event.target.value)} placeholder="например 80" /></label>
-        <label>Высота, мм<input type="number" value={marker.heightMm ?? ''} onChange={(event) => updateNum('heightMm', event.target.value)} placeholder="например 80" /></label>
-        <label>Диаметр, мм<input type="number" value={marker.diameterMm ?? ''} onChange={(event) => updateNum('diameterMm', event.target.value)} placeholder="для трубы/канала" /></label>
-        <label>Глубина/вынос, мм<input type="number" value={marker.depthMm ?? ''} onChange={(event) => updateNum('depthMm', event.target.value)} /></label>
+        <label>Высота от пола, мм<MmInput value={marker.elevationMm} onValue={(value) => props.onChange({ elevationMm: value })} placeholder="например 1050" /></label>
+        <label>Ширина, мм<MmInput value={marker.widthMm} onValue={(value) => props.onChange({ widthMm: value })} placeholder="например 80" /></label>
+        <label>Высота, мм<MmInput value={marker.heightMm} onValue={(value) => props.onChange({ heightMm: value })} placeholder="например 80" /></label>
+        <label>Диаметр, мм<MmInput value={marker.diameterMm} onValue={(value) => props.onChange({ diameterMm: value })} placeholder="для трубы/канала" /></label>
+        <label>Глубина/вынос, мм<MmInput value={marker.depthMm} onValue={(value) => props.onChange({ depthMm: value })} /></label>
         <label className="wide">Примечание<textarea rows={2} value={marker.note ?? ''} onChange={(event) => props.onChange({ note: event.target.value })} placeholder="Например: двойная розетка, вывод под ПММ, смещение от чистового пола" /></label>
       </div>
       <div className="eskiz-communication-summary">
@@ -507,6 +544,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const activeId = eskizPro.activeProjectId && linkedIds.includes(eskizPro.activeProjectId) ? eskizPro.activeProjectId : linkedIds[0] ?? null;
   const showInClient = eskizPro.showInClient !== false;
   const clientMode = eskizPro.clientMode ?? 'active';
+  const moduleMarkerMode: EskizModuleMarkerMode = eskizPro.moduleMarkerMode ?? 'full';
   const moduleMarkers = useMemo(() => collectEskizModuleMarkers(linkedProjects), [linkedProjects]);
   const moduleBindings = eskizPro.moduleBindings ?? EMPTY_BINDINGS;
   const communications = eskizPro.communications ?? EMPTY_COMMUNICATIONS;
@@ -825,6 +863,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             <div className="eskiz-pro-kp-controls">
               <label className="chk-row"><input type="checkbox" checked={showInClient} onChange={(event) => updateEskizPro({ showInClient: event.target.checked })} /> Вставить Эскиз PRO в КП</label>
               <label>Что вставлять<select value={clientMode} onChange={(event) => updateEskizPro({ clientMode: event.target.value as EskizProIntegration['clientMode'] })}><option value="active">Только главный эскиз</option><option value="all">Все связанные эскизы</option></select></label>
+              <label>Маркеры модулей в выгрузке<select value={moduleMarkerMode} onChange={(event) => updateEskizPro({ moduleMarkerMode: event.target.value as EskizModuleMarkerMode })}><option value="full">Полные плашки</option><option value="compact">Компактные точки</option><option value="hidden">Скрыть маркеры</option></select></label>
             </div>
             <div className="eskiz-pro-status-cards">
               <div><b>{linkedIds.length}</b><span>привязано</span></div>
@@ -931,7 +970,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
                         <button className="btn tiny ghost" disabled={loading} onClick={() => void sync(id)}>Синхр.</button>
                         <button className="btn tiny danger" onClick={() => detach(id)}>Убрать</button>
                       </div>
-                      {previewProject && <EskizProjectPreview project={previewProject} compact activeModuleKey={activeMarkerKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} communicationMarkers={communications} activeCommunicationId={activeCommunicationId} communicationAddMode={Boolean(communicationAddKind || distancePointPick)} onModuleClick={handlePreviewModuleClick} onCommunicationClick={handleCommunicationClick} onStagePointClick={handlePreviewPointClick} />}
+                      {previewProject && <EskizProjectPreview project={previewProject} compact activeModuleKey={activeMarkerKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} communicationMarkers={communications} activeCommunicationId={activeCommunicationId} communicationAddMode={Boolean(communicationAddKind || distancePointPick)} onModuleClick={handlePreviewModuleClick} onCommunicationClick={handleCommunicationClick} onStagePointClick={handlePreviewPointClick} />}
                     </article>
                   );
                 })}
@@ -944,7 +983,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       {linkedProjects.length > 0 && (
         <section className="card eskiz-pro-project-preview">
           <div className="section-head"><div><h3>Как это будет выглядеть в КП</h3><p className="muted small">Рендерим сохранённый snapshot из настоящего Эскиз PRO.</p></div></div>
-          {linkedProjects.map((item) => <EskizProjectPreview key={item.id} project={item} activeModuleKey={activeMarkerKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} communicationMarkers={communications} activeCommunicationId={activeCommunicationId} communicationAddMode={Boolean(communicationAddKind || distancePointPick)} onModuleClick={handlePreviewModuleClick} onCommunicationClick={handleCommunicationClick} onStagePointClick={handlePreviewPointClick} />)}
+          {linkedProjects.map((item) => <EskizProjectPreview key={item.id} project={item} activeModuleKey={activeMarkerKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} communicationMarkers={communications} activeCommunicationId={activeCommunicationId} communicationAddMode={Boolean(communicationAddKind || distancePointPick)} onModuleClick={handlePreviewModuleClick} onCommunicationClick={handleCommunicationClick} onStagePointClick={handlePreviewPointClick} />)}
         </section>
       )}
     </section>

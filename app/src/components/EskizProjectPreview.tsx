@@ -1,9 +1,10 @@
-import type { MouseEvent } from 'react';
+import type { KeyboardEvent, MouseEvent } from 'react';
 import type { EskizCommunicationDistance, EskizCommunicationMarker } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationDistanceText, communicationSizeText } from '../lib/eskizCommunications';
 
 export type EskizModulePreviewStatus = { level: 'new' | 'error' | 'warn' | 'ok'; label: string; summary?: string };
+export type EskizModuleMarkerMode = 'full' | 'compact' | 'hidden';
 
 const STATUS_COLORS: Record<EskizModulePreviewStatus['level'], string> = {
   new: '#8b5cf6',
@@ -91,8 +92,36 @@ function DimensionPreview({ object: o }: { object: EskizDimensionObject }) {
   );
 }
 
-function ModulePreview({ object: o, projectId, active = false, linked = false, status, onModuleClick }: { object: EskizModuleObject; projectId: string; active?: boolean; linked?: boolean; status?: EskizModulePreviewStatus; onModuleClick?: (projectId: string, object: EskizModuleObject) => void }) {
+function ModulePreview({ object: o, projectId, active = false, linked = false, status, markerMode = 'full', onModuleClick }: { object: EskizModuleObject; projectId: string; active?: boolean; linked?: boolean; status?: EskizModulePreviewStatus; markerMode?: EskizModuleMarkerMode; onModuleClick?: (projectId: string, object: EskizModuleObject) => void }) {
   const sourceLines = [o.number, ...o.description.split('\n').filter(Boolean)];
+  const statusColor = status ? STATUS_COLORS[status.level] : o.color;
+  const badgeWidth = status ? Math.max(48, status.label.length * 6 + 16) : 0;
+  const commonProps = {
+    role: onModuleClick ? 'button' : undefined,
+    tabIndex: onModuleClick ? 0 : undefined,
+    'aria-label': status ? `${o.number}: ${status.label}. ${status.summary ?? ''}` : undefined,
+    onClick: (event: MouseEvent<SVGGElement>) => { event.stopPropagation(); onModuleClick?.(projectId, o); },
+    onKeyDown: (event: KeyboardEvent<SVGGElement>) => {
+      if (!onModuleClick || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      onModuleClick(projectId, o);
+    },
+  };
+  if (markerMode === 'compact') {
+    const label = (o.number || 'М').slice(0, 4);
+    return (
+      <g
+        className={`eskiz-preview-object eskiz-preview-module eskiz-preview-module-compact ${onModuleClick ? 'clickable' : ''} ${active ? 'active' : ''} ${linked ? 'linked' : ''} ${status ? `status-${status.level}` : ''}`}
+        transform={`translate(${o.x} ${o.y})`}
+        {...commonProps}
+      >
+        <circle r={active ? 15 : 12} fill={statusColor} stroke="#fff" strokeWidth="4" />
+        <text y="4" textAnchor="middle" fontSize="9" fontWeight="900" fill="#fff">{label}</text>
+        {status && <circle cx="11" cy="-11" r="5" fill={statusColor} stroke="#fff" strokeWidth="2" />}
+        <title>{[o.number, o.description, status?.summary].filter(Boolean).join(' · ')}</title>
+      </g>
+    );
+  }
   const autoWidth = Math.max(72, ...sourceLines.map((text) => text.length * o.fontSize * .6)) + 22;
   const width = o.width ? Math.max(60, o.width) : autoWidth;
   const maxChars = Math.max(2, Math.floor((width - 22) / (o.fontSize * .6)));
@@ -101,21 +130,11 @@ function ModulePreview({ object: o, projectId, active = false, linked = false, s
   const height = Math.max(autoHeight, o.height ?? 0);
   const textBlockHeight = lines.length * (o.fontSize + 5) - 5;
   const textY = Math.max(8, (height - textBlockHeight) / 2);
-  const statusColor = status ? STATUS_COLORS[status.level] : o.color;
-  const badgeWidth = status ? Math.max(48, status.label.length * 6 + 16) : 0;
   return (
     <g
       className={`eskiz-preview-object eskiz-preview-label eskiz-preview-module ${onModuleClick ? 'clickable' : ''} ${active ? 'active' : ''} ${linked ? 'linked' : ''} ${status ? `status-${status.level}` : ''}`}
       transform={`translate(${o.x} ${o.y})`}
-      role={onModuleClick ? 'button' : undefined}
-      tabIndex={onModuleClick ? 0 : undefined}
-      aria-label={status ? `${o.number}: ${status.label}. ${status.summary ?? ''}` : undefined}
-      onClick={(event) => { event.stopPropagation(); onModuleClick?.(projectId, o); }}
-      onKeyDown={(event) => {
-        if (!onModuleClick || (event.key !== 'Enter' && event.key !== ' ')) return;
-        event.preventDefault();
-        onModuleClick(projectId, o);
-      }}
+      {...commonProps}
     >
       <rect x="0" y="0" width={width} height={height} rx={o.borderRadius ?? 6} fill={o.fill ?? 'white'} fillOpacity={o.fillOpacity ?? 1} stroke={statusColor} strokeWidth={status ? 3 : 2} />
       <circle className="eskiz-preview-module-point" cx="0" cy="0" r="7" fill={statusColor} stroke="#fff" strokeWidth="3" />
@@ -222,12 +241,13 @@ function CommunicationPreview(props: { marker: EskizCommunicationMarker; width: 
   );
 }
 
-function ObjectPreview({ object, projectId, activeModuleKey, moduleBindings, moduleStatuses, onModuleClick }: { object: EskizObject; projectId: string; activeModuleKey?: string | null; moduleBindings?: Record<string, string>; moduleStatuses?: Record<string, EskizModulePreviewStatus>; onModuleClick?: (projectId: string, object: EskizModuleObject) => void }) {
+function ObjectPreview({ object, projectId, activeModuleKey, moduleBindings, moduleStatuses, moduleMarkerMode = 'full', onModuleClick }: { object: EskizObject; projectId: string; activeModuleKey?: string | null; moduleBindings?: Record<string, string>; moduleStatuses?: Record<string, EskizModulePreviewStatus>; moduleMarkerMode?: EskizModuleMarkerMode; onModuleClick?: (projectId: string, object: EskizModuleObject) => void }) {
   if (object.hidden) return null;
   if (object.type === 'dimension') return <DimensionPreview object={object} />;
   if (object.type === 'module') {
+    if (moduleMarkerMode === 'hidden') return null;
     const key = `${projectId}:${object.id}`;
-    return <ModulePreview object={object} projectId={projectId} active={activeModuleKey === key} linked={Boolean(moduleBindings?.[key])} status={moduleStatuses?.[key]} onModuleClick={onModuleClick} />;
+    return <ModulePreview object={object} projectId={projectId} active={activeModuleKey === key} linked={Boolean(moduleBindings?.[key])} status={moduleStatuses?.[key]} markerMode={moduleMarkerMode} onModuleClick={onModuleClick} />;
   }
   if (object.type === 'callout') return <CalloutPreview object={object} />;
   if (object.type === 'comment' || object.type === 'link' || object.type === 'equipment') return <TextPreview object={object} />;
@@ -240,6 +260,7 @@ type EskizProjectPreviewProps = {
   activeModuleKey?: string | null;
   moduleBindings?: Record<string, string>;
   moduleStatuses?: Record<string, EskizModulePreviewStatus>;
+  moduleMarkerMode?: EskizModuleMarkerMode;
   communicationMarkers?: EskizCommunicationMarker[];
   activeCommunicationId?: string | null;
   communicationAddMode?: boolean;
@@ -248,7 +269,7 @@ type EskizProjectPreviewProps = {
   onStagePointClick?: (projectId: string, x: number, y: number) => void;
 };
 
-export default function EskizProjectPreview({ project, compact = false, activeModuleKey = null, moduleBindings, moduleStatuses, communicationMarkers = [], activeCommunicationId = null, communicationAddMode = false, onModuleClick, onCommunicationClick, onStagePointClick }: EskizProjectPreviewProps) {
+export default function EskizProjectPreview({ project, compact = false, activeModuleKey = null, moduleBindings, moduleStatuses, moduleMarkerMode = 'full', communicationMarkers = [], activeCommunicationId = null, communicationAddMode = false, onModuleClick, onCommunicationClick, onStagePointClick }: EskizProjectPreviewProps) {
   const width = Math.max(1, project.image.width);
   const height = Math.max(1, project.image.height);
   const projectCommunications = communicationMarkers.filter((marker) => marker.eskizId === project.id);
@@ -262,7 +283,7 @@ export default function EskizProjectPreview({ project, compact = false, activeMo
   return (
     <article className={`eskiz-preview ${compact ? 'compact' : ''}`}>
       <div className="eskiz-preview-head">
-        <div><b>{project.title}</b><span>{project.image.name} · {project.objects.filter((item) => !item.hidden && item.type !== 'guide' && item.type !== 'anchor').length} объектов · коммуникаций: {projectCommunications.length}</span></div>
+        <div><b>{project.title}</b><span>{project.image.name} · {project.objects.filter((item) => !item.hidden && item.type !== 'guide' && item.type !== 'anchor').length} объектов · коммуникаций: {projectCommunications.length}{moduleMarkerMode !== 'full' ? ` · модули: ${moduleMarkerMode === 'hidden' ? 'скрыты' : 'точками'}` : ''}</span></div>
         <em>{new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(project.updatedAt))}</em>
       </div>
       {project.header?.enabled && (
@@ -284,7 +305,7 @@ export default function EskizProjectPreview({ project, compact = false, activeMo
             </marker>
           </defs>
           <image href={project.image.dataUrl} x="0" y="0" width={width} height={height} preserveAspectRatio="none" style={{ filter: imageFilter(project) }} />
-          {project.objects.map((object) => <ObjectPreview key={object.id} object={object} projectId={project.id} activeModuleKey={activeModuleKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} onModuleClick={onModuleClick} />)}
+          {project.objects.map((object) => <ObjectPreview key={object.id} object={object} projectId={project.id} activeModuleKey={activeModuleKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} onModuleClick={onModuleClick} />)}
           {projectCommunications.map((marker) => <CommunicationPreview key={marker.id} marker={marker} width={width} height={height} active={marker.id === activeCommunicationId} onCommunicationClick={(item) => onCommunicationClick?.(project.id, item)} />)}
         </svg>
       </div>

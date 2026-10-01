@@ -361,6 +361,8 @@ export interface EskizProIntegration {
   showInClient?: boolean;
   /** active — вставлять в КП только главный эскиз; all — вставлять все связанные snapshot. */
   clientMode?: 'active' | 'all';
+  /** Как показывать маркеры модулей на выгружаемом/клиентском эскизе: полные плашки, компактные точки или скрыть. */
+  moduleMarkerMode?: 'full' | 'compact' | 'hidden';
   /** Связка: ключ маркера Эскиз PRO (`eskizId:objectId`) → id KitchenModule в расчёте. */
   moduleBindings?: Record<string, string>;
   /** Коммуникации, нанесённые поверх snapshot: розетки, вода, канализация, газ, вентиляция и расстояния до точек. */

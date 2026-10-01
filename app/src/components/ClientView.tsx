@@ -236,7 +236,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         {clientSketchVisible && (
           <section className="cd-sketch-pro">
             <div className="cd-section-head"><h3>Эскиз PRO</h3><span>{isTechnical ? 'внешний эскиз со скрином проекта и размерными аннотациями' : 'схема из внешнего Эскиз PRO'}</span></div>
-            {linkedEskizProjects.map((eskiz) => <EskizProjectPreview key={eskiz.id} project={eskiz} compact={!isTechnical} communicationMarkers={(project.eskizPro?.communications ?? []).filter((marker) => marker.showInClient !== false)} />)}
+            {linkedEskizProjects.map((eskiz) => <EskizProjectPreview key={eskiz.id} project={eskiz} compact={!isTechnical} moduleMarkerMode={project.eskizPro?.moduleMarkerMode ?? 'full'} communicationMarkers={(project.eskizPro?.communications ?? []).filter((marker) => marker.showInClient !== false)} />)}
             {eskizModules.length > 0 && (
               <div className="cd-eskiz-modules">
                 <b>Модули, добавленные с эскиза</b>

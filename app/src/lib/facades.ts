@@ -52,6 +52,10 @@ function isDrawerUnderOven(body: PriceItem): boolean {
   return /под\s+дш[^—]*ящик/iu.test(body.name);
 }
 
+function dividedFacadeWidth(bodyWidth: number, count: number): number {
+  return Math.max(1, Math.floor((bodyWidth - count * 4) / count));
+}
+
 function facadeWidth(body: PriceItem, bodyWidth: number, count: number, lower: boolean, drawers: number, doors: number): number {
   const name = body.name.toLowerCase();
   if (/дверь\s+гармошка/iu.test(name)) {
@@ -62,14 +66,12 @@ function facadeWidth(body: PriceItem, bodyWidth: number, count: number, lower: b
     const special = lower ? ({ 200: 260, 250: 330, 300: 401, 350: 472, 400: 543 } as Record<number, number>) : ({ 200: 210, 250: 268, 300: 326, 350: 383 } as Record<number, number>);
     if (special[bodyWidth]) return special[bodyWidth];
   }
-  // Фасады ящиков и вертикальные комбинации «ящик + дверь» занимают
-  // всю ширину корпуса. Зазор 4 мм нужен только по краям: для корпуса
-  // 500 мм фасад ящика получается 496 мм, а не 246 мм.
-  // Деление ширины относится только к нескольким дверям рядом.
-  if (drawers > 0 || doors <= 1) return Math.max(1, bodyWidth - 4);
+  // Фасады ящиков без дверей занимают всю ширину корпуса. Деление ширины
+  // относится к нескольким дверям рядом и к смешанным модулям с дверями.
+  if ((drawers > 0 && doors === 0) || doors <= 1) return Math.max(1, bodyWidth - 4);
   // Техничка, стр. 31–32: для двух дверей 600-мм корпус даёт
   // 296 мм на дверь (600 - 2 × 4) / 2.
-  return Math.max(1, Math.floor((bodyWidth - count * 4) / count));
+  return dividedFacadeWidth(bodyWidth, count);
 }
 
 function nonStandardTechnicalHeights(
@@ -114,6 +116,33 @@ function lowerHeights(body: PriceItem, drawers: number, doors: number, totalHeig
   return { heights: Array.from({ length: drawers + doors }, () => Math.max(1, Math.floor((totalHeight - (drawers + doors + 1) * 4) / (drawers + doors)))), exact: false, note: 'Размеры смешанных фасадов рассчитаны предварительно; проверьте схему заказа.' };
 }
 
+function mixedDoorDrawerParts(body: PriceItem, bodyWidth: number, totalHeight: number, drawers: number, doors: number, lower: boolean): { parts: FacadePart[]; exact: boolean; note: string } | null {
+  if (drawers <= 0 || doors <= 0) return null;
+  const drawerHeight = isDrawerUnderOven(body) ? 120 : 176;
+  const doorHeight = Math.max(1, totalHeight - drawerHeight - 8);
+  const doorWidth = doors > 1 ? dividedFacadeWidth(bodyWidth, doors) : Math.max(1, bodyWidth - 4);
+  // Если ящиков столько же, сколько дверей, это обычно два ящика над двумя дверями:
+  // ширина ящика равна ширине колонки. Если ящик один — он чаще идёт на всю ширину.
+  const drawerWidth = drawers === doors && doors > 1 ? doorWidth : Math.max(1, bodyWidth - 4);
+  const parts: FacadePart[] = [
+    ...Array.from({ length: drawers }, () => ({ widthMm: drawerWidth, heightMm: drawerHeight, kind: 'drawer' as const, source: 'technical' as const })),
+    ...Array.from({ length: doors }, () => ({ widthMm: doorWidth, heightMm: doorHeight, kind: 'door' as const, source: 'technical' as const })),
+  ];
+  return {
+    parts,
+    exact: lower && totalHeight === 720,
+    note: `${drawers} ящ. + ${doors} двер.: ящик ${drawerHeight} мм, дверь ${doorHeight} мм; ${drawers === doors && doors > 1 ? 'ширина разбита по колонкам' : 'одиночный ящик оставлен на всю ширину'}. Проверьте по схеме, если это нестандартный корпус.`,
+  };
+}
+
+function structureFromModule(module: KitchenModule, parsedDrawers: number, parsedDoors: number): { drawers: number; doors: number; manual: boolean } {
+  const parsedTotal = parsedDrawers + parsedDoors;
+  const userChangedStructure = module.facadeSpecStatus === 'manual' && module.facades > 0;
+  if (!userChangedStructure) return { drawers: parsedDrawers, doors: parsedDoors, manual: false };
+  const drawers = Math.min(Math.max(0, module.drawers), module.facades);
+  return { drawers, doors: Math.max(0, module.facades - drawers), manual: parsedTotal !== module.facades || parsedDrawers !== drawers };
+}
+
 /**
  * Определяет количество и размеры фасадов по выбранному корпусу.
  * Важное ограничение: если фабрика не дала точную разбивку, результат помечается
@@ -123,25 +152,32 @@ export function inferFacadeSpec(module: KitchenModule, body: PriceItem): FacadeI
   const bodyWidth = module.widthMm ?? bodyWidthMm(body);
   const lower = isLowerBody(body);
   const upper = isUpperBody(body);
-  const doors = parseBodyDoors(body.name) ?? (/дверь\s+гармошка/iu.test(body.name) ? 2 : 0);
-  const drawers = parseBodyDrawers(body.name) ?? 0;
+  const parsedDoors = parseBodyDoors(body.name) ?? (/дверь\s+гармошка/iu.test(body.name) ? 2 : 0);
+  const parsedDrawers = parseBodyDrawers(body.name) ?? 0;
+  const structure = structureFromModule(module, parsedDrawers, parsedDoors);
+  const { drawers, doors } = structure;
   const count = doors + drawers;
   if (!bodyWidth || count <= 0) return null;
 
   const height = bodyHeightMm(body, module);
-  const width = facadeWidth(body, bodyWidth, count, lower, drawers, doors);
-  const heightSpec = lower
+  const mixed = mixedDoorDrawerParts(body, bodyWidth, height, drawers, doors, lower);
+  const heightSpec = mixed ? null : lower
     ? lowerHeights(body, drawers, doors, height)
     : { heights: Array.from({ length: count }, () => Math.max(1, height - 4)), exact: Boolean(upper), note: 'Зазор 4 мм учтён по техничке; для нестандартной высоты проверьте заказ.' };
-  const parts: FacadePart[] = heightSpec.heights.map((heightMm, index) => ({ widthMm: width, heightMm, kind: index < drawers ? 'drawer' : 'door', source: 'technical' }));
+  const width = mixed ? null : facadeWidth(body, bodyWidth, count, lower, drawers, doors);
+  const parts: FacadePart[] = mixed?.parts ?? heightSpec!.heights.map((heightMm, index) => ({ widthMm: width!, heightMm, kind: index < drawers ? 'drawer' : 'door', source: 'technical' }));
   const source = lower ? 'Техничка, стр. 2–3, 31–32' : 'Техничка, стр. 3, 31–32';
+  const note = [
+    mixed?.note ?? heightSpec!.note,
+    structure.manual ? ' Структура фасадов взята из ручных полей модуля, потому что она отличается от названия выбранного корпуса.' : '',
+  ].join('').trim();
   return {
     facades: count,
     parts,
     bodyWidthMm: bodyWidth,
     bodyHeightMm: height,
-    confidence: heightSpec.exact ? 'exact' : 'suggestion',
-    note: heightSpec.note,
+    confidence: (mixed?.exact ?? heightSpec!.exact) && !structure.manual ? 'exact' : 'suggestion',
+    note,
     source,
   };
 }
