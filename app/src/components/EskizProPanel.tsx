@@ -853,6 +853,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             activeCommunicationId={activeCommunicationId}
             communicationAddKind={communicationAddKind}
             pickingDistancePoint={Boolean(distancePointPick)}
+            fullScreen={fullScreenSketch}
             onProjectChange={saveEmbeddedProject}
             onModuleObjectClick={handlePreviewModuleClick}
             onStartCommunicationPlacement={startCommunicationPlacement}

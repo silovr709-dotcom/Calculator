@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ChangeEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ChangeEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizEquipmentType, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
 import { readEskizFile } from '../lib/eskizPro';
@@ -58,9 +58,13 @@ type Props = {
   onCommunicationDistanceAddSet: (communicationId: string, anchors: EskizCommunicationAnchorKind[]) => void;
   onCommunicationDistanceChange: (communicationId: string, distanceId: string, patch: Partial<EskizCommunicationDistance>) => void;
   onCommunicationDistanceDelete: (communicationId: string, distanceId: string) => void;
+  fullScreen?: boolean;
 };
 
 const COLORS = { ink: '#20242b', accent: '#ff5c35', blue: '#2563eb' };
+const MIN_ZOOM = 0.08;
+const MAX_ZOOM = 6;
+const ZOOM_FACTOR = 1.18;
 const EQUIPMENT_TYPES: EskizEquipmentType[] = ['Холодильник', 'Духовой шкаф', 'СВЧ', 'ПММ', 'Варочная панель', 'Вытяжка', 'Стиральная машина', 'Мойка', 'Другое'];
 const TOOL_ITEMS: { id: Tool; label: string; hotkey?: string }[] = [
   { id: 'select', label: 'Курсор', hotkey: 'V' },
@@ -130,6 +134,10 @@ function pointDistance(a: Point, b: Point) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function clampZoom(value: number) {
+  return Number(clamp(value, MIN_ZOOM, MAX_ZOOM).toFixed(3));
 }
 
 function numberValue(value: string): number | null {
@@ -347,6 +355,68 @@ export default function EmbeddedEskizEditor(props: Props) {
   const communicationDraftEnd = props.pickingDistancePoint && activeCommunication ? communicationDraftPoint ?? { x: activeCommunication.x + 140, y: activeCommunication.y } : null;
   const chosen = project?.objects.find((object) => object.id === selected);
 
+  const zoomTo = useCallback((nextZoom: number | ((currentZoom: number) => number), anchorClient?: Point) => {
+    const current = project;
+    const viewport = viewportRef.current;
+    const svg = svgRef.current;
+    const viewportRect = viewport?.getBoundingClientRect();
+    const svgRect = svg?.getBoundingClientRect();
+    const clientX = anchorClient?.x ?? (viewportRect ? viewportRect.left + viewportRect.width / 2 : 0);
+    const clientY = anchorClient?.y ?? (viewportRect ? viewportRect.top + viewportRect.height / 2 : 0);
+    const anchor = current && svgRect && svgRect.width > 0 && svgRect.height > 0
+      ? {
+        x: clamp((clientX - svgRect.left) * current.image.width / svgRect.width, 0, current.image.width),
+        y: clamp((clientY - svgRect.top) * current.image.height / svgRect.height, 0, current.image.height),
+      }
+      : null;
+    const anchorOffset = viewportRect ? { x: clientX - viewportRect.left, y: clientY - viewportRect.top } : null;
+
+    setZoom((value) => {
+      const next = clampZoom(typeof nextZoom === 'function' ? nextZoom(value) : nextZoom);
+      if (!current || !anchor || !anchorOffset || Math.abs(next - value) < 0.001) return next;
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          const nextViewport = viewportRef.current;
+          const nextSvg = svgRef.current;
+          if (!nextViewport || !nextSvg) return;
+          const nextViewportRect = nextViewport.getBoundingClientRect();
+          const nextSvgRect = nextSvg.getBoundingClientRect();
+          const nextClientX = nextSvgRect.left + (anchor.x / current.image.width) * nextSvgRect.width;
+          const nextClientY = nextSvgRect.top + (anchor.y / current.image.height) * nextSvgRect.height;
+          nextViewport.scrollLeft += nextClientX - (nextViewportRect.left + anchorOffset.x);
+          nextViewport.scrollTop += nextClientY - (nextViewportRect.top + anchorOffset.y);
+        });
+      });
+      return next;
+    });
+  }, [project]);
+
+  const fit = useCallback(() => {
+    const current = project;
+    const viewport = viewportRef.current;
+    if (!current || !viewport) return;
+    const headerReserve = current.header.enabled ? 54 : 0;
+    const availableWidth = Math.max(180, viewport.clientWidth - 64);
+    const availableHeight = Math.max(180, viewport.clientHeight - headerReserve - 72);
+    const next = clampZoom(Math.min(availableWidth / current.image.width, availableHeight / current.image.height, 1.35));
+    setZoom(next);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const nextViewport = viewportRef.current;
+        if (!nextViewport) return;
+        nextViewport.scrollLeft = Math.max(0, (nextViewport.scrollWidth - nextViewport.clientWidth) / 2);
+        nextViewport.scrollTop = 0;
+      });
+    });
+  }, [project]);
+
+  const handleViewportWheel = useCallback((event: ReactWheelEvent<HTMLElement>) => {
+    if (!(event.ctrlKey || event.metaKey || event.altKey)) return;
+    event.preventDefault();
+    const factor = Math.exp(-event.deltaY * 0.0016);
+    zoomTo((value) => value * factor, { x: event.clientX, y: event.clientY });
+  }, [zoomTo]);
+
   useEffect(() => {
     if (!project || saved) return;
     const timer = window.setTimeout(() => {
@@ -493,6 +563,10 @@ export default function EmbeddedEskizEditor(props: Props) {
       const input = target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
       if (event.code === 'Space' && !input) { event.preventDefault(); setSpaceDown(true); }
       if (input) return;
+      if ((event.ctrlKey || event.metaKey) && ['=', '+'].includes(event.key)) { event.preventDefault(); zoomTo((value) => value * ZOOM_FACTOR); return; }
+      if ((event.ctrlKey || event.metaKey) && event.key === '-') { event.preventDefault(); zoomTo((value) => value / ZOOM_FACTOR); return; }
+      if ((event.ctrlKey || event.metaKey) && event.key === '0') { event.preventDefault(); fit(); return; }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === '1') { event.preventDefault(); zoomTo(1); return; }
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'c') { event.preventDefault(); copySelectedStyle(); return; }
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'v') { event.preventDefault(); pasteSelectedStyle(); return; }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') { event.preventDefault(); copySelected(); return; }
@@ -519,7 +593,7 @@ export default function EmbeddedEskizEditor(props: Props) {
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
-  }, [copySelected, copySelectedStyle, deleteSelected, duplicate, lastDrawingTool, nudgeSelected, onCancelCommunicationMode, pasteClipboard, pasteSelectedStyle, redo, saveNow, selectOnly, selected, undo]);
+  }, [copySelected, copySelectedStyle, deleteSelected, duplicate, fit, lastDrawingTool, nudgeSelected, onCancelCommunicationMode, pasteClipboard, pasteSelectedStyle, redo, saveNow, selectOnly, selected, undo, zoomTo]);
 
   const point = useCallback((event: ReactPointerEvent): Point => {
     const current = project;
@@ -841,17 +915,10 @@ export default function EmbeddedEskizEditor(props: Props) {
     svgRef.current?.setPointerCapture(event.pointerId);
   };
 
-  const fit = useCallback(() => {
-    const current = project;
-    const viewport = viewportRef.current;
-    if (!current || !viewport) return;
-    setZoom(Math.min((viewport.clientWidth - 90) / current.image.width, (viewport.clientHeight - 90) / current.image.height, 1.2));
-  }, [project]);
-
   useEffect(() => {
-    const timer = window.setTimeout(fit, 50);
+    const timer = window.setTimeout(fit, 80);
     return () => window.clearTimeout(timer);
-  }, [fit, project?.id]);
+  }, [fit, project?.id, props.fullScreen]);
 
   const setActiveTool = (id: Tool) => {
     setTool(id);
@@ -978,6 +1045,14 @@ export default function EmbeddedEskizEditor(props: Props) {
       }}><option value="">Выбрать и поставить…</option>{COMMUNICATION_KINDS.map((kind) => <option key={kind} value={kind}>{COMMUNICATION_KIND_META[kind].icon} {COMMUNICATION_KIND_META[kind].label}</option>)}</select></label>
       <button className={props.pickingDistancePoint ? 'active communication-distance-tool' : 'communication-distance-tool'} disabled={!activeCommunication} title={activeCommunication ? 'Нарисовать свободную линию расстояния от выбранной коммуникации' : 'Сначала выберите коммуникацию на эскизе'} onClick={() => activeCommunication && startCommunicationDistance(activeCommunication.id)}>+ линия</button>
       {communicationMode && <button className="communication-cancel-tool" onClick={cancelCommunicationMode}>Отмена</button>}
+      <div className="embedded-eskiz-zoombar" aria-label="Масштаб эскиза">
+        <button type="button" title="Отдалить" onClick={() => zoomTo((value) => value / ZOOM_FACTOR)}>−</button>
+        <input type="range" min={MIN_ZOOM} max={MAX_ZOOM} step="0.01" value={zoom} aria-label="Масштаб" onChange={(event) => zoomTo(Number(event.currentTarget.value))} />
+        <button type="button" title="Приблизить" onClick={() => zoomTo((value) => value * ZOOM_FACTOR)}>+</button>
+        <button type="button" title="Масштаб 100%" onClick={() => zoomTo(1)}>100%</button>
+        <button type="button" title="Вписать эскиз в область" onClick={fit}>Вписать</button>
+        <output>{Math.round(zoom * 100)}%</output>
+      </div>
       <button className={sidebarOpen ? 'active side-toggle' : 'side-toggle'} onClick={() => setSidebarOpen((value) => !value)}>Свойства</button>
     </nav>
     {communicationMode && <div className="embedded-eskiz-communication-banner">{props.communicationAddKind ? `Режим добавления: ${COMMUNICATION_KIND_META[props.communicationAddKind].label}. Тапните по основному эскизу Эскиз PRO.` : 'Рисуйте свободную линию расстояния: ведите курсор от выбранной коммуникации и кликните конечную точку.'}</div>}
@@ -1000,6 +1075,8 @@ export default function EmbeddedEskizEditor(props: Props) {
           viewport.scrollTop = pan.top - (event.clientY - pan.y);
         }}
         onPointerUp={() => { panRef.current = null; }}
+        onPointerCancel={() => { panRef.current = null; }}
+        onWheel={handleViewportWheel}
       >
         {project.header.enabled && <div className="embedded-eskiz-canvas-header" style={{ width: project.image.width * zoom }}><strong>РЕцепт <i>/</i> Эскиз PRO</strong><span>Проект: {project.header.project || '—'}</span><small>Помещение: {project.header.room || '—'} · Дата: {project.header.date} · Вариант: {project.header.variant}</small></div>}
         <div className="embedded-eskiz-stage" style={{ width: project.image.width * zoom, height: project.image.height * zoom }}>
@@ -1026,7 +1103,7 @@ export default function EmbeddedEskizEditor(props: Props) {
       {quickEdit && <div className="embedded-eskiz-quick" style={{ left: Math.min(quickEdit.left + 14, window.innerWidth - 210), top: Math.min(quickEdit.top + 14, window.innerHeight - 105) }}><span>Размер</span><div><input autoFocus inputMode="decimal" value={quickEdit.value} onChange={(event) => setQuickEdit({ ...quickEdit, value: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); finishQuickEdit(false); } if (event.key === 'Tab') { event.preventDefault(); finishQuickEdit(true); } if (event.key === 'Escape') { event.preventDefault(); setQuickEdit(null); } }} /><b>мм</b></div><small>Enter — готово · Tab — следующий</small></div>}
       {sidebarOpen && <Inspector project={project} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} moduleSummaries={props.moduleSummaries} onModuleObjectClick={(projectId, object) => { props.onProjectChange(project); props.onModuleObjectClick?.(projectId, object); }} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} layerVisibility={layerVisibility} onShowImage={setShowImage} onShowAnnotations={setShowAnnotations} onShowHelpers={setShowHelpers} onLayerVisibility={(key, value) => setLayerVisibility((current) => ({ ...current, [key]: value }))} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceAddSet={props.onCommunicationDistanceAddSet} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
     </div>
-    <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span>Стрелки — точный сдвиг · Shift — привязка угла · Пробел — перемещение</span><div><button onClick={() => setZoom((value) => Math.max(.1, value - .1))}>−</button><button onClick={fit}>{Math.round(zoom * 100)}%</button><button onClick={() => setZoom((value) => Math.min(3, value + .1))}>+</button></div></footer>
+    <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span>Ctrl/⌘ + колесо — точное приближение под курсором · Пробел — перемещение</span><div><button onClick={() => zoomTo((value) => value / ZOOM_FACTOR)}>−</button><button onClick={fit}>Вписать · {Math.round(zoom * 100)}%</button><button onClick={() => zoomTo((value) => value * ZOOM_FACTOR)}>+</button></div></footer>
   </div>;
 }
 
