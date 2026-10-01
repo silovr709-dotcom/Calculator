@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ChangeEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import type { EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizEquipmentType, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
 import { readEskizFile } from '../lib/eskizPro';
-import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationDistanceText, communicationSizeText } from '../lib/eskizCommunications';
+import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, COMMUNICATION_KINDS, communicationDistanceText, communicationSizeText } from '../lib/eskizCommunications';
 
 type Tool = 'select' | 'free-dimension' | 'h-dimension' | 'v-dimension' | 'chain' | 'anchor' | 'h-guide' | 'v-guide' | 'module' | 'callout' | 'comment' | 'equipment' | 'link';
 type Drag = { mode: 'create' | 'move' | 'handle' | 'marquee'; start: Point; id?: string; end?: 'start' | 'end' | 'offset' | 'resize'; before: EskizProject; original?: EskizObject };
@@ -18,6 +18,9 @@ type Props = {
   communicationAddKind?: EskizCommunicationKind | null;
   pickingDistancePoint?: boolean;
   onProjectChange: (project: EskizProject) => void;
+  onStartCommunicationPlacement: (kind: EskizCommunicationKind) => void;
+  onStartCommunicationDistance: (communicationId: string) => void;
+  onCancelCommunicationMode: () => void;
   onCommunicationPoint: (projectId: string, x: number, y: number) => void;
   onCommunicationClick: (projectId: string, marker: EskizCommunicationMarker) => void;
 };
@@ -182,6 +185,7 @@ export default function EmbeddedEskizEditor(props: Props) {
   const [selectionBox, setSelectionBox] = useState<{ start: Point; end: Point } | null>(null);
   const [snapIndicator, setSnapIndicator] = useState<Point | null>(null);
   const [quickEdit, setQuickEdit] = useState<QuickEdit | null>(null);
+  const [communicationDraftPoint, setCommunicationDraftPoint] = useState<Point | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
   const [error, setError] = useState('');
   const svgRef = useRef<SVGSVGElement>(null);
@@ -192,7 +196,10 @@ export default function EmbeddedEskizEditor(props: Props) {
   const panRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const past = useRef<EskizProject[]>([]);
   const future = useRef<EskizProject[]>([]);
+  const { onCancelCommunicationMode } = props;
   const communicationMode = Boolean(props.communicationAddKind || props.pickingDistancePoint);
+  const activeCommunication = project ? props.communications.find((marker) => marker.id === props.activeCommunicationId && marker.eskizId === project.id) ?? null : null;
+  const communicationDraftEnd = props.pickingDistancePoint && activeCommunication ? communicationDraftPoint ?? { x: activeCommunication.x + 140, y: activeCommunication.y } : null;
   const chosen = project?.objects.find((object) => object.id === selected);
 
   useEffect(() => {
@@ -355,7 +362,7 @@ export default function EmbeddedEskizEditor(props: Props) {
         const step = event.shiftKey ? 10 : 1;
         nudgeSelected(event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0, event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0);
       }
-      if (event.key === 'Escape') { setTool('select'); selectOnly(null); setChainLast(null); setChainAxis(null); setChainSessionId(null); setPendingDimension(null); }
+      if (event.key === 'Escape') { setTool('select'); selectOnly(null); setChainLast(null); setChainAxis(null); setChainSessionId(null); setPendingDimension(null); onCancelCommunicationMode(); }
       const found = TOOL_ITEMS.find((item) => item.hotkey?.toLowerCase() === event.key.toLowerCase());
       if (found && !event.ctrlKey && !event.metaKey) {
         setTool(found.id);
@@ -367,7 +374,7 @@ export default function EmbeddedEskizEditor(props: Props) {
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
-  }, [copySelected, copySelectedStyle, deleteSelected, duplicate, lastDrawingTool, nudgeSelected, pasteClipboard, pasteSelectedStyle, redo, saveNow, selectOnly, selected, undo]);
+  }, [copySelected, copySelectedStyle, deleteSelected, duplicate, lastDrawingTool, nudgeSelected, onCancelCommunicationMode, pasteClipboard, pasteSelectedStyle, redo, saveNow, selectOnly, selected, undo]);
 
   const point = useCallback((event: ReactPointerEvent): Point => {
     const current = project;
@@ -435,7 +442,13 @@ export default function EmbeddedEskizEditor(props: Props) {
     event.stopPropagation();
     const target = point(event);
     props.onCommunicationPoint(project.id, Math.round(target.x), Math.round(target.y));
+    setCommunicationDraftPoint(null);
   }, [point, project, props]);
+
+  const handleCommunicationStageMove = useCallback((event: ReactPointerEvent<SVGRectElement>) => {
+    if (!project || !props.pickingDistancePoint) return;
+    setCommunicationDraftPoint(point(event));
+  }, [point, project, props.pickingDistancePoint]);
 
   const onStageDown = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (!project) return;
@@ -750,9 +763,16 @@ export default function EmbeddedEskizEditor(props: Props) {
     </header>
     <nav className="embedded-eskiz-tools">
       {TOOL_ITEMS.map((item) => <button key={item.id} className={tool === item.id ? 'active' : ''} disabled={communicationMode} title={item.hotkey ? `${item.label} (${item.hotkey})` : item.label} onClick={() => setActiveTool(item.id)}><span>{item.label}</span>{item.hotkey && <kbd>{item.hotkey}</kbd>}</button>)}
+      <span className="embedded-eskiz-tool-label">Коммуникации</span>
+      {COMMUNICATION_KINDS.map((kind) => {
+        const meta = COMMUNICATION_KIND_META[kind];
+        return <button key={kind} className={`communication-tool ${props.communicationAddKind === kind ? 'active' : ''}`} style={{ '--comm-color': meta.color } as CSSProperties} title={`Поставить на эскиз: ${meta.label}`} onClick={() => props.onStartCommunicationPlacement(kind)}><b>{meta.icon}</b><span>{meta.label}</span></button>;
+      })}
+      <button className={props.pickingDistancePoint ? 'active communication-distance-tool' : 'communication-distance-tool'} disabled={!activeCommunication} title={activeCommunication ? 'Нарисовать свободную линию расстояния от выбранной коммуникации' : 'Сначала выберите коммуникацию на эскизе'} onClick={() => activeCommunication && props.onStartCommunicationDistance(activeCommunication.id)}>Линия расстояния</button>
+      {communicationMode && <button className="communication-cancel-tool" onClick={props.onCancelCommunicationMode}>Отмена</button>}
       <button className={sidebarOpen ? 'active side-toggle' : 'side-toggle'} onClick={() => setSidebarOpen((value) => !value)}>Свойства</button>
     </nav>
-    {communicationMode && <div className="embedded-eskiz-communication-banner">{props.communicationAddKind ? `Режим добавления: ${COMMUNICATION_KIND_META[props.communicationAddKind].label}. Тапните по основному эскизу.` : 'Выберите точку расстояния на основном эскизе.'}</div>}
+    {communicationMode && <div className="embedded-eskiz-communication-banner">{props.communicationAddKind ? `Режим добавления: ${COMMUNICATION_KIND_META[props.communicationAddKind].label}. Тапните по основному эскизу Эскиз PRO.` : 'Рисуйте свободную линию расстояния: ведите курсор от выбранной коммуникации и кликните конечную точку.'}</div>}
     <div className="embedded-eskiz-workarea">
       <section
         ref={viewportRef}
@@ -787,7 +807,8 @@ export default function EmbeddedEskizEditor(props: Props) {
             {draftLine && <g pointerEvents="none" opacity=".9"><line x1={draftLine.start.x} y1={draftLine.start.y} x2={draftLine.end.x} y2={draftLine.end.y} stroke={COLORS.accent} strokeWidth="3" strokeDasharray="10 7" /><circle cx={draftLine.start.x} cy={draftLine.start.y} r="6" fill={COLORS.accent} /><circle cx={draftLine.end.x} cy={draftLine.end.y} r="6" fill={COLORS.accent} /></g>}
             {tool === 'chain' && chainLast && <g pointerEvents="none"><circle cx={chainLast.x} cy={chainLast.y} r="8" fill={COLORS.accent} /><circle cx={chainLast.x} cy={chainLast.y} r="16" fill="none" stroke={COLORS.accent} opacity=".35" /></g>}
             {snapIndicator && <g pointerEvents="none" className="embedded-eskiz-snap-marker"><circle cx={snapIndicator.x} cy={snapIndicator.y} r="11" fill="none" stroke={COLORS.blue} strokeWidth="2" /><path d={`M ${snapIndicator.x - 15} ${snapIndicator.y} H ${snapIndicator.x + 15} M ${snapIndicator.x} ${snapIndicator.y - 15} V ${snapIndicator.y + 15}`} stroke={COLORS.blue} strokeWidth="1" /></g>}
-            {communicationMode && <rect className="embedded-eskiz-communication-catcher" x="0" y="0" width={project.image.width} height={project.image.height} fill="transparent" pointerEvents="all" onPointerDown={handleCommunicationStagePoint} />}
+            {activeCommunication && communicationDraftEnd && <g pointerEvents="none" className="embedded-eskiz-communication-draft"><line x1={activeCommunication.x} y1={activeCommunication.y} x2={communicationDraftEnd.x} y2={communicationDraftEnd.y} stroke={COMMUNICATION_KIND_META[activeCommunication.kind]?.color ?? COLORS.accent} strokeWidth="3" strokeDasharray="10 7" /><circle cx={activeCommunication.x} cy={activeCommunication.y} r="7" fill={COMMUNICATION_KIND_META[activeCommunication.kind]?.color ?? COLORS.accent} /><circle cx={communicationDraftEnd.x} cy={communicationDraftEnd.y} r="7" fill="#fff" stroke={COMMUNICATION_KIND_META[activeCommunication.kind]?.color ?? COLORS.accent} strokeWidth="3" /></g>}
+            {communicationMode && <rect className="embedded-eskiz-communication-catcher" x="0" y="0" width={project.image.width} height={project.image.height} fill="transparent" pointerEvents="all" onPointerMove={handleCommunicationStageMove} onPointerDown={handleCommunicationStagePoint} />}
           </svg>
         </div>
         {pendingDimension ? <div className="embedded-eskiz-hint"><b>Шаг 3 из 3</b> Отведите размерную линию и кликните для фиксации</div> : tool === 'chain' && <div className="embedded-eskiz-hint"><b>Цепочка</b> Укажите следующую точку · Esc — закончить</div>}

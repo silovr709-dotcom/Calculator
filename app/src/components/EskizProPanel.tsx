@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizProIntegration, ExtraFacadePart, FacadePart, KitchenModule, Pricebook, PriceItem, Project, SlotKey } from '../types';
 import {
   collectEskizModuleMarkers,
@@ -672,8 +672,38 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       return;
     }
     setActiveMarkerKey(null);
-    setMessage(`Выбран режим «${COMMUNICATION_KIND_META[nextKind].label}». Тапните по основному эскизу слева — отметка появится прямо на нём.`);
+    setMessage(`В Эскиз PRO выбран инструмент «${COMMUNICATION_KIND_META[nextKind].label}». Тапните по основному полотну — отметка появится прямо на нём.`);
     window.setTimeout(() => editorCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+  };
+  const startFreeCommunicationDistance = (communicationId: string) => {
+    const marker = communications.find((item) => item.id === communicationId);
+    if (!marker) {
+      setMessage('Сначала выберите коммуникацию на самом эскизе, затем нажмите «Линия расстояния».');
+      return;
+    }
+    const distance: EskizCommunicationDistance = {
+      id: uid('dist'),
+      label: 'Свободное расстояние',
+      anchor: 'custom',
+      valueMm: null,
+      anchorX: marker.x + 140,
+      anchorY: marker.y,
+    };
+    updateCommunication(communicationId, { distances: [...(marker.distances ?? []), distance] });
+    setActiveCommunicationId(communicationId);
+    setCommunicationAddKind(null);
+    setDistancePointPick({ communicationId, distanceId: distance.id });
+    setMessage('В Эскиз PRO включена свободная линия расстояния: ведите курсор от коммуникации и кликните конечную точку где угодно на эскизе.');
+  };
+  const cancelCommunicationMode = () => {
+    if (distancePointPick) {
+      const marker = communications.find((item) => item.id === distancePointPick.communicationId);
+      const distance = marker?.distances?.find((item) => item.id === distancePointPick.distanceId);
+      if (distance && distance.valueMm == null) deleteCommunicationDistance(distancePointPick.communicationId, distancePointPick.distanceId);
+    }
+    setCommunicationAddKind(null);
+    setDistancePointPick(null);
+    setMessage('Режим коммуникаций выключен.');
   };
   const handleCommunicationClick = (_eskizId: string, marker: EskizCommunicationMarker) => {
     setActiveCommunicationId(marker.id);
@@ -683,9 +713,12 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   };
   const handlePreviewPointClick = (eskizId: string, x: number, y: number) => {
     if (distancePointPick) {
-      updateCommunicationDistance(distancePointPick.communicationId, distancePointPick.distanceId, { anchor: 'custom', anchorX: x, anchorY: y });
+      const marker = communications.find((item) => item.id === distancePointPick.communicationId);
+      const distance = marker?.distances?.find((item) => item.id === distancePointPick.distanceId);
+      const autoValue = marker ? Math.round(Math.hypot(x - marker.x, y - marker.y)) : null;
+      updateCommunicationDistance(distancePointPick.communicationId, distancePointPick.distanceId, { anchor: 'custom', anchorX: x, anchorY: y, valueMm: distance?.valueMm ?? autoValue });
       setDistancePointPick(null);
-      setMessage('Точка расстояния выбрана на эскизе. Укажите фактическое расстояние в мм.');
+      setMessage('Свободная линия расстояния нарисована в Эскиз PRO. Значение в мм можно уточнить в свойствах коммуникации.');
       return;
     }
     if (!communicationAddKind) return;
@@ -736,18 +769,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       <div className="eskiz-pro-grid">
         <div ref={editorCardRef} className="card eskiz-pro-frame-card no-print">
           <div className="section-head">
-            <div><h3>Основной эскиз</h3><p className="muted small">Это рабочее полотно Эскиз PRO внутри расчёта. Коммуникации ставятся прямо здесь: выберите тип ниже и тапните по эскизу.</p></div>
-          </div>
-          <div className="eskiz-frame-communication-toolbar">
-            <div><b>Добавить коммуникацию на основной эскиз</b><span>{activePreviewProject ? `Главный snapshot: ${activePreviewProject.title}` : 'Сначала загрузите скрин или импортируйте .eskiz'}</span></div>
-            <div className="eskiz-communication-kind-grid inline">
-              {COMMUNICATION_KINDS.map((kind) => {
-                const meta = COMMUNICATION_KIND_META[kind];
-                return <button key={kind} className={communicationAddKind === kind ? 'active' : ''} style={{ '--comm-color': meta.color } as CSSProperties} onClick={() => startCommunicationPlacement(kind)}><span>{meta.icon}</span>{meta.label}</button>;
-              })}
-            </div>
-            {communicationAddKind && <div className="note small">Режим добавления: <b>{COMMUNICATION_KIND_META[communicationAddKind].label}</b>. Тапните по основному эскизу. Чтобы отменить — нажмите тип ещё раз.</div>}
-            {distancePointPick && <div className="note small">Выберите точку расстояния на основном эскизе, затем укажите значение в мм.</div>}
+            <div><h3>Основной эскиз</h3><p className="muted small">Это рабочее полотно Эскиз PRO внутри расчёта. Коммуникации, их свободные линии расстояний, размеры и модули ставятся из верхней панели самого Эскиз PRO.</p></div>
           </div>
           <EmbeddedEskizEditor
             key={activePreviewProject?.id ?? 'empty-eskiz'}
@@ -759,6 +781,9 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             communicationAddKind={communicationAddKind}
             pickingDistancePoint={Boolean(distancePointPick)}
             onProjectChange={saveEmbeddedProject}
+            onStartCommunicationPlacement={startCommunicationPlacement}
+            onStartCommunicationDistance={(communicationId) => startFreeCommunicationDistance(communicationId)}
+            onCancelCommunicationMode={cancelCommunicationMode}
             onCommunicationPoint={handlePreviewPointClick}
             onCommunicationClick={handleCommunicationClick}
           />
@@ -812,10 +837,10 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
           </section>
 
           <section className="card no-print eskiz-communications-card">
-            <div className="section-head"><div><h3>Коммуникации эскиза</h3><p className="muted small">Кнопки добавления теперь находятся над большим окном Эскиз PRO слева. Здесь — список отметок и их размеры/расстояния.</p></div><b>{communications.length}</b></div>
-            {communicationAddKind && <div className="note small">Выбран тип <b>{COMMUNICATION_KIND_META[communicationAddKind].label}</b>. Тапните по большому эскизу слева.</div>}
-            {distancePointPick && <div className="note small">Выберите точку расстояния на большом эскизе слева.</div>}
-            {communications.length === 0 ? <div className="empty small">Коммуникаций пока нет. Выберите тип над большим Эскиз PRO и тапните место на самом эскизе.</div> : (
+            <div className="section-head"><div><h3>Свойства коммуникаций</h3><p className="muted small">Добавление и рисование линий расстояний находится внутри верхней панели самого Эскиз PRO. Здесь только список, размеры и точные значения.</p></div><b>{communications.length}</b></div>
+            {communicationAddKind && <div className="note small">В Эскиз PRO выбран тип <b>{COMMUNICATION_KIND_META[communicationAddKind].label}</b>: тапните по основному полотну.</div>}
+            {distancePointPick && <div className="note small">В Эскиз PRO включена свободная линия расстояния: кликните конечную точку на полотне.</div>}
+            {communications.length === 0 ? <div className="empty small">Коммуникаций пока нет. Используйте группу «Коммуникации» в верхней панели самого Эскиз PRO.</div> : (
               <div className="eskiz-communication-list">
                 {communications.slice(0, 12).map((marker) => {
                   const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;

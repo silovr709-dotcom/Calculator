@@ -368,10 +368,6 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .eskiz-pro-grid { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 14px; align-items: start; }
 .eskiz-pro-frame-card { padding: 0; overflow: hidden; }
 .eskiz-pro-frame-card .section-head { padding: 14px 16px 10px; margin: 0; }
-.eskiz-frame-communication-toolbar { padding: 10px 16px 12px; border-top: 1px solid #edf2ef; background: linear-gradient(135deg, #fbfdfc, #f8f3ff); display: flex; flex-direction: column; gap: 8px; }
-.eskiz-frame-communication-toolbar > div:first-child { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
-.eskiz-frame-communication-toolbar b { color: #24382f; }
-.eskiz-frame-communication-toolbar span { color: var(--muted); font-size: 11px; text-align: right; }
 
 .embedded-eskiz-start { min-height: 620px; padding: 28px; border-top: 1px solid var(--line); background: radial-gradient(circle at 15% 5%, rgba(124, 58, 237, .12), transparent 34%), linear-gradient(135deg, #f8fbfa, #fff7f2); display: grid; align-content: center; justify-items: center; text-align: center; gap: 16px; }
 .embedded-eskiz-start h3 { margin: 4px 0 6px; color: #332255; }
@@ -391,6 +387,13 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .embedded-eskiz-tools button.active { background: #ff5c35; border-color: #ff8a6d; color: #fff; }
 .embedded-eskiz-tools button:disabled { opacity: .45; cursor: not-allowed; }
 .embedded-eskiz-tools kbd { padding: 1px 4px; border-radius: 4px; background: rgba(0,0,0,.25); font-size: 9px; }
+.embedded-eskiz-tool-label { flex: 0 0 auto; align-self: center; margin-left: 8px; padding-left: 10px; border-left: 1px solid rgba(255,255,255,.14); color: #ffb38f; font-size: 10px; font-weight: 950; text-transform: uppercase; letter-spacing: .07em; }
+.embedded-eskiz-tools button.communication-tool { border-color: color-mix(in srgb, var(--comm-color, #ff5c35) 60%, rgba(255,255,255,.18)); box-shadow: inset 3px 0 0 var(--comm-color, #ff5c35); }
+.embedded-eskiz-tools button.communication-tool b { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; background: var(--comm-color, #ff5c35); color: #fff; font-size: 10px; }
+.embedded-eskiz-tools button.communication-tool.active { background: var(--comm-color, #ff5c35); border-color: #fff; color: #fff; }
+.embedded-eskiz-tools button.communication-distance-tool { background: rgba(124, 58, 237, .20); border-color: rgba(196, 181, 253, .35); color: #efe8ff; }
+.embedded-eskiz-tools button.communication-distance-tool.active { background: #7c3aed; border-color: #c4b5fd; }
+.embedded-eskiz-tools button.communication-cancel-tool { background: rgba(220, 38, 38, .20); border-color: rgba(248, 113, 113, .35); color: #ffd6d6; }
 .embedded-eskiz-tools .side-toggle { margin-left: auto; }
 .embedded-eskiz-communication-banner { padding: 9px 12px; background: #332255; color: #fff; font-size: 12px; font-weight: 900; }
 .embedded-eskiz-workarea { position: relative; min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 310px; }
