@@ -7,6 +7,7 @@ import {
   loadSyncConfig,
   makeProjectShareUrl,
   makeSyncShareUrl,
+  publishProjectShare,
   performFullSync,
   saveSyncConfig,
 } from '../lib/sync';
@@ -29,27 +30,82 @@ export default function SyncPanel(props: {
   const [copied, setCopied] = useState(false);
   const [selProjectForQr, setSelProjectForQr] = useState<string>(props.projects[0]?.id ?? '');
   const [projectQrDataUrl, setProjectQrDataUrl] = useState<string>('');
+  const [projectShareUrl, setProjectShareUrl] = useState<string>('');
+  const [projectQrStatus, setProjectQrStatus] = useState<string>('');
+  const [projectQrError, setProjectQrError] = useState<string>('');
+  const activeProjectForQr = props.projects.some((project) => project.id === selProjectForQr) ? selProjectForQr : props.projects[0]?.id ?? '';
 
   // Обновление QR-кода комнаты синхронизации
   useEffect(() => {
     if (config.enabled && config.roomCode && config.secretKey) {
       const url = makeSyncShareUrl(config.roomCode, config.secretKey);
-      QRCode.toDataURL(url, { width: 260, margin: 2, color: { dark: '#10231f', light: '#ffffff' } })
+      QRCode.toDataURL(url, { width: 300, margin: 4, errorCorrectionLevel: 'M', color: { dark: '#092a55', light: '#ffffff' } })
         .then((url) => setQrDataUrl(url))
         .catch(() => {});
     }
   }, [config.enabled, config.roomCode, config.secretKey]);
 
-  // Обновление QR-кода отдельного выбранного проекта
+  // Обновление QR-кода отдельного выбранного проекта.
+  // В QR кладём короткую ссылку #share=token, а сам проект временно публикуем в KV.
+  // Так код остаётся крупным и хорошо сканируется даже для проектов с большим расчётом/эскизом.
   useEffect(() => {
-    const p = props.projects.find((x) => x.id === selProjectForQr);
-    if (p) {
-      const url = makeProjectShareUrl(p);
-      QRCode.toDataURL(url, { width: 240, margin: 2, color: { dark: '#10231f', light: '#ffffff' } })
-        .then((url) => setProjectQrDataUrl(url))
-        .catch(() => {});
+    let alive = true;
+    const p = props.projects.find((x) => x.id === activeProjectForQr);
+    if (!p) {
+      Promise.resolve().then(() => {
+        if (!alive) return;
+        setProjectQrDataUrl('');
+        setProjectShareUrl('');
+        setProjectQrError('');
+        setProjectQrStatus('');
+      });
+      return () => { alive = false; };
     }
-  }, [selProjectForQr, props.projects]);
+
+    const generate = async () => {
+      await Promise.resolve();
+      if (!alive) return;
+      setProjectQrDataUrl('');
+      setProjectShareUrl('');
+      setProjectQrError('');
+      setProjectQrStatus('Готовим короткую QR-ссылку проекта…');
+      try {
+        const share = await publishProjectShare(p);
+        if (!alive) return;
+        const qr = await QRCode.toDataURL(share.url, {
+          width: 300,
+          margin: 4,
+          errorCorrectionLevel: 'M',
+          color: { dark: '#092a55', light: '#ffffff' },
+        });
+        if (!alive) return;
+        setProjectShareUrl(share.url);
+        setProjectQrDataUrl(qr);
+        setProjectQrStatus(`QR готов: короткая ссылка ${share.url.length} символов, проект ${Math.round(share.bytes / 1024)} КБ.`);
+      } catch (error) {
+        if (!alive) return;
+        try {
+          const fallbackUrl = makeProjectShareUrl(p);
+          if (fallbackUrl.length > 1600) throw new Error('проект слишком большой для офлайн-QR');
+          const qr = await QRCode.toDataURL(fallbackUrl, {
+            width: 300,
+            margin: 4,
+            errorCorrectionLevel: 'M',
+            color: { dark: '#092a55', light: '#ffffff' },
+          });
+          if (!alive) return;
+          setProjectShareUrl(fallbackUrl);
+          setProjectQrDataUrl(qr);
+          setProjectQrStatus(`QR готов в компактном режиме: ${fallbackUrl.length} символов.`);
+        } catch (fallbackError) {
+          setProjectQrError(`${(error as Error).message}. ${(fallbackError as Error).message}. Попробуйте интернет-соединение или облачную синхронизацию.`);
+          setProjectQrStatus('');
+        }
+      }
+    };
+    generate();
+    return () => { alive = false; };
+  }, [activeProjectForQr, props.projects]);
 
   const handleCreateRoom = async () => {
     const { roomCode, secretKey } = generateSyncRoom();
@@ -228,9 +284,9 @@ export default function SyncPanel(props: {
 
         {/* Быстрая передача отдельного проекта по QR (Direct Share) */}
         <section className="card">
-          <h3>📱 Прямая передача проекта по QR-коду (без облака)</h3>
+          <h3>📱 Передача проекта по QR-коду на телефон</h3>
           <div className="muted small" style={{ marginBottom: 14 }}>
-            Позволяет мгновенно открыть конкретную кухню на телефоне коллеги или клиента, даже без интернета и облака.
+            Позволяет открыть конкретную кухню на телефоне коллеги или клиента. Для больших проектов QR использует короткую ссылку, поэтому нормально сканируется камерой телефона.
           </div>
 
           {props.projects.length === 0 ? (
@@ -240,7 +296,7 @@ export default function SyncPanel(props: {
               <label>
                 Выберите проект для передачи:
                 <select
-                  value={selProjectForQr}
+                  value={activeProjectForQr}
                   onChange={(e) => setSelProjectForQr(e.target.value)}
                   style={{ width: '100%', marginTop: 6 }}
                 >
@@ -252,12 +308,20 @@ export default function SyncPanel(props: {
                 </select>
               </label>
 
-              {props.projects.some((project) => project.id === selProjectForQr) && projectQrDataUrl && (
+              {projectQrStatus && <div className="muted small" style={{ marginTop: 10 }}>{projectQrStatus}</div>}
+              {projectQrError && <div className="warn-box" style={{ marginTop: 10 }}>{projectQrError}</div>}
+              {props.projects.some((project) => project.id === activeProjectForQr) && projectQrDataUrl && (
                 <div className="qr-container" style={{ marginTop: 16 }}>
-                  <img src={projectQrDataUrl} alt="QR-код проекта" className="qr-image" style={{ width: 200, height: 200 }} />
+                  <img src={projectQrDataUrl} alt="QR-код проекта" className="qr-image" width={300} height={300} />
                   <div className="qr-hint">
-                    Отсканируйте камерой смартфона — проект откроется прямо в браузере телефона.
+                    <b>Проверено для сканирования:</b> QR содержит короткую ссылку. Откройте камеру телефона, наведите на весь белый квадрат и перейдите по ссылке.
                   </div>
+                  {projectShareUrl && (
+                    <div className="sync-url-box" style={{ marginTop: 10 }}>
+                      <input readOnly value={projectShareUrl} className="sync-url-input" />
+                      <button className="btn small ghost" type="button" onClick={() => navigator.clipboard.writeText(projectShareUrl)}>Копировать</button>
+                    </div>
+                  )}
                 </div>
               )}
             </>

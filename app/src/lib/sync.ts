@@ -25,7 +25,7 @@ export interface SyncPayload {
 
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'offline' | 'error';
 
-const DEFAULT_CLOUD_API = 'https://kvdb.io/Ank3iN1oH5eX2sP9bKq1tW'; // изолированный KV-бакет калькулятора РЕцепт
+export const DEFAULT_CLOUD_API = 'https://kvdb.io/Ank3iN1oH5eX2sP9bKq1tW'; // изолированный KV-бакет калькулятора РЕцепт
 
 export function defaultSyncConfig(): SyncConfig {
   return {
@@ -72,7 +72,9 @@ export function makeSyncShareUrl(roomCode: string, secretKey: string, baseUrl?: 
 }
 
 /** Парсинг входящего хэша URL (при сканировании QR-кода на телефоне) */
-export function parseIncomingHash(hash: string): { type: 'sync'; roomCode: string; secretKey: string } | { type: 'import'; project: Project } | null {
+export interface ProjectSharePayload { version: 1; type: 'project-share'; token: string; createdAt: string; project: Project }
+
+export function parseIncomingHash(hash: string): { type: 'sync'; roomCode: string; secretKey: string } | { type: 'import'; project: Project } | { type: 'share'; token: string } | null {
   if (!hash) return null;
   const clean = hash.startsWith('#') ? hash.slice(1) : hash;
   
@@ -82,6 +84,12 @@ export function parseIncomingHash(hash: string): { type: 'sync'; roomCode: strin
     if (parts.length >= 2) {
       return { type: 'sync', roomCode: parts[0], secretKey: parts.slice(1).join(':') };
     }
+  }
+
+  if (clean.startsWith('share=')) {
+    const token = decodeURIComponent(clean.slice('share='.length)).trim();
+    if (/^prj_[a-z0-9_-]{12,}$/i.test(token)) return { type: 'share', token };
+    return null;
   }
 
   if (clean.startsWith('import=')) {
@@ -99,17 +107,74 @@ export function parseIncomingHash(hash: string): { type: 'sync'; roomCode: strin
   return null;
 }
 
-/** Формирование ссылки прямого импорта одного проекта по QR-коду (без облака) */
-export function makeProjectShareUrl(project: Project, baseUrl?: string): string {
+function cleanAppBase(baseUrl?: string): string {
   const origin = baseUrl || (typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : 'https://silovr709-dotcom.github.io/Calculator/');
-  const cleanBase = origin.split('#')[0].split('?')[0];
-  // Копируем проект без тяжелых фото для компактности QR-кода
-  const clone: Project = {
-    ...JSON.parse(JSON.stringify(project)),
-    photos: (project.photos ?? []).map((ph) => ({ ...ph, dataUrl: '' })),
-  };
+  return origin.split('#')[0].split('?')[0];
+}
+
+/** Формирование старой ссылки прямого импорта одного проекта (только для очень маленьких проектов). */
+export function makeProjectShareUrl(project: Project, baseUrl?: string): string {
+  const cleanBase = cleanAppBase(baseUrl);
+  const clone = compactProjectForShare(project);
   const json = JSON.stringify(clone);
   return `${cleanBase}#import=${encodeURIComponent(json)}`;
+}
+
+export function makeProjectShareToken(projectId = 'project'): string {
+  const safeId = projectId.toLowerCase().replace(/[^a-z0-9_-]+/g, '').slice(0, 18) || 'project';
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `prj_${safeId}_${Date.now().toString(36)}_${rand}`;
+}
+
+export function makeCloudProjectShareUrl(token: string, baseUrl?: string): string {
+  return `${cleanAppBase(baseUrl)}#share=${encodeURIComponent(token)}`;
+}
+
+function stripInlineBinaryForShare(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return value.startsWith('data:image/') || value.startsWith('data:application/') ? '' : value;
+  }
+  if (Array.isArray(value)) return value.map((item) => stripInlineBinaryForShare(item));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, stripInlineBinaryForShare(item)]));
+  }
+  return value;
+}
+
+export function compactProjectForShare(project: Project): Project {
+  return stripInlineBinaryForShare(JSON.parse(JSON.stringify(project))) as Project;
+}
+
+export function projectShareEndpoint(token: string): string {
+  return `${DEFAULT_CLOUD_API}/${encodeURIComponent(`share_${token}`)}`;
+}
+
+export async function publishProjectShare(project: Project, baseUrl?: string): Promise<{ token: string; url: string; bytes: number }> {
+  const token = makeProjectShareToken(project.id);
+  const payload: ProjectSharePayload = {
+    version: 1,
+    type: 'project-share',
+    token,
+    createdAt: new Date().toISOString(),
+    project: compactProjectForShare(project),
+  };
+  const body = JSON.stringify(payload);
+  const headers = { 'Content-Type': 'application/json' };
+  const endpoint = projectShareEndpoint(token);
+  let res = await fetch(endpoint, { method: 'POST', headers, body });
+  if (!res.ok) res = await fetch(endpoint, { method: 'PUT', headers, body });
+  if (!res.ok) throw new Error(`Не удалось опубликовать проект для QR (HTTP ${res.status})`);
+  return { token, url: makeCloudProjectShareUrl(token, baseUrl), bytes: body.length };
+}
+
+export async function loadProjectShare(token: string): Promise<Project> {
+  const res = await fetch(projectShareEndpoint(token), { method: 'GET', headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new Error(`Не удалось загрузить проект по QR (HTTP ${res.status})`);
+  const json = (await res.json()) as ProjectSharePayload;
+  if (!json || json.version !== 1 || json.type !== 'project-share' || !json.project || !Array.isArray(json.project.lines)) {
+    throw new Error('QR-ссылка проекта повреждена или устарела');
+  }
+  return json.project;
 }
 
 /** Умное слияние локальных и удалённых данных по дате изменения (Smart Merge) */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WorktopPiece } from '../types';
-import { autoArrangeWorktopPieces, buildWorktopPlanSvg, layoutWorktopPieces, nextWorktopEdgeKind, snapWorktopPiecePosition, worktopEdgeSymbol } from './worktopSketch';
+import { autoArrangeWorktopPieces, buildWorktopPlanSvg, layoutWorktopPieces, nextWorktopEdgeKind, snapWorktopPiecePosition, worktopDimensionPlacement, worktopEdgeLabelPlacement, worktopEdgeSymbol, worktopSketchMetrics } from './worktopSketch';
 
 const pieces: WorktopPiece[] = [
   { id: 'a', name: 'Основная', lengthMm: 2400, widthMm: 600, front: 'pf', back: 'pvc', left: 'v', right: 'eurozapil' },
@@ -12,8 +12,8 @@ describe('worktopSketch', () => {
     expect(worktopEdgeSymbol('v')).toBe('V');
     expect(worktopEdgeSymbol('pvc')).toBe('Х');
     expect(worktopEdgeSymbol('pf')).toBe('ПФ');
-    expect(worktopEdgeSymbol('eurozapil')).toBe('⧖');
-    expect(worktopEdgeSymbol('eurostyk')).toBe('↔');
+    expect(worktopEdgeSymbol('eurozapil')).toBe('//');
+    expect(worktopEdgeSymbol('eurostyk')).toBe('≈');
   });
 
   it('строит SVG-схему с размерами и обозначениями кромок', () => {
@@ -25,6 +25,22 @@ describe('worktopSketch', () => {
     expect(svg).toContain('V');
     expect(svg).toContain('//');
     expect(svg).toContain('Х');
+  });
+
+
+
+  it('не прячет еврозапил на стыке и ставит вертикальный размер читаемой плашкой', () => {
+    const arranged = autoArrangeWorktopPieces(pieces, 'corner').map((piece) => (
+      piece.id === 'b' ? { ...piece, left: 'eurozapil' as const } : piece
+    ));
+    const metrics = worktopSketchMetrics(arranged, 900, 390, true);
+    const verticalPiece = metrics.layouts.find((layout) => layout.piece.id === 'b')!;
+    const leftLabel = worktopEdgeLabelPlacement(verticalPiece, metrics, 'left', 900, 390);
+    const dims = worktopDimensionPlacement(verticalPiece, metrics, 900, 390);
+    expect(leftLabel.x).toBeGreaterThan(0);
+    expect(leftLabel.y).toBeGreaterThan(0);
+    expect(dims.verticalValue).toBe(1600);
+    expect(dims.vertical.rotate).toBe(0);
   });
 
   it('даёт быстрые схемы прямой и угловой раскладки', () => {

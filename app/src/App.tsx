@@ -6,7 +6,7 @@ import {
   loadStoredPricebooks, saveStoredPricebooks, uid, loadKbArticles, saveKbArticles } from './lib/storage';
 import {
   loadSyncConfig, saveSyncConfig, performFullSync, parseIncomingHash,
-  pushToCloud,
+  pushToCloud, loadProjectShare,
 } from './lib/sync';
 import type { SyncConfig, SyncStatus } from './lib/sync';
 import { ProjectHistory } from './lib/history';
@@ -88,6 +88,18 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
       window.setTimeout(() => { setProjects(next); setView({ kind: 'project', id: p.id }); }, 0);
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
       alert(`📱 Проект «${p.name}» успешно импортирован на это устройство!`);
+    } else if (parsed.type === 'share') {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      loadProjectShare(parsed.token).then((project) => {
+        const p = { ...project, id: uid('prj'), updatedAt: new Date().toISOString() };
+        const next = [p, ...loadProjects()];
+        saveProjects(next);
+        setProjects(next);
+        setView({ kind: 'project', id: p.id });
+        alert(`📱 Проект «${p.name}» загружен по QR-коду!`);
+      }).catch((error) => {
+        alert(`Не удалось открыть проект по QR-коду: ${(error as Error).message}`);
+      });
     }
   }, []);
 

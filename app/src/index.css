@@ -3034,3 +3034,365 @@ textarea:focus::placeholder {
   border-color: #0ea5e9 !important;
   box-shadow: 0 0 0 3px rgba(14, 165, 233, .16) !important;
 }
+
+/* ---------- Daylight navy interface: light background + dark-blue HUD lines ---------- */
+:root {
+  --bg: #f3f7fc;
+  --panel: rgba(255, 255, 255, .94);
+  --panel-solid: #ffffff;
+  --line: rgba(9, 42, 85, .16);
+  --line-strong: rgba(9, 42, 85, .30);
+  --text: #102037;
+  --muted: #5f7088;
+  --accent: #0b3a75;
+  --accent-2: #092a55;
+  --accent-soft: rgba(11, 58, 117, .09);
+  --accent-ring: rgba(25, 93, 166, .22);
+  --hud-cyan: #195da6;
+  --hud-amber: #c27a22;
+  --shadow-sm: 0 1px 2px rgba(9, 42, 85, .06), 0 12px 28px rgba(9, 42, 85, .06);
+  --shadow-md: 0 22px 54px -28px rgba(9, 42, 85, .36), 0 3px 14px rgba(9, 42, 85, .08);
+  --shadow-lg: 0 34px 86px -36px rgba(9, 42, 85, .42), 0 8px 24px rgba(9, 42, 85, .12);
+}
+body {
+  color: var(--text) !important;
+  background:
+    radial-gradient(900px 520px at 50% -10%, rgba(25, 93, 166, .14), transparent 66%),
+    radial-gradient(780px 540px at 100% 8%, rgba(9, 42, 85, .10), transparent 62%),
+    linear-gradient(135deg, #f8fbff 0%, #eef4fb 50%, #f7faff 100%) !important;
+}
+body::before {
+  opacity: .45 !important;
+  background-image:
+    linear-gradient(rgba(9, 42, 85, .045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(9, 42, 85, .04) 1px, transparent 1px),
+    radial-gradient(circle at 50% 0%, rgba(25, 93, 166, .11), transparent 38%) !important;
+  background-size: 36px 36px, 36px 36px, 100% 100% !important;
+}
+.main::before {
+  background:
+    linear-gradient(115deg, transparent 0 44%, rgba(9,42,85,.055) 45%, transparent 46% 100%),
+    radial-gradient(520px 320px at 62% 4%, rgba(25,93,166,.10), transparent 70%),
+    radial-gradient(680px 380px at 82% 92%, rgba(9,42,85,.08), transparent 70%) !important;
+}
+.sidebar {
+  color: #dcecff !important;
+  background:
+    radial-gradient(220px 180px at 50% 0%, rgba(58, 134, 211, .25), transparent 72%),
+    linear-gradient(180deg, #092a55 0%, #071f40 58%, #05162d 100%) !important;
+  border-right: 1px solid rgba(255,255,255,.16) !important;
+  box-shadow: 18px 0 44px rgba(9,42,85,.12) !important;
+}
+.brand-name {
+  color: #ffffff !important;
+  background: none !important;
+  text-shadow: 0 0 20px rgba(150, 204, 255, .24) !important;
+}
+.brand-sub { color: rgba(220, 236, 255, .75) !important; }
+.brand-pro { background: rgba(255,255,255,.12) !important; color: #ffffff !important; border-color: rgba(255,255,255,.22) !important; }
+.sidebar nav button { color: rgba(220,236,255,.82) !important; border-color: transparent !important; }
+.sidebar nav button:hover,
+.sidebar nav button:focus-visible {
+  color: #fff !important;
+  background: rgba(255,255,255,.10) !important;
+  border-color: rgba(184,218,255,.24) !important;
+}
+.sidebar nav button.active {
+  color: #092a55 !important;
+  background: linear-gradient(135deg, #ffffff, #cfe6ff) !important;
+  border-color: rgba(255,255,255,.5) !important;
+  box-shadow: 0 12px 28px -18px rgba(255,255,255,.7), inset 0 1px 0 rgba(255,255,255,.85) !important;
+}
+.sidebar nav button .nav-icon { color: currentColor !important; }
+.pb-badge { background: rgba(255,255,255,.08) !important; border-color: rgba(255,255,255,.14) !important; color: #eaf4ff !important; }
+
+.app :where(.page-head, .card, .totals-card, .empty, .dashboard-filters, .modal, .table, .client-offer-editor, .eskiz-pro-intro, .eskiz-pro-export-card, .blank-worktop-designer, .finance-strip):not(.client-doc) {
+  --text: #102037;
+  --muted: #5f7088;
+  --line: rgba(9, 42, 85, .16);
+  --line-strong: rgba(9, 42, 85, .30);
+  color: #102037 !important;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.96), rgba(247,251,255,.90)),
+    radial-gradient(360px 160px at 100% 0%, rgba(25,93,166,.08), transparent 72%) !important;
+  border-color: rgba(9,42,85,.16) !important;
+  box-shadow: var(--shadow-sm) !important;
+  backdrop-filter: blur(10px) saturate(1.05) !important;
+}
+.app :where(.page-head, .card, .totals-card, .empty, .dashboard-filters, .modal, .table, .client-offer-editor, .eskiz-pro-intro, .eskiz-pro-export-card, .blank-worktop-designer):not(.client-doc) :where(h1, h2, h3, h4, b, strong) {
+  color: #0b2342 !important;
+  text-shadow: none !important;
+}
+.app :where(.page-head, .card, .totals-card, .empty, .dashboard-filters, .modal, .table, .client-offer-editor, .eskiz-pro-intro, .eskiz-pro-export-card, .blank-worktop-designer):not(.client-doc) :where(p, li, label, summary, td, th, span, small, em) {
+  color: inherit;
+}
+.app :where(.muted, small, .sub, .def-label, .slot-label, .r-meta, .r-unit, .t-row.small, .blank-label, .dict-card-subtitle, .kb-tag, .qr-hint) {
+  color: #5f7088 !important;
+}
+.page::before,
+.card::before,
+.totals-card::before,
+.client-doc::before,
+.modal::before {
+  background:
+    linear-gradient(90deg, rgba(9,42,85,.45), transparent 84px) top left / 120px 1px no-repeat,
+    linear-gradient(180deg, rgba(9,42,85,.45), transparent 84px) top left / 1px 120px no-repeat,
+    linear-gradient(270deg, rgba(25,93,166,.34), transparent 84px) bottom right / 120px 1px no-repeat,
+    linear-gradient(0deg, rgba(25,93,166,.34), transparent 84px) bottom right / 1px 120px no-repeat !important;
+}
+.page-head::after {
+  color: #0b3a75 !important;
+  background: #ffffff !important;
+  border-color: rgba(9,42,85,.28) !important;
+  box-shadow: 0 0 20px rgba(9,42,85,.10) !important;
+}
+.page-head h1::before {
+  background: radial-gradient(circle, #fff 0 18%, #195da6 19% 42%, rgba(25,93,166,.14) 43% 100%) !important;
+  box-shadow: 0 0 18px rgba(25,93,166,.36), 0 0 0 5px rgba(25,93,166,.08) !important;
+}
+
+.app :where(.card, .totals-card, .modal, .client-offer-editor, .blank-worktop-designer) :where(
+  .stat, .extra-row, .def-slot, .slot-row, .tpl-row, .preview, .quick-confidence,
+  .quick-metrics span, .quick-switches label, .wizard-step, .shape-choice,
+  .wizard-material-row, .wizard-section-title, .wizard-review-status, .wall-planner-mandatory,
+  .wall-plan, .bulk-copy-row, .bulk-slot, .check-summary-grid > div, .check-actions,
+  .check-toolbar, .variant-prices div, .variant-composition, .variant-slot,
+  .measurement-hint, .measurement-record, .measurement-photo-editor, .facade-tech-card,
+  .facade-part-row, .surcharge-tech-card, .surcharge-tech-row, .module-formula-card,
+  .module-formula-row, .hinge-tech-card, .extra-facade-card, .extra-facade-row,
+  .checklist-item, .blank-export-preview div, .blank-sketch-placeholder, .blank-tech-summary,
+  .dict-smart-picker, .dict-group-block, .dict-card, .blank-worktop-sketch,
+  .blank-worktop-piece-card, .blank-worktop-edge-buttons button, .kb-metrics button,
+  .kb-rule-list div, .kb-route-list button, .kb-hit, .kb-doc, .kb-doc-head,
+  .kb-pricebook-stats div, .kb-detail-pill, .kb-detail-map, .milling-card, .order-hero,
+  .order-status-grid div, .offer-version-list article, .variant-mini-table div,
+  .procurement-group, .procurement-group summary, .procurement-table div, .unresolved-issue,
+  .order-status-strip button, .issue-filter button, .embedded-eskiz-module-mini,
+  .eskiz-template-grid button, .eskiz-module-size-hint, .eskiz-body-recommendations,
+  .eskiz-body-recommendations button, .embedded-eskiz-communication-symbol-preview,
+  .add-filter, .pin-banner, .qr-container, .sync-url-input, .photo-card
+) {
+  color: #102037 !important;
+  background: rgba(255,255,255,.88) !important;
+  border-color: rgba(9,42,85,.14) !important;
+}
+.app :where(.card, .totals-card, .modal, .client-offer-editor, .blank-worktop-designer) :where(.stat, .extra-row, .def-slot, .slot-row, .preview, .quick-confidence, .wizard-step, .shape-choice, .wall-plan, .dict-card, .kb-metrics button, .order-status-grid div, .embedded-eskiz-module-mini) :where(span, small, em, p) {
+  color: #5f7088 !important;
+}
+.app :where(.card, .totals-card, .modal, .client-offer-editor, .blank-worktop-designer) :where(.stat, .extra-row, .def-slot, .slot-row, .preview, .quick-confidence, .wizard-step, .shape-choice, .wall-plan, .dict-card, .kb-metrics button, .order-status-grid div, .embedded-eskiz-module-mini) :where(b, strong, h3, h4) {
+  color: #0b2342 !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+select,
+textarea,
+.sync-url-input {
+  color: #102037 !important;
+  background: #ffffff !important;
+  border-color: rgba(9,42,85,.26) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9) !important;
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):hover,
+select:hover,
+textarea:hover,
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus,
+select:focus,
+textarea:focus,
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  color: #102037 !important;
+  background: #ffffff !important;
+  border-color: #195da6 !important;
+  box-shadow: 0 0 0 3px rgba(25,93,166,.15), inset 0 1px 0 rgba(255,255,255,.9) !important;
+}
+input::placeholder, textarea::placeholder { color: #8090a5 !important; }
+select option { background: #fff !important; color: #102037 !important; }
+
+.btn,
+.btn.primary {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #0b3a75, #092a55) !important;
+  border-color: rgba(9,42,85,.42) !important;
+  box-shadow: 0 12px 26px -18px rgba(9,42,85,.60), inset 0 1px 0 rgba(255,255,255,.16) !important;
+}
+.btn:hover,
+.btn:focus-visible,
+.btn.primary:hover,
+.btn.primary:focus-visible {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #124d92, #092a55) !important;
+  border-color: #195da6 !important;
+  box-shadow: 0 0 0 3px rgba(25,93,166,.16), 0 16px 34px -22px rgba(9,42,85,.55) !important;
+}
+.btn.ghost,
+.btn.add,
+.btn.danger,
+.app button:not(.btn) {
+  color: #0b3a75 !important;
+  background: #ffffff !important;
+  border-color: rgba(9,42,85,.20) !important;
+}
+.btn.ghost:hover,
+.btn.ghost:focus-visible,
+.btn.add:hover,
+.btn.add:focus-visible,
+.app button:not(.btn):hover,
+.app button:not(.btn):focus-visible {
+  color: #ffffff !important;
+  background: #0b3a75 !important;
+  border-color: #0b3a75 !important;
+  box-shadow: 0 0 0 3px rgba(25,93,166,.14) !important;
+}
+.btn.danger { color: #9f1d1d !important; }
+.btn.danger:hover,
+.btn.danger:focus-visible { color: #fff !important; background: #9f1d1d !important; border-color: #9f1d1d !important; }
+
+.table { background: #ffffff !important; border-color: rgba(9,42,85,.16) !important; }
+.table thead th,
+.table th {
+  position: sticky;
+  top: 0;
+  background: linear-gradient(180deg, #0b3a75, #092a55) !important;
+  color: #ffffff !important;
+  border-bottom-color: rgba(255,255,255,.18) !important;
+}
+.table td { color: #102037 !important; background: #fff !important; border-bottom-color: rgba(9,42,85,.10) !important; }
+.table td .muted, .table td small { color: #5f7088 !important; }
+.table tr.row-click:hover td { background: rgba(25,93,166,.08) !important; color: #102037 !important; }
+.table tr.group-row td,
+.table tr.sel-row td,
+.focus-line td { background: rgba(25,93,166,.10) !important; color: #102037 !important; }
+.table tr.has-warn td { background: #fff7e6 !important; color: #603f08 !important; }
+
+.tabs,
+.kb-tabs { background: rgba(255,255,255,.82) !important; border-color: rgba(9,42,85,.16) !important; }
+.tabs button,
+.kb-tab,
+.chip,
+.status-inline,
+.readiness-pill,
+.client-eskiz-layer-controls button {
+  color: #0b3a75 !important;
+  background: #ffffff !important;
+  border-color: rgba(9,42,85,.16) !important;
+}
+.tabs button:hover,
+.tabs button:focus-visible,
+.kb-tab:hover,
+.kb-tab:focus-visible,
+.chip:hover,
+.chip:focus-visible,
+.status-inline:hover,
+.status-inline:focus-visible,
+.client-eskiz-layer-controls button:hover,
+.client-eskiz-layer-controls button:focus-visible {
+  color: #ffffff !important;
+  background: #0b3a75 !important;
+  border-color: #0b3a75 !important;
+}
+.tabs button.active,
+.kb-tab.active,
+.chip.active,
+.client-eskiz-layer-controls button.active {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #0b3a75, #195da6) !important;
+  border-color: #195da6 !important;
+}
+
+.dropdown-menu {
+  background: #ffffff !important;
+  border-color: rgba(9,42,85,.16) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.dropdown-menu button { color: #0b3a75 !important; background: transparent !important; }
+.dropdown-menu button:hover { color: #fff !important; background: #0b3a75 !important; }
+
+.embedded-eskiz-editor {
+  background: linear-gradient(180deg, #f7fbff, #eef5fc) !important;
+  color: #102037 !important;
+}
+.embedded-eskiz-header,
+.embedded-eskiz-tools,
+.embedded-eskiz-status {
+  background: linear-gradient(135deg, #092a55, #0b3a75) !important;
+  color: #eaf4ff !important;
+  border-color: rgba(255,255,255,.14) !important;
+}
+.embedded-eskiz-viewport { background: #eef4fb !important; }
+.embedded-eskiz-inspector { background: #ffffff !important; color: #102037 !important; border-left-color: rgba(9,42,85,.16) !important; }
+
+.qr-container {
+  background: #ffffff !important;
+  border: 1px solid rgba(9,42,85,.18) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+.qr-image {
+  display: block;
+  width: min(300px, 100%) !important;
+  height: auto !important;
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid rgba(9,42,85,.12);
+  border-radius: 14px;
+  image-rendering: auto;
+}
+.pin-banner { background: #eef6ff !important; border-color: #0b3a75 !important; }
+.pin-code { color: #0b3a75 !important; background: #fff !important; }
+.warn-box,
+.warning-row { background: #fff7e6 !important; color: #694707 !important; border-color: #f0d28a !important; }
+.ok-box,
+.confirmed-row { background: #eefaf2 !important; color: #145c2e !important; border-color: #bfe4cd !important; }
+
+@media print {
+  body { background: #fff !important; color: #111 !important; }
+  .sidebar, .main::before, body::before { display: none !important; }
+  .app :where(.page-head, .card, .totals-card, .empty, .dashboard-filters, .modal, .table, .client-doc) {
+    color: #111 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+}
+
+/* Keep left navigation dark-blue even after generic button daylight overrides. */
+.app .sidebar nav button:not(.btn) {
+  color: rgba(220,236,255,.82) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+}
+.app .sidebar nav button:not(.btn):hover,
+.app .sidebar nav button:not(.btn):focus-visible {
+  color: #ffffff !important;
+  background: rgba(255,255,255,.10) !important;
+  border-color: rgba(184,218,255,.24) !important;
+}
+.app .sidebar nav button.active:not(.btn) {
+  color: #092a55 !important;
+  background: linear-gradient(135deg, #ffffff, #cfe6ff) !important;
+  border-color: rgba(255,255,255,.5) !important;
+}
+
+/* Active secondary controls need an explicit navy fill after the generic daylight button reset. */
+.app :where(
+  .blank-worktop-edge-buttons button.active,
+  .blank-worktop-piece-card.active,
+  .shape-choice.active,
+  .wizard-step.active,
+  .order-status-strip button.active,
+  .issue-filter button.active,
+  .eskiz-template-grid button.active,
+  .kb-route-list button.active,
+  .dict-card.active,
+  .offer-version-list article.active
+) {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #0b3a75, #195da6) !important;
+  border-color: #195da6 !important;
+  box-shadow: 0 14px 30px -22px rgba(9,42,85,.65) !important;
+}
+.app :where(.blank-worktop-edge-buttons button.active small, .blank-worktop-piece-card.active span, .blank-worktop-piece-card.active small) {
+  color: rgba(255,255,255,.80) !important;
+}
+.app :where(.blank-worktop-edge-buttons button.active b, .blank-worktop-piece-card.active b) {
+  color: #ffffff !important;
+}

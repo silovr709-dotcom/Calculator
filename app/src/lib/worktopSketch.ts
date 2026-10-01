@@ -7,10 +7,8 @@ export const WORKTOP_EDGE_SYMBOLS: Record<WorktopEdgeKind, string> = {
   pvc: 'Х',
   v: 'V',
   pf: 'ПФ',
-  // Для стыков в официальном бланке используются не текстовые // / ≈, а синие пиктограммы.
-  // Эти строки оставлены только как короткий fallback для текстовых мест интерфейса.
-  eurozapil: '⧖',
-  eurostyk: '↔',
+  eurozapil: '//',
+  eurostyk: '≈',
 };
 
 export const WORKTOP_EDGE_SHORT_LABELS: Record<WorktopEdgeKind, string> = {
@@ -158,6 +156,125 @@ export function snapWorktopPiecePosition(layouts: WorktopSketchPieceLayout[], pi
   };
 }
 
+
+export interface WorktopScreenRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  centerX: number;
+  centerY: number;
+}
+
+export interface WorktopLabelPlacement {
+  x: number;
+  y: number;
+  rotate?: number;
+}
+
+export interface WorktopDimensionPlacement {
+  horizontalValue: number | null | undefined;
+  horizontal: WorktopLabelPlacement;
+  verticalValue: number | null | undefined;
+  vertical: WorktopLabelPlacement;
+  verticalSide: 'left' | 'right' | 'inside';
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (max < min) return min;
+  return Math.max(min, Math.min(max, value));
+}
+
+function rangesOverlap(a1: number, a2: number, b1: number, b2: number): number {
+  return Math.max(0, Math.min(a2, b2) - Math.max(a1, b1));
+}
+
+export function worktopScreenRect(layout: WorktopSketchPieceLayout, metrics: WorktopSketchMetrics): WorktopScreenRect {
+  const x = metrics.offsetX + layout.x * metrics.scale;
+  const y = metrics.offsetY + layout.y * metrics.scale;
+  const width = layout.width * metrics.scale;
+  const height = layout.height * metrics.scale;
+  return { x, y, width, height, centerX: x + width / 2, centerY: y + height / 2 };
+}
+
+export function worktopSideHasNeighbor(layout: WorktopSketchPieceLayout, layouts: WorktopSketchPieceLayout[], side: WorktopEdgeSide, toleranceMm = 35): boolean {
+  return layouts.some((other) => {
+    if (other.piece.id === layout.piece.id) return false;
+    if (side === 'back') {
+      return Math.abs((other.y + other.height) - layout.y) <= toleranceMm && rangesOverlap(layout.x, layout.x + layout.width, other.x, other.x + other.width) > 40;
+    }
+    if (side === 'front') {
+      return Math.abs(other.y - (layout.y + layout.height)) <= toleranceMm && rangesOverlap(layout.x, layout.x + layout.width, other.x, other.x + other.width) > 40;
+    }
+    if (side === 'left') {
+      return Math.abs((other.x + other.width) - layout.x) <= toleranceMm && rangesOverlap(layout.y, layout.y + layout.height, other.y, other.y + other.height) > 40;
+    }
+    return Math.abs(other.x - (layout.x + layout.width)) <= toleranceMm && rangesOverlap(layout.y, layout.y + layout.height, other.y, other.y + other.height) > 40;
+  });
+}
+
+export function worktopEdgeLabelPlacement(
+  layout: WorktopSketchPieceLayout,
+  metrics: WorktopSketchMetrics,
+  side: WorktopEdgeSide,
+  svgWidth = metrics.widthPx,
+  svgHeight = metrics.heightPx,
+): WorktopLabelPlacement {
+  const rect = worktopScreenRect(layout, metrics);
+  const joined = worktopSideHasNeighbor(layout, metrics.layouts, side);
+  const labelOffset = 20;
+  if (side === 'back') {
+    const inside = joined || rect.y - labelOffset < 26;
+    return { x: clamp(rect.centerX, 26, svgWidth - 26), y: clamp(inside ? rect.y + labelOffset : rect.y - labelOffset, 18, svgHeight - 18), rotate: 0 };
+  }
+  if (side === 'front') {
+    const inside = joined || rect.y + rect.height + labelOffset > svgHeight - 50;
+    return { x: clamp(rect.centerX, 26, svgWidth - 26), y: clamp(inside ? rect.y + rect.height - labelOffset : rect.y + rect.height + labelOffset, 18, svgHeight - 18), rotate: 0 };
+  }
+  if (side === 'left') {
+    const inside = joined || rect.x - labelOffset < 26;
+    return { x: clamp(inside ? rect.x + labelOffset : rect.x - labelOffset, 18, svgWidth - 18), y: clamp(rect.centerY, 26, svgHeight - 56), rotate: -90 };
+  }
+  const inside = joined || rect.x + rect.width + labelOffset > svgWidth - 26;
+  return { x: clamp(inside ? rect.x + rect.width - labelOffset : rect.x + rect.width + labelOffset, 18, svgWidth - 18), y: clamp(rect.centerY, 26, svgHeight - 56), rotate: 90 };
+}
+
+export function worktopDimensionPlacement(
+  layout: WorktopSketchPieceLayout,
+  metrics: WorktopSketchMetrics,
+  svgWidth = metrics.widthPx,
+  svgHeight = metrics.heightPx,
+): WorktopDimensionPlacement {
+  const rect = worktopScreenRect(layout, metrics);
+  const topBusy = worktopSideHasNeighbor(layout, metrics.layouts, 'back') || Boolean(layout.piece.back);
+  const bottomBusy = worktopSideHasNeighbor(layout, metrics.layouts, 'front') || Boolean(layout.piece.front);
+  const horizontalInside = topBusy || rect.y < 52;
+  const horizontalY = horizontalInside
+    ? (bottomBusy ? rect.y + 24 : rect.y + rect.height + 34 > svgHeight - 50 ? rect.y + 24 : rect.y + rect.height + 24)
+    : rect.y - 34;
+  const rightBusy = worktopSideHasNeighbor(layout, metrics.layouts, 'right') || Boolean(layout.piece.right);
+  const leftBusy = worktopSideHasNeighbor(layout, metrics.layouts, 'left') || Boolean(layout.piece.left);
+  let verticalSide: WorktopDimensionPlacement['verticalSide'] = 'right';
+  let verticalX = rect.x + rect.width + 52;
+  if (rightBusy || verticalX > svgWidth - 46) {
+    verticalSide = 'left';
+    verticalX = rect.x - 52;
+  }
+  if (leftBusy || verticalX < 46) {
+    verticalSide = 'inside';
+    verticalX = rect.x + rect.width - 32;
+  }
+  return {
+    horizontalValue: layout.rotated ? layout.piece.widthMm : layout.piece.lengthMm,
+    horizontal: { x: clamp(rect.centerX, 42, svgWidth - 42), y: clamp(horizontalY, 18, svgHeight - 60), rotate: 0 },
+    verticalValue: layout.rotated ? layout.piece.lengthMm : layout.piece.widthMm,
+    // Вертикальный размер ставим читаемой горизонтальной плашкой рядом со свободной стороной,
+    // а не повернутым текстом на стыке — так длинные вертикальные детали не перекрывают соседей.
+    vertical: { x: clamp(verticalX, 42, svgWidth - 42), y: clamp(rect.centerY, 32, svgHeight - 62), rotate: 0 },
+    verticalSide,
+  };
+}
+
 export function autoArrangeWorktopPieces(pieces: WorktopPiece[], mode: WorktopSketchLayoutMode): WorktopPiece[] {
   if (pieces.length === 0) return pieces;
   const gap = 80;
@@ -212,38 +329,22 @@ export function worktopSketchMetrics(pieces: WorktopPiece[], widthPx: number, he
   return { layouts, minX, minY, maxX, maxY, contentWidth, contentHeight, scale: safeScale, offsetX, offsetY, widthPx, heightPx };
 }
 
-function edgeIconSvg(kind: WorktopEdgeKind): string {
-  const blue = '#4f86b7';
-  if (kind === 'eurozapil') {
-    // Пиктограмма как в бланке: две встречные «ласточкины» выборки, а не текстовые //.
-    return `<g fill="${blue}" stroke="${blue}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
-      <path d="M -17 -7 L -7 -3 L -17 1 Z" />
-      <path d="M 17 -7 L 7 -3 L 17 1 Z" />
-      <line x1="-7" y1="-3" x2="7" y2="-3" />
-      <path d="M -17 1 L -7 5 L -17 9 Z" />
-      <path d="M 17 1 L 7 5 L 17 9 Z" />
-      <line x1="-7" y1="5" x2="7" y2="5" />
-    </g>`;
-  }
-  if (kind === 'eurostyk') {
-    // Пиктограмма «евростык»: двунаправленная стяжка с центральным соединением.
-    return `<g fill="none" stroke="${blue}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">
-      <path d="M -18 0 H 18" />
-      <path d="M -18 0 L -10 -6 M -18 0 L -10 6 M 18 0 L 10 -6 M 18 0 L 10 6" />
-      <path d="M -3 -8 H 3 V 8 H -3 Z" fill="#fff" />
-      <path d="M -3 -8 H 3 V 8 H -3 Z" />
-    </g>`;
-  }
-  return '';
-}
-
 function edgeLabel(kind: WorktopEdgeKind, x: number, y: number, rotate = 0) {
   const symbol = worktopEdgeSymbol(kind);
-  const icon = edgeIconSvg(kind);
-  const w = icon ? 46 : Math.max(24, symbol.length * 8 + 12);
+  const w = Math.max(24, symbol.length * 8 + 12);
   return `<g transform="translate(${x} ${y}) rotate(${rotate})">
     <rect x="${-w / 2}" y="-12" width="${w}" height="24" rx="6" fill="#fff" stroke="#1f6feb" stroke-width="1.4" />
-    ${icon || `<text text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="900" fill="#184f9e">${xml(symbol)}</text>`}
+    <text text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="900" fill="#184f9e">${xml(symbol)}</text>
+  </g>`;
+}
+
+function dimensionLabel(value: number | null | undefined, placement: WorktopLabelPlacement) {
+  if (!value) return '';
+  const text = `${value} мм`;
+  const w = Math.max(48, text.length * 6.6 + 14);
+  return `<g transform="translate(${placement.x} ${placement.y}) rotate(${placement.rotate ?? 0})">
+    <rect x="${-w / 2}" y="-10" width="${w}" height="20" rx="5" fill="#ffffff" stroke="#c9d8ea" stroke-width="1" />
+    <text text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="800" fill="#111827">${xml(text)}</text>
   </g>`;
 }
 
@@ -258,26 +359,22 @@ export function buildWorktopPlanSvg(pieces: WorktopPiece[], options: WorktopSket
   const metrics = worktopSketchMetrics(pieces, width, height, showLegend);
   const parts = metrics.layouts.map((layout, index) => {
     const p = layout.piece;
-    const x = metrics.offsetX + layout.x * metrics.scale;
-    const y = metrics.offsetY + layout.y * metrics.scale;
-    const w = layout.width * metrics.scale;
-    const h = layout.height * metrics.scale;
-    const centerX = x + w / 2;
-    const centerY = y + h / 2;
+    const rect = worktopScreenRect(layout, metrics);
     const name = p.name || `Деталь ${index + 1}`;
     const size = `${p.lengthMm ?? '—'}×${p.widthMm ?? '—'} мм${layout.rotated ? ' · повернута' : ''}`;
+    const dim = worktopDimensionPlacement(layout, metrics, width, height);
     const labels = [
-      p.back ? edgeLine(x, y, x + w, y) + edgeLabel(p.back, centerX, y - 18) : '',
-      p.front ? edgeLine(x, y + h, x + w, y + h) + edgeLabel(p.front, centerX, y + h + 18) : '',
-      p.left ? edgeLine(x, y, x, y + h) + edgeLabel(p.left, x - 18, centerY, -90) : '',
-      p.right ? edgeLine(x + w, y, x + w, y + h) + edgeLabel(p.right, x + w + 18, centerY, 90) : '',
+      p.back ? edgeLine(rect.x, rect.y, rect.x + rect.width, rect.y) + edgeLabel(p.back, worktopEdgeLabelPlacement(layout, metrics, 'back', width, height).x, worktopEdgeLabelPlacement(layout, metrics, 'back', width, height).y, worktopEdgeLabelPlacement(layout, metrics, 'back', width, height).rotate) : '',
+      p.front ? edgeLine(rect.x, rect.y + rect.height, rect.x + rect.width, rect.y + rect.height) + edgeLabel(p.front, worktopEdgeLabelPlacement(layout, metrics, 'front', width, height).x, worktopEdgeLabelPlacement(layout, metrics, 'front', width, height).y, worktopEdgeLabelPlacement(layout, metrics, 'front', width, height).rotate) : '',
+      p.left ? edgeLine(rect.x, rect.y, rect.x, rect.y + rect.height) + edgeLabel(p.left, worktopEdgeLabelPlacement(layout, metrics, 'left', width, height).x, worktopEdgeLabelPlacement(layout, metrics, 'left', width, height).y, worktopEdgeLabelPlacement(layout, metrics, 'left', width, height).rotate) : '',
+      p.right ? edgeLine(rect.x + rect.width, rect.y, rect.x + rect.width, rect.y + rect.height) + edgeLabel(p.right, worktopEdgeLabelPlacement(layout, metrics, 'right', width, height).x, worktopEdgeLabelPlacement(layout, metrics, 'right', width, height).y, worktopEdgeLabelPlacement(layout, metrics, 'right', width, height).rotate) : '',
     ].join('');
     return `<g>
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#ffffff" stroke="#7a8380" stroke-width="1.8" stroke-dasharray="9 6" />
-      <text x="${centerX}" y="${centerY - 8}" text-anchor="middle" font-size="13" font-weight="900" fill="#1f2f29">${xml(name)}</text>
-      <text x="${centerX}" y="${centerY + 10}" text-anchor="middle" font-size="11" font-weight="700" fill="#55685d">${xml(size)}</text>
-      <text x="${centerX}" y="${Math.max(18, y - 8)}" text-anchor="middle" font-size="11" font-weight="800" fill="#111827">${xml(p.lengthMm ?? '')}${p.lengthMm ? ' мм' : ''}</text>
-      <text x="${Math.min(width - 10, x + w + 24)}" y="${centerY}" text-anchor="middle" font-size="11" font-weight="800" fill="#111827" transform="rotate(90 ${Math.min(width - 10, x + w + 24)} ${centerY})">${xml(p.widthMm ?? '')}${p.widthMm ? ' мм' : ''}</text>
+      <rect x="${rect.x}" y="${rect.y}" width="${rect.width}" height="${rect.height}" fill="#ffffff" stroke="#7a8380" stroke-width="1.8" stroke-dasharray="9 6" />
+      <text x="${rect.centerX}" y="${rect.centerY - 8}" text-anchor="middle" font-size="13" font-weight="900" fill="#1f2f29">${xml(name)}</text>
+      <text x="${rect.centerX}" y="${rect.centerY + 10}" text-anchor="middle" font-size="11" font-weight="700" fill="#55685d">${xml(size)}</text>
+      ${dimensionLabel(dim.horizontalValue, dim.horizontal)}
+      ${dimensionLabel(dim.verticalValue, dim.vertical)}
       ${labels}
     </g>`;
   }).join('\n');

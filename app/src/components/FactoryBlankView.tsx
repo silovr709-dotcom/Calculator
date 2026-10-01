@@ -3,7 +3,7 @@ import type { Pricebook, Project } from '../types';
 import { checkFactoryBlank, draftFactoryBlank, FACTORY_BLANK_SPECS, factoryBlankProgress, type BlankIssue } from '../lib/factoryBlank';
 import { checkDictRules, factoryDictSuggestionGroups, loadFactoryDicts, type FactoryDicts } from '../lib/factoryDicts';
 import { BACK_EDGE_NOTE, checkWorktopPlan, edgeKindLabel, suggestWorktopPlan, WORKTOP_EDGE_KINDS } from '../lib/worktopPlan';
-import { autoArrangeWorktopPieces, nextWorktopEdgeKind, renderWorktopPlanPng, snapWorktopPiecePosition, WORKTOP_EDGE_SHORT_LABELS, worktopEdgeSymbol, worktopSketchMetrics, type WorktopEdgeSide, type WorktopSketchLayoutMode, type WorktopSketchPieceLayout } from '../lib/worktopSketch';
+import { autoArrangeWorktopPieces, nextWorktopEdgeKind, renderWorktopPlanPng, snapWorktopPiecePosition, WORKTOP_EDGE_SHORT_LABELS, worktopDimensionPlacement, worktopEdgeLabelPlacement, worktopEdgeSymbol, worktopSketchMetrics, type WorktopEdgeSide, type WorktopSketchLayoutMode, type WorktopSketchPieceLayout } from '../lib/worktopSketch';
 import { lineMatchesChecklistKey } from '../lib/checklist';
 import { blankCellRefLabel, blankSketchRangeLabel, exportFactoryBlankXlsx, getBlankSheetMap, type FactoryTechPack } from '../lib/factoryBlankXls';
 import { buildFactoryTechCommunicationRows, buildFactoryTechModuleRows, buildFactoryTechReadinessRows, factoryTechReadinessSummary } from '../lib/factoryTechPack';
@@ -84,40 +84,31 @@ function WorktopMmInput(props: { value: number | null | undefined; onValue: (val
 }
 
 function WorktopSvgEdgeMark({ kind }: { kind: WorktopEdgeKind }) {
-  if (kind === 'eurozapil') {
-    return <g fill="#4f86b7" stroke="#4f86b7" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round">
-      <path d="M -17 -7 L -7 -3 L -17 1 Z" />
-      <path d="M 17 -7 L 7 -3 L 17 1 Z" />
-      <line x1="-7" y1="-3" x2="7" y2="-3" />
-      <path d="M -17 1 L -7 5 L -17 9 Z" />
-      <path d="M 17 1 L 7 5 L 17 9 Z" />
-      <line x1="-7" y1="5" x2="7" y2="5" />
-    </g>;
-  }
-  if (kind === 'eurostyk') {
-    return <g fill="none" stroke="#4f86b7" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round">
-      <path d="M -18 0 H 18" />
-      <path d="M -18 0 L -10 -6 M -18 0 L -10 6 M 18 0 L 10 -6 M 18 0 L 10 6" />
-      <path d="M -3 -8 H 3 V 8 H -3 Z" fill="#fff" />
-      <path d="M -3 -8 H 3 V 8 H -3 Z" />
-    </g>;
-  }
   return <text textAnchor="middle" dominantBaseline="middle" fontSize={11} fontWeight={900} fill="#184f9e">{worktopEdgeSymbol(kind)}</text>;
 }
 
 function WorktopEdgeButtonMark({ kind }: { kind: WorktopEdgeKind }) {
-  if (kind === 'eurozapil' || kind === 'eurostyk') {
-    return <svg className="blank-worktop-edge-icon" viewBox="-22 -13 44 28" aria-hidden="true"><WorktopSvgEdgeMark kind={kind} /></svg>;
-  }
   return <>{worktopEdgeSymbol(kind)}</>;
 }
 
 function WorktopSvgEdgeLabel(props: { kind: WorktopEdgeKind; x: number; y: number; rotate?: number; onClick: () => void }) {
   const symbol = worktopEdgeSymbol(props.kind);
-  const width = props.kind === 'eurozapil' || props.kind === 'eurostyk' ? 46 : Math.max(24, symbol.length * 8 + 12);
+  const width = Math.max(24, symbol.length * 8 + 12);
   return <g className="blank-worktop-svg-edge-label" transform={`translate(${props.x} ${props.y}) rotate(${props.rotate ?? 0})`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); props.onClick(); }}>
     <rect x={-width / 2} y={-12} width={width} height={24} rx={6} fill="#fff" stroke="#1f6feb" strokeWidth={1.4} />
     <WorktopSvgEdgeMark kind={props.kind} />
+  </g>;
+}
+
+
+
+function WorktopSvgDimensionLabel(props: { value: number | null | undefined; x: number; y: number; rotate?: number }) {
+  if (!props.value) return null;
+  const text = `${props.value} мм`;
+  const width = Math.max(48, text.length * 6.6 + 14);
+  return <g className="blank-worktop-svg-dimension-label" transform={`translate(${props.x} ${props.y}) rotate(${props.rotate ?? 0})`} onPointerDown={(event) => event.stopPropagation()}>
+    <rect x={-width / 2} y={-10} width={width} height={20} rx={5} fill="#fff" stroke="#c9d8ea" strokeWidth={1} />
+    <text textAnchor="middle" dominantBaseline="middle" fontSize={11} fontWeight={800} fill="#111827">{text}</text>
   </g>;
 }
 
@@ -229,16 +220,21 @@ function WorktopPlanDesigner(props: {
           const selected = selectedId === piece.id;
           const name = piece.name || `Деталь ${index + 1}`;
           const size = `${piece.lengthMm ?? '—'}×${piece.widthMm ?? '—'} мм${layout.rotated ? ' · повернута' : ''}`;
+          const dim = worktopDimensionPlacement(layout, metrics, WORKTOP_SKETCH_WIDTH, WORKTOP_SKETCH_HEIGHT);
+          const backLabel = worktopEdgeLabelPlacement(layout, metrics, 'back', WORKTOP_SKETCH_WIDTH, WORKTOP_SKETCH_HEIGHT);
+          const frontLabel = worktopEdgeLabelPlacement(layout, metrics, 'front', WORKTOP_SKETCH_WIDTH, WORKTOP_SKETCH_HEIGHT);
+          const leftLabel = worktopEdgeLabelPlacement(layout, metrics, 'left', WORKTOP_SKETCH_WIDTH, WORKTOP_SKETCH_HEIGHT);
+          const rightLabel = worktopEdgeLabelPlacement(layout, metrics, 'right', WORKTOP_SKETCH_WIDTH, WORKTOP_SKETCH_HEIGHT);
           return <g key={piece.id} className={`blank-worktop-svg-piece ${selected ? 'selected' : ''}`} onPointerDown={(event) => startDrag(event, layout)} onClick={() => setSelectedId(piece.id)}>
             <rect x={x} y={y} width={width} height={height} rx="3" fill="#ffffff" stroke={selected ? '#ff5c35' : '#7a8380'} strokeWidth={selected ? 2.8 : 1.8} strokeDasharray={selected ? '0' : '9 6'} />
             <text x={centerX} y={centerY - 8} textAnchor="middle" fontSize="13" fontWeight="900" fill="#1f2f29">{name}</text>
             <text x={centerX} y={centerY + 10} textAnchor="middle" fontSize="11" fontWeight="700" fill="#55685d">{size}</text>
-            <text x={centerX} y={Math.max(18, y - 8)} textAnchor="middle" fontSize="11" fontWeight="800" fill="#111827">{piece.lengthMm ? `${piece.lengthMm} мм` : ''}</text>
-            <text x={Math.min(WORKTOP_SKETCH_WIDTH - 10, x + width + 24)} y={centerY} textAnchor="middle" fontSize="11" fontWeight="800" fill="#111827" transform={`rotate(90 ${Math.min(WORKTOP_SKETCH_WIDTH - 10, x + width + 24)} ${centerY})`}>{piece.widthMm ? `${piece.widthMm} мм` : ''}</text>
-            {piece.back && <><line x1={x} y1={y} x2={x + width} y2={y} stroke="#1f6feb" strokeWidth="3.2" strokeLinecap="round" /><WorktopSvgEdgeLabel kind={piece.back} x={centerX} y={y - 18} onClick={() => cycleEdge(piece, 'back')} /></>}
-            {piece.front && <><line x1={x} y1={y + height} x2={x + width} y2={y + height} stroke="#1f6feb" strokeWidth="3.2" strokeLinecap="round" /><WorktopSvgEdgeLabel kind={piece.front} x={centerX} y={y + height + 18} onClick={() => cycleEdge(piece, 'front')} /></>}
-            {piece.left && <><line x1={x} y1={y} x2={x} y2={y + height} stroke="#1f6feb" strokeWidth="3.2" strokeLinecap="round" /><WorktopSvgEdgeLabel kind={piece.left} x={x - 18} y={centerY} rotate={-90} onClick={() => cycleEdge(piece, 'left')} /></>}
-            {piece.right && <><line x1={x + width} y1={y} x2={x + width} y2={y + height} stroke="#1f6feb" strokeWidth="3.2" strokeLinecap="round" /><WorktopSvgEdgeLabel kind={piece.right} x={x + width + 18} y={centerY} rotate={90} onClick={() => cycleEdge(piece, 'right')} /></>}
+            <WorktopSvgDimensionLabel value={dim.horizontalValue} x={dim.horizontal.x} y={dim.horizontal.y} rotate={dim.horizontal.rotate} />
+            <WorktopSvgDimensionLabel value={dim.verticalValue} x={dim.vertical.x} y={dim.vertical.y} rotate={dim.vertical.rotate} />
+            {piece.back && <><line x1={x} y1={y} x2={x + width} y2={y} stroke="#1f6feb" strokeWidth="3.2" strokeLinecap="round" /><WorktopSvgEdgeLabel kind={piece.back} x={backLabel.x} y={backLabel.y} rotate={backLabel.rotate} onClick={() => cycleEdge(piece, 'back')} /></>}
+            {piece.front && <><line x1={x} y1={y + height} x2={x + width} y2={y + height} stroke="#1f6feb" strokeWidth="3.2" strokeLinecap="round" /><WorktopSvgEdgeLabel kind={piece.front} x={frontLabel.x} y={frontLabel.y} rotate={frontLabel.rotate} onClick={() => cycleEdge(piece, 'front')} /></>}
+            {piece.left && <><line x1={x} y1={y} x2={x} y2={y + height} stroke="#1f6feb" strokeWidth="3.2" strokeLinecap="round" /><WorktopSvgEdgeLabel kind={piece.left} x={leftLabel.x} y={leftLabel.y} rotate={leftLabel.rotate} onClick={() => cycleEdge(piece, 'left')} /></>}
+            {piece.right && <><line x1={x + width} y1={y} x2={x + width} y2={y + height} stroke="#1f6feb" strokeWidth="3.2" strokeLinecap="round" /><WorktopSvgEdgeLabel kind={piece.right} x={rightLabel.x} y={rightLabel.y} rotate={rightLabel.rotate} onClick={() => cycleEdge(piece, 'right')} /></>}
             {selected && <>
               <rect data-worktop-edge-hotspot="true" x={x} y={y - 16} width={width} height="32" className="blank-worktop-edge-hotspot" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); cycleEdge(piece, 'back'); }}><title>Зад: переключить обработку. Если оставить пустым — ПВХ 0,4 белая по умолчанию.</title></rect>
               <rect data-worktop-edge-hotspot="true" x={x} y={y + height - 16} width={width} height="32" className="blank-worktop-edge-hotspot" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); cycleEdge(piece, 'front'); }}><title>Перед: переключить обработку</title></rect>
