@@ -541,9 +541,10 @@ export default function EmbeddedEskizEditor(props: Props) {
     event.preventDefault();
     event.stopPropagation();
     const target = point(event);
+    selectOnly(null);
     props.onCommunicationPoint(project.id, Math.round(target.x), Math.round(target.y));
     setCommunicationDraftPoint(null);
-  }, [point, project, props]);
+  }, [point, project, props, selectOnly]);
 
   const handleCommunicationStageMove = useCallback((event: ReactPointerEvent<SVGRectElement>) => {
     if (!project || !props.pickingDistancePoint) return;
@@ -551,6 +552,7 @@ export default function EmbeddedEskizEditor(props: Props) {
   }, [point, project, props.pickingDistancePoint]);
 
   const handleCommunicationPointerDown = useCallback((event: ReactPointerEvent<SVGGElement>, marker: EskizCommunicationMarker) => {
+    event.preventDefault();
     event.stopPropagation();
     props.onCommunicationClick(marker.eskizId, marker);
     selectOnly(null);
@@ -560,6 +562,7 @@ export default function EmbeddedEskizEditor(props: Props) {
   }, [communicationMode, point, props, selectOnly]);
 
   const handleDistanceEndPointerDown = useCallback((event: ReactPointerEvent<SVGCircleElement>, marker: EskizCommunicationMarker, distance: EskizCommunicationDistance) => {
+    event.preventDefault();
     event.stopPropagation();
     props.onCommunicationClick(marker.eskizId, marker);
     selectOnly(null);
