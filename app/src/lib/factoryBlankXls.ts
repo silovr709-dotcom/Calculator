@@ -22,7 +22,7 @@ export interface BlankSketchSlot {
   /** Координаты ExcelJS: нумерация колонок/строк с нуля, br — правый нижний край области. */
   tl: { col: number; row: number };
   br: { col: number; row: number };
-  /** Оптимальный размер PNG: совпадает с пропорциями области, чтобы Excel не растягивал эскиз. */
+  /** Максимальный размер штатного поля в px; картинка вписывается в него без искажения пропорций. */
   targetPx: { width: number; height: number };
 }
 
@@ -362,6 +362,16 @@ function addSectionTitle(ws: ExcelJS.Worksheet, rowIndex: number, title: string,
   ws.getRow(rowIndex).height = subtitle ? 34 : 22;
 }
 
+function imageSizeWithinBox(image: BlankSketchImage, box: { width: number; height: number }): { width: number; height: number } {
+  const sourceWidth = Math.max(1, image.width ?? box.width);
+  const sourceHeight = Math.max(1, image.height ?? box.height);
+  const scale = Math.min(box.width / sourceWidth, box.height / sourceHeight);
+  return {
+    width: Math.max(1, Math.round(sourceWidth * scale)),
+    height: Math.max(1, Math.round(sourceHeight * scale)),
+  };
+}
+
 function addTable(ws: ExcelJS.Worksheet, startRow: number, headers: string[], rows: string[][]): number {
   const header = ws.getRow(startRow);
   header.values = ['', ...headers];
@@ -404,8 +414,11 @@ function addFactoryTechSheet(wb: ExcelJS.Workbook, techPack: FactoryTechPack) {
     imageTitle.font = { bold: true, size: 12, color: { argb: 'FF24382F' } };
     imageTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF7FBF9' } };
     const imageId = wb.addImage({ base64: techPack.sketchImage.base64, extension: techPack.sketchImage.extension });
-    (ws as unknown as { addImage: (imageId: number, range: unknown) => void }).addImage(imageId, { tl: { col: 0, row: 4 }, br: { col: 11, row: 31 }, editAs: 'oneCell' });
-    rowIndex = 33;
+    const imageSize = imageSizeWithinBox(techPack.sketchImage, { width: 1500, height: 680 });
+    (ws as unknown as { addImage: (imageId: number, range: unknown) => void }).addImage(imageId, { tl: { col: 0, row: 4 }, ext: imageSize, editAs: 'oneCell' });
+    const imageRows = Math.max(8, Math.ceil((imageSize.height + 12) / 20));
+    for (let row = 5; row < 5 + imageRows; row += 1) ws.getRow(row).height = 15;
+    rowIndex = 5 + imageRows + 2;
   }
 
   const errors = techPack.readinessRows.filter((row) => row.level === 'error').length;
@@ -468,8 +481,10 @@ export async function buildFactoryBlankWorkbook(
   // Текст/клетки под ним не трогаем: официальная сетка и подписи остаются как в шаблоне.
   if (sketchImage && map.sketch) {
     const imageId = wb.addImage({ base64: sketchImage.base64, extension: sketchImage.extension });
-    // В рантайме ExcelJS принимает обычные координаты { col, row }; его .d.ts ожидает внутренний Anchor.
-    (ws as unknown as { addImage: (imageId: number, range: unknown) => void }).addImage(imageId, { tl: map.sketch.tl, br: map.sketch.br, editAs: 'oneCell' });
+    const imageSize = imageSizeWithinBox(sketchImage, map.sketch.targetPx);
+    // В рантайме ExcelJS принимает обычные координаты { col, row } и размер { width, height } в px.
+    // Используем ext вместо br, чтобы Excel не растягивал широкий эскиз под высокий штатный блок A14:I47.
+    (ws as unknown as { addImage: (imageId: number, range: unknown) => void }).addImage(imageId, { tl: map.sketch.tl, ext: imageSize, editAs: 'oneCell' });
   }
 
   // 4) Дополнительный техлист не меняет официальный бланк, но даёт фабрике крупный эскиз,

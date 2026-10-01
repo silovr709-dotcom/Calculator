@@ -8,11 +8,21 @@ import { blankCellRefLabel, blankSketchRangeLabel, exportFactoryBlankXlsx, getBl
 import { buildFactoryTechCommunicationRows, buildFactoryTechModuleRows, buildFactoryTechReadinessRows, factoryTechReadinessSummary } from '../lib/factoryTechPack';
 import { uid } from '../lib/storage';
 import type { WorktopEdgeKind, WorktopPiece } from '../types';
-import { snapshotProject } from '../lib/eskizPro';
+import { snapshotProject, type EskizProject } from '../lib/eskizPro';
 import { renderEskizSketchPng, type EskizSketchModuleMarkerMode } from '../lib/eskizSketchExport';
 import EskizProjectPreview from './EskizProjectPreview';
 
 const NO_PIECES: WorktopPiece[] = [];
+
+function fitEskizExportSize(project: EskizProject, box: { width: number; height: number }) {
+  const sourceWidth = Math.max(1, project.image.width);
+  const sourceHeight = Math.max(1, project.image.height);
+  const scale = Math.min(box.width / sourceWidth, box.height / sourceHeight);
+  return {
+    width: Math.max(1, Math.round(sourceWidth * scale)),
+    height: Math.max(1, Math.round(sourceHeight * scale)),
+  };
+}
 
 function FactoryDictPicker(props: {
   fieldKey: string;
@@ -264,26 +274,30 @@ export default function FactoryBlankView(props: {
     if (errors.length > 0 && !confirm(`В бланке ${errors.length} незаполненных обязательных пунктов. Всё равно выгрузить в Excel?`)) return;
     setExporting(true);
     try {
-      const sketchImage = canInsertSketch && selectedSketch && sheetMap?.sketch
+      const sketchSize = canInsertSketch && selectedSketch && sheetMap?.sketch
+        ? fitEskizExportSize(selectedSketch, sheetMap.sketch.targetPx)
+        : null;
+      const sketchImage = sketchSize && selectedSketch
         ? await renderEskizSketchPng(selectedSketch, {
-          widthPx: sheetMap.sketch.targetPx.width,
-          heightPx: sheetMap.sketch.targetPx.height,
+          widthPx: sketchSize.width,
+          heightPx: sketchSize.height,
+          frame: 'none',
           moduleMarkerMode: sketchMarkerMode,
           communications: showSketchCommunications ? (project.eskizPro?.communications ?? []) : [],
           showCommunicationSizeBadges: showSketchCommunicationSizeBadges,
-          title: 'Эскиз PRO для фабрики',
-          subtitle: `${selectedSketch.title} · ${selectedSketch.image.name}`,
         })
         : null;
-      const techSketchImage = includeTechSheet && selectedSketch
+      const techSketchSize = includeTechSheet && selectedSketch
+        ? fitEskizExportSize(selectedSketch, { width: 1500, height: 680 })
+        : null;
+      const techSketchImage = techSketchSize && selectedSketch
         ? await renderEskizSketchPng(selectedSketch, {
-          widthPx: 1500,
-          heightPx: 900,
+          widthPx: techSketchSize.width,
+          heightPx: techSketchSize.height,
+          frame: 'none',
           moduleMarkerMode: sketchMarkerMode,
           communications: showSketchCommunications ? (project.eskizPro?.communications ?? []) : [],
           showCommunicationSizeBadges: showSketchCommunicationSizeBadges,
-          title: 'Эскиз PRO — технический лист',
-          subtitle: `${project.name}${project.client ? ` · ${project.client}` : ''}`,
         })
         : null;
       const techPack: FactoryTechPack | null = includeTechSheet

@@ -17,6 +17,11 @@ export interface EskizSketchPngOptions extends EskizSketchSvgOptions {
   title?: string;
   subtitle?: string;
   pixelRatio?: number;
+  /**
+   * card — белая карточка с полями/шапкой для самостоятельного PNG/PDF.
+   * none — ровно сам эскиз без внутренних полей; удобно для вставки в ячейки Excel без «паспарту».
+   */
+  frame?: 'card' | 'none';
 }
 
 export interface EskizSketchJpegOptions extends EskizSketchPngOptions {
@@ -394,6 +399,11 @@ async function renderEskizSketchCanvas(project: EskizProject, options: EskizSket
   ctx.scale(pixelRatio, pixelRatio);
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, displayWidth, displayHeight);
+
+  if (options.frame === 'none') {
+    ctx.drawImage(source, 0, 0, displayWidth, displayHeight);
+    return { canvas, width: displayWidth, height: displayHeight };
+  }
 
   const hasHeader = Boolean(options.title || options.subtitle);
   const headerHeight = hasHeader ? 54 : 12;
