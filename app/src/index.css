@@ -2787,3 +2787,250 @@ table.modules tr.drop-after td,
     color: #111 !important;
   }
 }
+
+/* ---------- Contrast guard for hover/focus states ----------
+   Rule: hover must glow, never invert into low-contrast text. */
+:root {
+  --hud-hover-bg: linear-gradient(135deg, rgba(8, 22, 38, .96), rgba(3, 12, 22, .92) 58%, rgba(12, 34, 48, .94));
+  --hud-hover-fg: #f5feff;
+  --hud-hover-muted: rgba(214, 243, 255, .78);
+  --hud-hover-border: rgba(56, 232, 255, .58);
+  --hud-hover-shadow: 0 0 0 1px rgba(56, 232, 255, .22), 0 0 28px rgba(56, 232, 255, .16), inset 0 1px 0 rgba(255,255,255,.08);
+}
+
+.btn,
+.btn.primary {
+  text-shadow: none;
+}
+.btn:hover,
+.btn:focus-visible,
+.btn.primary:hover,
+.btn.primary:focus-visible {
+  color: #00131a !important;
+  background: linear-gradient(135deg, #b9fbff, #54ecff 52%, #9df7ff) !important;
+  border-color: rgba(185, 251, 255, .78) !important;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.18), 0 0 32px rgba(56,232,255,.28), inset 0 1px 0 rgba(255,255,255,.62) !important;
+}
+.btn:hover :where(span, small, b, strong, em),
+.btn:focus-visible :where(span, small, b, strong, em),
+.btn.primary:hover :where(span, small, b, strong, em),
+.btn.primary:focus-visible :where(span, small, b, strong, em) {
+  color: inherit !important;
+}
+.btn.ghost:hover,
+.btn.ghost:focus-visible,
+.btn.add:hover,
+.btn.add:focus-visible,
+.btn.danger:hover,
+.btn.danger:focus-visible,
+.number-field-calculator-trigger:hover,
+.number-field-calculator-trigger:focus-visible {
+  color: var(--hud-hover-fg) !important;
+  background: var(--hud-hover-bg) !important;
+  border-color: var(--hud-hover-border) !important;
+  box-shadow: var(--hud-hover-shadow) !important;
+}
+.btn.danger:hover,
+.btn.danger:focus-visible {
+  color: #ffe2e2 !important;
+  background: linear-gradient(135deg, rgba(78, 16, 28, .96), rgba(9, 16, 28, .92)) !important;
+  border-color: rgba(248, 113, 113, .58) !important;
+}
+.btn.ghost:hover :where(span, small, b, strong, em),
+.btn.ghost:focus-visible :where(span, small, b, strong, em),
+.btn.add:hover :where(span, small, b, strong, em),
+.btn.add:focus-visible :where(span, small, b, strong, em),
+.btn.danger:hover :where(span, small, b, strong, em),
+.btn.danger:focus-visible :where(span, small, b, strong, em) {
+  color: inherit !important;
+}
+
+.app :where(.card, .totals-card, .modal, .client-offer-editor, .blank-worktop-designer) :where(
+  button:not(.btn):hover,
+  button:not(.btn):focus-visible,
+  .slot-pick-button:hover,
+  .slot-pick-button:focus-visible,
+  .dict-card:hover,
+  .dict-card:focus-visible,
+  .kb-route-list button:hover,
+  .kb-route-list button:focus-visible,
+  .dict-more-note:hover,
+  .dict-more-note:focus-visible,
+  .wizard-step:hover,
+  .wizard-step:focus-visible,
+  .shape-choice:hover,
+  .shape-choice:focus-visible,
+  .wall-plan:hover,
+  .wall-plan:focus-visible,
+  .kb-metrics button:hover,
+  .kb-metrics button:focus-visible,
+  .milling-card:hover,
+  .milling-card:focus-visible,
+  .eskiz-template-grid button:hover,
+  .eskiz-template-grid button:focus-visible,
+  .eskiz-body-recommendations button:hover,
+  .eskiz-body-recommendations button:focus-visible,
+  .blank-worktop-layout-buttons button:hover,
+  .blank-worktop-layout-buttons button:focus-visible,
+  .blank-worktop-card-actions button:hover,
+  .blank-worktop-card-actions button:focus-visible,
+  .blank-worktop-nudge-grid button:hover,
+  .blank-worktop-nudge-grid button:focus-visible,
+  .number-field-calculator-buttons button:hover,
+  .number-field-calculator-buttons button:focus-visible,
+  .embedded-eskiz-distance-add-grid button:hover,
+  .embedded-eskiz-distance-add-grid button:focus-visible,
+  .embedded-eskiz-distance-row-actions button:hover,
+  .embedded-eskiz-distance-row-actions button:focus-visible,
+  .embedded-eskiz-color-row button:hover,
+  .embedded-eskiz-color-row button:focus-visible,
+  .embedded-eskiz-layer-toggle:hover,
+  .embedded-eskiz-layer-toggle:focus-visible,
+  .embedded-eskiz-layer-presets button:hover,
+  .embedded-eskiz-layer-presets button:focus-visible,
+  .order-status-strip button:hover,
+  .order-status-strip button:focus-visible,
+  .issue-filter button:hover,
+  .issue-filter button:focus-visible,
+  .favorite-toggle:hover,
+  .favorite-toggle:focus-visible
+) {
+  color: var(--hud-hover-fg) !important;
+  background: var(--hud-hover-bg) !important;
+  border-color: var(--hud-hover-border) !important;
+  box-shadow: var(--hud-hover-shadow) !important;
+  text-shadow: none !important;
+}
+.app :where(.card, .totals-card, .modal, .client-offer-editor, .blank-worktop-designer) :where(
+  button:not(.btn):hover,
+  button:not(.btn):focus-visible,
+  .slot-pick-button:hover,
+  .slot-pick-button:focus-visible,
+  .dict-card:hover,
+  .dict-card:focus-visible,
+  .kb-route-list button:hover,
+  .kb-route-list button:focus-visible,
+  .dict-more-note:hover,
+  .dict-more-note:focus-visible,
+  .wizard-step:hover,
+  .wizard-step:focus-visible,
+  .shape-choice:hover,
+  .shape-choice:focus-visible,
+  .wall-plan:hover,
+  .wall-plan:focus-visible,
+  .kb-metrics button:hover,
+  .kb-metrics button:focus-visible,
+  .milling-card:hover,
+  .milling-card:focus-visible,
+  .eskiz-template-grid button:hover,
+  .eskiz-template-grid button:focus-visible,
+  .eskiz-body-recommendations button:hover,
+  .eskiz-body-recommendations button:focus-visible,
+  .blank-worktop-layout-buttons button:hover,
+  .blank-worktop-layout-buttons button:focus-visible,
+  .blank-worktop-card-actions button:hover,
+  .blank-worktop-card-actions button:focus-visible,
+  .blank-worktop-nudge-grid button:hover,
+  .blank-worktop-nudge-grid button:focus-visible,
+  .number-field-calculator-buttons button:hover,
+  .number-field-calculator-buttons button:focus-visible,
+  .embedded-eskiz-distance-add-grid button:hover,
+  .embedded-eskiz-distance-add-grid button:focus-visible,
+  .embedded-eskiz-distance-row-actions button:hover,
+  .embedded-eskiz-distance-row-actions button:focus-visible,
+  .embedded-eskiz-color-row button:hover,
+  .embedded-eskiz-color-row button:focus-visible,
+  .embedded-eskiz-layer-toggle:hover,
+  .embedded-eskiz-layer-toggle:focus-visible,
+  .embedded-eskiz-layer-presets button:hover,
+  .embedded-eskiz-layer-presets button:focus-visible,
+  .order-status-strip button:hover,
+  .order-status-strip button:focus-visible,
+  .issue-filter button:hover,
+  .issue-filter button:focus-visible,
+  .favorite-toggle:hover,
+  .favorite-toggle:focus-visible
+) :where(b, strong, span, small, em, i, p) {
+  color: inherit !important;
+}
+
+.tabs button:hover,
+.tabs button:focus-visible,
+.kb-tab:hover,
+.kb-tab:focus-visible,
+.chip:hover,
+.chip:focus-visible,
+.status-inline:hover,
+.status-inline:focus-visible,
+.readiness-pill:hover,
+.readiness-pill:focus-visible,
+.client-eskiz-layer-controls button:hover,
+.client-eskiz-layer-controls button:focus-visible {
+  color: var(--hud-hover-fg) !important;
+  background: rgba(56, 232, 255, .14) !important;
+  border-color: var(--hud-hover-border) !important;
+  box-shadow: 0 0 0 1px rgba(56,232,255,.10), 0 0 18px rgba(56,232,255,.10) !important;
+  text-shadow: none !important;
+}
+.tabs button:hover :where(span, small, b, strong, em),
+.tabs button:focus-visible :where(span, small, b, strong, em),
+.kb-tab:hover :where(span, small, b, strong, em),
+.kb-tab:focus-visible :where(span, small, b, strong, em),
+.chip:hover :where(span, small, b, strong, em),
+.chip:focus-visible :where(span, small, b, strong, em),
+.status-inline:hover :where(span, small, b, strong, em),
+.status-inline:focus-visible :where(span, small, b, strong, em) {
+  color: inherit !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not(:disabled):hover,
+select:not(:disabled):hover,
+textarea:not(:disabled):hover,
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not(:disabled):focus,
+select:not(:disabled):focus,
+textarea:not(:disabled):focus,
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not(:disabled):focus-visible,
+select:not(:disabled):focus-visible,
+textarea:not(:disabled):focus-visible {
+  color: #f5feff !important;
+  background: rgba(1, 8, 16, .92) !important;
+  border-color: rgba(56, 232, 255, .68) !important;
+  box-shadow: 0 0 0 3px rgba(56,232,255,.16), inset 0 1px 0 rgba(255,255,255,.07) !important;
+  outline: none !important;
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):disabled,
+select:disabled,
+textarea:disabled {
+  color: rgba(214, 243, 255, .58) !important;
+  background: rgba(1, 8, 16, .48) !important;
+  border-color: rgba(56, 232, 255, .14) !important;
+  opacity: 1 !important;
+}
+input:hover::placeholder,
+input:focus::placeholder,
+textarea:hover::placeholder,
+textarea:focus::placeholder {
+  color: rgba(214, 243, 255, .58) !important;
+}
+
+/* Light client document must stay light even when controls are hovered for print/export previews. */
+.client-doc :where(.btn:hover, .btn:focus-visible, button:not(.btn):hover, button:not(.btn):focus-visible) {
+  color: #0f172a !important;
+  background: #f8fafc !important;
+  border-color: #94a3b8 !important;
+  box-shadow: none !important;
+}
+.client-doc input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):hover,
+.client-doc select:hover,
+.client-doc textarea:hover,
+.client-doc input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus,
+.client-doc select:focus,
+.client-doc textarea:focus,
+.client-doc input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus-visible,
+.client-doc select:focus-visible,
+.client-doc textarea:focus-visible {
+  color: #0f172a !important;
+  background: #fff !important;
+  border-color: #0ea5e9 !important;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, .16) !important;
+}
