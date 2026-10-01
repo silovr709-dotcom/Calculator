@@ -19,6 +19,7 @@ import { calcLines } from '../lib/engine';
 import { fmtMoney, fmtNum } from '../lib/format';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, defaultCommunicationDimensions } from '../lib/eskizCommunications';
 import { downloadEskizSketchPdf, downloadEskizSketchPng } from '../lib/eskizSketchExport';
+import { evaluateNumericExpression } from '../lib/numericExpression';
 import CatalogPicker from './CatalogPicker';
 import EskizProjectPreview, { type EskizModuleMarkerMode, type EskizModulePreviewStatus } from './EskizProjectPreview';
 import EmbeddedEskizEditor from './EmbeddedEskizEditor';
@@ -47,9 +48,7 @@ function formatDate(value: string) {
 }
 
 function numberValue(value: string): number | null {
-  if (value.trim() === '') return null;
-  const parsed = Number(value.replace(',', '.'));
-  return Number.isFinite(parsed) ? parsed : null;
+  return evaluateNumericExpression(value);
 }
 
 function mmValue(value: string): number | null {
@@ -74,6 +73,8 @@ function MmInput(props: { value: number | null | undefined; onValue: (value: num
       key={initial}
       className={props.className}
       inputMode="numeric"
+      data-number-calculator="true"
+      data-number-calculator-commit="blur"
       defaultValue={initial}
       placeholder={props.placeholder}
       onBlur={(event) => commit(event.currentTarget)}

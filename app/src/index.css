@@ -1746,3 +1746,23 @@ label { color: #5f553f; font-weight: 760; }
 @media (max-width: 560px) {
   .embedded-eskiz-popover-sizes { grid-template-columns: 1fr; }
 }
+.number-field-calculator {
+  position: fixed;
+  z-index: 2500;
+  padding: 9px;
+  border: 1px solid #d8e5df;
+  border-radius: 14px;
+  background: rgba(255,255,255,.98);
+  box-shadow: 0 18px 48px rgba(15,23,42,.20);
+  backdrop-filter: blur(10px);
+}
+.number-field-calculator-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.number-field-calculator-head b { color: #332255; font-size: 12px; }
+.number-field-calculator-head button { border: 0; background: #f3f6f4; color: #5d6f66; border-radius: 999px; width: 22px; height: 22px; cursor: pointer; }
+.number-field-calculator input { width: 100%; min-height: 34px; padding: 7px 9px; border: 1px solid #cfded6; border-radius: 9px; font: inherit; font-weight: 800; color: #1f2f29; background: #fff; }
+.number-field-calculator-result { min-height: 20px; padding: 5px 2px 6px; color: var(--accent); font-size: 11px; font-weight: 900; }
+.number-field-calculator-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.number-field-calculator-buttons button { min-height: 30px; border: 1px solid #dce8e3; border-radius: 8px; background: #fbfdfc; color: #2e4239; font-weight: 900; cursor: pointer; }
+.number-field-calculator-buttons button:hover { border-color: var(--accent); background: #fff7f2; color: var(--accent); }
+.number-field-calculator-buttons .primary { grid-column: span 2; background: var(--accent); color: #fff; border-color: var(--accent); }
+.number-field-calculator small { display: block; margin-top: 6px; color: var(--muted); font-size: 10px; }

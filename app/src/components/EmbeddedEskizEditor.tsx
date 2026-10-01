@@ -3,6 +3,7 @@ import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCom
 import type { EskizCalloutObject, EskizDimensionObject, EskizEquipmentType, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
 import { downloadEskizFile, readEskizFileBundle } from '../lib/eskizPro';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, COMMUNICATION_KINDS, COMMUNICATION_VISUAL_SCALE_MAX, COMMUNICATION_VISUAL_SCALE_MIN, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale, defaultCommunicationDimensions, normalizeCommunicationVisualScale } from '../lib/eskizCommunications';
+import { evaluateNumericExpression } from '../lib/numericExpression';
 
 type Tool = 'select' | 'free-dimension' | 'h-dimension' | 'v-dimension' | 'chain' | 'anchor' | 'h-guide' | 'v-guide' | 'module' | 'callout' | 'comment' | 'equipment' | 'link';
 type Drag = { mode: 'create' | 'move' | 'handle' | 'marquee'; start: Point; id?: string; end?: 'start' | 'end' | 'offset' | 'resize'; before: EskizProject; original?: EskizObject };
@@ -148,9 +149,7 @@ function clampZoom(value: number) {
 }
 
 function numberValue(value: string): number | null {
-  if (value.trim() === '') return null;
-  const parsed = Number(value.replace(',', '.'));
-  return Number.isFinite(parsed) ? parsed : null;
+  return evaluateNumericExpression(value);
 }
 
 function mmValue(value: string): number | null {
@@ -170,7 +169,7 @@ function CommunicationMmInput(props: { value: number | null | undefined; onValue
     props.onValue(next);
     input.value = next == null ? '' : String(next);
   };
-  return <input key={initial} inputMode="numeric" defaultValue={initial} placeholder={props.placeholder} onBlur={(event) => commit(event.currentTarget)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') event.currentTarget.value = initial; }} />;
+  return <input key={initial} inputMode="numeric" data-number-calculator="true" data-number-calculator-commit="blur" defaultValue={initial} placeholder={props.placeholder} onBlur={(event) => commit(event.currentTarget)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') event.currentTarget.value = initial; }} />;
 }
 
 function snapAngle(start: Point, end: Point, step = 45) {
@@ -857,7 +856,7 @@ export default function EmbeddedEskizEditor(props: Props) {
         const originalAnchor = communicationDrag.originalAnchor ?? { x: communicationDrag.originalDistance.anchorX ?? communicationDrag.originalMarker.x + 120, y: communicationDrag.originalDistance.anchorY ?? communicationDrag.originalMarker.y };
         const anchorX = Math.round(clamp(originalAnchor.x + dx, 0, project.image.width));
         const anchorY = Math.round(clamp(originalAnchor.y + dy, 0, project.image.height));
-        props.onCommunicationDistanceChange(communicationDrag.communicationId, communicationDrag.distanceId, { anchor: 'custom', anchorX, anchorY, valueMm: Math.round(Math.hypot(anchorX - communicationDrag.originalMarker.x, anchorY - communicationDrag.originalMarker.y)) });
+        props.onCommunicationDistanceChange(communicationDrag.communicationId, communicationDrag.distanceId, { anchor: 'custom', anchorX, anchorY });
       }
       return;
     }

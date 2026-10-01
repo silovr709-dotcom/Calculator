@@ -19,6 +19,7 @@ import QuickCalc from './components/QuickCalc';
 import SyncPanel from './components/SyncPanel';
 import FactoryBlankView from './components/FactoryBlankView';
 import KnowledgeView from './components/KnowledgeView';
+import NumberFieldCalculator from './components/NumberFieldCalculator';
 
 type View =
   | { kind: 'dashboard' }
@@ -393,6 +394,7 @@ const persistTemplates = useCallback((next: Template[]) => {
           />
         )}
       </main>
+      <NumberFieldCalculator />
     </div>
   );
 }
