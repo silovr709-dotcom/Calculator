@@ -362,18 +362,28 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 
 /* ---------- Эскиз PRO (встроенный инструмент) ---------- */
 .eskiz-pro-workspace { display: flex; flex-direction: column; gap: 12px; }
+.eskiz-pro-workspace.fullscreen { position: fixed; inset: 0; z-index: 1000; padding: 10px; background: #eef0f2; overflow: hidden; }
+.eskiz-pro-workspace.fullscreen .eskiz-pro-intro, .eskiz-pro-workspace.fullscreen > .eskiz-pro-project-preview { display: none; }
 .eskiz-pro-intro { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; border-left: 4px solid var(--accent); }
 .eskiz-pro-intro h3 { margin: 0 0 4px; color: #332255; }
 .eskiz-pro-intro p { margin: 0; max-width: 850px; }
-.eskiz-pro-grid { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 14px; align-items: start; }
+.eskiz-pro-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
 .eskiz-pro-frame-card { padding: 0; overflow: hidden; }
 .eskiz-pro-frame-card .section-head { padding: 14px 16px 10px; margin: 0; }
+.eskiz-pro-editor-head { align-items: center; }
+.eskiz-pro-workspace.fullscreen .eskiz-pro-grid { height: 100%; min-height: 0; }
+.eskiz-pro-workspace.fullscreen .eskiz-pro-frame-card { height: calc(100vh - 20px); min-height: 0; display: flex; flex-direction: column; }
+.eskiz-pro-workspace.fullscreen .eskiz-pro-side { display: none; }
+.eskiz-pro-workspace.fullscreen .eskiz-pro-frame-card > .embedded-eskiz-editor { flex: 1; min-height: 0; }
+.eskiz-pro-workspace.fullscreen .embedded-eskiz-workarea { flex: 1; min-height: 0; }
+.eskiz-pro-workspace.fullscreen .embedded-eskiz-viewport { min-height: 0; }
+.eskiz-pro-workspace.fullscreen .embedded-eskiz-inspector { max-height: none; }
 
 .embedded-eskiz-start { min-height: 620px; padding: 28px; border-top: 1px solid var(--line); background: radial-gradient(circle at 15% 5%, rgba(124, 58, 237, .12), transparent 34%), linear-gradient(135deg, #f8fbfa, #fff7f2); display: grid; align-content: center; justify-items: center; text-align: center; gap: 16px; }
 .embedded-eskiz-start h3 { margin: 4px 0 6px; color: #332255; }
 .embedded-eskiz-start p { max-width: 620px; margin: 0 auto; }
 .embedded-eskiz-start-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.embedded-eskiz-editor { border-top: 1px solid var(--line); background: #171a1f; color: #eef2f5; min-height: 760px; display: flex; flex-direction: column; overflow: hidden; }
+.embedded-eskiz-editor { border-top: 1px solid var(--line); background: #171a1f; color: #eef2f5; min-height: clamp(760px, 82vh, 980px); display: flex; flex-direction: column; overflow: hidden; }
 .embedded-eskiz-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.08); background: #20242b; }
 .embedded-eskiz-title { display: flex; gap: 9px; align-items: center; min-width: 0; flex: 1; }
 .embedded-eskiz-title b { color: #ff8a6d; white-space: nowrap; }
@@ -402,7 +412,7 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .embedded-eskiz-tools .side-toggle { margin-left: auto; }
 .embedded-eskiz-communication-banner { padding: 9px 12px; background: #332255; color: #fff; font-size: 12px; font-weight: 900; }
 .embedded-eskiz-workarea { position: relative; min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 310px; }
-.embedded-eskiz-viewport { position: relative; overflow: auto; background: #eef0f2; padding: 24px; min-height: 650px; }
+.embedded-eskiz-viewport { position: relative; overflow: auto; background: #eef0f2; padding: 24px; min-height: clamp(650px, 72vh, 860px); }
 .embedded-eskiz-viewport.panning { cursor: grab; }
 .embedded-eskiz-stage { margin: 0 auto; background: #fff; box-shadow: 0 18px 45px rgba(15, 23, 42, .24); }
 .embedded-eskiz-surface { display: block; background: #fff; touch-action: none; user-select: none; }
@@ -492,7 +502,7 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .embedded-eskiz-distance-row-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 5px; }
 .embedded-eskiz-distance-row-actions .danger, .embedded-eskiz-danger-wide { border-color: #f1b7aa; background: #fff4f1; color: #b33b23; }
 .embedded-eskiz-danger-wide { width: 100%; margin-top: 4px; }
-.eskiz-pro-side { display: flex; flex-direction: column; gap: 12px; }
+.eskiz-pro-side { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .eskiz-pro-kp-controls { display: grid; grid-template-columns: 1fr; gap: 8px; }
 .eskiz-pro-kp-controls .chk-row { min-height: 36px; padding: 8px 10px; border: 1px solid #dce8e3; border-radius: 9px; background: #fbfdfc; }
 .eskiz-pro-status-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin: 10px 0; }
@@ -605,8 +615,8 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
   .eskiz-preview-stage { overflow: visible; padding: 0; background: #fff; }
   .eskiz-preview-stage svg { max-height: none; box-shadow: none; }
 }
-@media (max-width: 1180px) { .eskiz-pro-grid { grid-template-columns: 1fr; } .eskiz-pro-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .eskiz-pro-side section:last-child { grid-column: 1 / -1; } }
-@media (max-width: 760px) { .eskiz-pro-intro { flex-direction: column; } .eskiz-pro-side { display: flex; } .embedded-eskiz-workarea { grid-template-columns: 1fr; } .embedded-eskiz-inspector { max-height: none; border-left: 0; border-top: 1px solid #dce8e3; } .embedded-eskiz-header, .embedded-eskiz-status { flex-direction: column; align-items: stretch; } .eskiz-preview-meta { grid-template-columns: 1fr 1fr; } .eskiz-pro-list article { grid-template-columns: 48px minmax(0, 1fr); } .eskiz-pro-list article .btn { grid-column: 1 / -1; justify-self: start; } }
+@media (max-width: 1180px) { .eskiz-pro-side { grid-template-columns: repeat(2, minmax(0, 1fr)); } .eskiz-pro-side section:last-child { grid-column: 1 / -1; } }
+@media (max-width: 760px) { .eskiz-pro-intro { flex-direction: column; } .eskiz-pro-side { display: flex; flex-direction: column; } .embedded-eskiz-workarea { grid-template-columns: 1fr; } .embedded-eskiz-inspector { max-height: none; border-left: 0; border-top: 1px solid #dce8e3; } .embedded-eskiz-header, .embedded-eskiz-status { flex-direction: column; align-items: stretch; } .eskiz-preview-meta { grid-template-columns: 1fr 1fr; } .eskiz-pro-list article { grid-template-columns: 48px minmax(0, 1fr); } .eskiz-pro-list article .btn { grid-column: 1 / -1; justify-self: start; } }
 
 /* ---- Позиции кухни (модули) ---- */
 .defaults-card { border-left: 3px solid var(--accent); }

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizProIntegration, ExtraFacadePart, FacadePart, KitchenModule, Pricebook, PriceItem, Project, SlotKey } from '../types';
 import {
   collectEskizModuleMarkers,
@@ -452,6 +452,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const [communicationAddKind, setCommunicationAddKind] = useState<EskizCommunicationKind | null>(null);
   const [activeCommunicationId, setActiveCommunicationId] = useState<string | null>(null);
   const [distancePointPick, setDistancePointPick] = useState<{ communicationId: string; distanceId: string } | null>(null);
+  const [fullScreenSketch, setFullScreenSketch] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const editorCardRef = useRef<HTMLDivElement | null>(null);
   const linkedProjects = useMemo(() => linkedIds
@@ -469,6 +470,20 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const activeMarker = moduleMarkers.find((marker) => marker.key === activeMarkerKey) ?? null;
   const activeModuleId = activeMarker ? moduleBindings[activeMarker.key] : null;
   const activeModule = activeModuleId ? project.modules?.find((module) => module.id === activeModuleId) ?? null : null;
+
+  useEffect(() => {
+    if (!fullScreenSketch) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFullScreenSketch(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [fullScreenSketch]);
   const moduleStatuses = useMemo(() => Object.fromEntries(moduleMarkers.map((marker) => {
     const moduleId = moduleBindings[marker.key];
     const linkedModule = moduleId ? project.modules?.find((module) => module.id === moduleId) ?? null : null;
@@ -686,7 +701,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   };
 
   return (
-    <section className="eskiz-pro-workspace">
+    <section className={`eskiz-pro-workspace ${fullScreenSketch ? 'fullscreen' : ''}`}>
       <div className="card eskiz-pro-intro no-print">
         <div>
           <span className="eyebrow">ЭСКИЗ PRO</span>
@@ -695,14 +710,16 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
         </div>
         <div className="actions">
           <button className="btn ghost" onClick={() => fileRef.current?.click()}>Импорт старого .eskiz</button>
+          <button className="btn ghost" onClick={() => setFullScreenSketch(true)}>Открыть Эскиз PRO на весь экран</button>
           <button className="btn primary" disabled={!activePreviewProject} onClick={syncModulesToCalculation}>Модули → просчёт</button>
         </div>
       </div>
 
       <div className="eskiz-pro-grid">
         <div ref={editorCardRef} className="card eskiz-pro-frame-card no-print">
-          <div className="section-head">
+          <div className="section-head eskiz-pro-editor-head">
             <div><h3>Основной эскиз</h3><p className="muted small">Это рабочее полотно Эскиз PRO внутри расчёта. Коммуникации, их свободные линии расстояний, размеры и модули ставятся из верхней панели самого Эскиз PRO.</p></div>
+            <div className="actions"><button className="btn ghost" onClick={() => setFullScreenSketch((value) => !value)}>{fullScreenSketch ? 'Выйти из полного экрана' : 'На весь экран'}</button></div>
           </div>
           <EmbeddedEskizEditor
             key={activePreviewProject?.id ?? 'empty-eskiz'}
