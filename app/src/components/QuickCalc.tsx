@@ -238,6 +238,7 @@ export default function QuickCalc(props: {
   const [express, setExpress] = useState<QuickEstimateInput>({
     lowerLengthMm: 2400,
     upperLengthMm: 2400,
+    upperHeightMm: 720,
     avgModuleWidthMm: 600,
     tallCount: 0,
     drawerCount: 2,
@@ -249,6 +250,8 @@ export default function QuickCalc(props: {
     includeLegs: true,
     includePlinth: true,
     includeDryer: true,
+    includeSink: false,
+    includeMixer: false,
   });
   const updateExpress = (patch: Partial<QuickEstimateInput>) => setExpress((current) => ({ ...current, ...patch }));
 
@@ -335,7 +338,7 @@ export default function QuickCalc(props: {
               <div>
                 <span className="eyebrow">быстрый коридор</span>
                 <h3>Считаем не «на глаз», а типовыми позициями прайса</h3>
-                <p className="muted">Введите только метраж, материал и уровень фурнитуры. Программа сама подберёт типовые корпуса, фасады м², столешницу хлыстами, петли, ручки, опоры и цоколь. Это не заменяет точный модульный расчёт, но даёт быструю актуальную вилку.</p>
+                <p className="muted">Введите метраж, высоту верха, материал и уровень фурнитуры. Программа раскладывает длины на реальные ширины корпусов из прайса, считает фасады по площади этих корпусов, столешницу хлыстами и фурнитуру по фактическим фронтам.</p>
               </div>
               <div className="quick-confidence">
                 <b>±{Math.round(expressEstimate.tolerancePct * 100)}%</b>
@@ -346,26 +349,33 @@ export default function QuickCalc(props: {
             <section className="card">
               <h3>1. Габариты кухни</h3>
               <div className="quick-presets">
-                <button className="chip" type="button" onClick={() => setExpress({ ...express, lowerLengthMm: 1800, upperLengthMm: 1800, worktopLengthMm: 1800, tallCount: 0, drawerCount: 1 })}>Маленькая 1,8 м</button>
-                <button className="chip" type="button" onClick={() => setExpress({ ...express, lowerLengthMm: 2400, upperLengthMm: 2400, worktopLengthMm: 2400, tallCount: 0, drawerCount: 2 })}>Стандарт 2,4 м</button>
-                <button className="chip" type="button" onClick={() => setExpress({ ...express, lowerLengthMm: 3600, upperLengthMm: 3000, worktopLengthMm: 3600, tallCount: 1, drawerCount: 3 })}>Кухня 3,6 м + пенал</button>
-                <button className="chip" type="button" onClick={() => setExpress({ ...express, lowerLengthMm: 4200, upperLengthMm: 3600, worktopLengthMm: 4200, tallCount: 2, drawerCount: 4 })}>Большая 4,2 м</button>
+                <button className="chip" type="button" onClick={() => setExpress({ ...express, lowerLengthMm: 1800, upperLengthMm: 1800, upperHeightMm: 720, worktopLengthMm: 1800, tallCount: 0, drawerCount: 1 })}>Маленькая 1,8 м</button>
+                <button className="chip" type="button" onClick={() => setExpress({ ...express, lowerLengthMm: 2400, upperLengthMm: 2400, upperHeightMm: 720, worktopLengthMm: 2400, tallCount: 0, drawerCount: 2 })}>Стандарт 2,4 м</button>
+                <button className="chip" type="button" onClick={() => setExpress({ ...express, lowerLengthMm: 3600, upperLengthMm: 3000, upperHeightMm: 920, worktopLengthMm: 3600, tallCount: 1, drawerCount: 3 })}>Кухня 3,6 м + пенал</button>
+                <button className="chip" type="button" onClick={() => setExpress({ ...express, lowerLengthMm: 4200, upperLengthMm: 3600, upperHeightMm: 920, worktopLengthMm: 4200, tallCount: 2, drawerCount: 4 })}>Большая 4,2 м</button>
               </div>
               <div className="grid3">
                 <label>Нижний ряд, мм<input type="number" min={0} step={50} value={express.lowerLengthMm} onChange={(event) => updateExpress({ lowerLengthMm: Number(event.target.value) || 0 })} /></label>
                 <label>Верхний ряд, мм<input type="number" min={0} step={50} value={express.upperLengthMm} onChange={(event) => updateExpress({ upperLengthMm: Number(event.target.value) || 0 })} /></label>
                 <label>Столешница, мм<input type="number" min={0} step={50} value={express.worktopLengthMm} onChange={(event) => updateExpress({ worktopLengthMm: Number(event.target.value) || 0 })} /></label>
               </div>
-              <div className="grid3">
+              <div className="grid4">
                 <label>Средняя ширина модуля<input type="number" min={300} step={50} value={express.avgModuleWidthMm} onChange={(event) => updateExpress({ avgModuleWidthMm: Number(event.target.value) || 600 })} /></label>
+                <label>Высота верха
+                  <select value={express.upperHeightMm} onChange={(event) => updateExpress({ upperHeightMm: Number(event.target.value) || 720 })}>
+                    <option value={600}>600 мм</option>
+                    <option value={720}>720 мм</option>
+                    <option value={920}>920 мм</option>
+                  </select>
+                </label>
                 <label>Пеналы, шт<input type="number" min={0} step={1} value={express.tallCount} onChange={(event) => updateExpress({ tallCount: Number(event.target.value) || 0 })} /></label>
                 <label>Ящики/направляющие, к-т<input type="number" min={0} step={1} value={express.drawerCount} onChange={(event) => updateExpress({ drawerCount: Number(event.target.value) || 0 })} /></label>
               </div>
               <div className="quick-metrics">
-                <span><b>{expressEstimate.metrics.lowerModules}</b> нижних мод.</span>
-                <span><b>{expressEstimate.metrics.upperModules}</b> верхних мод.</span>
-                <span><b>{fmtNum(expressEstimate.metrics.facadeAreaM2)}</b> м² фасадов</span>
-                <span><b>{expressEstimate.metrics.hingeCount}</b> петель</span>
+                <span><b>{expressEstimate.metrics.lowerModules}</b> нижних мод.<small>{expressEstimate.metrics.lowerPlannedLengthMm || 0} мм корпусами</small></span>
+                <span><b>{expressEstimate.metrics.upperModules}</b> верхних мод.<small>{expressEstimate.metrics.upperPlannedLengthMm || 0} мм корпусами</small></span>
+                <span><b>{fmtNum(expressEstimate.metrics.facadeAreaM2)}</b> м² фасадов<small>{expressEstimate.metrics.facadeCount} фронтов</small></span>
+                <span><b>{expressEstimate.metrics.hingeCount}</b> петель<small>{expressEstimate.metrics.doorFronts} распашных фасадов</small></span>
               </div>
             </section>
 
@@ -403,6 +413,8 @@ export default function QuickCalc(props: {
                 <label><input type="checkbox" checked={express.includeLegs} onChange={(event) => updateExpress({ includeLegs: event.target.checked })} /> Опоры 4 шт на напольный модуль</label>
                 <label><input type="checkbox" checked={express.includePlinth} onChange={(event) => updateExpress({ includePlinth: event.target.checked })} /> Цоколь по длине низа</label>
                 <label><input type="checkbox" checked={express.includeDryer} onChange={(event) => updateExpress({ includeDryer: event.target.checked })} /> Посудосушитель</label>
+                <label><input type="checkbox" checked={express.includeSink} onChange={(event) => updateExpress({ includeSink: event.target.checked })} /> Мойка среднего уровня</label>
+                <label><input type="checkbox" checked={express.includeMixer} onChange={(event) => updateExpress({ includeMixer: event.target.checked })} /> Смеситель среднего уровня</label>
               </div>
             </section>
 

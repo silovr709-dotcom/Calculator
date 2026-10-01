@@ -13,6 +13,7 @@ const pb: Pricebook = JSON.parse(readFileSync(join(here, '../../public/data/pric
 const baseInput: QuickEstimateInput = {
   lowerLengthMm: 2400,
   upperLengthMm: 2400,
+  upperHeightMm: 720,
   avgModuleWidthMm: 600,
   tallCount: 0,
   drawerCount: 2,
@@ -24,6 +25,8 @@ const baseInput: QuickEstimateInput = {
   includeLegs: true,
   includePlinth: true,
   includeDryer: true,
+  includeSink: false,
+  includeMixer: false,
 };
 
 describe('экспресс-оценка кухни', () => {
@@ -33,7 +36,11 @@ describe('экспресс-оценка кухни', () => {
     expect(estimate.missing).toEqual([]);
     expect(estimate.metrics.lowerModules).toBe(4);
     expect(estimate.metrics.upperModules).toBe(4);
+    expect(estimate.metrics.lowerPlannedLengthMm).toBe(2400);
+    expect(estimate.metrics.upperPlannedLengthMm).toBe(2400);
     expect(estimate.metrics.facadeAreaM2).toBeGreaterThan(3);
+    expect(estimate.metrics.hingeCount).toBeLessThan(estimate.metrics.facadeCount * 2);
+    expect(estimate.tolerancePct).toBeLessThanOrEqual(0.1);
     expect(estimate.lines.length).toBeGreaterThan(7);
     expect(estimate.lines.every((line) => pb.items.some((item) => item.id === line.itemId))).toBe(true);
     expect(estimate.lines.some((line) => line.category.startsWith('Фасады'))).toBe(true);
@@ -52,7 +59,7 @@ describe('экспресс-оценка кухни', () => {
   it('не добавляет столешницу, если она отключена', () => {
     const estimate = buildQuickEstimate({ ...baseInput, worktopTier: 'none', worktopLengthMm: 0 }, pb);
     expect(estimate.lines.some((line) => line.category.startsWith('Столешницы'))).toBe(false);
-    expect(estimate.tolerancePct).toBeGreaterThan(0.12);
+    expect(estimate.tolerancePct).toBeGreaterThan(0.08);
   });
 
   it('подбирает компакт-плиту хлыстом, а не теряет длину формата 3.050/4.200', () => {
@@ -60,5 +67,11 @@ describe('экспресс-оценка кухни', () => {
     const worktop = estimate.lines.find((line) => line.category.startsWith('Столешницы: компакт-плита'));
     expect(worktop).toBeTruthy();
     expect(worktop?.qty).toBe(1);
+  });
+
+  it('может включить мойку и смеситель в экспресс-комплект', () => {
+    const estimate = buildQuickEstimate({ ...baseInput, includeSink: true, includeMixer: true }, pb);
+    expect(estimate.lines.some((line) => line.category === 'Мойки')).toBe(true);
+    expect(estimate.lines.some((line) => line.category === 'Смесители')).toBe(true);
   });
 });
