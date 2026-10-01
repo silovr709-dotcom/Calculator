@@ -201,17 +201,20 @@ function CommunicationPreview(props: { marker: EskizCommunicationMarker; width: 
   const labelWidth = Math.max(90, Math.min(280, label.length * 6.1 + 18));
   const labelX = marker.x + 18 > width - labelWidth ? marker.x - labelWidth - 18 : marker.x + 18;
   const labelY = Math.max(8, Math.min(height - 38, marker.y - 18));
+  const clickProps = onCommunicationClick ? {
+    role: 'button' as const,
+    tabIndex: 0,
+    onClick: (event: MouseEvent<SVGGElement>) => { event.stopPropagation(); onCommunicationClick(marker); },
+    onKeyDown: (event: KeyboardEvent<SVGGElement>) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      onCommunicationClick(marker);
+    },
+  } : {};
   return (
     <g
       className={`eskiz-preview-communication ${active ? 'active' : ''} ${onCommunicationClick ? 'clickable' : ''}`}
-      role={onCommunicationClick ? 'button' : undefined}
-      tabIndex={onCommunicationClick ? 0 : undefined}
-      onClick={(event) => { event.stopPropagation(); onCommunicationClick?.(marker); }}
-      onKeyDown={(event) => {
-        if (!onCommunicationClick || (event.key !== 'Enter' && event.key !== ' ')) return;
-        event.preventDefault();
-        onCommunicationClick(marker);
-      }}
+      {...clickProps}
     >
       {distances.map((distance) => {
         const anchor = distanceAnchorPoint(distance, marker, width, height);
@@ -294,7 +297,8 @@ export default function EskizProjectPreview({ project, compact = false, activeMo
           <span><b>Дата:</b> {project.header.date || '—'}</span>
         </div>
       )}
-      <div className="eskiz-preview-stage">
+      <div className={`eskiz-preview-stage ${communicationAddMode ? 'adding-communication' : ''}`}>
+        {communicationAddMode && <div className="eskiz-preview-placement-hint">Тапните по месту на эскизе — отметка добавится прямо сюда</div>}
         <svg className={communicationAddMode ? 'adding-communication' : ''} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Эскиз PRO: ${project.title}`} onClick={handleSvgClick}>
           <defs>
             <marker id="eskizDimArrow" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto-start-reverse">
@@ -305,8 +309,8 @@ export default function EskizProjectPreview({ project, compact = false, activeMo
             </marker>
           </defs>
           <image href={project.image.dataUrl} x="0" y="0" width={width} height={height} preserveAspectRatio="none" style={{ filter: imageFilter(project) }} />
-          {project.objects.map((object) => <ObjectPreview key={object.id} object={object} projectId={project.id} activeModuleKey={activeModuleKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} onModuleClick={onModuleClick} />)}
-          {projectCommunications.map((marker) => <CommunicationPreview key={marker.id} marker={marker} width={width} height={height} active={marker.id === activeCommunicationId} onCommunicationClick={(item) => onCommunicationClick?.(project.id, item)} />)}
+          {project.objects.map((object) => <ObjectPreview key={object.id} object={object} projectId={project.id} activeModuleKey={activeModuleKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} onModuleClick={communicationAddMode ? undefined : onModuleClick} />)}
+          {projectCommunications.map((marker) => <CommunicationPreview key={marker.id} marker={marker} width={width} height={height} active={marker.id === activeCommunicationId} onCommunicationClick={communicationAddMode ? undefined : (item) => onCommunicationClick?.(project.id, item)} />)}
         </svg>
       </div>
     </article>

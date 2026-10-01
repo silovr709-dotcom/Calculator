@@ -537,6 +537,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const [activeCommunicationId, setActiveCommunicationId] = useState<string | null>(null);
   const [distancePointPick, setDistancePointPick] = useState<{ communicationId: string; distanceId: string } | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const communicationStageRef = useRef<HTMLDivElement | null>(null);
   const liveSyncRef = useRef('');
   const linkedProjects = useMemo(() => linkedIds
     .map((id) => snapshotProject(snapshots.find((item) => item.id === id)))
@@ -545,6 +546,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const showInClient = eskizPro.showInClient !== false;
   const clientMode = eskizPro.clientMode ?? 'active';
   const moduleMarkerMode: EskizModuleMarkerMode = eskizPro.moduleMarkerMode ?? 'full';
+  const activePreviewProject = linkedProjects.find((item) => item.id === activeId) ?? linkedProjects[0] ?? null;
   const moduleMarkers = useMemo(() => collectEskizModuleMarkers(linkedProjects), [linkedProjects]);
   const moduleBindings = eskizPro.moduleBindings ?? EMPTY_BINDINGS;
   const communications = eskizPro.communications ?? EMPTY_COMMUNICATIONS;
@@ -737,6 +739,22 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     updateCommunication(communicationId, { distances: (marker.distances ?? []).filter((distance) => distance.id !== distanceId) });
     if (distancePointPick?.distanceId === distanceId) setDistancePointPick(null);
   };
+  const startCommunicationPlacement = (kind: EskizCommunicationKind) => {
+    const nextKind = communicationAddKind === kind ? null : kind;
+    setCommunicationAddKind(nextKind);
+    setDistancePointPick(null);
+    if (!nextKind) {
+      setMessage('Режим добавления коммуникации выключен.');
+      return;
+    }
+    if (!activePreviewProject) {
+      setMessage('Сначала привяжите или импортируйте snapshot Эскиз PRO — после этого коммуникации ставятся прямо на эскизе.');
+      return;
+    }
+    setActiveMarkerKey(null);
+    setMessage(`Выбран режим «${COMMUNICATION_KIND_META[nextKind].label}». Тапните по рабочему эскизу в этом блоке — не по iframe слева.`);
+    window.setTimeout(() => communicationStageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+  };
   const handleCommunicationClick = (_eskizId: string, marker: EskizCommunicationMarker) => {
     setActiveCommunicationId(marker.id);
     setCommunicationAddKind(null);
@@ -836,7 +854,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
         <div>
           <span className="eyebrow">ЭСКИЗ PRO</span>
           <h3>Внешний инструмент для скрина проекта, размеров, модулей и коммуникаций</h3>
-          <p className="muted small">Откройте настоящий Эскиз PRO, загрузите скрин, нанесите размеры/подписи и добавьте объект «Модуль» как точку/сноску. В калькуляторе поверх snapshot можно дополнительно поставить розетки, воду, канализацию, газ и вентиляцию с размерами и расстояниями до точек.</p>
+          <p className="muted small">Откройте настоящий Эскиз PRO, загрузите скрин, нанесите размеры/подписи и добавьте объект «Модуль» как точку/сноску. Коммуникации ставятся прямо на рабочем эскизе snapshot: выберите тип, тапните место, затем задайте размеры и привязки.</p>
         </div>
         <div className="actions">
           <a className="btn ghost" href={ESKIZ_PRO_URL} target="_blank" rel="noreferrer">Открыть в новой вкладке</a>
@@ -852,7 +870,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       <div className="eskiz-pro-grid">
         <div className="card eskiz-pro-frame-card no-print">
           <div className="section-head">
-            <div><h3>Окно Эскиз PRO</h3><p className="muted small">Загрузите скрин, поставьте объект «Модуль» на нужное место и кликните по нему. Коммуникации добавляются уже поверх сохранённого snapshot в preview справа/ниже, чтобы они попадали в проект и КП.</p></div>
+            <div><h3>Окно Эскиз PRO</h3><p className="muted small">Загрузите скрин, поставьте объект «Модуль» на нужное место и кликните по нему. Розетки, вода и вентиляция ставятся в рабочем эскизе «Коммуникации прямо на эскизе» — это тот же snapshot, но с сохранением в проект, КП и фабричный Excel.</p></div>
           </div>
           <iframe key={frameKey} className="eskiz-pro-frame" src={ESKIZ_PRO_URL} title="Эскиз PRO" />
         </div>
@@ -905,16 +923,37 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
           </section>
 
           <section className="card no-print eskiz-communications-card">
-            <div className="section-head"><div><h3>Коммуникации на эскизе</h3><p className="muted small">Розетки, выводы воды, канализация, газ, вентиляция. Нажмите тип, затем кликните по preview эскиза ниже.</p></div><b>{communications.length}</b></div>
+            <div className="section-head"><div><h3>Коммуникации прямо на эскизе</h3><p className="muted small">Розетки, вода, канализация, газ и вентиляция теперь ставятся на рабочем эскизе в этом блоке. Выберите тип и тапните по картинке ниже — координаты сразу сохранятся в проект, КП и фабричную выгрузку.</p></div><b>{communications.length}</b></div>
             <div className="eskiz-communication-kind-grid">
               {COMMUNICATION_KINDS.map((kind) => {
                 const meta = COMMUNICATION_KIND_META[kind];
-                return <button key={kind} className={communicationAddKind === kind ? 'active' : ''} style={{ '--comm-color': meta.color } as CSSProperties} onClick={() => { setCommunicationAddKind(communicationAddKind === kind ? null : kind); setDistancePointPick(null); }}><span>{meta.icon}</span>{meta.label}</button>;
+                return <button key={kind} className={communicationAddKind === kind ? 'active' : ''} style={{ '--comm-color': meta.color } as CSSProperties} onClick={() => startCommunicationPlacement(kind)}><span>{meta.icon}</span>{meta.label}</button>;
               })}
             </div>
-            {communicationAddKind && <div className="note small">Режим добавления: <b>{COMMUNICATION_KIND_META[communicationAddKind].label}</b>. Кликните на нужное место в preview. Чтобы отменить — нажмите тип ещё раз.</div>}
-            {distancePointPick && <div className="note small">Выберите на preview точку, до которой нужно показать расстояние. После клика укажите фактическое значение в мм.</div>}
-            {communications.length === 0 ? <div className="empty small">Коммуникаций пока нет. Привяжите эскиз и добавьте первую отметку.</div> : (
+            {communicationAddKind && <div className="note small">Режим добавления: <b>{COMMUNICATION_KIND_META[communicationAddKind].label}</b>. Тапните по рабочему эскизу ниже. Чтобы отменить — нажмите тип ещё раз.</div>}
+            {distancePointPick && <div className="note small">Выберите на рабочем эскизе точку, до которой нужно показать расстояние. После клика укажите фактическое значение в мм.</div>}
+            <div ref={communicationStageRef} className={`eskiz-communication-stage ${communicationAddKind || distancePointPick ? 'armed' : ''}`}>
+              <div className="eskiz-communication-stage-head"><b>Рабочий эскиз для коммуникаций</b><span>{activePreviewProject ? activePreviewProject.title : 'snapshot не привязан'}</span></div>
+              {activePreviewProject ? (
+                <EskizProjectPreview
+                  project={activePreviewProject}
+                  compact
+                  activeModuleKey={activeMarkerKey}
+                  moduleBindings={moduleBindings}
+                  moduleStatuses={moduleStatuses}
+                  moduleMarkerMode={moduleMarkerMode === 'full' ? 'compact' : moduleMarkerMode}
+                  communicationMarkers={communications}
+                  activeCommunicationId={activeCommunicationId}
+                  communicationAddMode={Boolean(communicationAddKind || distancePointPick)}
+                  onModuleClick={handlePreviewModuleClick}
+                  onCommunicationClick={handleCommunicationClick}
+                  onStagePointClick={handlePreviewPointClick}
+                />
+              ) : (
+                <div className="empty small">Привяжите или импортируйте snapshot Эскиз PRO — здесь появится кликабельный эскиз для розеток, воды и вентиляции.</div>
+              )}
+            </div>
+            {communications.length === 0 ? <div className="empty small">Коммуникаций пока нет. Выберите тип выше и тапните место на рабочем эскизе.</div> : (
               <div className="eskiz-communication-list">
                 {communications.slice(0, 12).map((marker) => {
                   const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
