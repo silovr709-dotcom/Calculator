@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizProIntegration, ExtraFacadePart, FacadePart, KitchenModule, Pricebook, PriceItem, Project, SlotKey } from '../types';
 import {
   collectEskizModuleMarkers,
+  parseEskizModuleMarker,
   readEskizFile,
   snapshotProject,
   syncEskizModulesToCalculation,
@@ -10,7 +11,7 @@ import {
   type EskizModuleObject,
   type EskizProject,
 } from '../lib/eskizPro';
-import { MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moduleToLines, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
+import { MODULE_PRESETS, MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moduleStandsOnFloor, moduleToLines, newModule, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
 import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalFacadeSpecOutdated, isTechnicalHingeSpecOutdated } from '../lib/facades';
 import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surcharges';
 import { calcLines } from '../lib/engine';
@@ -84,6 +85,34 @@ function MmInput(props: { value: number | null | undefined; onValue: (value: num
 
 function shortLine(text: string, length = 76) {
   return text.length > length ? `${text.slice(0, length - 1)}…` : text;
+}
+
+function moduleKitPatch(source: KitchenModule): Partial<KitchenModule> {
+  return {
+    slots: JSON.parse(JSON.stringify(source.slots)) as KitchenModule['slots'],
+    facades: source.facades,
+    drawers: source.drawers,
+    shelves: source.shelves,
+    hinges: source.hinges,
+    handles: source.handles,
+    lifts: source.lifts,
+    legs: source.legs,
+    facadeWmm: source.facadeWmm,
+    facadeHmm: source.facadeHmm,
+    facadeParts: source.facadeParts ? JSON.parse(JSON.stringify(source.facadeParts)) as FacadePart[] : undefined,
+    extraFacadeParts: source.extraFacadeParts ? JSON.parse(JSON.stringify(source.extraFacadeParts)) as ExtraFacadePart[] : undefined,
+    facadeSpecStatus: source.facadeSpecStatus,
+    hingeSpecStatus: source.hingeSpecStatus,
+    surcharges: source.surcharges ? [...source.surcharges] : undefined,
+    automaticSurcharges: source.automaticSurcharges ? [...source.automaticSurcharges] : undefined,
+  };
+}
+
+function moduleFromUnsavedMarker(marker: EskizModuleMarker): KitchenModule {
+  const parsed = parseEskizModuleMarker(marker, null);
+  const base = newModule(parsed.type);
+  const definedPatch = Object.fromEntries(Object.entries(parsed).filter(([, value]) => value !== undefined)) as Partial<KitchenModule>;
+  return { ...base, type: parsed.type, name: parsed.name, ...definedPatch };
 }
 
 function normSearch(value: string) {
@@ -168,24 +197,7 @@ function EskizMarkerModuleEditor(props: {
   const copyKitFrom = (sourceId: string) => {
     const source = modules.find((item) => item.id === sourceId);
     if (!source) return;
-    update({
-      slots: JSON.parse(JSON.stringify(source.slots)) as KitchenModule['slots'],
-      facades: source.facades,
-      drawers: source.drawers,
-      shelves: source.shelves,
-      hinges: source.hinges,
-      handles: source.handles,
-      lifts: source.lifts,
-      legs: source.legs,
-      facadeWmm: source.facadeWmm,
-      facadeHmm: source.facadeHmm,
-      facadeParts: source.facadeParts ? JSON.parse(JSON.stringify(source.facadeParts)) as FacadePart[] : undefined,
-      extraFacadeParts: source.extraFacadeParts ? JSON.parse(JSON.stringify(source.extraFacadeParts)) as ExtraFacadePart[] : undefined,
-      facadeSpecStatus: source.facadeSpecStatus,
-      hingeSpecStatus: source.hingeSpecStatus,
-      surcharges: source.surcharges ? [...source.surcharges] : undefined,
-      automaticSurcharges: source.automaticSurcharges ? [...source.automaticSurcharges] : undefined,
-    });
+    update(moduleKitPatch(source));
   };
   const updateDimensionValue = (key: 'widthMm' | 'heightMm' | 'depthMm', value: number | null) => {
     const patch: Partial<KitchenModule> = { [key]: value };
@@ -260,6 +272,26 @@ function EskizMarkerModuleEditor(props: {
   });
   const priceMeta = (item: PriceItem) => `${item.category}${item.subcategory ? ` · ${item.subcategory}` : ''}${item.article ? ` · арт. ${item.article}` : ''}${item.price != null ? ` · ${fmtMoney(item.price)}` : ''}${item.unit ? `/${item.unit}` : ''}`;
   const dimensionLabel = (dimension: 'width' | 'height' | 'depth') => ({ width: 'ширине', height: 'высоте', depth: 'глубине' }[dimension]);
+  const bodyRecommendations = recommendedBySlot.body.map((id) => pricebook.items.find((item) => item.id === id)).filter((item): item is PriceItem => Boolean(item)).slice(0, 4);
+  const markerFrame = marker.width && marker.height ? `${Math.round(marker.width)}×${Math.round(marker.height)} px на эскизе` : null;
+  const applyPreset = (presetId: string) => {
+    const preset = MODULE_PRESETS.find((item) => item.id === presetId);
+    if (!preset) return;
+    update({
+      type: preset.type,
+      name: `${marker.number} — ${preset.name}`,
+      facades: preset.facades,
+      drawers: preset.drawers,
+      shelves: preset.shelves,
+      widthMm: preset.widthMm ?? module.widthMm,
+      heightMm: preset.heightMm ?? module.heightMm,
+      depthMm: preset.depthMm ?? module.depthMm,
+      legs: moduleStandsOnFloor(preset.type) ? (module.legs && module.legs > 0 ? module.legs : 4) : 0,
+      facadeParts: undefined,
+      facadeSpecStatus: 'manual',
+      hingeSpecStatus: module.hingeSpecStatus === 'applied' ? 'outdated' : module.hingeSpecStatus,
+    });
+  };
 
   return (
     <div className="eskiz-marker-editor">
@@ -288,6 +320,11 @@ function EskizMarkerModuleEditor(props: {
       </div>
 
       {moduleTab === 'basics' && <section className="eskiz-module-tab-panel">
+        <h4>Быстрые шаблоны</h4>
+        <div className="eskiz-template-grid">
+          {MODULE_PRESETS.map((preset) => <button key={preset.id} type="button" onClick={() => applyPreset(preset.id)}>{preset.label}</button>)}
+        </div>
+        <div className="eskiz-module-size-hint"><b>Подсказка по маркеру</b><span>{markerFrame ? `Рамка ${markerFrame}. ` : ''}Рекомендации корпуса ниже строятся по типу, ширине и описанию модуля.</span></div>
         <h4>Основные параметры</h4>
         <div className="eskiz-module-form-grid">
         <label>Название<input value={module.name} onChange={(event) => update({ name: event.target.value })} /></label>
@@ -313,6 +350,7 @@ function EskizMarkerModuleEditor(props: {
 
       {moduleTab === 'price' && <section className="eskiz-module-tab-panel">
         <h4>Прайс и комплектующие</h4>
+        {bodyRecommendations.length > 0 && <div className="eskiz-body-recommendations"><b>Подходящие корпуса по размеру/типу</b><div>{bodyRecommendations.map((item) => <button key={item.id} type="button" onClick={() => updateSlot('body', item.id)}><strong>{shortLine(item.name, 46)}</strong><small>{priceMeta(item)}</small></button>)}</div></div>}
         <div className="eskiz-slot-picker improved">
         {QUICK_SLOTS.map((slot) => {
           const choice = module.slots[slot] ?? { mode: 'default' as const, itemId: null };
@@ -469,6 +507,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const [activeCommunicationId, setActiveCommunicationId] = useState<string | null>(null);
   const [distancePointPick, setDistancePointPick] = useState<{ communicationId: string; distanceId: string } | null>(null);
   const [fullScreenSketch, setFullScreenSketch] = useState(false);
+  const [bulkMarkerKeys, setBulkMarkerKeys] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const editorCardRef = useRef<HTMLDivElement | null>(null);
   const linkedProjects = useMemo(() => linkedIds
@@ -509,6 +548,17 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     if (checked.level === 'warn') return [marker.key, { level: 'warn', label: 'проверить', summary: checked.openWarnings[0]?.text ?? checked.warnings[0] ?? 'Есть предупреждения.' } satisfies EskizModulePreviewStatus];
     return [marker.key, { level: 'ok', label: 'готов', summary: 'Модуль полностью участвует в просчёте.' } satisfies EskizModulePreviewStatus];
   })) as Record<string, EskizModulePreviewStatus>, [moduleMarkers, moduleBindings, project.modules, project.moduleDefaults, pricebook]);
+  const moduleSummaries = useMemo(() => Object.fromEntries(moduleMarkers.map((marker) => {
+    const moduleId = moduleBindings[marker.key];
+    const linkedModule = moduleId ? project.modules?.find((module) => module.id === moduleId) ?? null : null;
+    if (!linkedModule) return [marker.key, { status: 'new', label: 'Новый модуль', body: 'Ещё не создан в просчёте' }];
+    const checked = checkModule(linkedModule, project.moduleDefaults ?? {}, pricebook);
+    const body = resolveSlot(linkedModule, 'body', project.moduleDefaults ?? {}, pricebook).item;
+    const lines = moduleToLines(linkedModule, project.moduleDefaults ?? {}, pricebook);
+    const sums = calcLines(lines);
+    const cost = lines.reduce((sum, line) => sum + (sums.get(line.id)?.sum ?? 0), 0);
+    return [marker.key, { status: checked.level, label: linkedModule.name, body: body ? shortLine(body.name, 54) : 'Корпус не выбран', cost: fmtMoney(cost), lines: lines.length }];
+  })) as Record<string, { status: 'ok' | 'warn' | 'error' | 'new'; label: string; body?: string; cost?: string; lines?: number }>, [moduleMarkers, moduleBindings, project.modules, project.moduleDefaults, pricebook]);
 
   const updateEskizPro = useCallback((patch: Partial<EskizProIntegration>) => onChange({ ...project, eskizPro: { ...eskizPro, ...patch } }), [onChange, project, eskizPro]);
 
@@ -572,14 +622,34 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       return;
     }
     const result = syncEskizModulesToCalculation(project, linkedProjects);
-    onChange(result.project);
+    let nextProject = result.project;
+    if (!nextProject.eskizPro?.moduleBindings?.[marker.key]) {
+      const module = moduleFromUnsavedMarker(marker);
+      nextProject = {
+        ...nextProject,
+        modules: [...(nextProject.modules ?? []), module],
+        eskizPro: { ...nextProject.eskizPro, moduleBindings: { ...(nextProject.eskizPro?.moduleBindings ?? {}), [marker.key]: module.id } },
+      };
+    }
+    onChange(nextProject);
     setActiveMarkerKey(marker.key);
     setMessage(`Для маркера «${marker.number}» создана позиция расчёта. Теперь выберите корпус, фасады и фурнитуру из прайса.`);
   };
 
   const handlePreviewModuleClick = (eskizId: string, object: EskizModuleObject) => {
-    const marker = moduleMarkers.find((item) => item.eskizId === eskizId && item.objectId === object.id);
-    if (marker) openMarkerModule(marker);
+    const marker = moduleMarkers.find((item) => item.eskizId === eskizId && item.objectId === object.id) ?? {
+      key: `${eskizId}:${object.id}`,
+      eskizId,
+      eskizTitle: linkedProjects.find((item) => item.id === eskizId)?.title ?? activePreviewProject?.title ?? 'Эскиз PRO',
+      objectId: object.id,
+      number: object.number.trim() || 'Модуль',
+      description: object.description.trim(),
+      x: object.x,
+      y: object.y,
+      width: object.width,
+      height: object.height,
+    };
+    openMarkerModule(marker);
   };
 
   const updateCommunications = (next: EskizCommunicationMarker[]) => updateEskizPro({ communications: next });
@@ -716,6 +786,27 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     });
   };
 
+  const toggleBulkMarker = (key: string) => setBulkMarkerKeys((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
+  const applyActiveModuleKitToSelected = () => {
+    if (!activeModule || bulkMarkerKeys.length === 0) return;
+    const targetKeys = bulkMarkerKeys.filter((key) => key !== activeMarkerKey);
+    if (targetKeys.length === 0) {
+      setMessage('Выберите один или несколько других маркеров, чтобы применить комплектацию активного модуля.');
+      return;
+    }
+    const needsSync = targetKeys.some((key) => !moduleBindings[key]);
+    const baseProject = needsSync ? syncEskizModulesToCalculation(project, linkedProjects).project : project;
+    const nextBindings = baseProject.eskizPro?.moduleBindings ?? {};
+    const targetIds = targetKeys.map((key) => nextBindings[key]).filter((id): id is string => Boolean(id) && id !== activeModule.id);
+    const patch = moduleKitPatch(activeModule);
+    onChange({
+      ...baseProject,
+      modules: (baseProject.modules ?? []).map((module) => targetIds.includes(module.id) ? { ...module, ...patch, name: module.name, type: module.type, widthMm: module.widthMm, heightMm: module.heightMm, depthMm: module.depthMm, facadeWmm: module.facadeWmm, facadeHmm: module.facadeHmm, facadeParts: module.facadeParts, extraFacadeParts: module.extraFacadeParts, facadeSpecStatus: module.facadeSpecStatus === 'applied' ? 'outdated' : module.facadeSpecStatus, note: module.note } : module),
+    });
+    setBulkMarkerKeys([]);
+    setMessage(`Комплектация активного модуля применена к ${targetIds.length} маркерам. Габариты и названия целевых модулей сохранены.`);
+  };
+
   return (
     <section className={`eskiz-pro-workspace ${fullScreenSketch ? 'fullscreen' : ''}`}>
       <div className="card eskiz-pro-intro no-print">
@@ -743,6 +834,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             calculatorProjectName={project.name}
             calculatorProjectClient={project.client}
             communications={communications}
+            moduleSummaries={moduleSummaries}
             activeCommunicationId={activeCommunicationId}
             communicationAddKind={communicationAddKind}
             pickingDistancePoint={Boolean(distancePointPick)}
@@ -800,14 +892,15 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             <div className="section-head"><div><h3>Модули с эскиза → просчёт</h3><p className="muted small">Поставьте объект «Модуль» на эскизе и кликните его в превью/списке: удобный редактор откроется отдельной широкой карточкой сразу под Эскиз PRO.</p></div></div>
             <div className="eskiz-pro-module-stats"><div><b>{moduleMarkers.length}</b><span>маркеров</span></div><div><b>{linkedModuleCount}</b><span>уже связаны</span></div><div><b>{Math.max(0, moduleMarkers.length - linkedModuleCount)}</b><span>новые</span></div></div>
             <button className="btn primary block" disabled={moduleMarkers.length === 0} onClick={syncModulesToCalculation}>Создать / обновить модули в расчёте</button>
+            {moduleMarkers.length > 0 && <div className="eskiz-pro-marker-bulk-actions"><button className="btn tiny ghost" onClick={() => setBulkMarkerKeys(moduleMarkers.map((marker) => marker.key))}>Выбрать все</button><button className="btn tiny ghost" onClick={() => setBulkMarkerKeys([])}>Снять</button><button className="btn tiny" disabled={!activeModule || bulkMarkerKeys.length === 0} onClick={applyActiveModuleKitToSelected}>Применить комплектовку активного к выбранным ({bulkMarkerKeys.length})</button></div>}
             {moduleMarkers.length === 0 ? <div className="empty small">В привязанных эскизах пока нет объектов «Модуль».</div> : (
               <div className="eskiz-pro-marker-list">
-                {moduleMarkers.slice(0, 8).map((marker) => {
+                {moduleMarkers.map((marker) => {
                   const moduleId = moduleBindings[marker.key];
                   const linkedModule = moduleId ? project.modules?.find((module) => module.id === moduleId) : null;
-                  return <div className={activeMarkerKey === marker.key ? 'active' : ''} key={marker.key}><b>{marker.number}</b><span>{marker.description || 'без описания'}{linkedModule ? ` → ${linkedModule.name}` : ' → будет создан'}</span><button className="btn tiny ghost" onClick={() => openMarkerModule(marker)}>{linkedModule ? 'Настроить здесь' : 'Создать и настроить'}</button>{linkedModule && props.onOpenModule && <button className="btn tiny ghost" onClick={() => props.onOpenModule?.(linkedModule.id)}>Полная карточка</button>}</div>;
+                  const status = moduleStatuses[marker.key];
+                  return <div className={activeMarkerKey === marker.key ? 'active' : ''} key={marker.key}><label className="eskiz-marker-select"><input type="checkbox" checked={bulkMarkerKeys.includes(marker.key)} onChange={() => toggleBulkMarker(marker.key)} /><span /></label><b>{marker.number}</b><span>{marker.description || 'без описания'}{linkedModule ? ` → ${linkedModule.name}` : ' → будет создан'}<small>{status?.label ? ` · ${status.label}` : ''}</small></span><button className="btn tiny ghost" onClick={() => openMarkerModule(marker)}>{linkedModule ? 'Настроить здесь' : 'Создать и настроить'}</button>{linkedModule && props.onOpenModule && <button className="btn tiny ghost" onClick={() => props.onOpenModule?.(linkedModule.id)}>Полная карточка</button>}</div>;
                 })}
-                {moduleMarkers.length > 8 && <div><b>+{moduleMarkers.length - 8}</b><span>ещё модулей</span></div>}
               </div>
             )}
           </section>

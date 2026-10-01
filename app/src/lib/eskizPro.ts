@@ -67,6 +67,8 @@ export interface EskizModuleMarker {
   description: string;
   x: number;
   y: number;
+  width?: number;
+  height?: number;
 }
 
 interface ParsedEskizModule {
@@ -191,6 +193,8 @@ export function collectEskizModuleMarkers(projects: EskizProject[]): EskizModule
       description: object.description.trim(),
       x: object.x,
       y: object.y,
+      width: object.width,
+      height: object.height,
     })));
 }
 

@@ -8,6 +8,7 @@ type Tool = 'select' | 'free-dimension' | 'h-dimension' | 'v-dimension' | 'chain
 type Drag = { mode: 'create' | 'move' | 'handle' | 'marquee'; start: Point; id?: string; end?: 'start' | 'end' | 'offset' | 'resize'; before: EskizProject; original?: EskizObject };
 type Point = { x: number; y: number };
 type QuickEdit = { id: string; value: string; left: number; top: number; repeatTool: Tool };
+type ModuleSummary = { status: 'ok' | 'warn' | 'error' | 'new'; label: string; body?: string; cost?: string; lines?: number };
 
 const QUICK_TOOLS: Tool[] = ['select', 'free-dimension', 'module', 'callout', 'comment'];
 
@@ -16,6 +17,7 @@ type Props = {
   calculatorProjectName: string;
   calculatorProjectClient?: string;
   communications: EskizCommunicationMarker[];
+  moduleSummaries?: Record<string, ModuleSummary>;
   activeCommunicationId?: string | null;
   communicationAddKind?: EskizCommunicationKind | null;
   pickingDistancePoint?: boolean;
@@ -715,7 +717,10 @@ export default function EmbeddedEskizEditor(props: Props) {
       return;
     }
     if (!selectedIds.includes(object.id)) selectOnly(object.id);
-    if (object.type === 'module') props.onModuleObjectClick?.(project.id, object);
+    if (object.type === 'module') {
+      props.onProjectChange(project);
+      props.onModuleObjectClick?.(project.id, object);
+    }
     if (object.locked) return;
     const target = point(event);
     dragRef.current = { mode: 'move', start: target, id: object.id, before: project, original: object };
@@ -910,7 +915,7 @@ export default function EmbeddedEskizEditor(props: Props) {
         {pendingDimension ? <div className="embedded-eskiz-hint"><b>Шаг 3 из 3</b> Отведите размерную линию и кликните для фиксации</div> : tool === 'chain' && <div className="embedded-eskiz-hint"><b>Цепочка</b> Укажите следующую точку · Esc — закончить</div>}
       </section>
       {quickEdit && <div className="embedded-eskiz-quick" style={{ left: Math.min(quickEdit.left + 14, window.innerWidth - 210), top: Math.min(quickEdit.top + 14, window.innerHeight - 105) }}><span>Размер</span><div><input autoFocus inputMode="decimal" value={quickEdit.value} onChange={(event) => setQuickEdit({ ...quickEdit, value: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); finishQuickEdit(false); } if (event.key === 'Tab') { event.preventDefault(); finishQuickEdit(true); } if (event.key === 'Escape') { event.preventDefault(); setQuickEdit(null); } }} /><b>мм</b></div><small>Enter — готово · Tab — следующий</small></div>}
-      {sidebarOpen && <Inspector project={project} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} onShowImage={setShowImage} onShowAnnotations={setShowAnnotations} onShowHelpers={setShowHelpers} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
+      {sidebarOpen && <Inspector project={project} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} moduleSummaries={props.moduleSummaries} onModuleObjectClick={(projectId, object) => { props.onProjectChange(project); props.onModuleObjectClick?.(projectId, object); }} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} onShowImage={setShowImage} onShowAnnotations={setShowAnnotations} onShowHelpers={setShowHelpers} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
     </div>
     <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span>Стрелки — точный сдвиг · Shift — привязка угла · Пробел — перемещение</span><div><button onClick={() => setZoom((value) => Math.max(.1, value - .1))}>−</button><button onClick={fit}>{Math.round(zoom * 100)}%</button><button onClick={() => setZoom((value) => Math.min(3, value + .1))}>+</button></div></footer>
   </div>;
@@ -921,6 +926,8 @@ function Inspector(props: {
   object?: EskizObject;
   communication?: EskizCommunicationMarker | null;
   communications: EskizCommunicationMarker[];
+  moduleSummaries?: Record<string, ModuleSummary>;
+  onModuleObjectClick?: (projectId: string, object: EskizModuleObject) => void;
   activeCommunicationId?: string | null;
   selectedIds: string[];
   onSelect: (id: string | null) => void;
@@ -953,7 +960,7 @@ function Inspector(props: {
   const setTab = (tab: 'object' | 'objects' | 'document') => setTabState({ tab, selectionKey: currentSelectionKey });
   return <aside className="embedded-eskiz-inspector">
     <div className="embedded-eskiz-tabs"><button className={activeTab === 'object' ? 'active' : ''} onClick={() => setTab('object')}>Объект</button><button className={activeTab === 'objects' ? 'active' : ''} onClick={() => setTab('objects')}>Список</button><button className={activeTab === 'document' ? 'active' : ''} onClick={() => setTab('document')}>Документ</button></div>
-    {activeTab === 'object' ? selectedIds.length > 1 ? <div className="embedded-eskiz-fields"><div className="embedded-eskiz-fields-heading"><span>Выбрано объектов: {selectedIds.length}</span></div><div className="embedded-eskiz-section-label">Выравнивание</div><div className="embedded-eskiz-align-grid"><button onClick={() => props.onAlign('left')}>По левому</button><button onClick={() => props.onAlign('centerX')}>Центр X</button><button onClick={() => props.onAlign('right')}>По правому</button><button onClick={() => props.onAlign('top')}>По верху</button><button onClick={() => props.onAlign('centerY')}>Центр Y</button><button onClick={() => props.onAlign('bottom')}>По низу</button></div></div> : object ? <ObjectFields object={object} onObject={props.onObject} onSelectChain={props.onSelectChain} /> : communication ? <CommunicationFields marker={communication} imageWidth={project.image.width} imageHeight={project.image.height} onChange={(patch) => props.onCommunicationChange(communication.id, patch)} onDelete={() => props.onCommunicationDelete(communication.id)} onStartDistance={() => props.onStartCommunicationDistance(communication.id)} onDistanceAdd={(anchor) => props.onCommunicationDistanceAdd(communication.id, anchor)} onDistanceChange={(distanceId, patch) => props.onCommunicationDistanceChange(communication.id, distanceId, patch)} onDistanceDelete={(distanceId) => props.onCommunicationDistanceDelete(communication.id, distanceId)} /> : <div className="embedded-eskiz-empty"><strong>Ничего не выбрано</strong><span>Выберите объект или коммуникацию на эскизе, чтобы изменить параметры.</span></div> : activeTab === 'objects' ? <InspectorObjectList project={project} selectedIds={selectedIds} communications={props.communications} activeCommunicationId={props.activeCommunicationId} onSelect={props.onSelect} onProject={props.onProject} onPatchObject={props.onPatchObject} onCommunicationSelect={props.onCommunicationSelect} onStartCommunicationDistance={props.onStartCommunicationDistance} /> : <DocumentFields project={project} showImage={props.showImage} showAnnotations={props.showAnnotations} showHelpers={props.showHelpers} onShowImage={props.onShowImage} onShowAnnotations={props.onShowAnnotations} onShowHelpers={props.onShowHelpers} onProject={props.onProject} />}
+    {activeTab === 'object' ? selectedIds.length > 1 ? <div className="embedded-eskiz-fields"><div className="embedded-eskiz-fields-heading"><span>Выбрано объектов: {selectedIds.length}</span></div><div className="embedded-eskiz-section-label">Выравнивание</div><div className="embedded-eskiz-align-grid"><button onClick={() => props.onAlign('left')}>По левому</button><button onClick={() => props.onAlign('centerX')}>Центр X</button><button onClick={() => props.onAlign('right')}>По правому</button><button onClick={() => props.onAlign('top')}>По верху</button><button onClick={() => props.onAlign('centerY')}>Центр Y</button><button onClick={() => props.onAlign('bottom')}>По низу</button></div></div> : object ? <ObjectFields object={object} moduleSummary={object.type === 'module' ? props.moduleSummaries?.[`${project.id}:${object.id}`] : undefined} onOpenModule={object.type === 'module' ? () => props.onModuleObjectClick?.(project.id, object) : undefined} onObject={props.onObject} onSelectChain={props.onSelectChain} /> : communication ? <CommunicationFields marker={communication} imageWidth={project.image.width} imageHeight={project.image.height} onChange={(patch) => props.onCommunicationChange(communication.id, patch)} onDelete={() => props.onCommunicationDelete(communication.id)} onStartDistance={() => props.onStartCommunicationDistance(communication.id)} onDistanceAdd={(anchor) => props.onCommunicationDistanceAdd(communication.id, anchor)} onDistanceChange={(distanceId, patch) => props.onCommunicationDistanceChange(communication.id, distanceId, patch)} onDistanceDelete={(distanceId) => props.onCommunicationDistanceDelete(communication.id, distanceId)} /> : <div className="embedded-eskiz-empty"><strong>Ничего не выбрано</strong><span>Выберите объект или коммуникацию на эскизе, чтобы изменить параметры.</span></div> : activeTab === 'objects' ? <InspectorObjectList project={project} selectedIds={selectedIds} communications={props.communications} activeCommunicationId={props.activeCommunicationId} onSelect={props.onSelect} onProject={props.onProject} onPatchObject={props.onPatchObject} onCommunicationSelect={props.onCommunicationSelect} onStartCommunicationDistance={props.onStartCommunicationDistance} /> : <DocumentFields project={project} showImage={props.showImage} showAnnotations={props.showAnnotations} showHelpers={props.showHelpers} onShowImage={props.onShowImage} onShowAnnotations={props.onShowAnnotations} onShowHelpers={props.onShowHelpers} onProject={props.onProject} />}
     {activeTab === 'object' && selectedIds.length > 0 && <div className="embedded-eskiz-inspector-bottom"><button onClick={props.onDuplicate}>Дублировать</button><button className="danger" onClick={props.onDelete}>Удалить</button></div>}
   </aside>;
 }
@@ -969,6 +976,7 @@ function InspectorObjectList(props: {
   onCommunicationSelect: (marker: EskizCommunicationMarker) => void;
   onStartCommunicationDistance: (communicationId: string) => void;
 }) {
+  const [dragObjectId, setDragObjectId] = useState<string | null>(null);
   const reorder = (index: number, delta: number) => {
     const next = [...props.project.objects];
     const target = index + delta;
@@ -976,9 +984,19 @@ function InspectorObjectList(props: {
     [next[index], next[target]] = [next[target], next[index]];
     props.onProject({ objects: next });
   };
+  const moveObjectBefore = (sourceId: string | null, targetId: string) => {
+    if (!sourceId || sourceId === targetId) return;
+    const next = [...props.project.objects];
+    const sourceIndex = next.findIndex((item) => item.id === sourceId);
+    const targetIndex = next.findIndex((item) => item.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+    const [item] = next.splice(sourceIndex, 1);
+    next.splice(sourceIndex < targetIndex ? targetIndex - 1 : targetIndex, 0, item);
+    props.onProject({ objects: next });
+  };
   return <div className="embedded-eskiz-object-list">
     <span className="embedded-eskiz-list-heading">Объекты на эскизе</span>
-    {props.project.objects.length === 0 ? <div className="embedded-eskiz-list-empty">Пока нет размеров, модулей или подписей.</div> : props.project.objects.map((item, index) => <div key={item.id} className={props.selectedIds.includes(item.id) ? 'active' : ''}><button className="embedded-eskiz-object-list-main" onClick={() => props.onSelect(item.id)}><b>{objectListLabel(item)}</b><span>{index + 1} · {item.type}</span></button><button title="Выше" onClick={() => reorder(index, -1)}>↑</button><button title="Ниже" onClick={() => reorder(index, 1)}>↓</button><button title={item.hidden ? 'Показать' : 'Скрыть'} onClick={() => props.onPatchObject(item.id, { hidden: !item.hidden })}>{item.hidden ? '○' : '◉'}</button><button title={item.locked ? 'Разблокировать' : 'Заблокировать'} onClick={() => props.onPatchObject(item.id, { locked: !item.locked })}>{item.locked ? '🔒' : '🔓'}</button></div>)}
+    {props.project.objects.length === 0 ? <div className="embedded-eskiz-list-empty">Пока нет размеров, модулей или подписей.</div> : props.project.objects.map((item, index) => <div key={item.id} draggable className={`${props.selectedIds.includes(item.id) ? 'active' : ''} ${dragObjectId === item.id ? 'dragging' : ''}`} onDragStart={(event) => { setDragObjectId(item.id); event.dataTransfer.effectAllowed = 'move'; }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); moveObjectBefore(dragObjectId, item.id); setDragObjectId(null); }} onDragEnd={() => setDragObjectId(null)}><button className="embedded-eskiz-object-list-main" onClick={() => props.onSelect(item.id)}><b>{objectListLabel(item)}</b><span>{index + 1} · {item.type} · перетащите строку для порядка</span></button><button title="Выше" onClick={() => reorder(index, -1)}>↑</button><button title="Ниже" onClick={() => reorder(index, 1)}>↓</button><button title={item.hidden ? 'Показать' : 'Скрыть'} onClick={() => props.onPatchObject(item.id, { hidden: !item.hidden })}>{item.hidden ? '○' : '◉'}</button><button title={item.locked ? 'Разблокировать' : 'Заблокировать'} onClick={() => props.onPatchObject(item.id, { locked: !item.locked })}>{item.locked ? '🔒' : '🔓'}</button></div>)}
     <span className="embedded-eskiz-list-heading">Коммуникации</span>
     {props.communications.length === 0 ? <div className="embedded-eskiz-list-empty">Нет отметок. Выберите тип в верхнем выпадающем списке и кликните по эскизу.</div> : props.communications.map((marker) => {
       const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
@@ -1039,7 +1057,7 @@ function CommunicationFields(props: {
   </div>;
 }
 
-function ObjectFields({ object, onObject, onSelectChain }: { object: EskizObject; onObject: (patch: Partial<EskizObject>) => void; onSelectChain: (chainId: string) => void }) {
+function ObjectFields({ object, moduleSummary, onOpenModule, onObject, onSelectChain }: { object: EskizObject; moduleSummary?: ModuleSummary; onOpenModule?: () => void; onObject: (patch: Partial<EskizObject>) => void; onSelectChain: (chainId: string) => void }) {
   const hasFrame = ['module', 'callout', 'comment', 'equipment', 'link'].includes(object.type);
   const title = object.type === 'dimension' ? 'Размерная линия' : object.type === 'module' ? 'Модуль' : object.type === 'callout' ? 'Выноска' : object.type === 'equipment' ? 'Техника' : object.type === 'link' ? 'Ссылка' : object.type === 'anchor' ? 'Опорная точка' : object.type === 'guide' ? 'Направляющая' : 'Комментарий';
   return <div className="embedded-eskiz-fields"><div className="embedded-eskiz-fields-heading"><span>{title}</span><small>#{object.id.slice(0, 5)}</small></div>
@@ -1047,7 +1065,7 @@ function ObjectFields({ object, onObject, onSelectChain }: { object: EskizObject
     {object.type === 'dimension' && <DimensionFields object={object} onObject={onObject} onSelectChain={onSelectChain} />}
     {object.type === 'anchor' && <label>Название точки<input autoFocus value={object.label} onChange={(event) => onObject({ label: event.target.value } as Partial<EskizObject>)} /></label>}
     {object.type === 'guide' && <label>Ориентация<select value={object.orientation} onChange={(event) => onObject({ orientation: event.target.value } as Partial<EskizObject>)}><option value="horizontal">Горизонтальная</option><option value="vertical">Вертикальная</option></select></label>}
-    {object.type === 'module' && <><label>Номер модуля<input autoFocus value={object.number} onChange={(event) => onObject({ number: event.target.value } as Partial<EskizObject>)} /></label><label>Описание<textarea rows={4} placeholder={'600\nНиз'} value={object.description} onChange={(event) => onObject({ description: event.target.value } as Partial<EskizObject>)} /></label></>}
+    {object.type === 'module' && <><div className={`embedded-eskiz-module-mini ${moduleSummary?.status ?? 'new'}`}><b>{moduleSummary ? moduleSummary.label : 'Модуль ещё не создан в просчёте'}</b><span>{moduleSummary?.body ?? 'Кликните «Редактор модуля», чтобы создать/открыть позицию расчёта.'}</span>{moduleSummary?.cost && <small>{moduleSummary.cost}{moduleSummary.lines != null ? ` · ${moduleSummary.lines} строк` : ''}</small>}<button type="button" onClick={onOpenModule}>{moduleSummary ? 'Редактор модуля' : 'Создать в просчёте'}</button></div><label>Номер модуля<input autoFocus value={object.number} onChange={(event) => onObject({ number: event.target.value } as Partial<EskizObject>)} /></label><label>Описание<textarea rows={4} placeholder={'600\nНиз'} value={object.description} onChange={(event) => onObject({ description: event.target.value } as Partial<EskizObject>)} /></label></>}
     {(object.type === 'comment' || object.type === 'callout') && <label>Текст<textarea autoFocus rows={5} value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label>}
     {object.type === 'equipment' && <><label>Тип техники<select value={object.equipmentType} onChange={(event) => onObject({ equipmentType: event.target.value, text: event.target.value } as Partial<EskizObject>)}>{EQUIPMENT_TYPES.map((item) => <option key={item}>{item}</option>)}</select></label><label>Подпись<input autoFocus value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label><label>Ссылка на модель<input type="url" placeholder="https://…" value={object.url || ''} onChange={(event) => onObject({ url: event.target.value } as Partial<EskizObject>)} /></label></>}
     {object.type === 'link' && <><label>Название<input autoFocus value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label><label>URL<input type="url" placeholder="https://…" value={object.url || ''} onChange={(event) => onObject({ url: event.target.value } as Partial<EskizObject>)} /></label>{object.url && <a className="embedded-eskiz-test-link" href={object.url} target="_blank" rel="noreferrer">Открыть ссылку ↗</a>}</>}
