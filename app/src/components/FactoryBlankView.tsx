@@ -4,9 +4,12 @@ import { checkFactoryBlank, draftFactoryBlank, FACTORY_BLANK_SPECS, factoryBlank
 import { checkDictRules, dictSuggestions, loadFactoryDicts, type FactoryDicts } from '../lib/factoryDicts';
 import { BACK_EDGE_NOTE, checkWorktopPlan, edgeKindLabel, suggestWorktopPlan, WORKTOP_EDGE_KINDS } from '../lib/worktopPlan';
 import { lineMatchesChecklistKey } from '../lib/checklist';
-import { blankCellRefLabel, exportFactoryBlankXlsx, getBlankSheetMap } from '../lib/factoryBlankXls';
+import { blankCellRefLabel, blankSketchRangeLabel, exportFactoryBlankXlsx, getBlankSheetMap } from '../lib/factoryBlankXls';
 import { uid } from '../lib/storage';
 import type { WorktopEdgeKind, WorktopPiece } from '../types';
+import { snapshotProject } from '../lib/eskizPro';
+import { renderEskizSketchPng, type EskizSketchModuleMarkerMode } from '../lib/eskizSketchExport';
+import EskizProjectPreview from './EskizProjectPreview';
 
 const NO_PIECES: WorktopPiece[] = [];
 
@@ -46,6 +49,10 @@ export default function FactoryBlankView(props: {
   const hasWorktopPlanSection = spec.fields.some((f) => f.autoFrom === 'worktop');
   const hasWorktopInProject = Boolean(project?.lines.some((l) => lineMatchesChecklistKey('worktop', l)));
   const pieces = project?.worktopPlan ?? NO_PIECES;
+  const eskizSnapshots = useMemo(() => (project?.eskizPro?.snapshots ?? []).flatMap((snapshot) => {
+    const eskizProject = snapshotProject(snapshot);
+    return eskizProject ? [{ snapshot, project: eskizProject }] : [];
+  }), [project]);
   const planIssues = useMemo<BlankIssue[]>(() =>
     hasWorktopPlanSection && hasWorktopInProject
       ? checkWorktopPlan(pieces, true).map((i) => ({ fieldKey: 'worktopPlan', label: 'Лист 2', level: i.level, text: i.text }))
@@ -106,6 +113,12 @@ export default function FactoryBlankView(props: {
     delete drafts[spec.id];
     props.onChangeProject({ ...project, factoryBlankDrafts: drafts });
   };
+  const updateSketchSettings = (patch: NonNullable<Project['factoryBlankSketch']>) => {
+    props.onChangeProject({
+      ...project,
+      factoryBlankSketch: { ...(project.factoryBlankSketch ?? {}), ...patch },
+    });
+  };
   const scrollToField = (key: string) => {
     const el = document.getElementById(`blank-field-${key}`);
     if (!el) return;
@@ -118,6 +131,18 @@ export default function FactoryBlankView(props: {
   const warns = issues.filter((i) => i.level === 'warn');
   const sheetMap = getBlankSheetMap(spec.id);
   const hasTemplate = Boolean(sheetMap);
+  const sketchSettings = project.factoryBlankSketch ?? {};
+  const defaultSketchId = project.eskizPro?.activeProjectId && eskizSnapshots.some((item) => item.project.id === project.eskizPro?.activeProjectId)
+    ? project.eskizPro.activeProjectId
+    : eskizSnapshots[0]?.project.id;
+  const selectedSketchId = sketchSettings.snapshotId && eskizSnapshots.some((item) => item.project.id === sketchSettings.snapshotId)
+    ? sketchSettings.snapshotId
+    : defaultSketchId;
+  const selectedSketch = eskizSnapshots.find((item) => item.project.id === selectedSketchId)?.project ?? null;
+  const sketchEnabled = sketchSettings.enabled ?? (eskizSnapshots.length > 0);
+  const sketchMarkerMode: EskizSketchModuleMarkerMode = sketchSettings.moduleMarkerMode ?? project.eskizPro?.moduleMarkerMode ?? 'compact';
+  const showSketchCommunications = sketchSettings.showCommunications ?? true;
+  const canInsertSketch = Boolean(sheetMap?.sketch && selectedSketch && sketchEnabled);
   const issueKeys = new Set(issues.map((i) => i.fieldKey));
   const fieldKeys = new Set(draft.map((d) => d.field.key));
   const shownSections = sections
@@ -132,9 +157,20 @@ export default function FactoryBlankView(props: {
     if (errors.length > 0 && !confirm(`В бланке ${errors.length} незаполненных обязательных пунктов. Всё равно выгрузить в Excel?`)) return;
     setExporting(true);
     try {
+      const sketchImage = canInsertSketch && selectedSketch && sheetMap?.sketch
+        ? await renderEskizSketchPng(selectedSketch, {
+          widthPx: sheetMap.sketch.targetPx.width,
+          heightPx: sheetMap.sketch.targetPx.height,
+          moduleMarkerMode: sketchMarkerMode,
+          communications: showSketchCommunications ? (project.eskizPro?.communications ?? []) : [],
+          title: 'Эскиз PRO для фабрики',
+          subtitle: `${selectedSketch.title} · ${selectedSketch.image.name}`,
+        })
+        : null;
       await exportFactoryBlankXlsx({
         baseUrl: import.meta.env.BASE_URL,
         project, spec, draft, pieces,
+        sketchImage,
       });
     } catch (e) {
       alert(`Не получилось собрать файл бланка: ${e instanceof Error ? e.message : String(e)}`);
@@ -196,7 +232,60 @@ export default function FactoryBlankView(props: {
         <div><b>{errors.length}</b><span>критичных ошибок</span></div>
         <div><b>{warns.length}</b><span>предупреждений</span></div>
         <div><b>{hasWorktopPlanSection ? pieces.length : '—'}</b><span>деталей столешницы на лист 2</span></div>
+        <div><b>{canInsertSketch ? 'да' : '—'}</b><span>Эскиз PRO в {sheetMap ? blankSketchRangeLabel(sheetMap) || 'нет поля' : 'нет шаблона'}</span></div>
       </div>
+
+      {sheetMap?.sketch && (
+        <div className="card blank-sketch-card no-print">
+          <div className="blank-sketch-main">
+            <div className="section-head">
+              <div>
+                <h3>Эскиз PRO в Excel-бланк фабрики</h3>
+                <p className="muted small">Картинка попадёт в левое поле официального шаблона: <b>{blankSketchRangeLabel(sheetMap)}</b>. Можно уменьшить или скрыть маркеры модулей, чтобы ничего не перекрывало размеры.</p>
+              </div>
+              <label className="toggle small"><input type="checkbox" checked={sketchEnabled} onChange={(e) => updateSketchSettings({ enabled: e.target.checked })} /> вставлять в Excel</label>
+            </div>
+            {eskizSnapshots.length === 0 ? (
+              <div className="empty small">В проекте пока нет snapshot Эскиз PRO. Откройте проект, добавьте/обновите эскиз — после этого он будет вставляться в бланк.</div>
+            ) : (
+              <div className="blank-sketch-controls">
+                <label>Эскиз
+                  <select value={selectedSketchId ?? ''} disabled={!sketchEnabled} onChange={(e) => updateSketchSettings({ snapshotId: e.target.value || null })}>
+                    {eskizSnapshots.map((item) => <option key={item.project.id} value={item.project.id}>{item.project.title} · {item.project.image.name}</option>)}
+                  </select>
+                </label>
+                <label>Маркеры модулей
+                  <select value={sketchMarkerMode} disabled={!sketchEnabled} onChange={(e) => updateSketchSettings({ moduleMarkerMode: e.target.value as EskizSketchModuleMarkerMode })}>
+                    <option value="compact">Компактные точки</option>
+                    <option value="hidden">Скрыть маркеры</option>
+                    <option value="full">Полные плашки</option>
+                  </select>
+                </label>
+                <label className="toggle"><input type="checkbox" checked={showSketchCommunications} disabled={!sketchEnabled} onChange={(e) => updateSketchSettings({ showCommunications: e.target.checked })} /> коммуникации и расстояния</label>
+              </div>
+            )}
+          </div>
+          {selectedSketch && sketchEnabled ? (
+            <div className="blank-sketch-preview">
+              <EskizProjectPreview
+                project={selectedSketch}
+                compact
+                moduleMarkerMode={sketchMarkerMode}
+                communicationMarkers={showSketchCommunications ? (project.eskizPro?.communications ?? []) : []}
+              />
+            </div>
+          ) : (
+            <div className="blank-sketch-placeholder">Эскиз не будет вставлен в Excel.</div>
+          )}
+        </div>
+      )}
+
+      {sheetMap && !sheetMap.sketch && eskizSnapshots.length > 0 && (
+        <div className="card blank-sketch-card no-print">
+          <b>Эскиз PRO найден, но у выбранного шаблона нет отдельного левого поля под картинку.</b>
+          <span className="muted small">Для кухонного бланка Висма картинка вставляется в A14:I47. В корпусном бланке такого места в официальной форме нет, поэтому файл не меняю самовольно.</span>
+        </div>
+      )}
 
       {issues.length > 0 && (
         <div className="card blank-issues no-print">

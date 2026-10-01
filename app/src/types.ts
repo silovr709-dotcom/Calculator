@@ -370,6 +370,17 @@ export interface EskizProIntegration {
   snapshots?: EskizProSnapshot[];
 }
 
+export interface FactoryBlankSketchSettings {
+  /** false — не вставлять Эскиз PRO в официальный Excel-бланк фабрики. Отсутствие поля = вставлять, если есть snapshot. */
+  enabled?: boolean;
+  /** Какой snapshot Эскиз PRO вставлять в левую область бланка; null/undefined = активный или последний. */
+  snapshotId?: string | null;
+  /** Режим маркеров именно для фабричного Excel: можно сделать компактно или совсем убрать. */
+  moduleMarkerMode?: 'full' | 'compact' | 'hidden';
+  /** false — не добавлять в картинку фабричного бланка розетки/воду/газ/вентиляцию. */
+  showCommunications?: boolean;
+}
+
 export type KitchenChecklistKey = 'plinth' | 'baseboard' | 'worktop' | 'wallPanel';
 
 export interface KitchenChecklistItem {
@@ -425,6 +436,8 @@ export interface Project {
   factoryBlankDrafts?: Record<string, Record<string, string>>;
   /** Лист 2 бланка — схема столешницы: детали и виды кромок (по инструкции фабрики). */
   worktopPlan?: WorktopPiece[];
+  /** Настройки вставки Эскиз PRO в официальный Excel-бланк фабрики. */
+  factoryBlankSketch?: FactoryBlankSketchSettings;
   createdAt: string;
   updatedAt: string;
 }

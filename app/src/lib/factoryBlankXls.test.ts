@@ -9,6 +9,7 @@ import type { BlankSheetMap } from './factoryBlankXls';
 import {
   blankCellRefLabel,
   blankFileName,
+  blankSketchRangeLabel,
   buildBlankCellWrites,
   buildWorktopWrites,
   CORPUS_SHEET_MAP,
@@ -69,6 +70,7 @@ describe('карта ячеек бланка сверена с настоящи�
     expect(text(ws.getCell('A4').value)).toBe('h пеналов общ:');
     expect(text(ws.getCell('H4').value)).toBe('h столов общ:');
     expect(text(ws.getCell('J48').value)).toBe('Прочее');
+    expect(blankSketchRangeLabel(KITCHEN_SHEET_MAP)).toBe('A14:I47');
   });
 
   it('все целевые клетки кухни существуют и попадают в лист бланка', async () => {
@@ -156,6 +158,8 @@ describe('сборка значений для шаблона', () => {
     expect(byCell.get('B6')).toBe('U1147 Дуб табачный');
     expect(byCell.get('B26')).toBe('Titus 110 — 4 шт');
     expect(CORPUS_SHEET_MAP.worktop).toBeUndefined();
+    expect(CORPUS_SHEET_MAP.sketch).toBeUndefined();
+    expect(blankSketchRangeLabel(CORPUS_SHEET_MAP)).toBe('');
     expect(buildWorktopWrites(CORPUS_SHEET_MAP, [], 'что-то')).toEqual([]);
   });
 

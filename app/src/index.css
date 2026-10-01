@@ -985,7 +985,7 @@ input.dim { width: 54px; font-size: 11.5px; padding: 3px 4px; text-align: center
 .blank-controls { display: flex; gap: 16px; flex-wrap: wrap; align-items: end; margin-bottom: 14px; }
 .blank-controls label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; min-width: 220px; }
 .blank-control-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.blank-export-preview { display: grid; grid-template-columns: minmax(260px, 1fr) repeat(3, auto); gap: 12px; align-items: center; margin-top: -6px; }
+.blank-export-preview { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; align-items: center; margin-top: -6px; }
 .blank-export-preview div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: #fbfdfc; }
 .blank-export-preview b { font-size: 15px; }
 .blank-export-preview span { font-size: 11px; color: var(--muted); }
@@ -1012,6 +1012,17 @@ input.dim { width: 54px; font-size: 11.5px; padding: 3px 4px; text-align: center
 .blank-field textarea { font-size: 13px; min-height: 34px; }
 .blank-field.has-issue textarea { border-color: #d58b30; box-shadow: 0 0 0 2px rgba(213, 139, 48, .10); }
 .blank-field.required textarea:placeholder-shown { border-color: #d4a29a; }
+.blank-sketch-card { display: grid; grid-template-columns: minmax(320px, .95fr) minmax(300px, 1.05fr); gap: 14px; align-items: start; border-left: 4px solid #7c3aed; }
+.blank-sketch-main .section-head { margin-bottom: 10px; }
+.blank-sketch-main .section-head h3 { margin: 0 0 4px; }
+.blank-sketch-controls { display: grid; grid-template-columns: minmax(180px, 1.2fr) minmax(170px, .8fr); gap: 10px; align-items: end; }
+.blank-sketch-controls label:not(.toggle) { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 800; color: #55685d; }
+.blank-sketch-controls select { min-height: 34px; }
+.toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 800; color: #40554b; }
+.toggle.small { white-space: nowrap; }
+.blank-sketch-preview .eskiz-preview { margin: 0; }
+.blank-sketch-preview .eskiz-preview-stage svg { max-height: 340px; }
+.blank-sketch-placeholder { min-height: 180px; display: grid; place-items: center; border: 1px dashed #d8e5df; border-radius: 12px; color: var(--muted); background: #fbfdfc; font-weight: 700; text-align: center; padding: 16px; }
 
 .kb-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
 .kb-card h3 { margin: 0; font-size: 15px; }
@@ -1037,8 +1048,8 @@ input.dim { width: 54px; font-size: 11.5px; padding: 3px 4px; text-align: center
   .blank-print-label { width: 34%; font-weight: 600; }
 }
 @media screen { .blank-print { display: none; } }
-@media (max-width: 900px) { .blank-export-preview { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 640px) { .blank-export-preview { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .blank-export-preview { grid-template-columns: 1fr 1fr; } .blank-sketch-card { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .blank-export-preview, .blank-sketch-controls { grid-template-columns: 1fr; } }
 
 .dict-picker { font-size: 11px; min-height: 24px !important; padding: 1px 4px; color: var(--muted, #6b7a73); border-style: dashed; }
 

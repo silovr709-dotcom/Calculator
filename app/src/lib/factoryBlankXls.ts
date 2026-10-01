@@ -15,6 +15,23 @@ import type { BlankDraftField, FactoryBlankSpec } from './factoryBlank';
 import { edgeKindLabel } from './worktopPlan';
 
 /** Куда писать значения одного бланка. */
+export interface BlankSketchSlot {
+  /** Человекочитаемый диапазон официального бланка, куда ложится картинка. */
+  rangeLabel: string;
+  /** Координаты ExcelJS: нумерация колонок/строк с нуля, br — правый нижний край области. */
+  tl: { col: number; row: number };
+  br: { col: number; row: number };
+  /** Оптимальный размер PNG: совпадает с пропорциями области, чтобы Excel не растягивал эскиз. */
+  targetPx: { width: number; height: number };
+}
+
+export interface BlankSketchImage {
+  base64: string;
+  extension: 'png' | 'jpeg';
+  width?: number;
+  height?: number;
+}
+
 export interface BlankSheetMap {
   /** Файл шаблона в public/templates. */
   template: string;
@@ -33,6 +50,8 @@ export interface BlankSheetMap {
   mirrors?: Record<string, string>;
   /** Клетки шаблона с примерами заполнения — их нужно очистить. */
   clear: string[];
+  /** Левая область официального бланка, предназначенная под эскиз/схему. */
+  sketch?: BlankSketchSlot;
   /** Блок «Лист 2»: схема столешницы. */
   worktop?: {
     /** Клетка с описанием столешницы (тип + цвет). */
@@ -87,6 +106,12 @@ export const KITCHEN_SHEET_MAP: BlankSheetMap = {
   },
   mirrors: { startDate: 'J51', shipDate: 'L51', orderNo: 'L52', manager: 'L53', worktopScraps: 'L54' },
   clear: KITCHEN_VALUE_CELLS,
+  sketch: {
+    rangeLabel: 'A14:I47',
+    tl: { col: 0, row: 13 },
+    br: { col: 9, row: 47 },
+    targetPx: { width: 842, height: 997 },
+  },
   worktop: {
     summaryCell: 'I56',
     titleCell: 'A57',
@@ -138,6 +163,11 @@ export function blankCellRefsForField(map: BlankSheetMap, key: string): string[]
 export function blankCellRefLabel(map: BlankSheetMap, key: string): string {
   const refs = blankCellRefsForField(map, key);
   return refs.length ? refs.join(' / ') : '';
+}
+
+/** Куда в официальном шаблоне попадёт картинка Эскиз PRO. */
+export function blankSketchRangeLabel(map: BlankSheetMap): string {
+  return map.sketch?.rangeLabel ?? '';
 }
 
 /** Клетки таблицы столешницы, которые нужно очистить перед новой записью. */
@@ -231,6 +261,7 @@ export async function buildFactoryBlankWorkbook(
   baseUrl: string,
   map: BlankSheetMap,
   writes: BlankCellWrite[],
+  sketchImage?: BlankSketchImage | null,
 ): Promise<ArrayBuffer> {
   const ExcelJS = (await import('exceljs')).default;
   const url = `${baseUrl}templates/${map.template}`;
@@ -260,6 +291,14 @@ export async function buildFactoryBlankWorkbook(
     }
   }
 
+  // 3) Эскиз PRO кладём картинкой в штатное левое поле бланка.
+  // Текст/клетки под ним не трогаем: официальная сетка и подписи остаются как в шаблоне.
+  if (sketchImage && map.sketch) {
+    const imageId = wb.addImage({ base64: sketchImage.base64, extension: sketchImage.extension });
+    // В рантайме ExcelJS принимает обычные координаты { col, row }; его .d.ts ожидает внутренний Anchor.
+    (ws as unknown as { addImage: (imageId: number, range: unknown) => void }).addImage(imageId, { tl: map.sketch.tl, br: map.sketch.br, editAs: 'oneCell' });
+  }
+
   return wb.xlsx.writeBuffer() as Promise<ArrayBuffer>;
 }
 
@@ -283,6 +322,7 @@ export async function exportFactoryBlankXlsx(args: {
   spec: FactoryBlankSpec;
   draft: BlankDraftField[];
   pieces: WorktopPiece[];
+  sketchImage?: BlankSketchImage | null;
 }): Promise<void> {
   const map = getBlankSheetMap(args.spec.id);
   if (!map) throw new Error(`Для бланка «${args.spec.blankName}» нет карты шаблона`);
@@ -290,6 +330,6 @@ export async function exportFactoryBlankXlsx(args: {
     ...buildBlankCellWrites(map, args.draft),
     ...buildWorktopWrites(map, args.pieces, worktopSummary(args.draft)),
   ];
-  const data = await buildFactoryBlankWorkbook(args.baseUrl, map, writes);
+  const data = await buildFactoryBlankWorkbook(args.baseUrl, map, writes, args.sketchImage ?? null);
   downloadWorkbook(data, blankFileName(args.project, args.spec));
 }
