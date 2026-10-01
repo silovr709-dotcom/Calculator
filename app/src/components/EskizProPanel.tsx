@@ -148,6 +148,7 @@ function EskizMarkerModuleEditor(props: {
   const [pickSlot, setPickSlot] = useState<SlotKey | null>(null);
   const [pickSurcharge, setPickSurcharge] = useState(false);
   const [copySourceId, setCopySourceId] = useState('');
+  const [moduleTab, setModuleTab] = useState<'basics' | 'price' | 'tech' | 'check'>('basics');
   const check = useMemo(() => checkModule(module, defaults, pricebook), [module, defaults, pricebook]);
   const lines = useMemo(() => moduleToLines(module, defaults, pricebook), [module, defaults, pricebook]);
   const lineCalcs = useMemo(() => calcLines(lines), [lines]);
@@ -279,8 +280,16 @@ function EskizMarkerModuleEditor(props: {
         </div>
       )}
 
-      <h4>Основные параметры</h4>
-      <div className="eskiz-module-form-grid">
+      <div className="eskiz-module-tabs" role="tablist" aria-label="Разделы редактирования модуля">
+        <button type="button" className={moduleTab === 'basics' ? 'active' : ''} onClick={() => setModuleTab('basics')}>Быстро</button>
+        <button type="button" className={moduleTab === 'price' ? 'active' : ''} onClick={() => setModuleTab('price')}>Прайс <small>{QUICK_SLOTS.filter((slot) => resolveSlot(module, slot, defaults, pricebook).item).length}/{QUICK_SLOTS.length}</small></button>
+        <button type="button" className={moduleTab === 'tech' ? 'active' : ''} onClick={() => setModuleTab('tech')}>Техничка</button>
+        <button type="button" className={moduleTab === 'check' ? 'active' : ''} onClick={() => setModuleTab('check')}>Проверка <small>{lines.length}</small></button>
+      </div>
+
+      {moduleTab === 'basics' && <section className="eskiz-module-tab-panel">
+        <h4>Основные параметры</h4>
+        <div className="eskiz-module-form-grid">
         <label>Название<input value={module.name} onChange={(event) => update({ name: event.target.value })} /></label>
         <label>Тип<input list={`eskiz-mod-types-${module.id}`} value={module.type} onChange={(event) => update({ type: event.target.value })} />
           <datalist id={`eskiz-mod-types-${module.id}`}>{MODULE_TYPES.map((type) => <option key={type} value={type} />)}</datalist>
@@ -298,11 +307,13 @@ function EskizMarkerModuleEditor(props: {
         <label>Опоры<input type="number" min="0" value={module.legs ?? 0} onChange={(event) => updateCount('legs', event.target.value)} /></label>
         <label>Фасад Ш, мм<MmInput value={module.facadeWmm} onValue={(value) => updateFacadeSize('facadeWmm', value)} /></label>
         <label>Фасад В, мм<MmInput value={module.facadeHmm} onValue={(value) => updateFacadeSize('facadeHmm', value)} /></label>
-        <label className="wide">Заметка<input value={module.note ?? ''} placeholder="что важно учесть в КП / заказе" onChange={(event) => update({ note: event.target.value })} /></label>
-      </div>
+          <label className="wide">Заметка<input value={module.note ?? ''} placeholder="что важно учесть в КП / заказе" onChange={(event) => update({ note: event.target.value })} /></label>
+        </div>
+      </section>}
 
-      <h4>Прайс и комплектующие</h4>
-      <div className="eskiz-slot-picker improved">
+      {moduleTab === 'price' && <section className="eskiz-module-tab-panel">
+        <h4>Прайс и комплектующие</h4>
+        <div className="eskiz-slot-picker improved">
         {QUICK_SLOTS.map((slot) => {
           const choice = module.slots[slot] ?? { mode: 'default' as const, itemId: null };
           const { item, source } = resolveSlot(module, slot, defaults, pricebook);
@@ -323,11 +334,13 @@ function EskizMarkerModuleEditor(props: {
               </div>
             </article>
           );
-        })}
-      </div>
+          })}
+        </div>
+      </section>}
 
-      {(selectedBody || module.facades > 0 || module.facadeParts?.length || hingeInference) && (
-        <section className="eskiz-tech-card">
+      {moduleTab === 'tech' && <section className="eskiz-module-tab-panel">
+        {(selectedBody || module.facades > 0 || module.facadeParts?.length || hingeInference) ? (
+          <section className="eskiz-tech-card">
           <div className="eskiz-tech-head"><h4>Фасады и петли по техничке</h4>{selectedBody && <span className="badge tech-suggest">корпус выбран</span>}</div>
           <div className="eskiz-tech-block">
             <div className="muted small">{facadeInference ? `${facadeInference.source} · ${facadeInference.note}` : 'Можно задать ручную разбивку фасадов даже без выбранного корпуса. После выбора корпуса появятся рекомендации по техничке.'}</div>
@@ -359,11 +372,11 @@ function EskizMarkerModuleEditor(props: {
               )}
             </div>
           )}
-        </section>
-      )}
+          </section>
+        ) : <div className="empty small">Выберите корпус во вкладке «Прайс» или задайте фасады — здесь появятся рекомендации по техничке.</div>}
 
-      <section className="eskiz-tech-card">
-        <div className="eskiz-tech-head"><h4>Отдельные фасадные детали</h4><span className="badge man">вручную</span></div>
+        <section className="eskiz-tech-card">
+          <div className="eskiz-tech-head"><h4>Отдельные фасадные детали</h4><span className="badge man">вручную</span></div>
         {(module.extraFacadeParts ?? []).length > 0 && (
           <div className="extra-facade-mini-list">
             {(module.extraFacadeParts ?? []).map((part, index) => (
@@ -377,10 +390,10 @@ function EskizMarkerModuleEditor(props: {
           </div>
         )}
         <div className="eskiz-mini-actions"><button className="btn tiny add" type="button" onClick={() => addExtraPart(true)}>＋ Боковина</button><button className="btn tiny ghost" type="button" onClick={() => addExtraPart(false)}>＋ Любая деталь</button></div>
-      </section>
+        </section>
 
-      <section className="eskiz-tech-card">
-        <div className="eskiz-tech-head"><h4>Надбавки корпуса</h4><span className="muted small">проценты считаются от корпуса</span></div>
+        <section className="eskiz-tech-card">
+          <div className="eskiz-tech-head"><h4>Надбавки корпуса</h4><span className="muted small">проценты считаются от корпуса</span></div>
         {dimensionSurchargeRecommendations.length > 0 && (
           <div className="surcharge-mini-list">
             {dimensionSurchargeRecommendations.map((item) => {
@@ -395,20 +408,23 @@ function EskizMarkerModuleEditor(props: {
           const item = pricebook.items.find((candidate) => candidate.id === id);
           return <div className="surcharge-mini manual" key={id}><span><b>{item ? item.name : 'Позиция не найдена'}</b><small>{item ? `+${item.price}% · ${item.category}` : id}</small></span><button className="btn tiny danger" type="button" onClick={() => update({ surcharges: (module.surcharges ?? []).filter((itemId) => itemId !== id), automaticSurcharges: (module.automaticSurcharges ?? []).filter((itemId) => itemId !== id) })}>✕</button></div>;
         })}
-        <button className="btn tiny ghost" type="button" onClick={() => setPickSurcharge(true)}>＋ Добавить надбавку из прайса</button>
-      </section>
+          <button className="btn tiny ghost" type="button" onClick={() => setPickSurcharge(true)}>＋ Добавить надбавку из прайса</button>
+        </section>
+      </section>}
 
-      <div className={`eskiz-module-check ${check.level}`}>
+      {moduleTab === 'check' && <section className="eskiz-module-tab-panel">
+        <div className={`eskiz-module-check ${check.level}`}>
         <b>{check.level === 'ok' ? 'Готово к расчёту' : check.level === 'warn' ? 'Есть предупреждения' : 'Нужно заполнить'}</b>
         {check.errors.map((text) => <span key={text}>⛔ {text}</span>)}
         {check.openWarnings.map((warning) => <span key={warning.code}>⚠ {warning.text} <button className="btn tiny" type="button" onClick={() => update(setWarningConfirmed(module, warning.code, true))}>Подтвердить</button></span>)}
         {check.confirmedWarnings.map((warning) => <span key={warning.code}>✅ {warning.text} <button className="btn tiny ghost" type="button" onClick={() => update(setWarningConfirmed(module, warning.code, false))}>Отменить</button></span>)}
       </div>
-      <div className="eskiz-module-lines">
-        <b>В состав уйдёт: {lines.length} строк · {fmtMoney(cost)}</b>
-        {lines.slice(0, 6).map((line) => <span key={line.id}>{shortLine(line.name, 54)} · {fmtNum(lineCalcs.get(line.id)?.qtyEffective ?? line.qty)} {line.unit ?? ''}</span>)}
-        {lines.length > 6 && <span>+ ещё {lines.length - 6} строк</span>}
-      </div>
+        <div className="eskiz-module-lines">
+          <b>В состав уйдёт: {lines.length} строк · {fmtMoney(cost)}</b>
+          {lines.slice(0, 6).map((line) => <span key={line.id}>{shortLine(line.name, 54)} · {fmtNum(lineCalcs.get(line.id)?.qtyEffective ?? line.qty)} {line.unit ?? ''}</span>)}
+          {lines.length > 6 && <span>+ ещё {lines.length - 6} строк</span>}
+        </div>
+      </section>}
 
       {pickSlot && (
         <CatalogPicker
@@ -731,6 +747,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             communicationAddKind={communicationAddKind}
             pickingDistancePoint={Boolean(distancePointPick)}
             onProjectChange={saveEmbeddedProject}
+            onModuleObjectClick={handlePreviewModuleClick}
             onStartCommunicationPlacement={startCommunicationPlacement}
             onStartCommunicationDistance={(communicationId) => startFreeCommunicationDistance(communicationId)}
             onCancelCommunicationMode={cancelCommunicationMode}
@@ -744,6 +761,21 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
           />
           <input ref={fileRef} type="file" accept=".eskiz,application/json" hidden onChange={(event) => void importFile(event.target.files?.[0] ?? null)} />
         </div>
+
+        {activeMarker && activeModule && (
+          <section className="card no-print eskiz-active-module-card">
+            <EskizMarkerModuleEditor
+              key={activeModule.id}
+              marker={activeMarker}
+              module={activeModule}
+              pricebook={pricebook}
+              defaults={project.moduleDefaults ?? {}}
+              modules={project.modules ?? []}
+              onModuleChange={updateModule}
+              onOpenFull={props.onOpenModule}
+            />
+          </section>
+        )}
 
         <aside className="eskiz-pro-side">
           <section className="card no-print">
@@ -765,7 +797,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
           </section>
 
           <section className="card no-print eskiz-pro-module-sync">
-            <div className="section-head"><div><h3>Модули с эскиза → просчёт</h3><p className="muted small">Поставьте объект «Модуль» на основном эскизе и кликните его в превью/списке: здесь откроется карточка с поиском корпуса из прайса. Описание маркера можно оставить коротким — состав выбирается из прайса ниже.</p></div></div>
+            <div className="section-head"><div><h3>Модули с эскиза → просчёт</h3><p className="muted small">Поставьте объект «Модуль» на эскизе и кликните его в превью/списке: удобный редактор откроется отдельной широкой карточкой сразу под Эскиз PRO.</p></div></div>
             <div className="eskiz-pro-module-stats"><div><b>{moduleMarkers.length}</b><span>маркеров</span></div><div><b>{linkedModuleCount}</b><span>уже связаны</span></div><div><b>{Math.max(0, moduleMarkers.length - linkedModuleCount)}</b><span>новые</span></div></div>
             <button className="btn primary block" disabled={moduleMarkers.length === 0} onClick={syncModulesToCalculation}>Создать / обновить модули в расчёте</button>
             {moduleMarkers.length === 0 ? <div className="empty small">В привязанных эскизах пока нет объектов «Модуль».</div> : (
@@ -777,17 +809,6 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
                 })}
                 {moduleMarkers.length > 8 && <div><b>+{moduleMarkers.length - 8}</b><span>ещё модулей</span></div>}
               </div>
-            )}
-            {activeMarker && activeModule && (
-              <EskizMarkerModuleEditor
-                marker={activeMarker}
-                module={activeModule}
-                pricebook={pricebook}
-                defaults={project.moduleDefaults ?? {}}
-                modules={project.modules ?? []}
-                onModuleChange={updateModule}
-                onOpenFull={props.onOpenModule}
-              />
             )}
           </section>
 

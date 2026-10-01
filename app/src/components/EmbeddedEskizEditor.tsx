@@ -20,6 +20,7 @@ type Props = {
   communicationAddKind?: EskizCommunicationKind | null;
   pickingDistancePoint?: boolean;
   onProjectChange: (project: EskizProject) => void;
+  onModuleObjectClick?: (projectId: string, object: EskizModuleObject) => void;
   onStartCommunicationPlacement: (kind: EskizCommunicationKind) => void;
   onStartCommunicationDistance: (communicationId: string) => void;
   onCancelCommunicationMode: () => void;
@@ -714,6 +715,7 @@ export default function EmbeddedEskizEditor(props: Props) {
       return;
     }
     if (!selectedIds.includes(object.id)) selectOnly(object.id);
+    if (object.type === 'module') props.onModuleObjectClick?.(project.id, object);
     if (object.locked) return;
     const target = point(event);
     dragRef.current = { mode: 'move', start: target, id: object.id, before: project, original: object };
