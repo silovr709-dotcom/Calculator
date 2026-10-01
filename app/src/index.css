@@ -372,7 +372,7 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .eskiz-frame-communication-toolbar > div:first-child { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
 .eskiz-frame-communication-toolbar b { color: #24382f; }
 .eskiz-frame-communication-toolbar span { color: var(--muted); font-size: 11px; text-align: right; }
-.eskiz-pro-frame-wrap { position: relative; border-top: 1px solid var(--line); background: #eef0f2; }
+.eskiz-pro-frame-wrap { position: relative; overflow: hidden; border-top: 1px solid var(--line); background: #eef0f2; }
 .eskiz-pro-frame-wrap.placing { box-shadow: inset 0 0 0 3px rgba(124, 58, 237, .16); }
 .eskiz-pro-frame { display: block; width: 100%; min-height: 760px; border: 0; background: #eef0f2; }
 .eskiz-pro-side { display: flex; flex-direction: column; gap: 12px; }

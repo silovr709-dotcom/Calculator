@@ -991,7 +991,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       </div>
 
       {!sameGithubPagesOrigin() && (
-        <div className="note no-print">В live preview Эскиз PRO открыт с другого origin, поэтому браузер может не дать калькулятору читать его IndexedDB. На основной ссылке GitHub Pages оба приложения находятся на <b>silovr709-dotcom.github.io</b>, и живое добавление модулей работает напрямую. Для локальной проверки можно импортировать файл <b>.eskiz</b>.</div>
+        <div className="note no-print">В live preview Эскиз PRO открыт с другого origin, поэтому браузер может не дать калькулятору читать его IndexedDB и полотно для коммуникаций. На основной ссылке GitHub Pages оба приложения находятся на <b>silovr709-dotcom.github.io</b>, и живое добавление модулей/коммуникаций работает напрямую. Для локальной проверки можно импортировать файл <b>.eskiz</b>.</div>
       )}
 
       <div className="eskiz-pro-grid">
