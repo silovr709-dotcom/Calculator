@@ -1,6 +1,6 @@
 import type { EskizCommunicationDistance, EskizCommunicationMarker } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from './eskizPro';
-import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationDistanceText, communicationSizeText } from './eskizCommunications';
+import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount } from './eskizCommunications';
 
 export type EskizSketchModuleMarkerMode = 'full' | 'compact' | 'hidden';
 
@@ -178,35 +178,58 @@ function distanceAnchorPoint(distance: EskizCommunicationDistance, marker: Eskiz
   return { x: distance.anchorX ?? marker.x + 120, y: distance.anchorY ?? marker.y };
 }
 
+function renderCommunicationIcon(marker: EskizCommunicationMarker, active = false) {
+  const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
+  const sockets = communicationSocketCount(marker.kind);
+  const switches = communicationSwitchCount(marker.kind);
+  const frameWidth = sockets > 0 ? Math.max(30, sockets * 18 + 12) : switches > 0 ? Math.max(30, switches * 16 + 12) : 32;
+  const socketNodes = sockets > 0 ? `<rect x="${-frameWidth / 2}" y="-14" width="${frameWidth}" height="28" rx="7" fill="#fff" stroke="${meta.color}" stroke-width="${active ? 3 : 2.2}" />${Array.from({ length: sockets }).map((_, index) => {
+    const cx = (index - (sockets - 1) / 2) * 18;
+    return `<g transform="translate(${cx} 0)"><circle r="6.2" fill="#eff6ff" stroke="${meta.color}" stroke-width="1.8" /><circle cx="-2.2" cy="0" r="1.05" fill="${meta.color}" /><circle cx="2.2" cy="0" r="1.05" fill="${meta.color}" /></g>`;
+  }).join('')}` : '';
+  const switchNodes = switches > 0 ? `<rect x="${-frameWidth / 2}" y="-14" width="${frameWidth}" height="28" rx="7" fill="#fff" stroke="${meta.color}" stroke-width="${active ? 3 : 2.2}" />${Array.from({ length: switches }).map((_, index) => {
+    const cx = (index - (switches - 1) / 2) * 16;
+    return `<g transform="translate(${cx} 0)"><line x1="-5" y1="5" x2="5" y2="-5" stroke="${meta.color}" stroke-width="2.4" stroke-linecap="round" /><circle cx="-5" cy="5" r="1.9" fill="${meta.color}" /><circle cx="5" cy="-5" r="1.9" fill="${meta.color}" /></g>`;
+  }).join('')}` : '';
+  const otherNode = sockets === 0 && switches === 0 ? `<circle r="14" fill="#fff" stroke="${meta.color}" stroke-width="${active ? 3 : 2.4}" /><text y="4" text-anchor="middle" font-size="9" font-weight="900" fill="${meta.color}">${xml(meta.shortLabel)}</text>` : '';
+  return `<g transform="translate(${marker.x} ${marker.y})"><circle r="${active ? 22 : 18}" fill="${meta.color}" opacity="${active ? .18 : .1}" />${socketNodes}${switchNodes}${otherNode}</g>`;
+}
+
+function renderCommunicationMeasureBadges(marker: EskizCommunicationMarker, width: number, height: number) {
+  const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
+  const values = [communicationCompactSizeText(marker), communicationElevationText(marker)].filter(Boolean);
+  if (values.length === 0) return '';
+  let y = clamp(marker.y + 20, 4, Math.max(4, height - values.length * 18 - 4));
+  return values.map((value) => {
+    const label = String(value);
+    const w = Math.max(44, Math.min(130, label.length * 5.8 + 14));
+    const x = clamp(marker.x + 18, 4, Math.max(4, width - w - 4));
+    const node = `<g transform="translate(${x} ${y})"><rect width="${w}" height="16" rx="8" fill="#fff" stroke="${meta.color}" stroke-width="1.2" fill-opacity=".96" /><text x="${w / 2}" y="11.5" text-anchor="middle" font-size="9" font-weight="850" fill="${meta.color}">${xml(label)}</text></g>`;
+    y += 18;
+    return node;
+  }).join('');
+}
+
 function renderCommunication(marker: EskizCommunicationMarker, width: number, height: number) {
   const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
   const size = communicationSizeText(marker);
   const distances = marker.distances ?? [];
-  const label = [marker.name || meta.label, size].filter(Boolean).join(' · ');
-  const labelWidth = Math.max(90, Math.min(280, label.length * 6.1 + 18));
-  const labelX = marker.x + 18 > width - labelWidth ? marker.x - labelWidth - 18 : marker.x + 18;
-  const labelY = clamp(marker.y - 18, 8, Math.max(8, height - 38));
   return `<g class="communication">
+    <title>${xml([marker.name || meta.label, size, marker.note].filter(Boolean).join(' · '))}</title>
     ${distances.map((distance) => {
       const anchor = distanceAnchorPoint(distance, marker, width, height);
       const midX = (marker.x + anchor.x) / 2;
-      const midY = (marker.y + anchor.y) / 2;
+      const midY = (marker.y + anchor.y) / 2 - 5;
       const text = `${distance.label || COMMUNICATION_ANCHOR_LABELS[distance.anchor]}: ${communicationDistanceText(distance.valueMm)}`;
-      const textWidth = Math.max(74, Math.min(250, text.length * 5.6 + 14));
+      const textWidth = Math.max(74, Math.min(270, text.length * 5.6 + 14));
       return `<g>
-        <line x1="${marker.x}" y1="${marker.y}" x2="${anchor.x}" y2="${anchor.y}" stroke="${meta.color}" stroke-width="2" stroke-dasharray="7 5" opacity=".82" />
+        <line x1="${marker.x}" y1="${marker.y}" x2="${anchor.x}" y2="${anchor.y}" stroke="${meta.color}" stroke-width="2.1" stroke-dasharray="8 5" opacity=".88" marker-start="url(#eskizFactoryCommDistanceDot)" marker-end="url(#eskizFactoryCommDistanceArrow)" />
         ${distance.anchor === 'custom' ? `<line x1="${anchor.x - 8}" y1="${anchor.y}" x2="${anchor.x + 8}" y2="${anchor.y}" stroke="${meta.color}" stroke-width="2" /><line x1="${anchor.x}" y1="${anchor.y - 8}" x2="${anchor.x}" y2="${anchor.y + 8}" stroke="${meta.color}" stroke-width="2" />` : ''}
-        <g transform="translate(${midX} ${midY})"><rect x="${-textWidth / 2}" y="-10" width="${textWidth}" height="20" rx="10" fill="#fff" stroke="${meta.color}" stroke-width="1" opacity=".96" /><text text-anchor="middle" dominant-baseline="middle" font-size="10" font-weight="800" fill="${meta.color}">${xml(text)}</text></g>
+        <g transform="translate(${midX} ${midY})"><rect x="${-textWidth / 2}" y="-10" width="${textWidth}" height="20" rx="10" fill="#fff" stroke="${meta.color}" stroke-width="1" opacity=".96" /><text text-anchor="middle" dominant-baseline="middle" font-size="10" font-weight="850" fill="${meta.color}">${xml(text)}</text></g>
       </g>`;
     }).join('')}
-    <line x1="${marker.x}" y1="${marker.y}" x2="${labelX < marker.x ? labelX + labelWidth : labelX}" y2="${labelY + 17}" stroke="${meta.color}" stroke-width="2" opacity=".72" />
-    <circle cx="${marker.x}" cy="${marker.y}" r="10" fill="${meta.color}" stroke="#fff" stroke-width="4" />
-    <text x="${marker.x}" y="${marker.y + 4}" text-anchor="middle" font-size="10" font-weight="900" fill="#fff">${xml(meta.icon)}</text>
-    <g transform="translate(${labelX} ${labelY})">
-      <rect width="${labelWidth}" height="34" rx="9" fill="#fff" fill-opacity=".96" stroke="${meta.color}" stroke-width="1.7" />
-      <text x="9" y="13" font-size="11" font-weight="900" fill="${meta.color}">${xml(marker.name || meta.label)}</text>
-      <text x="9" y="26" font-size="9.5" font-weight="650" fill="#40554b">${xml(size || (marker.note ? marker.note.slice(0, 34) : meta.label))}</text>
-    </g>
+    ${renderCommunicationIcon(marker)}
+    ${renderCommunicationMeasureBadges(marker, width, height)}
   </g>`;
 }
 
@@ -232,6 +255,12 @@ export function buildEskizSketchSvg(project: EskizProject, options: EskizSketchS
       </marker>
       <marker id="eskizFactoryDimArrowClosed" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto-start-reverse">
         <path d="M 9 5 L 1 1 L 3 5 L 1 9 Z" fill="context-stroke" />
+      </marker>
+      <marker id="eskizFactoryCommDistanceArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+        <path d="M 1 1 L 8 5 L 1 9" fill="none" stroke="context-stroke" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+      </marker>
+      <marker id="eskizFactoryCommDistanceDot" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto" markerUnits="strokeWidth">
+        <circle cx="4" cy="4" r="2.3" fill="context-stroke" />
       </marker>
       <style>
         .label { filter: drop-shadow(0 2px 3px rgba(15, 23, 42, .16)); }

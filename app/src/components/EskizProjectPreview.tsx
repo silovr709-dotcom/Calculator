@@ -1,7 +1,7 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
 import type { EskizCommunicationDistance, EskizCommunicationMarker } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
-import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationDistanceText, communicationSizeText } from '../lib/eskizCommunications';
+import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount } from '../lib/eskizCommunications';
 
 export type EskizModulePreviewStatus = { level: 'new' | 'error' | 'warn' | 'ok'; label: string; summary?: string };
 export type EskizModuleMarkerMode = 'full' | 'compact' | 'hidden';
@@ -12,6 +12,10 @@ const STATUS_COLORS: Record<EskizModulePreviewStatus['level'], string> = {
   warn: '#d97706',
   ok: '#16a34a',
 };
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
 
 function wrapLines(text: string, maxChars: number) {
   return text.split('\n').flatMap((source) => {
@@ -192,15 +196,51 @@ function distanceAnchorPoint(distance: EskizCommunicationDistance, marker: Eskiz
   return { x: distance.anchorX ?? marker.x + 120, y: distance.anchorY ?? marker.y };
 }
 
+function CommunicationMarkerIcon({ marker, active = false }: { marker: EskizCommunicationMarker; active?: boolean }) {
+  const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
+  const sockets = communicationSocketCount(marker.kind);
+  const switches = communicationSwitchCount(marker.kind);
+  const frameWidth = sockets > 0 ? Math.max(30, sockets * 18 + 12) : switches > 0 ? Math.max(30, switches * 16 + 12) : 32;
+  return <g className={`eskiz-preview-communication-symbol ${active ? 'active' : ''}`} transform={`translate(${marker.x} ${marker.y})`}>
+    <circle className="eskiz-preview-communication-halo" r={active ? 22 : 18} fill={meta.color} opacity={active ? .18 : .1} />
+    {sockets > 0 && <g>
+      <rect x={-frameWidth / 2} y="-14" width={frameWidth} height="28" rx="7" fill="#fff" stroke={meta.color} strokeWidth={active ? 3 : 2.2} />
+      {Array.from({ length: sockets }).map((_, index) => {
+        const cx = (index - (sockets - 1) / 2) * 18;
+        return <g key={index} transform={`translate(${cx} 0)`}><circle r="6.2" fill="#eff6ff" stroke={meta.color} strokeWidth="1.8" /><circle cx="-2.2" cy="0" r="1.05" fill={meta.color} /><circle cx="2.2" cy="0" r="1.05" fill={meta.color} /></g>;
+      })}
+    </g>}
+    {switches > 0 && <g>
+      <rect x={-frameWidth / 2} y="-14" width={frameWidth} height="28" rx="7" fill="#fff" stroke={meta.color} strokeWidth={active ? 3 : 2.2} />
+      {Array.from({ length: switches }).map((_, index) => {
+        const cx = (index - (switches - 1) / 2) * 16;
+        return <g key={index} transform={`translate(${cx} 0)`}><line x1="-5" y1="5" x2="5" y2="-5" stroke={meta.color} strokeWidth="2.4" strokeLinecap="round" /><circle cx="-5" cy="5" r="1.9" fill={meta.color} /><circle cx="5" cy="-5" r="1.9" fill={meta.color} /></g>;
+      })}
+    </g>}
+    {sockets === 0 && switches === 0 && <g><circle r="14" fill="#fff" stroke={meta.color} strokeWidth={active ? 3 : 2.4} /><text y="4" textAnchor="middle" fontSize="9" fontWeight="900" fill={meta.color}>{meta.shortLabel}</text></g>}
+  </g>;
+}
+
+function CommunicationMeasureBadges({ marker, width, height }: { marker: EskizCommunicationMarker; width: number; height: number }) {
+  const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
+  const values = [communicationCompactSizeText(marker), communicationElevationText(marker)].filter(Boolean);
+  if (values.length === 0) return null;
+  let y = clamp(marker.y + 20, 4, Math.max(4, height - values.length * 18 - 4));
+  return <g className="eskiz-preview-communication-measures">{values.map((value) => {
+    const label = String(value);
+    const w = Math.max(44, Math.min(130, label.length * 5.8 + 14));
+    const x = clamp(marker.x + 18, 4, Math.max(4, width - w - 4));
+    const node = <g key={label} transform={`translate(${x} ${y})`}><rect width={w} height="16" rx="8" fill="#fff" stroke={meta.color} strokeWidth="1.2" fillOpacity=".96" /><text x={w / 2} y="11.5" textAnchor="middle" fontSize="9" fontWeight="850" fill={meta.color}>{label}</text></g>;
+    y += 18;
+    return node;
+  })}</g>;
+}
+
 function CommunicationPreview(props: { marker: EskizCommunicationMarker; width: number; height: number; active?: boolean; onCommunicationClick?: (marker: EskizCommunicationMarker) => void }) {
   const { marker, width, height, active = false, onCommunicationClick } = props;
   const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
   const size = communicationSizeText(marker);
   const distances = marker.distances ?? [];
-  const label = [marker.name || meta.label, size].filter(Boolean).join(' · ');
-  const labelWidth = Math.max(90, Math.min(280, label.length * 6.1 + 18));
-  const labelX = marker.x + 18 > width - labelWidth ? marker.x - labelWidth - 18 : marker.x + 18;
-  const labelY = Math.max(8, Math.min(height - 38, marker.y - 18));
   const clickProps = onCommunicationClick ? {
     role: 'button' as const,
     tabIndex: 0,
@@ -216,30 +256,24 @@ function CommunicationPreview(props: { marker: EskizCommunicationMarker; width: 
       className={`eskiz-preview-communication ${active ? 'active' : ''} ${onCommunicationClick ? 'clickable' : ''}`}
       {...clickProps}
     >
+      <title>{[marker.name || meta.label, size, marker.note].filter(Boolean).join(' · ')}</title>
       {distances.map((distance) => {
         const anchor = distanceAnchorPoint(distance, marker, width, height);
         const midX = (marker.x + anchor.x) / 2;
         const midY = (marker.y + anchor.y) / 2;
         const text = `${distance.label || COMMUNICATION_ANCHOR_LABELS[distance.anchor]}: ${communicationDistanceText(distance.valueMm)}`;
-        const textWidth = Math.max(74, Math.min(250, text.length * 5.6 + 14));
+        const textWidth = Math.max(74, Math.min(270, text.length * 5.6 + 14));
         return <g className="eskiz-preview-communication-distance" key={distance.id}>
-          <line x1={marker.x} y1={marker.y} x2={anchor.x} y2={anchor.y} stroke={meta.color} strokeWidth="2" strokeDasharray="7 5" opacity=".82" />
+          <line x1={marker.x} y1={marker.y} x2={anchor.x} y2={anchor.y} stroke={meta.color} strokeWidth="2.1" strokeDasharray="8 5" opacity=".88" markerStart="url(#eskizCommDistanceDot)" markerEnd="url(#eskizCommDistanceArrow)" />
           {distance.anchor === 'custom' && <g><line x1={anchor.x - 8} y1={anchor.y} x2={anchor.x + 8} y2={anchor.y} stroke={meta.color} strokeWidth="2" /><line x1={anchor.x} y1={anchor.y - 8} x2={anchor.x} y2={anchor.y + 8} stroke={meta.color} strokeWidth="2" /></g>}
-          <g transform={`translate(${midX} ${midY})`}>
+          <g transform={`translate(${midX} ${midY - 5})`}>
             <rect x={-textWidth / 2} y="-10" width={textWidth} height="20" rx="10" fill="#fff" stroke={meta.color} strokeWidth="1" opacity=".96" />
-            <text textAnchor="middle" dominantBaseline="middle" fontSize="10" fontWeight="800" fill={meta.color}>{text}</text>
+            <text textAnchor="middle" dominantBaseline="middle" fontSize="10" fontWeight="850" fill={meta.color}>{text}</text>
           </g>
         </g>;
       })}
-      <line x1={marker.x} y1={marker.y} x2={labelX < marker.x ? labelX + labelWidth : labelX} y2={labelY + 17} stroke={meta.color} strokeWidth="2" opacity=".72" />
-      <circle cx={marker.x} cy={marker.y} r={active ? 13 : 10} fill={meta.color} stroke="#fff" strokeWidth="4" />
-      <text x={marker.x} y={marker.y + 4} textAnchor="middle" fontSize="10" fontWeight="900" fill="#fff">{meta.icon}</text>
-      <g className="eskiz-preview-communication-label" transform={`translate(${labelX} ${labelY})`}>
-        <rect width={labelWidth} height="34" rx="9" fill="#fff" fillOpacity=".96" stroke={meta.color} strokeWidth={active ? 2.5 : 1.7} />
-        <text x="9" y="13" fontSize="11" fontWeight="900" fill={meta.color}>{marker.name || meta.label}</text>
-        <text x="9" y="26" fontSize="9.5" fontWeight="650" fill="#40554b">{size || (marker.note ? marker.note.slice(0, 34) : meta.label)}</text>
-      </g>
-      {marker.note && <title>{marker.note}</title>}
+      <CommunicationMarkerIcon marker={marker} active={active} />
+      <CommunicationMeasureBadges marker={marker} width={width} height={height} />
     </g>
   );
 }
@@ -274,6 +308,7 @@ export default function EskizProjectPreview({ project, compact = false, activeMo
   const width = Math.max(1, project.image.width);
   const height = Math.max(1, project.image.height);
   const projectCommunications = communicationMarkers.filter((marker) => marker.eskizId === project.id);
+  const communicationLegend = [...new Map(projectCommunications.map((marker) => [marker.kind, marker])).values()];
   return (
     <article className={`eskiz-preview ${compact ? 'compact' : ''}`}>
       <div className="eskiz-preview-head">
@@ -297,12 +332,22 @@ export default function EskizProjectPreview({ project, compact = false, activeMo
             <marker id="eskizDimArrowClosed" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto-start-reverse">
               <path d="M 9 5 L 1 1 L 3 5 L 1 9 Z" fill="context-stroke" />
             </marker>
+            <marker id="eskizCommDistanceArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+              <path d="M 1 1 L 8 5 L 1 9" fill="none" stroke="context-stroke" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+            </marker>
+            <marker id="eskizCommDistanceDot" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto" markerUnits="strokeWidth">
+              <circle cx="4" cy="4" r="2.3" fill="context-stroke" />
+            </marker>
           </defs>
           <image href={project.image.dataUrl} x="0" y="0" width={width} height={height} preserveAspectRatio="none" style={{ filter: imageFilter(project) }} />
           {project.objects.map((object) => <ObjectPreview key={object.id} object={object} projectId={project.id} activeModuleKey={activeModuleKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} onModuleClick={onModuleClick} />)}
           {projectCommunications.map((marker) => <CommunicationPreview key={marker.id} marker={marker} width={width} height={height} active={marker.id === activeCommunicationId} onCommunicationClick={(item) => onCommunicationClick?.(project.id, item)} />)}
         </svg>
       </div>
+      {communicationLegend.length > 0 && <div className="eskiz-preview-communication-legend">{communicationLegend.map((marker) => {
+        const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
+        return <span key={marker.kind}><svg viewBox="0 0 44 34" aria-hidden="true"><CommunicationMarkerIcon marker={{ ...marker, x: 22, y: 17 }} /></svg>{meta.label}</span>;
+      })}</div>}
     </article>
   );
 }

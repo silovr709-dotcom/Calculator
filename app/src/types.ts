@@ -308,7 +308,10 @@ export interface EskizProSnapshot {
 
 export type EskizCommunicationKind =
   | 'socket'
+  | 'socketDouble'
+  | 'socketTriple'
   | 'switch'
+  | 'switchDouble'
   | 'electricOutput'
   | 'waterCold'
   | 'waterHot'

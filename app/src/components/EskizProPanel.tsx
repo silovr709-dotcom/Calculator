@@ -16,7 +16,7 @@ import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalF
 import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surcharges';
 import { calcLines } from '../lib/engine';
 import { fmtMoney, fmtNum } from '../lib/format';
-import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META } from '../lib/eskizCommunications';
+import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, defaultCommunicationDimensions } from '../lib/eskizCommunications';
 import CatalogPicker from './CatalogPicker';
 import EskizProjectPreview, { type EskizModuleMarkerMode, type EskizModulePreviewStatus } from './EskizProjectPreview';
 import EmbeddedEskizEditor from './EmbeddedEskizEditor';
@@ -674,16 +674,17 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     if (anchor === 'bottom' && image) return Math.max(0, Math.round(image.height - marker.y));
     return null;
   };
+  const makeCommunicationDistance = (marker: EskizCommunicationMarker, anchor: EskizCommunicationAnchorKind): EskizCommunicationDistance => ({
+    id: uid('dist'),
+    label: anchor === 'custom' ? 'Свободное расстояние' : COMMUNICATION_ANCHOR_LABELS[anchor],
+    anchor,
+    valueMm: autoCommunicationDistanceValue(marker, anchor),
+    ...(anchor === 'custom' ? { anchorX: marker.x + 140, anchorY: marker.y } : {}),
+  });
   const addCommunicationDistance = (communicationId: string, anchor: EskizCommunicationAnchorKind) => {
     const marker = communications.find((item) => item.id === communicationId);
     if (!marker) return;
-    const distance: EskizCommunicationDistance = {
-      id: uid('dist'),
-      label: anchor === 'custom' ? 'Свободное расстояние' : COMMUNICATION_ANCHOR_LABELS[anchor],
-      anchor,
-      valueMm: autoCommunicationDistanceValue(marker, anchor),
-      ...(anchor === 'custom' ? { anchorX: marker.x + 140, anchorY: marker.y } : {}),
-    };
+    const distance = makeCommunicationDistance(marker, anchor);
     updateCommunication(communicationId, { distances: [...(marker.distances ?? []), distance] });
     setActiveCommunicationId(communicationId);
     setCommunicationAddKind(null);
@@ -692,6 +693,20 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     } else {
       setMessage(`Добавлена линия «${COMMUNICATION_ANCHOR_LABELS[anchor]}» в свойствах Эскиз PRO. Значение можно уточнить вручную.`);
     }
+  };
+  const addCommunicationDistanceSet = (communicationId: string, anchors: EskizCommunicationAnchorKind[]) => {
+    const marker = communications.find((item) => item.id === communicationId);
+    if (!marker) return;
+    const existing = new Set((marker.distances ?? []).map((distance) => distance.anchor));
+    const distances = anchors.filter((anchor) => anchor === 'custom' || !existing.has(anchor)).map((anchor) => makeCommunicationDistance(marker, anchor));
+    if (distances.length === 0) {
+      setMessage('Эти линии расстояний уже добавлены. Их можно перетащить или уточнить вручную в свойствах.');
+      return;
+    }
+    updateCommunication(communicationId, { distances: [...(marker.distances ?? []), ...distances] });
+    setActiveCommunicationId(communicationId);
+    setCommunicationAddKind(null);
+    setMessage(`Добавлены линии расстояний: ${distances.map((distance) => distance.label).join(', ')}.`);
   };
   const updateCommunicationDistance = (communicationId: string, distanceId: string, patch: Partial<EskizCommunicationDistance>) => {
     const marker = communications.find((item) => item.id === communicationId);
@@ -758,6 +773,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     if (!communicationAddKind) return;
     const meta = COMMUNICATION_KIND_META[communicationAddKind];
     const now = new Date().toISOString();
+    const dimensions = defaultCommunicationDimensions(communicationAddKind);
     const marker: EskizCommunicationMarker = {
       id: uid('comm'),
       eskizId,
@@ -765,14 +781,13 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       name: meta.defaultName,
       x,
       y,
-      widthMm: communicationAddKind === 'socket' || communicationAddKind === 'switch' ? 80 : null,
-      heightMm: communicationAddKind === 'socket' || communicationAddKind === 'switch' ? 80 : null,
-      diameterMm: communicationAddKind === 'sewer' || communicationAddKind === 'ventilation' || communicationAddKind === 'hood' ? 110 : null,
+      ...dimensions,
       distances: [],
       showInClient: true,
       createdAt: now,
       updatedAt: now,
     };
+    marker.distances = [makeCommunicationDistance(marker, 'left'), makeCommunicationDistance(marker, 'bottom')];
     updateCommunications([marker, ...communications]);
     setActiveCommunicationId(marker.id);
     setCommunicationAddKind(null);
@@ -848,6 +863,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             onCommunicationChange={updateCommunication}
             onCommunicationDelete={deleteCommunication}
             onCommunicationDistanceAdd={addCommunicationDistance}
+            onCommunicationDistanceAddSet={addCommunicationDistanceSet}
             onCommunicationDistanceChange={updateCommunicationDistance}
             onCommunicationDistanceDelete={deleteCommunicationDistance}
           />
