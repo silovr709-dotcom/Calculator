@@ -783,6 +783,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       y,
       ...dimensions,
       visualScale: 1,
+      showSizeBadge: true,
       distances: [],
       showInClient: true,
       createdAt: now,

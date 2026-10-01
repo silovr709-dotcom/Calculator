@@ -197,6 +197,7 @@ function renderCommunicationIcon(marker: EskizCommunicationMarker, active = fals
 }
 
 function renderCommunicationMeasureBadges(marker: EskizCommunicationMarker, width: number, height: number) {
+  if (marker.showSizeBadge === false) return '';
   const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
   const values = [communicationCompactSizeText(marker), communicationElevationText(marker)].filter(Boolean);
   if (values.length === 0) return '';

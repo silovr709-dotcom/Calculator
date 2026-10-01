@@ -225,6 +225,7 @@ function CommunicationMarkerIcon({ marker, active = false }: { marker: EskizComm
 }
 
 function CommunicationMeasureBadges({ marker, width, height }: { marker: EskizCommunicationMarker; width: number; height: number }) {
+  if (marker.showSizeBadge === false) return null;
   const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
   const values = [communicationCompactSizeText(marker), communicationElevationText(marker)].filter(Boolean);
   if (values.length === 0) return null;
