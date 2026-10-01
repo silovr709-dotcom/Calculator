@@ -95,6 +95,8 @@ export interface BlankSheetMap {
   sketch?: BlankSketchSlot;
   /** Блок «Лист 2»: схема столешницы. */
   worktop?: {
+    /** Область официального листа 2 под визуальную схему столешницы. */
+    sketch?: BlankSketchSlot;
     /** Клетка с описанием столешницы (тип + цвет). */
     summaryCell: string;
     /** Заголовок таблицы деталей. */
@@ -154,6 +156,12 @@ export const KITCHEN_SHEET_MAP: BlankSheetMap = {
     targetPx: { width: 842, height: 997 },
   },
   worktop: {
+    sketch: {
+      rangeLabel: 'A56:H77',
+      tl: { col: 0, row: 55 },
+      br: { col: 8, row: 77 },
+      targetPx: { width: 650, height: 420 },
+    },
     summaryCell: 'I56',
     titleCell: 'A57',
     firstRow: 58,
@@ -448,6 +456,7 @@ export async function buildFactoryBlankWorkbook(
   writes: BlankCellWrite[],
   sketchImage?: BlankSketchImage | null,
   techPack?: FactoryTechPack | null,
+  worktopSketchImage?: BlankSketchImage | null,
 ): Promise<ArrayBuffer> {
   const ExcelJS = (await import('exceljs')).default;
   const url = `${baseUrl}templates/${map.template}`;
@@ -487,7 +496,14 @@ export async function buildFactoryBlankWorkbook(
     (ws as unknown as { addImage: (imageId: number, range: unknown) => void }).addImage(imageId, { tl: map.sketch.tl, ext: imageSize, editAs: 'oneCell' });
   }
 
-  // 4) Дополнительный техлист не меняет официальный бланк, но даёт фабрике крупный эскиз,
+  // 4) Визуальная схема столешницы — в штатное поле листа 2, рядом с фабричной легендой V/Х/ПФ.
+  if (worktopSketchImage && map.worktop?.sketch) {
+    const imageId = wb.addImage({ base64: worktopSketchImage.base64, extension: worktopSketchImage.extension });
+    const imageSize = imageSizeWithinBox(worktopSketchImage, map.worktop.sketch.targetPx);
+    (ws as unknown as { addImage: (imageId: number, range: unknown) => void }).addImage(imageId, { tl: map.worktop.sketch.tl, ext: imageSize, editAs: 'oneCell' });
+  }
+
+  // 5) Дополнительный техлист не меняет официальный бланк, но даёт фабрике крупный эскиз,
   // расшифровку маркеров и список проблем в той же книге.
   if (techPack) addFactoryTechSheet(wb, techPack);
 
@@ -515,6 +531,7 @@ export async function exportFactoryBlankXlsx(args: {
   draft: BlankDraftField[];
   pieces: WorktopPiece[];
   sketchImage?: BlankSketchImage | null;
+  worktopSketchImage?: BlankSketchImage | null;
   techPack?: FactoryTechPack | null;
 }): Promise<void> {
   const map = getBlankSheetMap(args.spec.id);
@@ -523,6 +540,6 @@ export async function exportFactoryBlankXlsx(args: {
     ...buildBlankCellWrites(map, args.draft),
     ...buildWorktopWrites(map, args.pieces, worktopSummary(args.draft)),
   ];
-  const data = await buildFactoryBlankWorkbook(args.baseUrl, map, writes, args.sketchImage ?? null, args.techPack ?? null);
+  const data = await buildFactoryBlankWorkbook(args.baseUrl, map, writes, args.sketchImage ?? null, args.techPack ?? null, args.worktopSketchImage ?? null);
   downloadWorkbook(data, blankFileName(args.project, args.spec));
 }

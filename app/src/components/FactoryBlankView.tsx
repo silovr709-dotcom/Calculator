@@ -3,6 +3,7 @@ import type { Pricebook, Project } from '../types';
 import { checkFactoryBlank, draftFactoryBlank, FACTORY_BLANK_SPECS, factoryBlankProgress, type BlankIssue } from '../lib/factoryBlank';
 import { checkDictRules, factoryDictSuggestionGroups, loadFactoryDicts, type FactoryDicts } from '../lib/factoryDicts';
 import { BACK_EDGE_NOTE, checkWorktopPlan, edgeKindLabel, suggestWorktopPlan, WORKTOP_EDGE_KINDS } from '../lib/worktopPlan';
+import { autoArrangeWorktopPieces, buildWorktopPlanSvg, nextWorktopEdgeKind, renderWorktopPlanPng, WORKTOP_EDGE_SHORT_LABELS, worktopEdgeSymbol, type WorktopEdgeSide, type WorktopSketchLayoutMode } from '../lib/worktopSketch';
 import { lineMatchesChecklistKey } from '../lib/checklist';
 import { blankCellRefLabel, blankSketchRangeLabel, exportFactoryBlankXlsx, getBlankSheetMap, type FactoryTechPack } from '../lib/factoryBlankXls';
 import { buildFactoryTechCommunicationRows, buildFactoryTechModuleRows, buildFactoryTechReadinessRows, factoryTechReadinessSummary } from '../lib/factoryTechPack';
@@ -22,6 +23,56 @@ function fitEskizExportSize(project: EskizProject, box: { width: number; height:
     width: Math.max(1, Math.round(sourceWidth * scale)),
     height: Math.max(1, Math.round(sourceHeight * scale)),
   };
+}
+
+const WORKTOP_EDGE_SIDES: { id: WorktopEdgeSide; label: string }[] = [
+  { id: 'front', label: 'Перед' },
+  { id: 'left', label: 'Левый торец' },
+  { id: 'right', label: 'Правый / стык' },
+];
+
+function WorktopPlanDesigner(props: {
+  pieces: WorktopPiece[];
+  onPiece: (id: string, patch: Partial<WorktopPiece>) => void;
+  onReplace: (pieces: WorktopPiece[]) => void;
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+}) {
+  const svg = useMemo(() => buildWorktopPlanSvg(props.pieces, { widthPx: 900, heightPx: 390, showLegend: true, title: 'Схема столешницы — как в листе 2 бланка' }), [props.pieces]);
+  const arrange = (mode: WorktopSketchLayoutMode) => props.onReplace(autoArrangeWorktopPieces(props.pieces, mode));
+  const cycleEdge = (piece: WorktopPiece, side: WorktopEdgeSide) => props.onPiece(piece.id, { [side]: nextWorktopEdgeKind(piece[side]) } as Partial<WorktopPiece>);
+  return <div className="blank-worktop-designer">
+    <div className="blank-worktop-designer-head">
+      <div>
+        <b>Визуальная схема столешницы</b>
+        <span>В карточке детали кликайте по сторонам: — → Х → V → ПФ → // → ≈. Эти же знаки попадут в Excel-бланк.</span>
+      </div>
+      <div className="blank-worktop-layout-buttons">
+        <button type="button" onClick={() => arrange('line')}>Прямая</button>
+        <button type="button" onClick={() => arrange('corner')}>Г-угол</button>
+        <button type="button" onClick={() => arrange('u')} disabled={props.pieces.length < 3}>П-форма</button>
+        <button type="button" onClick={props.onAdd}>+ деталь</button>
+      </div>
+    </div>
+    <div className="blank-worktop-sketch" dangerouslySetInnerHTML={{ __html: svg }} />
+    <div className="blank-worktop-piece-grid">
+      {props.pieces.length === 0 ? <div className="empty small">Добавьте деталь — схема появится здесь и уйдёт в лист 2 Excel.</div> : props.pieces.map((piece, index) => (
+        <div key={piece.id} className="blank-worktop-piece-card">
+          <header><b>{piece.name || `Деталь ${index + 1}`}</b><span>{piece.lengthMm ?? '—'}×{piece.widthMm ?? '—'} мм</span></header>
+          <div className="blank-worktop-edge-buttons">
+            {WORKTOP_EDGE_SIDES.map((side) => {
+              const kind = piece[side.id];
+              return <button key={side.id} type="button" className={kind ? 'active' : ''} onClick={() => cycleEdge(piece, side.id)} title={kind ? WORKTOP_EDGE_SHORT_LABELS[kind] : 'Не отмечено'}><small>{side.label}</small><b>{worktopEdgeSymbol(kind) || '—'}</b></button>;
+            })}
+          </div>
+          <div className="blank-worktop-card-actions">
+            <button type="button" onClick={() => props.onPiece(piece.id, { rotated: !piece.rotated })}>{piece.rotated ? 'Повернуть горизонтально' : 'Повернуть вертикально'}</button>
+            <button type="button" className="danger" onClick={() => props.onRemove(piece.id)}>Удалить</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>;
 }
 
 function FactoryDictPicker(props: {
@@ -170,10 +221,12 @@ export default function FactoryBlankView(props: {
       : []
   , [hasWorktopPlanSection, hasWorktopInProject, pieces]);
 
-  const updatePiece = (id: string, patch: Partial<WorktopPiece>) => {
+  const replacePieces = (next: WorktopPiece[]) => {
     if (!project) return;
-    const next = pieces.map((piece) => (piece.id === id ? { ...piece, ...patch } : piece));
     props.onChangeProject({ ...project, worktopPlan: next });
+  };
+  const updatePiece = (id: string, patch: Partial<WorktopPiece>) => {
+    replacePieces(pieces.map((piece) => (piece.id === id ? { ...piece, ...patch } : piece)));
   };
 
   const issues = useMemo<BlankIssue[]>(() => {
@@ -185,19 +238,21 @@ export default function FactoryBlankView(props: {
   }, [project, pricebook, spec, draft, dicts, planIssues]);
   const progress = useMemo(() => factoryBlankProgress(draft), [draft]);
   const removePiece = (id: string) => {
-    if (!project) return;
-    props.onChangeProject({ ...project, worktopPlan: pieces.filter((piece) => piece.id !== id) });
+    replacePieces(pieces.filter((piece) => piece.id !== id));
   };
   const addPiece = () => {
-    if (!project) return;
-    props.onChangeProject({ ...project, worktopPlan: [...pieces, { id: uid('wp'), name: `Деталь ${pieces.length + 1}`, lengthMm: null, widthMm: null, front: null, left: null, right: null }] });
+    const arranged = autoArrangeWorktopPieces([
+      ...pieces,
+      { id: uid('wp'), name: `Деталь ${pieces.length + 1}`, lengthMm: null, widthMm: null, front: null, left: null, right: null },
+    ], 'line');
+    replacePieces(arranged);
   };
   const fillPlanFromProject = () => {
     if (!project) return;
     const suggested = suggestWorktopPlan(project);
     if (suggested.length === 0) { alert('В чек-листе проекта нет столешницы — добавьте её там или нарисуйте деталь вручную.'); return; }
     if (pieces.length > 0 && !confirm('Заменить текущую схему автоподстановкой из проекта?')) return;
-    props.onChangeProject({ ...project, worktopPlan: suggested });
+    replacePieces(autoArrangeWorktopPieces(suggested, 'line'));
   };
 
   if (!project || !pricebook) {
@@ -300,6 +355,13 @@ export default function FactoryBlankView(props: {
           showCommunicationSizeBadges: showSketchCommunicationSizeBadges,
         })
         : null;
+      const worktopSketchImage = hasWorktopPlanSection && pieces.length > 0 && sheetMap?.worktop?.sketch
+        ? await renderWorktopPlanPng(pieces, {
+          widthPx: sheetMap.worktop.sketch.targetPx.width,
+          heightPx: sheetMap.worktop.sketch.targetPx.height,
+          showLegend: false,
+        })
+        : null;
       const techPack: FactoryTechPack | null = includeTechSheet
         ? {
           projectName: project.name,
@@ -316,6 +378,7 @@ export default function FactoryBlankView(props: {
         baseUrl: import.meta.env.BASE_URL,
         project, spec, draft, pieces,
         sketchImage,
+        worktopSketchImage,
         techPack,
       });
     } catch (e) {
@@ -520,6 +583,7 @@ export default function FactoryBlankView(props: {
             <button className="btn tiny ghost" onClick={fillPlanFromProject}>⚙ Заполнить из проекта</button>
             <button className="btn tiny ghost" onClick={addPiece}>+ Деталь</button>
           </div>
+          <WorktopPlanDesigner pieces={pieces} onPiece={updatePiece} onReplace={replacePieces} onAdd={addPiece} onRemove={removePiece} />
           {pieces.length === 0 ? (
             <div className="empty small">Деталей пока нет — добавьте вручную или заполните из проекта.</div>
           ) : (

@@ -1,0 +1,239 @@
+import type { WorktopEdgeKind, WorktopPiece } from '../types';
+
+export type WorktopSketchLayoutMode = 'line' | 'corner' | 'u';
+export type WorktopEdgeSide = 'front' | 'left' | 'right';
+
+export const WORKTOP_EDGE_SYMBOLS: Record<WorktopEdgeKind, string> = {
+  pvc: 'Х',
+  v: 'V',
+  pf: 'ПФ',
+  eurozapil: '//',
+  eurostyk: '≈',
+};
+
+export const WORKTOP_EDGE_SHORT_LABELS: Record<WorktopEdgeKind, string> = {
+  pvc: 'кромка ПВХ',
+  v: 'кромка в цвет',
+  pf: 'постформинг',
+  eurozapil: 'еврозапил',
+  eurostyk: 'евростык',
+};
+
+export const WORKTOP_EDGE_CYCLE: (WorktopEdgeKind | null)[] = [null, 'pvc', 'v', 'pf', 'eurozapil', 'eurostyk'];
+
+export interface WorktopSketchPieceLayout {
+  piece: WorktopPiece;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotated: boolean;
+}
+
+export interface WorktopSketchMetrics {
+  layouts: WorktopSketchPieceLayout[];
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  contentWidth: number;
+  contentHeight: number;
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+  widthPx: number;
+  heightPx: number;
+}
+
+export interface WorktopSketchOptions {
+  widthPx: number;
+  heightPx: number;
+  showLegend?: boolean;
+  title?: string;
+}
+
+export interface WorktopSketchPng {
+  base64: string;
+  extension: 'png';
+  width?: number;
+  height?: number;
+}
+
+const xml = (value: string | number | null | undefined): string => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&apos;');
+
+const num = (value: number | null | undefined, fallback: number) => Number.isFinite(value) && value && value > 0 ? value : fallback;
+const pos = (value: number | null | undefined) => Number.isFinite(value) ? Number(value) : null;
+
+export function worktopEdgeSymbol(kind: WorktopEdgeKind | null | undefined): string {
+  return kind ? WORKTOP_EDGE_SYMBOLS[kind] ?? kind : '';
+}
+
+export function nextWorktopEdgeKind(kind: WorktopEdgeKind | null | undefined): WorktopEdgeKind | null {
+  const index = WORKTOP_EDGE_CYCLE.indexOf(kind ?? null);
+  return WORKTOP_EDGE_CYCLE[(index + 1) % WORKTOP_EDGE_CYCLE.length];
+}
+
+export function worktopPieceVisualSize(piece: WorktopPiece): { width: number; height: number; rotated: boolean } {
+  const length = num(piece.lengthMm, 1200);
+  const width = num(piece.widthMm, 600);
+  const rotated = Boolean(piece.rotated);
+  return { width: rotated ? width : length, height: rotated ? length : width, rotated };
+}
+
+export function layoutWorktopPieces(pieces: WorktopPiece[]): WorktopSketchPieceLayout[] {
+  let cursorX = 0;
+  return pieces.map((piece) => {
+    const size = worktopPieceVisualSize(piece);
+    const x = pos(piece.layoutXmm) ?? cursorX;
+    const y = pos(piece.layoutYmm) ?? 0;
+    if (piece.layoutXmm == null) cursorX += size.width + 90;
+    return { piece, x, y, width: size.width, height: size.height, rotated: size.rotated };
+  });
+}
+
+export function autoArrangeWorktopPieces(pieces: WorktopPiece[], mode: WorktopSketchLayoutMode): WorktopPiece[] {
+  if (pieces.length === 0) return pieces;
+  const gap = 80;
+  if (mode === 'line') {
+    let x = 0;
+    return pieces.map((piece) => {
+      const length = num(piece.lengthMm, 1200);
+      const next = { ...piece, layoutXmm: x, layoutYmm: 0, rotated: false };
+      x += length + gap;
+      return next;
+    });
+  }
+  if (mode === 'u' && pieces.length >= 3) {
+    const first = pieces[0];
+    const second = pieces[1];
+    const third = pieces[2];
+    const leftSize = { width: num(first.widthMm, 600), height: num(first.lengthMm, 1600) };
+    const topSize = { width: num(second.lengthMm, 1800), height: num(second.widthMm, 600) };
+    const next = pieces.map((piece, index) => {
+      if (index === 0) return { ...piece, layoutXmm: 0, layoutYmm: topSize.height + gap, rotated: true };
+      if (index === 1) return { ...piece, layoutXmm: leftSize.width + gap, layoutYmm: 0, rotated: false };
+      if (index === 2) return { ...piece, layoutXmm: leftSize.width + gap + Math.max(0, topSize.width - num(third.widthMm, 600)), layoutYmm: topSize.height + gap, rotated: true };
+      return { ...piece, layoutXmm: leftSize.width + gap + (index - 2) * 240, layoutYmm: topSize.height + gap + leftSize.height + gap, rotated: false };
+    });
+    return next;
+  }
+  const base = pieces[0];
+  const baseLength = num(base.lengthMm, 1600);
+  const baseWidth = num(base.widthMm, 600);
+  return pieces.map((piece, index) => {
+    if (index === 0) return { ...piece, layoutXmm: 0, layoutYmm: 0, rotated: false };
+    if (index === 1) return { ...piece, layoutXmm: Math.max(0, baseLength - num(piece.widthMm, 600)), layoutYmm: baseWidth + gap, rotated: true };
+    return { ...piece, layoutXmm: (index - 1) * (num(piece.lengthMm, 1200) + gap), layoutYmm: baseWidth + gap + num(pieces[1]?.lengthMm, 1200) + gap, rotated: false };
+  });
+}
+
+export function worktopSketchMetrics(pieces: WorktopPiece[], widthPx: number, heightPx: number, showLegend = false): WorktopSketchMetrics {
+  const layouts = layoutWorktopPieces(pieces);
+  const content = layouts.length > 0 ? layouts : [{ piece: { id: 'empty', name: 'Столешница', lengthMm: 1200, widthMm: 600, front: null, left: null, right: null }, x: 0, y: 0, width: 1200, height: 600, rotated: false }];
+  const minX = Math.min(...content.map((item) => item.x));
+  const minY = Math.min(...content.map((item) => item.y));
+  const maxX = Math.max(...content.map((item) => item.x + item.width));
+  const maxY = Math.max(...content.map((item) => item.y + item.height));
+  const contentWidth = Math.max(1, maxX - minX);
+  const contentHeight = Math.max(1, maxY - minY);
+  const pad = 38;
+  const legendHeight = showLegend ? 58 : 0;
+  const scale = Math.min((widthPx - pad * 2) / contentWidth, (heightPx - pad * 2 - legendHeight) / contentHeight);
+  const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+  const offsetX = (widthPx - contentWidth * safeScale) / 2 - minX * safeScale;
+  const offsetY = pad - minY * safeScale;
+  return { layouts, minX, minY, maxX, maxY, contentWidth, contentHeight, scale: safeScale, offsetX, offsetY, widthPx, heightPx };
+}
+
+function edgeLabel(kind: WorktopEdgeKind, x: number, y: number, rotate = 0) {
+  const symbol = worktopEdgeSymbol(kind);
+  const w = Math.max(24, symbol.length * 8 + 12);
+  return `<g transform="translate(${x} ${y}) rotate(${rotate})">
+    <rect x="${-w / 2}" y="-10" width="${w}" height="20" rx="5" fill="#fff" stroke="#1f6feb" stroke-width="1.4" />
+    <text text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="900" fill="#184f9e">${xml(symbol)}</text>
+  </g>`;
+}
+
+function edgeLine(x1: number, y1: number, x2: number, y2: number) {
+  return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#1f6feb" stroke-width="3.2" stroke-linecap="round" />`;
+}
+
+export function buildWorktopPlanSvg(pieces: WorktopPiece[], options: WorktopSketchOptions): string {
+  const width = Math.max(240, Math.round(options.widthPx));
+  const height = Math.max(180, Math.round(options.heightPx));
+  const showLegend = options.showLegend !== false;
+  const metrics = worktopSketchMetrics(pieces, width, height, showLegend);
+  const parts = metrics.layouts.map((layout, index) => {
+    const p = layout.piece;
+    const x = metrics.offsetX + layout.x * metrics.scale;
+    const y = metrics.offsetY + layout.y * metrics.scale;
+    const w = layout.width * metrics.scale;
+    const h = layout.height * metrics.scale;
+    const centerX = x + w / 2;
+    const centerY = y + h / 2;
+    const name = p.name || `Деталь ${index + 1}`;
+    const size = `${p.lengthMm ?? '—'}×${p.widthMm ?? '—'} мм${layout.rotated ? ' · повернута' : ''}`;
+    const labels = [
+      p.front ? edgeLine(x, y + h, x + w, y + h) + edgeLabel(p.front, centerX, y + h + 18) : '',
+      p.left ? edgeLine(x, y, x, y + h) + edgeLabel(p.left, x - 18, centerY, -90) : '',
+      p.right ? edgeLine(x + w, y, x + w, y + h) + edgeLabel(p.right, x + w + 18, centerY, 90) : '',
+    ].join('');
+    return `<g>
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#ffffff" stroke="#7a8380" stroke-width="1.8" stroke-dasharray="9 6" />
+      <text x="${centerX}" y="${centerY - 8}" text-anchor="middle" font-size="13" font-weight="900" fill="#1f2f29">${xml(name)}</text>
+      <text x="${centerX}" y="${centerY + 10}" text-anchor="middle" font-size="11" font-weight="700" fill="#55685d">${xml(size)}</text>
+      <text x="${centerX}" y="${Math.max(18, y - 8)}" text-anchor="middle" font-size="11" font-weight="800" fill="#111827">${xml(p.lengthMm ?? '')}${p.lengthMm ? ' мм' : ''}</text>
+      <text x="${Math.min(width - 10, x + w + 24)}" y="${centerY}" text-anchor="middle" font-size="11" font-weight="800" fill="#111827" transform="rotate(90 ${Math.min(width - 10, x + w + 24)} ${centerY})">${xml(p.widthMm ?? '')}${p.widthMm ? ' мм' : ''}</text>
+      ${labels}
+    </g>`;
+  }).join('\n');
+  const legendY = height - 44;
+  const legend = showLegend ? `<g transform="translate(14 ${legendY})">
+    <rect x="0" y="0" width="${width - 28}" height="34" rx="8" fill="#f7fbf9" stroke="#d8e5df" />
+    <text x="12" y="22" font-size="11" font-weight="900" fill="#24382f">V — кромка в цвет</text>
+    <text x="155" y="22" font-size="11" font-weight="900" fill="#24382f">Х — кромка ПВХ</text>
+    <text x="292" y="22" font-size="11" font-weight="900" fill="#24382f">ПФ — постформинг</text>
+    <text x="448" y="22" font-size="11" font-weight="900" fill="#24382f">// — еврозапил</text>
+    <text x="575" y="22" font-size="11" font-weight="900" fill="#24382f">≈ — евростык</text>
+  </g>` : '';
+  const empty = pieces.length === 0 ? `<text x="${width / 2}" y="${height / 2}" text-anchor="middle" font-size="14" font-weight="800" fill="#81918a">Добавьте деталь столешницы</text>` : '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff" />
+    ${options.title ? `<text x="14" y="22" font-size="13" font-weight="900" fill="#24382f">${xml(options.title)}</text>` : ''}
+    ${parts}
+    ${empty}
+    ${legend}
+  </svg>`;
+}
+
+function loadSvgImage(svg: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Браузер не смог подготовить схему столешницы для экспорта'));
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  });
+}
+
+export async function renderWorktopPlanPng(pieces: WorktopPiece[], options: WorktopSketchOptions): Promise<WorktopSketchPng> {
+  if (typeof document === 'undefined') throw new Error('Экспорт схемы столешницы доступен только в браузере');
+  const width = Math.max(240, Math.round(options.widthPx));
+  const height = Math.max(180, Math.round(options.heightPx));
+  const svg = buildWorktopPlanSvg(pieces, { ...options, widthPx: width, heightPx: height });
+  const image = await loadSvgImage(svg);
+  const canvas = document.createElement('canvas');
+  canvas.width = width * 2;
+  canvas.height = height * 2;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Браузер не смог создать canvas для схемы столешницы');
+  ctx.scale(2, 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(image, 0, 0, width, height);
+  return { base64: canvas.toDataURL('image/png'), extension: 'png', width, height };
+}

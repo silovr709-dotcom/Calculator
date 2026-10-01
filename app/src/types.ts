@@ -587,6 +587,11 @@ export interface WorktopPiece {
   front: WorktopEdgeKind | null;
   left: WorktopEdgeKind | null;
   right: WorktopEdgeKind | null;
+  /** Положение детали на схеме листа 2, в условных мм столешницы. Пусто = авто-раскладка. */
+  layoutXmm?: number | null;
+  layoutYmm?: number | null;
+  /** Повернуть деталь на 90° на визуальной схеме. Размеры в таблице остаются длина×ширина. */
+  rotated?: boolean;
 }
 
 export type KbCategory =
