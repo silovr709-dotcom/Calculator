@@ -105,7 +105,7 @@ export interface BlankSheetMap {
     firstRow: number;
     /** Сколько строк максимум можно занять, не залезая в подписи шаблона. */
     maxRows: number;
-    columns: { name: string; length: string; width: string; front: string; left: string; right: string };
+    columns: { name: string; length: string; width: string; front: string; back: string; left: string; right: string };
   };
 }
 
@@ -166,7 +166,7 @@ export const KITCHEN_SHEET_MAP: BlankSheetMap = {
     titleCell: 'A57',
     firstRow: 58,
     maxRows: 14,
-    columns: { name: 'A', length: 'C', width: 'D', front: 'E', left: 'F', right: 'G' },
+    columns: { name: 'A', length: 'C', width: 'D', front: 'E', back: 'F', left: 'G', right: 'H' },
   },
 };
 
@@ -266,12 +266,13 @@ export function buildWorktopWrites(map: BlankSheetMap, pieces: WorktopPiece[], s
   if (summary.trim()) writes.push({ cell: wt.summaryCell, value: summary.trim() });
   if (pieces.length === 0) return writes;
 
-  writes.push({ cell: wt.titleCell, value: 'Детали столешницы: длина × ширина, обработка видимых кромок' });
+  writes.push({ cell: wt.titleCell, value: 'Детали столешницы: длина × ширина, обработка сторон (перед/зад/лево/право)' });
   const head = wt.firstRow;
   writes.push({ cell: `${wt.columns.name}${head}`, value: 'Деталь' });
   writes.push({ cell: `${wt.columns.length}${head}`, value: 'Длина' });
   writes.push({ cell: `${wt.columns.width}${head}`, value: 'Ширина' });
   writes.push({ cell: `${wt.columns.front}${head}`, value: 'Перед' });
+  writes.push({ cell: `${wt.columns.back}${head}`, value: 'Зад' });
   writes.push({ cell: `${wt.columns.left}${head}`, value: 'Лево' });
   writes.push({ cell: `${wt.columns.right}${head}`, value: 'Право' });
 
@@ -281,6 +282,7 @@ export function buildWorktopWrites(map: BlankSheetMap, pieces: WorktopPiece[], s
     writes.push({ cell: `${wt.columns.length}${row}`, value: p.lengthMm == null ? '' : String(p.lengthMm) });
     writes.push({ cell: `${wt.columns.width}${row}`, value: p.widthMm == null ? '' : String(p.widthMm) });
     writes.push({ cell: `${wt.columns.front}${row}`, value: edgeKindLabel(p.front) });
+    writes.push({ cell: `${wt.columns.back}${row}`, value: p.back ? edgeKindLabel(p.back) : 'ПВХ 0,4 белая' });
     writes.push({ cell: `${wt.columns.left}${row}`, value: edgeKindLabel(p.left) });
     writes.push({ cell: `${wt.columns.right}${row}`, value: edgeKindLabel(p.right) });
   }

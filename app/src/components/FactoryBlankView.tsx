@@ -28,6 +28,7 @@ function fitEskizExportSize(project: EskizProject, box: { width: number; height:
 
 const WORKTOP_EDGE_SIDES: { id: WorktopEdgeSide; label: string }[] = [
   { id: 'front', label: 'Перед' },
+  { id: 'back', label: 'Зад' },
   { id: 'left', label: 'Левый торец' },
   { id: 'right', label: 'Правый / стык' },
 ];
@@ -112,6 +113,18 @@ function WorktopPlanDesigner(props: {
     if (!selectedLayout) return;
     props.onPiece(selectedLayout.piece.id, { layoutXmm: Math.max(0, Math.round((selectedLayout.x + dx) / 10) * 10), layoutYmm: Math.max(0, Math.round((selectedLayout.y + dy) / 10) * 10) });
   };
+  const duplicateSelected = () => {
+    if (!selectedLayout) return;
+    const copy: WorktopPiece = {
+      ...selectedLayout.piece,
+      id: uid('wp'),
+      name: `${selectedLayout.piece.name || 'Деталь'} копия`,
+      layoutXmm: Math.max(0, Math.round((selectedLayout.x + selectedLayout.width + 80) / 10) * 10),
+      layoutYmm: Math.max(0, Math.round(selectedLayout.y / 10) * 10),
+    };
+    props.onReplace([...props.pieces, copy]);
+    setSelectedId(copy.id);
+  };
   const selectedScreen = selectedLayout ? {
     x: metrics.offsetX + selectedLayout.x * metrics.scale,
     y: metrics.offsetY + selectedLayout.y * metrics.scale,
@@ -193,10 +206,12 @@ function WorktopPlanDesigner(props: {
             <text x={centerX} y={centerY + 10} textAnchor="middle" fontSize="11" fontWeight="700" fill="#55685d">{size}</text>
             <text x={centerX} y={Math.max(18, y - 8)} textAnchor="middle" fontSize="11" fontWeight="800" fill="#111827">{piece.lengthMm ? `${piece.lengthMm} мм` : ''}</text>
             <text x={Math.min(WORKTOP_SKETCH_WIDTH - 10, x + width + 24)} y={centerY} textAnchor="middle" fontSize="11" fontWeight="800" fill="#111827" transform={`rotate(90 ${Math.min(WORKTOP_SKETCH_WIDTH - 10, x + width + 24)} ${centerY})`}>{piece.widthMm ? `${piece.widthMm} мм` : ''}</text>
+            {piece.back && <><line x1={x} y1={y} x2={x + width} y2={y} stroke="#1f6feb" strokeWidth="3.2" strokeLinecap="round" /><WorktopSvgEdgeLabel kind={piece.back} x={centerX} y={y - 18} onClick={() => cycleEdge(piece, 'back')} /></>}
             {piece.front && <><line x1={x} y1={y + height} x2={x + width} y2={y + height} stroke="#1f6feb" strokeWidth="3.2" strokeLinecap="round" /><WorktopSvgEdgeLabel kind={piece.front} x={centerX} y={y + height + 18} onClick={() => cycleEdge(piece, 'front')} /></>}
             {piece.left && <><line x1={x} y1={y} x2={x} y2={y + height} stroke="#1f6feb" strokeWidth="3.2" strokeLinecap="round" /><WorktopSvgEdgeLabel kind={piece.left} x={x - 18} y={centerY} rotate={-90} onClick={() => cycleEdge(piece, 'left')} /></>}
             {piece.right && <><line x1={x + width} y1={y} x2={x + width} y2={y + height} stroke="#1f6feb" strokeWidth="3.2" strokeLinecap="round" /><WorktopSvgEdgeLabel kind={piece.right} x={x + width + 18} y={centerY} rotate={90} onClick={() => cycleEdge(piece, 'right')} /></>}
             {selected && <>
+              <rect data-worktop-edge-hotspot="true" x={x} y={y - 16} width={width} height="32" className="blank-worktop-edge-hotspot" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); cycleEdge(piece, 'back'); }}><title>Зад: переключить обработку. Если оставить пустым — ПВХ 0,4 белая по умолчанию.</title></rect>
               <rect data-worktop-edge-hotspot="true" x={x} y={y + height - 16} width={width} height="32" className="blank-worktop-edge-hotspot" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); cycleEdge(piece, 'front'); }}><title>Перед: переключить обработку</title></rect>
               <rect data-worktop-edge-hotspot="true" x={x - 16} y={y} width="32" height={height} className="blank-worktop-edge-hotspot" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); cycleEdge(piece, 'left'); }}><title>Левый торец: переключить обработку</title></rect>
               <rect data-worktop-edge-hotspot="true" x={x + width - 16} y={y} width="32" height={height} className="blank-worktop-edge-hotspot" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); cycleEdge(piece, 'right'); }}><title>Правый торец/стык: переключить обработку</title></rect>
@@ -236,6 +251,7 @@ function WorktopPlanDesigner(props: {
         <div className="blank-worktop-card-actions compact-actions">
           <button type="button" onClick={() => props.onPiece(selectedPiece.id, { rotated: !selectedPiece.rotated })}>{selectedPiece.rotated ? 'Горизонтально' : 'Вертикально'}</button>
           <button type="button" onClick={() => props.onPiece(selectedPiece.id, { layoutXmm: null, layoutYmm: null })}>Авто-позиция</button>
+          <button type="button" onClick={duplicateSelected}>Дублировать</button>
           <button type="button" className="danger" onClick={() => props.onRemove(selectedPiece.id)}>Удалить</button>
         </div>
       </div>}
@@ -432,7 +448,7 @@ export default function FactoryBlankView(props: {
   const addPiece = () => {
     const arranged = autoArrangeWorktopPieces([
       ...pieces,
-      { id: uid('wp'), name: `Деталь ${pieces.length + 1}`, lengthMm: null, widthMm: null, front: null, left: null, right: null },
+      { id: uid('wp'), name: `Деталь ${pieces.length + 1}`, lengthMm: null, widthMm: null, front: null, back: null, left: null, right: null },
     ], 'line');
     replacePieces(arranged);
   };
@@ -780,7 +796,7 @@ export default function FactoryBlankView(props: {
           ) : (
             <table className="table blank-plan-table">
               <thead>
-                <tr><th>Деталь</th><th>Длина, мм</th><th>Ширина, мм</th><th>Перед</th><th>Левый торец</th><th>Правый / стык</th><th /></tr>
+                <tr><th>Деталь</th><th>Длина, мм</th><th>Ширина, мм</th><th>Перед</th><th>Зад</th><th>Левый торец</th><th>Правый / стык</th><th /></tr>
               </thead>
               <tbody>
                 {pieces.map((piece) => (
@@ -788,10 +804,10 @@ export default function FactoryBlankView(props: {
                     <td><input value={piece.name} onChange={(e) => updatePiece(piece.id, { name: e.target.value })} /></td>
                     <td><WorktopMmInput value={piece.lengthMm} onValue={(value) => updatePiece(piece.id, { lengthMm: value })} placeholder="мм" /></td>
                     <td><WorktopMmInput value={piece.widthMm} onValue={(value) => updatePiece(piece.id, { widthMm: value })} placeholder="мм" /></td>
-                    {(['front', 'left', 'right'] as const).map((side) => (
-                      <td key={side}>
-                        <select value={piece[side] ?? ''} onChange={(e) => updatePiece(piece.id, { [side]: (e.target.value || null) as WorktopEdgeKind | null })}>
-                          <option value="">—</option>
+                    {WORKTOP_EDGE_SIDES.map((side) => (
+                      <td key={side.id}>
+                        <select value={piece[side.id] ?? ''} onChange={(e) => updatePiece(piece.id, { [side.id]: (e.target.value || null) as WorktopEdgeKind | null })}>
+                          <option value="">{side.id === 'back' ? '— (ПВХ 0,4 белая)' : '—'}</option>
                           {WORKTOP_EDGE_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
                         </select>
                       </td>
@@ -824,8 +840,8 @@ export default function FactoryBlankView(props: {
         ))}
         {hasWorktopPlanSection && pieces.length > 0 && (
           <table className="blank-print-table">
-            <thead><tr><th colSpan={7}>Лист 2 — схема столешницы (виды обработки видимых частей)</th></tr>
-              <tr><th>Деталь</th><th>Длина, мм</th><th>Ширина, мм</th><th>Перед</th><th>Левый торец</th><th>Правый / стык</th><th>Зад</th></tr></thead>
+            <thead><tr><th colSpan={8}>Лист 2 — схема столешницы (виды обработки видимых частей)</th></tr>
+              <tr><th>Деталь</th><th>Длина, мм</th><th>Ширина, мм</th><th>Перед</th><th>Зад</th><th>Левый торец</th><th>Правый / стык</th><th>Зад по умолчанию</th></tr></thead>
             <tbody>
               {pieces.map((piece) => (
                 <tr key={piece.id}>
@@ -833,9 +849,10 @@ export default function FactoryBlankView(props: {
                   <td>{piece.lengthMm ?? ''}</td>
                   <td>{piece.widthMm ?? ''}</td>
                   <td>{edgeKindLabel(piece.front)}</td>
+                  <td>{edgeKindLabel(piece.back)}</td>
                   <td>{edgeKindLabel(piece.left)}</td>
                   <td>{edgeKindLabel(piece.right)}</td>
-                  <td>ПВХ 0,4 белая</td>
+                  <td>{piece.back ? '—' : 'ПВХ 0,4 белая'}</td>
                 </tr>
               ))}
             </tbody>

@@ -3,7 +3,7 @@ import type { WorktopPiece } from '../types';
 import { autoArrangeWorktopPieces, buildWorktopPlanSvg, layoutWorktopPieces, nextWorktopEdgeKind, snapWorktopPiecePosition, worktopEdgeSymbol } from './worktopSketch';
 
 const pieces: WorktopPiece[] = [
-  { id: 'a', name: 'Основная', lengthMm: 2400, widthMm: 600, front: 'pf', left: 'v', right: 'eurozapil' },
+  { id: 'a', name: 'Основная', lengthMm: 2400, widthMm: 600, front: 'pf', back: 'pvc', left: 'v', right: 'eurozapil' },
   { id: 'b', name: 'Крыло', lengthMm: 1600, widthMm: 600, front: 'pvc', left: null, right: 'eurostyk' },
 ];
 
@@ -24,6 +24,7 @@ describe('worktopSketch', () => {
     expect(svg).toContain('ПФ');
     expect(svg).toContain('V');
     expect(svg).toContain('//');
+    expect(svg).toContain('Х');
   });
 
   it('даёт быстрые схемы прямой и угловой раскладки', () => {

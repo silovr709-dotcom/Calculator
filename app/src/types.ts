@@ -601,6 +601,8 @@ export interface WorktopPiece {
   lengthMm: number | null;
   widthMm: number | null;
   front: WorktopEdgeKind | null;
+  /** Задняя сторона. Пусто = фабрика применяет ПВХ 0,4 белая по умолчанию, но при необходимости сторону можно отметить явно. */
+  back?: WorktopEdgeKind | null;
   left: WorktopEdgeKind | null;
   right: WorktopEdgeKind | null;
   /** Положение детали на схеме листа 2, в условных мм столешницы. Пусто = авто-раскладка. */

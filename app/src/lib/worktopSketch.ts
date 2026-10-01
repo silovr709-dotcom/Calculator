@@ -1,7 +1,7 @@
 import type { WorktopEdgeKind, WorktopPiece } from '../types';
 
 export type WorktopSketchLayoutMode = 'line' | 'corner' | 'u';
-export type WorktopEdgeSide = 'front' | 'left' | 'right';
+export type WorktopEdgeSide = 'front' | 'back' | 'left' | 'right';
 
 export const WORKTOP_EDGE_SYMBOLS: Record<WorktopEdgeKind, string> = {
   pvc: 'Х',
@@ -194,14 +194,14 @@ export function autoArrangeWorktopPieces(pieces: WorktopPiece[], mode: WorktopSk
 
 export function worktopSketchMetrics(pieces: WorktopPiece[], widthPx: number, heightPx: number, showLegend = false): WorktopSketchMetrics {
   const layouts = layoutWorktopPieces(pieces);
-  const content = layouts.length > 0 ? layouts : [{ piece: { id: 'empty', name: 'Столешница', lengthMm: 1200, widthMm: 600, front: null, left: null, right: null }, x: 0, y: 0, width: 1200, height: 600, rotated: false }];
+  const content = layouts.length > 0 ? layouts : [{ piece: { id: 'empty', name: 'Столешница', lengthMm: 1200, widthMm: 600, front: null, back: null, left: null, right: null }, x: 0, y: 0, width: 1200, height: 600, rotated: false }];
   const minX = Math.min(...content.map((item) => item.x));
   const minY = Math.min(...content.map((item) => item.y));
   const maxX = Math.max(...content.map((item) => item.x + item.width));
   const maxY = Math.max(...content.map((item) => item.y + item.height));
   const contentWidth = Math.max(1, maxX - minX);
   const contentHeight = Math.max(1, maxY - minY);
-  const pad = 38;
+  const pad = 58;
   const legendHeight = showLegend ? 58 : 0;
   const scale = Math.min((widthPx - pad * 2) / contentWidth, (heightPx - pad * 2 - legendHeight) / contentHeight);
   const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
@@ -239,6 +239,7 @@ export function buildWorktopPlanSvg(pieces: WorktopPiece[], options: WorktopSket
     const name = p.name || `Деталь ${index + 1}`;
     const size = `${p.lengthMm ?? '—'}×${p.widthMm ?? '—'} мм${layout.rotated ? ' · повернута' : ''}`;
     const labels = [
+      p.back ? edgeLine(x, y, x + w, y) + edgeLabel(p.back, centerX, y - 18) : '',
       p.front ? edgeLine(x, y + h, x + w, y + h) + edgeLabel(p.front, centerX, y + h + 18) : '',
       p.left ? edgeLine(x, y, x, y + h) + edgeLabel(p.left, x - 18, centerY, -90) : '',
       p.right ? edgeLine(x + w, y, x + w, y + h) + edgeLabel(p.right, x + w + 18, centerY, 90) : '',

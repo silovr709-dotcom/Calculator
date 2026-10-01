@@ -38,10 +38,17 @@ export function suggestWorktopPlan(project: Project): WorktopPiece[] {
     lengthMm = Math.max(a, b); widthMm = Math.min(a, b);
   }
   const front: WorktopEdgeKind | null = /постформ/i.test(line.category + ' ' + line.name) ? 'pf' : null;
-  return [{ id: uid('wp'), name: 'Столешница', lengthMm, widthMm, front, left: null, right: null }];
+  return [{ id: uid('wp'), name: 'Столешница', lengthMm, widthMm, front, back: null, left: null, right: null }];
 }
 
 export interface WorktopPlanIssue { level: 'error' | 'warn'; text: string }
+
+const WORKTOP_SIDES: { key: 'front' | 'back' | 'left' | 'right'; label: string }[] = [
+  { key: 'front', label: 'спереди' },
+  { key: 'back', label: 'сзади' },
+  { key: 'left', label: 'слева' },
+  { key: 'right', label: 'справа' },
+];
 
 /** Проверка схемы столешницы: сообщаем, но сам лист не «чиним». */
 export function checkWorktopPlan(pieces: WorktopPiece[], hasWorktop: boolean): WorktopPlanIssue[] {
@@ -60,11 +67,14 @@ export function checkWorktopPlan(pieces: WorktopPiece[], hasWorktop: boolean): W
     if (!p.lengthMm || p.lengthMm <= 0) issues.push({ level: 'error', text: `Лист 2: у «${label}» не указана длина` });
     if (!p.widthMm || p.widthMm <= 0) issues.push({ level: 'error', text: `Лист 2: у «${label}» не указана ширина` });
     if (!p.front) issues.push({ level: 'warn', text: `Лист 2: у «${label}» не отмечена обработка передней кромки (ПФ/ПВХ/V)` });
-    if ((p.right === 'eurozapil' || p.right === 'eurostyk') && !pieces[index + 1]) {
-      issues.push({ level: 'error', text: `Лист 2: у «${label}» справа стык (${edgeKindLabel(p.right)}), а следующей детали нет` });
+    for (const side of WORKTOP_SIDES) {
+      const kind = p[side.key];
+      if ((kind === 'eurozapil' || kind === 'eurostyk') && pieces.length < 2) {
+        issues.push({ level: 'warn', text: `Лист 2: у «${label}» ${side.label} указан стык (${edgeKindLabel(kind)}), но на схеме только одна деталь — проверьте соседний кусок` });
+      }
     }
   });
-  const joins = pieces.filter((p) => p.right === 'eurozapil').length;
+  const joins = pieces.filter((p) => WORKTOP_SIDES.some((side) => p[side.key] === 'eurozapil')).length;
   if (joins > 0) {
     issues.push({ level: 'warn', text: `Еврозапил: по инструкции на стык нужны 2–3 стяжки — укажите их количество в поле «Планки для столешницы»` });
   }

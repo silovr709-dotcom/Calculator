@@ -165,7 +165,7 @@ describe('сборка значений для шаблона', () => {
 
   it('схема столешницы уходит на лист 2 таблицей с кромками', () => {
     const pieces: WorktopPiece[] = [
-      { id: 'a', name: 'Левая', lengthMm: 2400, widthMm: 600, front: 'pf', left: 'pvc', right: 'eurozapil' },
+      { id: 'a', name: 'Левая', lengthMm: 2400, widthMm: 600, front: 'pf', back: 'v', left: 'pvc', right: 'eurozapil' },
       { id: 'b', name: 'Правая', lengthMm: 1200, widthMm: 600, front: 'pf', left: null, right: null },
     ];
     const writes = buildWorktopWrites(KITCHEN_SHEET_MAP, pieces, '38мм СОЮЗ. Белый 1111Q');
@@ -176,6 +176,9 @@ describe('сборка значений для шаблона', () => {
     expect(byCell.get('C59')).toBe('2400');
     expect(byCell.get('A60')).toBe('Правая');
     expect(byCell.get('D60')).toBe('600');
+    expect(byCell.get('F59')).toContain('V');
+    expect(byCell.get('F60')).toBe('ПВХ 0,4 белая');
+    expect(byCell.get('H59')).toContain('Еврозапил');
   });
 
   it('длинный список деталей обрезается по лимиту строк шаблона', () => {
@@ -204,7 +207,7 @@ describe('сборка значений для шаблона', () => {
     const cells = worktopAreaCells(KITCHEN_SHEET_MAP);
     expect(cells).toContain('I56');
     expect(cells).toContain('A58');
-    expect(cells).toContain('G72');
+    expect(cells).toContain('H72');
     expect(worktopAreaCells(CORPUS_SHEET_MAP)).toEqual([]);
   });
 });
