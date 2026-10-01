@@ -2421,3 +2421,369 @@ select option { background: #06101d; color: var(--hud-white); }
   body { background: #fff !important; color: #111 !important; }
   .client-doc { color: #111 !important; background: #fff !important; }
 }
+
+/* ---------- HUD readability audit: keep the J.A.R.V.I.S. direction usable ---------- */
+.main,
+.card,
+.totals-card,
+.empty,
+.dashboard-filters,
+.client-doc {
+  overflow: visible;
+}
+.modal { overflow: auto; }
+.modal.wide { overflow: hidden; }
+.table { overflow: hidden; }
+
+.app :where(.page-head, .card, .totals-card, .empty, .dashboard-filters, .modal, .client-offer-editor, .eskiz-pro-intro, .eskiz-pro-export-card, .blank-worktop-designer):not(.client-doc) {
+  --text: #eafcff;
+  --muted: rgba(214, 243, 255, .68);
+  --line: rgba(56, 232, 255, .20);
+  --line-strong: rgba(56, 232, 255, .34);
+  color: #eafcff;
+}
+.app :where(.page-head, .card, .totals-card, .empty, .dashboard-filters, .modal, .client-offer-editor, .eskiz-pro-intro, .eskiz-pro-export-card, .blank-worktop-designer):not(.client-doc) :where(h1, h2, h3, h4, b, strong) {
+  color: #f5feff;
+}
+.app :where(.page-head, .card, .totals-card, .empty, .dashboard-filters, .modal, .client-offer-editor, .eskiz-pro-intro, .eskiz-pro-export-card, .blank-worktop-designer):not(.client-doc) :where(p, li, label, summary, td, th) {
+  color: inherit;
+}
+.app :where(.page-head, .card, .totals-card, .empty, .dashboard-filters, .modal, .client-offer-editor, .eskiz-pro-intro, .eskiz-pro-export-card, .blank-worktop-designer):not(.client-doc) :where(.muted, small, em, .sub, .def-label, .slot-label, .r-meta, .r-unit, .t-row.small, .blank-label, .dict-card-subtitle, .kb-tag, .qr-hint) {
+  color: rgba(214, 243, 255, .66) !important;
+}
+.app :where(.card, .totals-card, .modal, .client-offer-editor, .blank-worktop-designer) :where(
+  .stat,
+  .extra-row,
+  .def-slot,
+  .slot-row,
+  .tpl-row,
+  .preview,
+  .quick-confidence,
+  .quick-metrics span,
+  .quick-switches label,
+  .wizard-step,
+  .shape-choice,
+  .wizard-material-row,
+  .wizard-section-title,
+  .wizard-review-status,
+  .wall-planner-mandatory,
+  .wall-plan,
+  .bulk-copy-row,
+  .bulk-slot,
+  .check-summary-grid > div,
+  .check-actions,
+  .check-toolbar,
+  .variant-prices div,
+  .variant-composition,
+  .variant-slot,
+  .measurement-hint,
+  .measurement-record,
+  .measurement-photo-editor,
+  .facade-tech-card,
+  .facade-part-row,
+  .surcharge-tech-card,
+  .surcharge-tech-row,
+  .module-formula-card,
+  .module-formula-row,
+  .hinge-tech-card,
+  .extra-facade-card,
+  .extra-facade-row,
+  .checklist-item,
+  .blank-export-preview div,
+  .blank-sketch-placeholder,
+  .blank-tech-summary,
+  .dict-smart-picker,
+  .dict-group-block,
+  .dict-card,
+  .blank-worktop-sketch,
+  .blank-worktop-piece-card,
+  .blank-worktop-edge-buttons button,
+  .kb-metrics button,
+  .kb-rule-list div,
+  .kb-route-list button,
+  .kb-hit,
+  .kb-doc,
+  .kb-doc-head,
+  .kb-pricebook-stats div,
+  .kb-detail-pill,
+  .kb-detail-map,
+  .milling-card,
+  .order-hero,
+  .order-status-grid div,
+  .offer-version-list article,
+  .variant-mini-table div,
+  .procurement-group,
+  .procurement-group summary,
+  .procurement-table div,
+  .unresolved-issue,
+  .order-status-strip button,
+  .issue-filter button,
+  .embedded-eskiz-module-mini,
+  .eskiz-template-grid button,
+  .eskiz-module-size-hint,
+  .eskiz-body-recommendations,
+  .eskiz-body-recommendations button,
+  .embedded-eskiz-communication-symbol-preview,
+  .add-filter,
+  .pin-banner,
+  .qr-container,
+  .sync-url-input,
+  .photo-card
+) {
+  color: #eafcff !important;
+  background:
+    linear-gradient(145deg, rgba(8, 22, 38, .86), rgba(2, 8, 15, .72)),
+    radial-gradient(220px 120px at 100% 0%, rgba(56, 232, 255, .10), transparent 72%) !important;
+  border-color: rgba(56, 232, 255, .20) !important;
+}
+.app :where(.card, .totals-card, .modal, .client-offer-editor, .blank-worktop-designer) :where(
+  .stat,
+  .extra-row,
+  .def-slot,
+  .slot-row,
+  .tpl-row,
+  .preview,
+  .quick-confidence,
+  .quick-metrics span,
+  .quick-switches label,
+  .wizard-step,
+  .shape-choice,
+  .wizard-material-row,
+  .wizard-review-status,
+  .wall-plan,
+  .bulk-slot,
+  .check-summary-grid > div,
+  .variant-prices div,
+  .dict-card,
+  .kb-metrics button,
+  .order-status-grid div,
+  .offer-version-list article,
+  .variant-mini-table div,
+  .procurement-table div,
+  .embedded-eskiz-module-mini
+) :where(span, small, em, p) {
+  color: rgba(214, 243, 255, .68) !important;
+}
+.app :where(.card, .totals-card, .modal, .client-offer-editor, .blank-worktop-designer) :where(
+  .stat,
+  .extra-row,
+  .def-slot,
+  .slot-row,
+  .preview,
+  .quick-confidence,
+  .wizard-step,
+  .shape-choice,
+  .wizard-material-row,
+  .wizard-review-status,
+  .wall-plan,
+  .bulk-slot,
+  .check-summary-grid > div,
+  .variant-prices div,
+  .dict-card,
+  .kb-metrics button,
+  .order-status-grid div,
+  .offer-version-list article,
+  .variant-mini-table div,
+  .procurement-table div,
+  .embedded-eskiz-module-mini
+) :where(b, strong, h3, h4) {
+  color: #f5feff !important;
+}
+.app :where(.card, .totals-card, .modal, .client-offer-editor, .blank-worktop-designer) :where(button:not(.btn), .slot-pick-button, .dict-group-title, .blank-reset) {
+  color: #eafcff;
+}
+.app :where(.card, .totals-card, .modal, .client-offer-editor, .blank-worktop-designer) :where(button:not(.btn):hover, .slot-pick-button:hover, .dict-card:hover, .kb-route-list button:hover, .dict-more-note:hover) {
+  color: #00131a !important;
+  background: linear-gradient(135deg, rgba(56,232,255,.95), rgba(180,247,255,.78)) !important;
+  border-color: rgba(180,247,255,.74) !important;
+}
+
+.table td {
+  color: #eafcff;
+  border-bottom-color: rgba(56, 232, 255, .10);
+}
+.table tr.group-row td,
+.table tr.sel-row td,
+.focus-line td,
+table.modules tr.drop-before td,
+table.modules tr.drop-after td,
+.cd-module-row td {
+  background: rgba(56, 232, 255, .10) !important;
+  color: #eafcff !important;
+}
+.table tr.has-warn td,
+.table tr.has-warn:hover td {
+  background: rgba(201, 130, 66, .18) !important;
+  color: #ffe7c2 !important;
+}
+.warning-row,
+.warn-box,
+.readiness-card:not(.ready),
+.unresolved-issue.warning,
+.embedded-eskiz-module-mini.warn,
+.eskiz-live-card.warn div,
+.blank-tech-summary.warn {
+  background: rgba(201, 130, 66, .16) !important;
+  border-color: rgba(201, 130, 66, .34) !important;
+  color: #ffe7c2 !important;
+}
+.ok-box,
+.confirmed-row,
+.readiness-card.ready,
+.unresolved-issue.ok,
+.embedded-eskiz-module-mini.ok,
+.eskiz-live-card.ok div,
+.blank-tech-summary.ok {
+  background: rgba(34, 197, 94, .13) !important;
+  border-color: rgba(74, 222, 128, .28) !important;
+  color: #c7ffe1 !important;
+}
+.unresolved-issue.error,
+.embedded-eskiz-module-mini.error,
+.eskiz-live-card.error div,
+.blank-tech-summary.bad,
+.checklist-item:not(.included):not(.confirmed) {
+  background: rgba(248, 113, 113, .12) !important;
+  border-color: rgba(248, 113, 113, .30) !important;
+  color: #ffd8d8 !important;
+}
+.blank-bad,
+.check-issue.error .check-issue-content > b,
+.problems li.crit,
+.def-value.none,
+.slot-value.none {
+  color: #ffb4b4 !important;
+}
+.warn,
+.check-issue.warning .check-issue-content > b,
+.fin-item.warn {
+  color: #ffd38a !important;
+}
+.dot.ok,
+.badge.tech-exact,
+.module-facade-status.applied { color: #8dffbd !important; }
+.dot.warn,
+.badge.tech-suggest,
+.module-facade-status.outdated { color: #ffd38a !important; }
+.dot.err { color: #ffb4b4 !important; }
+
+.dropdown-menu button { color: #eafcff; }
+.dropdown-menu button:hover,
+.dropdown-menu button:focus-visible {
+  background: rgba(56, 232, 255, .12) !important;
+  color: #f5feff !important;
+}
+.menu-sep { color: rgba(214, 243, 255, .62) !important; }
+.r-group {
+  background: rgba(56, 232, 255, .12) !important;
+  color: #eafcff !important;
+  border-bottom-color: rgba(56, 232, 255, .18) !important;
+}
+.result { border-bottom-color: rgba(56, 232, 255, .10) !important; color: #eafcff; }
+.result:hover,
+.result.sel {
+  background: rgba(56, 232, 255, .10) !important;
+}
+.r-name,
+.r-price b,
+.picker-right h3 { color: #f5feff !important; }
+.r-art,
+.r-price,
+.preview-sum,
+.variant-mini-table strong,
+.offer-version-list strong,
+.procurement-table strong {
+  color: #65f2ff !important;
+}
+
+/* Keep customer-facing documents and printable sheets as clean light islands. */
+.client-doc,
+.client-doc * {
+  --text: #172033;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --accent: #0f766e;
+  --accent-2: #7c3aed;
+}
+.client-doc {
+  color: #172033 !important;
+  background: linear-gradient(180deg, rgba(255,255,255,.99), rgba(241,248,255,.96)) !important;
+  border-color: #dbe7ef !important;
+}
+.client-doc :where(p, li, td, th, label, span, small, em) { color: inherit; }
+.client-doc :where(.muted, small, .cd-sub, .cd-comment, .cd-section-head span, .cd-module-name span, .cd-component-qty, .cd-materials li, .eskiz-preview-head span, .eskiz-preview-head em) {
+  color: #64748b !important;
+}
+.client-doc :where(h1, h2, h3, h4, b, strong, .cd-brand, .cd-section-head h3, .cd-included b, .cd-materials b) {
+  color: #0f172a !important;
+}
+.client-doc .cd-brand { color: #0f766e !important; }
+.client-doc .cd-hero,
+.client-doc .cd-hero :where(h1, h2, h3, b, strong, span, small, em, p) {
+  color: #fff !important;
+}
+.client-doc .cd-hero :where(.cd-sub, .cd-hero-meta, .cd-hero-price span, .cd-hero-price em) {
+  color: rgba(255,255,255,.76) !important;
+}
+.client-doc .cd-summary,
+.client-doc .cd-next-steps div,
+.client-doc .cd-module-card,
+.client-doc .cd-component-list-extra,
+.client-doc .cd-component,
+.client-doc .cd-module-brief span,
+.client-doc .cd-component-notes span,
+.client-doc .cd-eskiz-modules,
+.client-doc .cd-eskiz-modules span,
+.client-doc .eskiz-preview,
+.client-doc .eskiz-preview-head,
+.client-doc .eskiz-preview-stage {
+  background: #fff !important;
+  color: #172033 !important;
+  border-color: #e2e8f0 !important;
+}
+.client-doc .cd-component-kind {
+  background: #eef2f7 !important;
+  color: #475569 !important;
+}
+.client-doc .table,
+.client-doc .client-table {
+  background: #fff !important;
+  color: #172033 !important;
+  border-color: #e2e8f0 !important;
+}
+.client-doc .table th,
+.client-doc .client-table th {
+  position: static;
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+.client-doc .table td,
+.client-doc .client-table td {
+  background: #fff !important;
+  color: #172033 !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+.client-doc .table tr.row-click:hover td,
+.client-doc .client-table tr.row-click:hover td {
+  background: #f8fafc !important;
+}
+
+@media print {
+  .main,
+  .card,
+  .totals-card,
+  .empty,
+  .dashboard-filters,
+  .client-doc,
+  .modal { overflow: visible !important; }
+  .app :where(.page-head, .card, .totals-card, .empty, .dashboard-filters, .modal, .client-offer-editor, .eskiz-pro-intro, .eskiz-pro-export-card, .blank-worktop-designer):not(.client-doc) {
+    color: #111 !important;
+    background: #fff !important;
+    border-color: #ddd !important;
+  }
+  .app :where(.page-head, .card, .totals-card, .empty, .dashboard-filters, .modal, .client-offer-editor, .eskiz-pro-intro, .eskiz-pro-export-card, .blank-worktop-designer):not(.client-doc) :where(h1, h2, h3, h4, b, strong, p, li, label, summary, td, th, span, small, em) {
+    color: #111 !important;
+  }
+}
