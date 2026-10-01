@@ -328,7 +328,7 @@ function FactoryDictPicker(props: {
   const total = groups.reduce((sum, group) => sum + group.total, 0);
   if (total === 0 && !props.query) return null;
   const hint = props.fieldKey === 'facadeColor'
-    ? 'ПВХ-плёнки, пластики/HPL (ARPA, FENIX, AGT, Rexay, ABET) и Compact Slotex — с группировкой по производителю и коллекции.'
+    ? 'ПВХ-плёнки, пластики/HPL (ARPA, FENIX, AGT, Rexay, ABET), Rehau-кромка 1,3мм и Compact Slotex — с группировкой по производителю и коллекции.'
     : props.fieldKey === 'ldspColor' || props.fieldKey === 'corpusColor'
       ? 'ЛДСП сгруппированы по производителю и категории; текстурные позиции помечены «!». '
       : 'Справочник сгруппирован по типу материала, производителю и категории.';

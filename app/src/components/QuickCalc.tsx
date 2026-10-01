@@ -53,8 +53,15 @@ function ItemSelect(props: {
 
   const optLabel = (i: PriceItem) => {
     const th = i.attrs?.['толщина'];
-    const bits = [i.name.slice(0, 70)];
-    if (th && !i.name.includes(th)) bits.push(th);
+    const category = i.attrs?.['категория'];
+    const milling = i.attrs?.['фрезеровка'];
+    const brand = i.attrs?.['бренд'];
+    const series = i.attrs?.['серия'] ?? i.attrs?.['коллекция'];
+    const format = i.attrs?.['формат'];
+    const bits = [i.name.slice(0, 72)];
+    for (const value of [th, category, milling, brand, series, format]) {
+      if (value && !bits.join(' ').includes(value)) bits.push(value);
+    }
     bits.push(i.price != null ? `${i.price} ₽${i.unit ? `/${i.unit}` : ''}` : 'нет цены');
     return bits.join(' · ');
   };
@@ -208,22 +215,48 @@ function shortCat(c: string): string {
 }
 
 const FACADE_CHIPS: Chip[] = [
-  { label: 'Плёнка ПВХ (МДФ)', pred: (i) => i.category === 'Фасады: МДФ (ПВХ плёнка)' },
-  { label: 'Эмаль', pred: (i) => i.category === 'Фасады: Эмаль' },
-  { label: 'Пластик (HPL)', pred: (i) => i.category === 'Фасады: Пластик (HPL)' },
-  { label: 'TSS плита', pred: (i) => i.category === 'Фасады: TSS плита' },
-  { label: 'Стекло и зеркала', pred: (i) => i.category === 'Фасады: Стекло и зеркала' },
+  { label: 'ПВХ · все', pred: (i) => i.category === 'Фасады: МДФ (ПВХ плёнка)' },
+  { label: 'ПВХ 16 мм', pred: (i) => i.category === 'Фасады: МДФ (ПВХ плёнка)' && i.attrs?.['толщина'] === '16мм' },
+  { label: 'ПВХ 19 мм', pred: (i) => i.category === 'Фасады: МДФ (ПВХ плёнка)' && i.attrs?.['толщина'] === '19мм' },
+  { label: 'ПВХ 22 мм', pred: (i) => i.category === 'Фасады: МДФ (ПВХ плёнка)' && i.attrs?.['толщина'] === '22мм' },
+  { label: 'ПВХ 1 кат', pred: (i) => i.category === 'Фасады: МДФ (ПВХ плёнка)' && `${i.attrs?.['категория'] ?? ''}`.startsWith('1 ') },
+  { label: 'ПВХ 2 кат', pred: (i) => i.category === 'Фасады: МДФ (ПВХ плёнка)' && `${i.attrs?.['категория'] ?? ''}`.startsWith('2 ') },
+  { label: 'Эмаль мат', pred: (i) => i.category === 'Фасады: Эмаль' && i.priceBasis === 'm2' && i.name.toLocaleLowerCase('ru').includes('матовая') },
+  { label: 'Эмаль глянец', pred: (i) => i.category === 'Фасады: Эмаль' && i.priceBasis === 'm2' && i.name.toLocaleLowerCase('ru').includes('глянец') },
+  { label: 'Фрез. 1 кат', pred: (i) => i.category === 'Фасады: Эмаль' && `${i.attrs?.['фрезеровка'] ?? ''}`.includes('1 кат') },
+  { label: 'Фрез. 2 кат', pred: (i) => i.category === 'Фасады: Эмаль' && `${i.attrs?.['фрезеровка'] ?? ''}`.includes('2 кат') },
+  { label: 'AGT / Rehau 1к', pred: (i) => i.category === 'Фасады: Пластик (HPL)' && `${i.attrs?.['бренд'] ?? ''}`.includes('AGT') && `${i.attrs?.['категория'] ?? ''}`.includes('1') },
+  { label: 'AGT / Rehau 2к', pred: (i) => i.category === 'Фасады: Пластик (HPL)' && `${i.attrs?.['бренд'] ?? ''}`.includes('AGT') && `${i.attrs?.['категория'] ?? ''}`.includes('2') },
+  { label: 'Пластик 1к', pred: (i) => i.category === 'Фасады: Пластик (HPL)' && `${i.attrs?.['категория'] ?? ''}`.includes('1') },
+  { label: 'Пластик 2к', pred: (i) => i.category === 'Фасады: Пластик (HPL)' && `${i.attrs?.['категория'] ?? ''}`.includes('2') },
+  { label: 'TSS', pred: (i) => i.category === 'Фасады: TSS плита' },
+  { label: 'Стекло/зеркало', pred: (i) => i.category === 'Фасады: Стекло и зеркала' },
 ];
+
 const WORKTOP_CHIPS: Chip[] = [
-  { label: 'Мир Столешниц', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' },
-  { label: 'СОЮЗ', pred: (i) => i.category === 'Столешницы: СОЮЗ (постформинг)' },
-  { label: 'Компакт Slotex', pred: (i) => i.category === 'Столешницы: компакт-плита Slotex' },
-  { label: 'Компакт Arkobaleno', pred: (i) => i.category === 'Столешницы: компакт-плита Arkobaleno' },
+  { label: 'МС 26 мм', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' && `${i.attrs?.['толщина'] ?? ''}`.includes('26') },
+  { label: 'МС 38 мм', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' && `${i.attrs?.['толщина'] ?? ''}`.includes('38') },
+  { label: 'МС 1 кат', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' && `${i.attrs?.['категория'] ?? ''}`.startsWith('1 ') },
+  { label: 'МС 2 кат', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' && `${i.attrs?.['категория'] ?? ''}`.startsWith('2 ') },
+  { label: 'СОЮЗ Universal', pred: (i) => i.category === 'Столешницы: СОЮЗ (постформинг)' && `${i.attrs?.['категория'] ?? ''}` === 'Universal' },
+  { label: 'СОЮЗ Premium', pred: (i) => i.category === 'Столешницы: СОЮЗ (постформинг)' && `${i.attrs?.['категория'] ?? ''}`.includes('Premium') },
+  { label: 'Slotex compact', pred: (i) => i.category === 'Столешницы: компакт-плита Slotex' },
+  { label: 'Arkobaleno compact', pred: (i) => i.category === 'Столешницы: компакт-плита Arkobaleno' },
   { label: 'Комплектующие', pred: (i) => i.category === 'Столешницы: комплектующие' },
 ];
-const BLUM_CHIPS = (sub: string, plain: string): Chip[] => [
-  { label: plain, pred: (i) => !i.category.includes('BLUM') },
-  { label: 'Blum', pred: (i) => i.category.includes('BLUM') && i.subcategory === sub },
+const HINGE_CHIPS: Chip[] = [
+  { label: 'Боярд с дов. накладные', pred: (i) => i.category === 'Петли' && /боярд/i.test(i.name) && /дов/i.test(i.name) && !/полунак|вклад|45|30|165|170|180|гормош/i.test(i.name) },
+  { label: 'Titus 110 с дов.', pred: (i) => i.category === 'Петли' && /titus/i.test(i.name) && /110/i.test(i.name) && /дов/i.test(i.name) && !/полунак/i.test(i.name) },
+  { label: 'Blum 110 с дов.', pred: (i) => (i.category === 'Петли' || i.category.includes('BLUM')) && /blum|блюм/i.test(i.name) && /110/i.test(i.name) && /дов/i.test(i.name) },
+  { label: 'Накладные 90/110', pred: (i) => i.category === 'Петли' && /90|110/i.test(i.name) && !/полунак|вклад/i.test(i.name) },
+  { label: 'Все Blum', pred: (i) => (i.category === 'Петли' || i.category.includes('BLUM')) && /blum|блюм/i.test(`${i.name} ${i.subcategory ?? ''}`) },
+];
+const DRAWER_CHIPS: Chip[] = [
+  { label: 'Боярд с дов.', pred: (i) => i.category === 'Системы выдвижения' && /боярд/i.test(i.name) && /дов/i.test(i.name) },
+  { label: 'ТПО', pred: (i) => /тпо/i.test(i.name) },
+  { label: 'ТЧО', pred: (i) => /тчо/i.test(i.name) },
+  { label: 'Blum', pred: (i) => /blum|блюм/i.test(`${i.category} ${i.subcategory ?? ''} ${i.name}`) },
+  { label: 'Тандембоксы', pred: (i) => /тандембокс|т\/б/i.test(i.name) },
 ];
 
 export default function QuickCalc(props: {
@@ -245,7 +278,7 @@ export default function QuickCalc(props: {
     worktopLengthMm: 2400,
     facadeTier: 'pvc-standard',
     worktopTier: 'postforming-38',
-    hardwareTier: 'soft-close',
+    hardwareTier: 'boyard-soft-close',
     includeHandles: true,
     includeLegs: true,
     includePlinth: true,
@@ -384,27 +417,68 @@ export default function QuickCalc(props: {
               <div className="grid3">
                 <label>Фасады
                   <select value={express.facadeTier} onChange={(event) => updateExpress({ facadeTier: event.target.value as QuickEstimateInput['facadeTier'] })}>
-                    <option value="pvc-economy">Плёнка ПВХ · эконом</option>
-                    <option value="pvc-standard">Плёнка ПВХ · средняя категория</option>
-                    <option value="pvc-premium">Плёнка ПВХ · высокая категория</option>
-                    <option value="emal">Эмаль · базовая</option>
-                    <option value="plastic">Пластик HPL · средний</option>
-                    <option value="tss">TSS плита</option>
+                    <optgroup label="ПВХ: толщина + категория плёнки">
+                      <option value="pvc-16-cat1">ПВХ 16 мм · 1 категория</option>
+                      <option value="pvc-16-cat2">ПВХ 16 мм · 2 категория</option>
+                      <option value="pvc-19-cat1">ПВХ 19 мм · 1 категория</option>
+                      <option value="pvc-19-cat2">ПВХ 19 мм · 2 категория</option>
+                      <option value="pvc-22-cat1">ПВХ 22 мм · 1 категория</option>
+                      <option value="pvc-22-cat2">ПВХ 22 мм · 2 категория</option>
+                    </optgroup>
+                    <optgroup label="Эмаль: покрытие + категория фрезеровки">
+                      <option value="emal-matt-cat1">Эмаль матовая · фрезеровка 1 кат</option>
+                      <option value="emal-matt-cat2">Эмаль матовая · фрезеровка 2 кат</option>
+                      <option value="emal-gloss-cat1">Эмаль глянец · фрезеровка 1 кат</option>
+                      <option value="emal-gloss-cat2">Эмаль глянец · фрезеровка 2 кат</option>
+                    </optgroup>
+                    <optgroup label="Пластик / Rehau">
+                      <option value="plastic-agt-rehau-cat1">AGT / Rehau-кромка · 1 категория</option>
+                      <option value="plastic-agt-rehau-cat2">AGT / Rehau-кромка · 2 категория</option>
+                      <option value="plastic-arpa-cat1">ARPA/ABET · 1 категория</option>
+                      <option value="plastic-fenix-cat1">FENIX · 1 категория</option>
+                      <option value="plastic">Пластик HPL · средний</option>
+                    </optgroup>
+                    <optgroup label="Быстрые старые уровни">
+                      <option value="pvc-economy">Плёнка ПВХ · эконом</option>
+                      <option value="pvc-standard">Плёнка ПВХ · средняя категория</option>
+                      <option value="pvc-premium">Плёнка ПВХ · высокая категория</option>
+                      <option value="emal">Эмаль · базовая</option>
+                      <option value="tss">TSS плита</option>
+                    </optgroup>
                   </select>
                 </label>
                 <label>Столешница
                   <select value={express.worktopTier} onChange={(event) => updateExpress({ worktopTier: event.target.value as QuickEstimateInput['worktopTier'] })}>
-                    <option value="postforming-26">Постформинг 26 мм</option>
-                    <option value="postforming-38">Постформинг 38 мм</option>
-                    <option value="compact">Компакт-плита</option>
-                    <option value="none">Не считать</option>
+                    <optgroup label="Мир Столешниц">
+                      <option value="ms-26-cat1">МС 26 мм · 1 категория</option>
+                      <option value="ms-26-cat2">МС 26 мм · 2 категория</option>
+                      <option value="ms-38-cat1">МС 38 мм · 1 категория</option>
+                      <option value="ms-38-cat2">МС 38 мм · 2 категория</option>
+                    </optgroup>
+                    <optgroup label="СОЮЗ">
+                      <option value="souz-universal">СОЮЗ · Universal</option>
+                      <option value="souz-premium">СОЮЗ · Premium/Premium+</option>
+                    </optgroup>
+                    <optgroup label="Компакт">
+                      <option value="slotex-e1">Компакт Slotex · E1</option>
+                      <option value="arkobaleno-650">Компакт Arkobaleno · 650 мм</option>
+                      <option value="compact">Компакт-плита · средний подбор</option>
+                    </optgroup>
+                    <optgroup label="Быстрые старые уровни">
+                      <option value="postforming-26">Постформинг 26 мм</option>
+                      <option value="postforming-38">Постформинг 38 мм</option>
+                      <option value="none">Не считать</option>
+                    </optgroup>
                   </select>
                 </label>
                 <label>Фурнитура
                   <select value={express.hardwareTier} onChange={(event) => updateExpress({ hardwareTier: event.target.value as QuickEstimateInput['hardwareTier'] })}>
-                    <option value="standard">Базовая</option>
-                    <option value="soft-close">С доводчиками</option>
-                    <option value="blum">Blum</option>
+                    <option value="boyard-soft-close">База: Боярд накладные с доводкой</option>
+                    <option value="titus-soft-close">Средний: Titus 110 с доводкой</option>
+                    <option value="blum-soft-close">Премиум: Blum 110 с доводкой</option>
+                    <option value="standard">Боярд без доводчика</option>
+                    <option value="soft-close">Боярд с доводчиками · старый пресет</option>
+                    <option value="blum">Blum · старый пресет</option>
                   </select>
                 </label>
               </div>
@@ -510,13 +584,14 @@ export default function QuickCalc(props: {
 
             <section className="card">
               <h3>3. Фурнитура</h3>
+              <div className="muted small">Основные петли вынесены в фильтры: база — Боярд с доводкой, средний уровень — Titus 110 с доводкой, премиум — Blum 110 с доводкой.</div>
               <div className="muted small">Фасадов добавлено: {facadesTotal || '—'} {facadesTotal ? `(обычно 2 петли на распашной фасад → ${facadesTotal * 2} петель)` : ''}</div>
               <MultiRows pool={priced((i) => i.category === 'Петли' || (i.category.includes('BLUM') && i.subcategory === 'Петли Blum'))}
-                chips={BLUM_CHIPS('Петли Blum', 'Обычные (Боярд и др.)')}
+                chips={HINGE_CHIPS}
                 placeholder="петля" addLabel="Добавить петли" qtyLabel="Петель, шт" defaultQty={facadesTotal * 2 || 2}
                 rows={hingeRows} onChange={setHingeRows} />
               <MultiRows pool={priced((i) => i.category === 'Системы выдвижения' || (i.category.includes('BLUM') && i.subcategory === 'Ящики и направляющие Blum'))}
-                chips={BLUM_CHIPS('Ящики и направляющие Blum', 'Обычные')}
+                chips={DRAWER_CHIPS}
                 placeholder="ящик / направляющие" addLabel="Добавить ящики" qtyLabel="Ящиков, шт"
                 rows={drawerRows} onChange={setDrawerRows} />
               <MultiRows pool={priced((i) => i.category === 'Посудосушители')}

@@ -133,6 +133,19 @@ function compactSuggestion(item: CompactHplItem): FactoryDictSuggestion {
   };
 }
 
+const REHAU_EDGE_SOURCE = '!разбивка 2026 ARPA, FENIX, AGT, Rexay.xlsx · колонка «Кромка Rehau 1,3мм»';
+
+function rehauEdgeSuggestion(): FactoryDictSuggestion {
+  return {
+    id: 'edge-Rehau|Кромки · Rehau|Rehau 1,3мм из разбивки пластиков/HPL',
+    value: `кромка Rehau 1,3мм (пластики/HPL; ${REHAU_EDGE_SOURCE})`,
+    title: 'Rehau 1,3мм',
+    subtitle: REHAU_EDGE_SOURCE,
+    badges: ['Rehau', '1,3мм', 'пластики/HPL'],
+    search: normText(`Rehau рехау 1,3мм 1.3мм пластик HPL AGT ${REHAU_EDGE_SOURCE}`),
+  };
+}
+
 function edgeMaker(value: string, title: string, subtitle: string, source: string, badges: string[]): FactoryDictSuggestion {
   const maker = /рехау|rehau/i.test(value) ? 'Rehau' : /gp/i.test(value) ? 'GP Plast' : source;
   return {
@@ -158,6 +171,7 @@ export function factoryDictSuggestionGroups(fieldKey: string, dicts: FactoryDict
       suggestions = [
         ...ldspColors.items.filter((i) => Boolean(i.edgingArticle)).map((i) => edgeMaker(`0,4мм ${i.edgingArticle}${/gp/i.test(i.edgingArticle ?? '') ? '' : ' GP'}`, i.edgingArticle!, `${i.name} · ${i.brand} · ${i.category || i.format}`, i.brand, [i.category])),
         ...(dicts.groups.ldspEdges?.items ?? []).map((i) => edgeMaker(`${i.edge}${i.article ? ` (${i.article})` : ''}`, i.edge, [i.brand, i.article].filter(Boolean).join(' · '), i.brand, [i.edge])),
+        rehauEdgeSuggestion(),
       ];
       break;
     case 'facadeColor':
@@ -179,6 +193,7 @@ export function factoryDictSuggestionGroups(fieldKey: string, dicts: FactoryDict
       break;
     case 'facadeEdging':
       suggestions = [
+        rehauEdgeSuggestion(),
         ...ldspColors.items.filter((i) => Boolean(i.edgingArticle)).map((i) => edgeMaker(`1мм ${i.edgingArticle}`, i.edgingArticle!, `${i.name} · ${i.brand} · ${i.category || i.format}`, i.brand, [i.category])),
         ...plastics.items.map((i) => edgeMaker(i.edge ? `кромка ${i.edge} (${i.brand} ${i.article})` : `кромка ${i.brand} под ${i.article}`, i.edge || `${i.brand} ${i.article}`, [i.name, i.category, i.collection].filter(Boolean).join(' · '), i.brand, [i.category ?? '', i.status])),
       ];
@@ -200,6 +215,7 @@ export function dictSuggestions(fieldKey: string, dicts: FactoryDicts, limit = 4
     case 'bodyEdging':
     case 'corpusEdging':
       return uniq([
+        `кромка Rehau 1,3мм (${REHAU_EDGE_SOURCE})`,
         ...ldspColors.items.map((i) => i.edgingArticle ? `0,4мм ${i.edgingArticle} GP` : null),
         ...(dicts.groups.ldspEdges?.items ?? []).map((i) => i.edge ? `${i.edge}${i.article ? ` (${i.article})` : ''}` : null),
       ]);
@@ -217,6 +233,7 @@ export function dictSuggestions(fieldKey: string, dicts: FactoryDicts, limit = 4
       return millingsOf(dicts).map((m) => `${m.name} (${m.categoryLabel}, ${m.mdfThicknessMm} мм, ${m.coatings.join('/')})`);
     case 'facadeEdging':
       return [
+        `кромка Rehau 1,3мм (${REHAU_EDGE_SOURCE})`,
         ...uniq(ldspColors.items.map((i) => i.edgingArticle ? `1мм ${i.edgingArticle}` : null)),
         ...uniq(plastics.items.map((i) => i.edge ? `кромка ${i.edge} (${i.brand} ${i.article})` : `кромка ${i.brand} под ${i.article}`)),
       ].slice(0, limit);

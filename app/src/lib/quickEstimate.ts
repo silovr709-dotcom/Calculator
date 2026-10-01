@@ -2,9 +2,17 @@ import type { Pricebook, PriceItem, ProjectLine } from '../types';
 import { lineFromItem, sheetsFromLength, sheetLengthOf, unitIsHalfSheetAllowed } from './engine';
 import { parseBodyDoors, parseBodyDrawers } from './modules';
 
-export type QuickFacadeTier = 'pvc-economy' | 'pvc-standard' | 'pvc-premium' | 'emal' | 'plastic' | 'tss';
-export type QuickWorktopTier = 'none' | 'postforming-26' | 'postforming-38' | 'compact';
-export type QuickHardwareTier = 'standard' | 'soft-close' | 'blum';
+export type QuickFacadeTier =
+  | 'pvc-economy' | 'pvc-standard' | 'pvc-premium'
+  | 'pvc-16-cat1' | 'pvc-16-cat2' | 'pvc-19-cat1' | 'pvc-19-cat2' | 'pvc-22-cat1' | 'pvc-22-cat2'
+  | 'emal' | 'emal-matt-cat1' | 'emal-matt-cat2' | 'emal-gloss-cat1' | 'emal-gloss-cat2'
+  | 'plastic' | 'plastic-agt-rehau-cat1' | 'plastic-agt-rehau-cat2' | 'plastic-arpa-cat1' | 'plastic-fenix-cat1'
+  | 'tss';
+export type QuickWorktopTier =
+  | 'none' | 'postforming-26' | 'postforming-38' | 'compact'
+  | 'ms-26-cat1' | 'ms-26-cat2' | 'ms-38-cat1' | 'ms-38-cat2'
+  | 'souz-universal' | 'souz-premium' | 'slotex-e1' | 'arkobaleno-650';
+export type QuickHardwareTier = 'standard' | 'soft-close' | 'blum' | 'boyard-soft-close' | 'titus-soft-close' | 'blum-soft-close';
 
 export interface QuickEstimateInput {
   lowerLengthMm: number;
@@ -208,30 +216,118 @@ function pickTallBody(pricebook: Pricebook): PriceItem | null {
   });
 }
 
+function attrText(item: PriceItem, key: string): string {
+  return norm(`${item.attrs?.[key] ?? ''}`);
+}
+
+function tierIncludes(item: PriceItem, value: string): boolean {
+  const target = norm(value);
+  return norm(`${item.subcategory ?? ''} ${Object.values(item.attrs ?? {}).join(' ')} ${item.name}`).includes(target);
+}
+
 function pickFacade(pricebook: Pricebook, tier: QuickFacadeTier): PriceItem | null {
-  const category: Record<QuickFacadeTier, string> = {
-    'pvc-economy': 'Фасады: МДФ (ПВХ плёнка)',
-    'pvc-standard': 'Фасады: МДФ (ПВХ плёнка)',
-    'pvc-premium': 'Фасады: МДФ (ПВХ плёнка)',
-    emal: 'Фасады: Эмаль',
-    plastic: 'Фасады: Пластик (HPL)',
-    tss: 'Фасады: TSS плита',
+  const pvc = () => fixedItems(pricebook, (item) => item.category === 'Фасады: МДФ (ПВХ плёнка)' && item.priceBasis === 'm2');
+  const enamel = () => fixedItems(pricebook, (item) => item.category === 'Фасады: Эмаль' && item.priceBasis === 'm2');
+  const plastic = () => fixedItems(pricebook, (item) => item.category === 'Фасады: Пластик (HPL)' && item.priceBasis === 'm2');
+
+  const pickPvc = (thicknessMm: string, category: string, percentile = 0.35) => byPricePercentile(
+    pvc().filter((item) => attrText(item, 'толщина').includes(thicknessMm) && tierIncludes(item, category) && !norm(item.name).includes('патина')),
+    percentile,
+  );
+  const pickEnamel = (finish: 'матовая' | 'глянец', category: string) => byPricePercentile(
+    enamel().filter((item) => tierIncludes(item, category) && norm(item.name).includes(finish)),
+    finish === 'глянец' ? 0.35 : 0.25,
+  );
+  const pickPlastic = (brand: string | null, category: string, percentile = 0.35) => byPricePercentile(
+    plastic().filter((item) => {
+      const brandText = attrText(item, 'бренд');
+      const catText = attrText(item, 'категория');
+      return (!brand || brandText.includes(norm(brand))) && (catText.includes(norm(category)) || tierIncludes(item, category));
+    }),
+    percentile,
+  );
+
+  switch (tier) {
+    case 'pvc-16-cat1': return pickPvc('16', '1 категория', 0.25) ?? byPricePercentile(pvc(), 0.08);
+    case 'pvc-16-cat2': return pickPvc('16', '2 категория', 0.30) ?? byPricePercentile(pvc(), 0.22);
+    case 'pvc-19-cat1': return pickPvc('19', '1 категория', 0.25) ?? byPricePercentile(pvc(), 0.12);
+    case 'pvc-19-cat2': return pickPvc('19', '2 категория', 0.30) ?? byPricePercentile(pvc(), 0.28);
+    case 'pvc-22-cat1': return pickPvc('22', '1 категория', 0.25) ?? byPricePercentile(pvc(), 0.18);
+    case 'pvc-22-cat2': return pickPvc('22', '2 категория', 0.30) ?? byPricePercentile(pvc(), 0.34);
+    case 'emal-matt-cat1': return pickEnamel('матовая', 'фрезеровка 1 кат') ?? byPricePercentile(enamel(), 0.22);
+    case 'emal-matt-cat2': return pickEnamel('матовая', 'фрезеровка 2 кат') ?? byPricePercentile(enamel(), 0.32);
+    case 'emal-gloss-cat1': return pickEnamel('глянец', 'фрезеровка 1 кат') ?? byPricePercentile(enamel(), 0.45);
+    case 'emal-gloss-cat2': return pickEnamel('глянец', 'фрезеровка 2 кат') ?? byPricePercentile(enamel(), 0.55);
+    case 'plastic-agt-rehau-cat1': return pickPlastic('AGT', '1', 0.20) ?? pickPlastic(null, '1', 0.22) ?? byPricePercentile(plastic(), 0.25);
+    case 'plastic-agt-rehau-cat2': return pickPlastic('AGT', '2', 0.20) ?? pickPlastic(null, '2', 0.35) ?? byPricePercentile(plastic(), 0.40);
+    case 'plastic-arpa-cat1': return pickPlastic('ARPA', '1', 0.25) ?? pickPlastic('ABET', '1', 0.25) ?? byPricePercentile(plastic(), 0.30);
+    case 'plastic-fenix-cat1': return pickPlastic('FENIX', '1', 0.25) ?? byPricePercentile(plastic(), 0.70);
+    case 'pvc-economy': return byPricePercentile(pvc().filter((item) => !norm(`${item.attrs?.['категория'] ?? ''} ${item.name}`).includes('патина')), 0.08);
+    case 'pvc-standard': return byPricePercentile(pvc().filter((item) => !norm(`${item.attrs?.['категория'] ?? ''} ${item.name}`).includes('патина')), 0.36);
+    case 'pvc-premium': return byPricePercentile(pvc().filter((item) => !norm(`${item.attrs?.['категория'] ?? ''} ${item.name}`).includes('патина')), 0.72);
+    case 'emal': return byPricePercentile(enamel(), 0.28);
+    case 'plastic': return byPricePercentile(plastic(), 0.35);
+    case 'tss': return byPricePercentile(fixedItems(pricebook, (item) => item.category === 'Фасады: TSS плита' && item.priceBasis === 'm2'), 0.45);
+  }
+}
+
+function facadeTierLabel(tier: QuickFacadeTier): string {
+  const labels: Record<QuickFacadeTier, string> = {
+    'pvc-economy': 'ПВХ · эконом',
+    'pvc-standard': 'ПВХ · средняя категория',
+    'pvc-premium': 'ПВХ · высокая категория',
+    'pvc-16-cat1': 'ПВХ 16 мм · 1 категория',
+    'pvc-16-cat2': 'ПВХ 16 мм · 2 категория',
+    'pvc-19-cat1': 'ПВХ 19 мм · 1 категория',
+    'pvc-19-cat2': 'ПВХ 19 мм · 2 категория',
+    'pvc-22-cat1': 'ПВХ 22 мм · 1 категория',
+    'pvc-22-cat2': 'ПВХ 22 мм · 2 категория',
+    emal: 'Эмаль · базовая',
+    'emal-matt-cat1': 'Эмаль матовая · фрезеровка 1 кат',
+    'emal-matt-cat2': 'Эмаль матовая · фрезеровка 2 кат',
+    'emal-gloss-cat1': 'Эмаль глянец · фрезеровка 1 кат',
+    'emal-gloss-cat2': 'Эмаль глянец · фрезеровка 2 кат',
+    plastic: 'Пластик HPL · средний',
+    'plastic-agt-rehau-cat1': 'AGT / Rehau-кромка · 1 категория',
+    'plastic-agt-rehau-cat2': 'AGT / Rehau-кромка · 2 категория',
+    'plastic-arpa-cat1': 'ARPA/ABET пластик · 1 категория',
+    'plastic-fenix-cat1': 'FENIX пластик · 1 категория',
+    tss: 'TSS плита',
   };
-  const percentile: Record<QuickFacadeTier, number> = {
-    'pvc-economy': 0.08,
-    'pvc-standard': 0.36,
-    'pvc-premium': 0.72,
-    emal: 0.28,
-    plastic: 0.35,
-    tss: 0.45,
-  };
-  let items = fixedItems(pricebook, (item) => item.category === category[tier] && item.priceBasis === 'm2');
-  if (tier.startsWith('pvc')) items = items.filter((item) => !norm(`${item.attrs?.['категория'] ?? ''} ${item.name}`).includes('патина'));
-  return byPricePercentile(items, percentile[tier]);
+  return labels[tier];
 }
 
 function pickWorktop(pricebook: Pricebook, tier: QuickWorktopTier): PriceItem | null {
   if (tier === 'none') return null;
+  const byCat = (category: string) => fixedItems(pricebook, (item) => item.category === category && item.priceBasis === 'sheet');
+  const pickMir = (thickness: '26' | '38', category: string) => byPricePercentile(
+    byCat('Столешницы: Мир Столешниц (постформинг)').filter((item) =>
+      norm(item.name).includes('столешница')
+      && `${item.attrs?.['толщина'] ?? ''} ${item.name}`.includes(thickness)
+      && tierIncludes(item, category)),
+    0.25,
+  );
+  const pickSoyuz = (category: string) => byPricePercentile(
+    byCat('Столешницы: СОЮЗ (постформинг)').filter((item) =>
+      norm(item.name).includes('столешница')
+      && tierIncludes(item, category)
+      && /(?:600\*3000\*(?:26|38)|600\*3000)/.test(`${item.attrs?.['формат'] ?? ''} ${item.name}`)),
+    0.25,
+  );
+  if (tier === 'ms-26-cat1') return pickMir('26', '1 категория') ?? byPricePercentile(byCat('Столешницы: Мир Столешниц (постформинг)'), 0.15);
+  if (tier === 'ms-26-cat2') return pickMir('26', '2 категория') ?? byPricePercentile(byCat('Столешницы: Мир Столешниц (постформинг)'), 0.25);
+  if (tier === 'ms-38-cat1') return pickMir('38', '1 категория') ?? byPricePercentile(byCat('Столешницы: Мир Столешниц (постформинг)'), 0.25);
+  if (tier === 'ms-38-cat2') return pickMir('38', '2 категория') ?? byPricePercentile(byCat('Столешницы: Мир Столешниц (постформинг)'), 0.35);
+  if (tier === 'souz-universal') return pickSoyuz('Universal') ?? byPricePercentile(byCat('Столешницы: СОЮЗ (постформинг)'), 0.15);
+  if (tier === 'souz-premium') return pickSoyuz('Premium') ?? byPricePercentile(byCat('Столешницы: СОЮЗ (постформинг)'), 0.70);
+  if (tier === 'slotex-e1') return byPricePercentile(
+    byCat('Столешницы: компакт-плита Slotex').filter((item) => tierIncludes(item, 'E1') && /(?:650|600|1320)/.test(`${item.attrs?.['формат'] ?? ''} ${item.name}`)),
+    0.25,
+  ) ?? byPricePercentile(byCat('Столешницы: компакт-плита Slotex'), 0.25);
+  if (tier === 'arkobaleno-650') return byPricePercentile(
+    byCat('Столешницы: компакт-плита Arkobaleno').filter((item) => /650/.test(`${item.attrs?.['формат'] ?? ''} ${item.name}`)),
+    0.25,
+  ) ?? byPricePercentile(byCat('Столешницы: компакт-плита Arkobaleno'), 0.25);
   if (tier === 'compact') {
     const compact = fixedItems(pricebook, (item) => item.category.startsWith('Столешницы: компакт-плита')
       && item.priceBasis === 'sheet'
@@ -246,23 +342,59 @@ function pickWorktop(pricebook: Pricebook, tier: QuickWorktopTier): PriceItem | 
   return byPricePercentile(items, 0.35);
 }
 
+function isOverlayHingeName(nameRaw: string): boolean {
+  const name = norm(nameRaw);
+  return !name.includes('полунак')
+    && !name.includes('вклад')
+    && !name.includes('без пруж')
+    && !name.includes('гормош')
+    && !name.includes('огранич')
+    && !name.includes('толкател')
+    && !name.includes('45')
+    && !name.includes('30')
+    && !name.includes('155')
+    && !name.includes('165')
+    && !name.includes('170')
+    && !name.includes('180');
+}
+
 function pickHinge(pricebook: Pricebook, tier: QuickHardwareTier): PriceItem | null {
-  if (tier === 'blum') {
-    const blum = fixedItems(pricebook, (item) => item.category.includes('BLUM')
-      && item.subcategory === 'Петли Blum'
-      && norm(item.name).includes('clip top')
-      && norm(item.name).includes('дов')
-      && norm(item.name).includes('110'));
-    return byPricePercentile(blum, 0.35) ?? byPricePercentile(fixedItems(pricebook, (item) => item.category.includes('BLUM') && item.subcategory === 'Петли Blum'), 0.45);
+  const hinges = fixedItems(pricebook, (item) => item.category === 'Петли');
+  const blumExtra = fixedItems(pricebook, (item) => item.category.includes('BLUM') && item.subcategory === 'Петли Blum');
+  const boyardSoft = hinges.filter((item) => {
+    const name = norm(item.name);
+    return name.includes('боярд') && name.includes('дов') && isOverlayHingeName(item.name) && (name.includes('90') || name.includes('110'));
+  });
+  const titusSoft = hinges.filter((item) => {
+    const name = norm(item.name);
+    return name.includes('titus') && name.includes('110') && name.includes('дов') && isOverlayHingeName(item.name);
+  });
+  const blumSoft = [
+    ...hinges.filter((item) => {
+      const name = norm(item.name);
+      return name.includes('blum') && name.includes('110') && name.includes('дов') && isOverlayHingeName(item.name);
+    }),
+    ...blumExtra.filter((item) => {
+      const name = norm(item.name);
+      return name.includes('clip top') && name.includes('110') && name.includes('дов') && isOverlayHingeName(item.name);
+    }),
+  ];
+
+  if (tier === 'blum' || tier === 'blum-soft-close') {
+    return byPricePercentile(blumSoft, 0.35) ?? byPricePercentile(blumExtra, 0.45) ?? byPricePercentile(hinges.filter((item) => norm(item.name).includes('blum')), 0.45);
   }
-  const hinges = fixedItems(pricebook, (item) => item.category === 'Петли'
-    && norm(item.name).includes('боярд')
-    && norm(item.name).includes(tier === 'soft-close' ? 'дов' : '90'));
-  return byPricePercentile(hinges, tier === 'soft-close' ? 0.35 : 0.2) ?? byPricePercentile(fixedItems(pricebook, (item) => item.category === 'Петли'), 0.35);
+  if (tier === 'titus-soft-close') {
+    return byPricePercentile(titusSoft, 0.35) ?? byPricePercentile(hinges.filter((item) => norm(item.name).includes('titus') && norm(item.name).includes('дов')), 0.35);
+  }
+  if (tier === 'boyard-soft-close' || tier === 'soft-close') {
+    return byPricePercentile(boyardSoft, 0.35) ?? byPricePercentile(hinges.filter((item) => norm(item.name).includes('боярд') && norm(item.name).includes('дов')), 0.35);
+  }
+  const standard = hinges.filter((item) => norm(item.name).includes('боярд') && isOverlayHingeName(item.name) && norm(item.name).includes('90'));
+  return byPricePercentile(standard, 0.20) ?? byPricePercentile(hinges, 0.35);
 }
 
 function pickDrawer(pricebook: Pricebook, tier: QuickHardwareTier): PriceItem | null {
-  if (tier === 'blum') {
+  if (tier === 'blum' || tier === 'blum-soft-close') {
     const blum = fixedItems(pricebook, (item) => item.category.includes('BLUM')
       && item.subcategory === 'Ящики и направляющие Blum'
       && norm(item.name).includes('450')
@@ -271,9 +403,9 @@ function pickDrawer(pricebook: Pricebook, tier: QuickHardwareTier): PriceItem | 
   }
   const drawers = fixedItems(pricebook, (item) => item.category === 'Системы выдвижения'
     && norm(item.name).includes('боярд')
-    && (tier === 'soft-close' ? norm(item.name).includes('дов') : true)
+    && (tier === 'standard' ? true : norm(item.name).includes('дов'))
     && !norm(item.name).includes('т/б'));
-  return byPricePercentile(drawers, tier === 'soft-close' ? 0.35 : 0.15) ?? byPricePercentile(fixedItems(pricebook, (item) => item.category === 'Системы выдвижения'), 0.25);
+  return byPricePercentile(drawers, tier === 'standard' ? 0.15 : 0.35) ?? byPricePercentile(fixedItems(pricebook, (item) => item.category === 'Системы выдвижения'), 0.25);
 }
 
 function pickHandle(pricebook: Pricebook): PriceItem | null {
@@ -424,7 +556,7 @@ export function buildQuickEstimate(input: QuickEstimateInput, pricebook: Pricebo
 
   if (facadeAreaM2 > 0) {
     const facade = pickFacade(pricebook, input.facadeTier);
-    if (facade) result.lines.push(makeLine(pricebook, facade, 1, `фасады по подобранным корпусам: ${facadeAreaM2} м²`, { areaM2: facadeAreaM2 }));
+    if (facade) result.lines.push(makeLine(pricebook, facade, 1, `${facadeTierLabel(input.facadeTier)}: фасады по подобранным корпусам ${facadeAreaM2} м²`, { areaM2: facadeAreaM2 }));
     else result.missing.push('материал фасада');
   }
 
@@ -475,7 +607,7 @@ export function buildQuickEstimate(input: QuickEstimateInput, pricebook: Pricebo
   if (lowerLength > 0 && Math.abs(lowerPlannedLength - lowerLength) > 50) result.warnings.push(`Низ разложен стандартными корпусами на ${lowerPlannedLength} мм вместо ${lowerLength} мм.`);
   if (upperLength > 0 && Math.abs(upperPlannedLength - upperLength) > 50) result.warnings.push(`Верх разложен стандартными корпусами на ${upperPlannedLength} мм вместо ${upperLength} мм.`);
   if (result.missing.length > 0) result.warnings.push(`Не удалось подобрать из прайса: ${result.missing.join(', ')}.`);
-  if (input.facadeTier === 'emal' && facadeAreaM2 > 0 && facadeAreaM2 < 1) result.warnings.push('Для эмали меньше 1 м² движок применит правило +30% при включенной настройке.');
+  if ((input.facadeTier === 'emal' || input.facadeTier.startsWith('emal-')) && facadeAreaM2 > 0 && facadeAreaM2 < 1) result.warnings.push('Для эмали меньше 1 м² движок применит правило +30% при включенной настройке.');
   if (lowerModules + upperModules + tallCount === 0) result.warnings.push('Укажите длину низа/верха или пеналы — сейчас в оценке нет корпусов.');
 
   result.tolerancePct = clamp(

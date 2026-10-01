@@ -74,4 +74,15 @@ describe('экспресс-оценка кухни', () => {
     expect(estimate.lines.some((line) => line.category === 'Мойки')).toBe(true);
     expect(estimate.lines.some((line) => line.category === 'Смесители')).toBe(true);
   });
+
+  it('умеет считать расширенные пресеты фасадов и основные уровни петель', () => {
+    const rehau = buildQuickEstimate({ ...baseInput, facadeTier: 'plastic-agt-rehau-cat1', hardwareTier: 'titus-soft-close' }, pb);
+    expect(rehau.missing).toEqual([]);
+    expect(rehau.lines.some((line) => line.category === 'Фасады: Пластик (HPL)' && /AGT|пластик/i.test(line.name))).toBe(true);
+    expect(rehau.lines.some((line) => line.category === 'Петли' && /Titus/i.test(line.name) && /110/.test(line.name) && /дов/i.test(line.name))).toBe(true);
+
+    const premium = buildQuickEstimate({ ...baseInput, hardwareTier: 'blum-soft-close' }, pb);
+    expect(premium.lines.some((line) => (line.category.includes('BLUM') || /Blum|Блюм/i.test(line.name)) && /110/.test(line.name) && /дов/i.test(line.name))).toBe(true);
+  });
+
 });

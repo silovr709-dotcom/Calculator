@@ -501,13 +501,46 @@ function DocsTab(props: { articles: KbArticle[]; onChange: (a: KbArticle[]) => v
 
 // ------------------------------------------------------------ Разбивки цветов
 
-type ColorKind = 'ldspColors' | 'ldspThickness' | 'ldspEdges' | 'films' | 'plastics' | 'compactHpl';
+type ColorKind = 'ldspColors' | 'ldspThickness' | 'ldspEdges' | 'rehauEdges' | 'films' | 'plastics' | 'compactHpl';
 
-const COLOR_GROUP_ORDER: ColorKind[] = ['ldspColors', 'ldspThickness', 'ldspEdges', 'films', 'plastics', 'compactHpl'];
+const COLOR_GROUP_ORDER: ColorKind[] = ['ldspColors', 'ldspThickness', 'ldspEdges', 'rehauEdges', 'films', 'plastics', 'compactHpl'];
 
 type DictRow = Record<string, unknown>;
 
+function rehauEdgeRows(dicts: FactoryDicts): DictRow[] {
+  const fromLdsp = dicts.groups.ldspColors.items
+    .filter((item) => /рехау|rehau/i.test(item.edgingArticle ?? ''))
+    .map((item) => ({
+      article: item.article,
+      name: item.name,
+      brand: 'Rehau',
+      category: item.category,
+      edge: item.edgingArticle,
+      details: `ЛДСП ${item.brand}, формат ${item.format}; кромка из разбивки: ${item.edgingArticle}`,
+      sources: item.sources,
+    }));
+  return [
+    {
+      article: 'Rehau 1,3мм',
+      name: 'Кромка Rehau 1,3мм для пластиков/HPL',
+      brand: 'Rehau',
+      category: 'пластики/HPL · AGT/ARPA/FENIX/Rexay',
+      edge: 'Rehau 1,3мм',
+      details: 'Источник: !разбивка 2026 ARPA, FENIX, AGT, Rexay.xlsx · колонка «Кромка Rehau 1,3мм»',
+      sources: [{ file: '!разбивка 2026 ARPA, FENIX, AGT, Rexay.xlsx', sheet: 'AGT', row: 2 }],
+    },
+    ...fromLdsp,
+  ];
+}
+
 function colorGroup(dicts: FactoryDicts, kind: ColorKind): { label: string; legend?: Record<string, string>; items: DictRow[] } {
+  if (kind === 'rehauEdges') {
+    return {
+      label: 'Кромки Rehau',
+      legend: { 'Rehau 1,3мм': 'есть отдельной колонкой в разбивке пластиков/HPL', 'ЛДСП': 'отдельные цвета Увадрев имеют кромку Рехау в разбивке' },
+      items: rehauEdgeRows(dicts),
+    };
+  }
   const group = (dicts.groups as unknown as Record<string, { label: string; legend?: Record<string, string>; items: DictRow[] } | undefined>)[kind];
   return group ?? { label: kind, items: [] };
 }
@@ -538,6 +571,7 @@ function sourceText(row: DictRow) {
 function rowPrimary(row: DictRow, kind: ColorKind) {
   if (kind === 'films') return val(row, 'code') || '—';
   if (kind === 'compactHpl') return val(row, 'code') || '—';
+  if (kind === 'rehauEdges') return val(row, 'article') || val(row, 'edge') || 'Rehau';
   return val(row, 'article') || val(row, 'code') || '—';
 }
 
@@ -615,7 +649,7 @@ function ColorsTab(props: { dicts: FactoryDicts | null }) {
   const categories = useMemo(() => [...new Set(rows.map(rowCategory).filter(Boolean))].sort(), [rows]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase().replace(/ё/g, 'е');
+    const q = query.trim().toLowerCase().replace(/ё/g, 'е').replace(/rehau/g, 'рехау');
     return rows.filter((r) => {
       if (brand && val(r, 'brand') !== brand) return false;
       if (category && rowCategory(r) !== category) return false;
@@ -623,7 +657,8 @@ function ColorsTab(props: { dicts: FactoryDicts | null }) {
       const status = val(r, 'status');
       if (hideRetired && (status === 'снята' || status === 'выведена')) return false;
       if (!q) return true;
-      const hay = JSON.stringify(r).toLowerCase().replace(/ё/g, 'е');
+      const rawHay = JSON.stringify(r).toLowerCase().replace(/ё/g, 'е');
+      const hay = `${rawHay} ${rawHay.includes('рехау') ? 'rehau' : ''} ${rawHay.includes('rehau') ? 'рехау' : ''}`;
       return hay.includes(q);
     });
   }, [rows, query, brand, category, onlyTexture, hideRetired]);
@@ -639,7 +674,7 @@ function ColorsTab(props: { dicts: FactoryDicts | null }) {
       <div className="kb-source-summary card">
         <div>
           <b>Полная база разбивок</b>
-          <p className="muted small">Загружено {totalRows} строк из {d.sources?.length ?? 0} документов: ЛДСП, толщины, кромки, ПВХ-плёнки, пластики ARPA/ABET/AGT/Rexay/FENIX и компакт Slotex.</p>
+          <p className="muted small">Загружено {totalRows} строк из {d.sources?.length ?? 0} документов: ЛДСП, толщины, кромки, Rehau, ПВХ-плёнки, пластики ARPA/ABET/AGT/Rexay/FENIX и компакт Slotex.</p>
         </div>
         <span>{filtered.length} показано</span>
       </div>

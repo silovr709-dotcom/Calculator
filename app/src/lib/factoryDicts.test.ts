@@ -36,6 +36,8 @@ describe('справочники разбивок Висма', () => {
     expect(facadeGroups.some((group) => group.title.includes('Пластики') && group.items.some((item) => item.value.includes('Пластик')))).toBe(true);
     const rehauEdges = factoryDictSuggestionGroups('facadeEdging', dicts, 'rehau', 8, 20);
     expect(rehauEdges.some((group) => group.title.includes('Rehau'))).toBe(true);
+    expect(dictSuggestions('facadeEdging', dicts, 40)[0]).toContain('Rehau');
+    expect(dictSuggestions('bodyEdging', dicts, 40)[0]).toContain('Rehau');
     expect(dictSuggestions('facadeColor', dicts, 40).some((item) => item.includes('Пластик'))).toBe(true);
   });
 
