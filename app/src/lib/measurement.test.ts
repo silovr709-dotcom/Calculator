@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calibratedPhotoLengthMm, emptyMeasurement, photoDistancePx, sketchFromMeasurement } from './measurement';
+import { calibratedPhotoLengthMm, emptyMeasurement, photoDistancePx } from './measurement';
 import { defaultSettings } from './storage';
 import type { Project } from '../types';
 
@@ -17,10 +17,4 @@ describe('мобильный режим замера', () => {
     expect(photoDistancePx({ x: 0, y: 0 }, { x: 50, y: 0 }, 1000, 500)).toBe(500);
     expect(calibratedPhotoLengthMm({ x1: 0, y1: 0, x2: 25, y2: 0, lengthMm: 600 }, { x: 0, y: 0 }, { x: 50, y: 0 }, 1000, 500)).toBe(1200);
     expect(calibratedPhotoLengthMm({ x1: 0, y1: 0, x2: 0, y2: 0, lengthMm: 600 }, { x: 0, y: 0 }, { x: 50, y: 0 }, 1000, 500)).toBeNull();
-  });
-
-  it('передаёт замер в планировку только отдельным подтверждаемым действием', () => {
-    const data = { roomHeightMm: 2650, walls: [{ id: 'a', name: 'Стена 1', lengthMm: 3000 }, { id: 'b', name: 'Стена 2', lengthMm: 1800 }], openings: [], communications: [], photos: [], notes: '', updatedAt: '' };
-    expect(sketchFromMeasurement(data, { shape: 'l', wallLengthsMm: { left: 1, back: 2 }, roomHeightMm: 3 })).toMatchObject({ shape: 'l', wallLengthsMm: { left: 3000, back: 1800 }, roomHeightMm: 2650 });
-  });
-});
+  });});

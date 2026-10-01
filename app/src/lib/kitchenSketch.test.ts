@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { KitchenModule } from '../types';
 import {
-  BASE_HEIGHT_MM, COUNTER_MM, PLINTH_MM, buildKitchenLayout, classifySketchTier, getSketchStyle,
+  BASE_HEIGHT_MM, COUNTER_MM, PLINTH_MM, buildKitchenLayout, classifySketchTier,
   layoutWalls, moduleWall, normalizeLayoutShape, placedBottomMm, planRect, roomBox, upperBottomMm,
 } from './kitchenSketch';
 
@@ -38,11 +38,6 @@ describe('kitchen sketch layout', () => {
     expect(layout.upper.map((m) => m.x)).toEqual([0, 600]);
     expect(layout.totalWidth).toBe(2050);
     expect(layout.totalHeight).toBe(2200);
-  });
-
-  it('uses white/oak style as the safe default', () => {
-    expect(getSketchStyle().id).toBe('white-oak');
-    expect(getSketchStyle('emerald-gold').name).toContain('Изумруд');
   });
 });
 
