@@ -1,10 +1,20 @@
-import type { EskizCommunicationDistance, EskizCommunicationMarker } from '../types';
+import type { EskizCommunicationDistance, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from './eskizPro';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationColor, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale } from './eskizCommunications';
 
 export type EskizSketchModuleMarkerMode = 'full' | 'compact' | 'hidden';
 
-export interface EskizSketchSvgOptions {
+const DEFAULT_LAYER_VISIBILITY: EskizLayerVisibility = {
+  dimensions: true,
+  modules: true,
+  communications: true,
+  callouts: true,
+  comments: true,
+  equipment: true,
+  links: true,
+};
+
+export interface EskizSketchSvgOptions extends EskizExportViewSettings {
   moduleMarkerMode?: EskizSketchModuleMarkerMode;
   communications?: EskizCommunicationMarker[];
   /** false — не выводить рядом с коммуникациями плашки их габаритов/высот. Линии расстояний остаются. */
@@ -287,13 +297,51 @@ function renderCommunication(marker: EskizCommunicationMarker, width: number, he
   </g>`;
 }
 
-function renderObject(object: EskizObject, markerMode: EskizSketchModuleMarkerMode) {
-  if (object.hidden) return '';
+function objectLayerKey(object: EskizObject): EskizLayerKey | 'helpers' {
+  if (object.type === 'dimension') return 'dimensions';
+  if (object.type === 'module') return 'modules';
+  if (object.type === 'callout') return 'callouts';
+  if (object.type === 'comment') return 'comments';
+  if (object.type === 'equipment') return 'equipment';
+  if (object.type === 'link') return 'links';
+  return 'helpers';
+}
+
+function mergedLayerVisibility(options: EskizSketchSvgOptions): EskizLayerVisibility {
+  return { ...DEFAULT_LAYER_VISIBILITY, ...(options.layerVisibility ?? {}) };
+}
+
+function objectVisibleInExport(object: EskizObject, options: EskizSketchSvgOptions, layers: EskizLayerVisibility) {
+  if (object.hidden) return false;
+  const layer = objectLayerKey(object);
+  if (layer === 'helpers') return options.showHelpers !== false;
+  return options.showAnnotations !== false && layers[layer] !== false;
+}
+
+function renderHelper(object: EskizObject, width: number, height: number) {
+  if (object.type === 'anchor') {
+    return `<g transform="translate(${object.x} ${object.y})" opacity="0.88">
+      <circle r="9" fill="#ffffff" fill-opacity="0.85" stroke="${xml(object.color)}" stroke-width="2" />
+      <path d="M -14 0 H 14 M 0 -14 V 14" stroke="${xml(object.color)}" stroke-width="1.5" />
+      <text x="12" y="-11" font-family="Inter, Arial, sans-serif" font-size="${object.fontSize}" font-weight="800" fill="${xml(object.color)}" stroke="#ffffff" stroke-width="3" paint-order="stroke">${xml(object.label)}</text>
+    </g>`;
+  }
+  if (object.type === 'guide') {
+    const guideLine = object.orientation === 'horizontal'
+      ? `<line x1="0" y1="${object.y}" x2="${width}" y2="${object.y}" stroke="${xml(object.color)}" stroke-width="1.5" stroke-dasharray="8 6" />`
+      : `<line x1="${object.x}" y1="0" x2="${object.x}" y2="${height}" stroke="${xml(object.color)}" stroke-width="1.5" stroke-dasharray="8 6" />`;
+    return `<g opacity="0.75">${guideLine}</g>`;
+  }
+  return '';
+}
+
+function renderObject(object: EskizObject, markerMode: EskizSketchModuleMarkerMode, options: EskizSketchSvgOptions, layers: EskizLayerVisibility, width: number, height: number) {
+  if (!objectVisibleInExport(object, options, layers)) return '';
   if (object.type === 'dimension') return renderDimension(object);
   if (object.type === 'module') return renderModule(object, markerMode);
   if (object.type === 'callout') return renderCallout(object);
   if (object.type === 'comment' || object.type === 'link' || object.type === 'equipment') return renderTextObject(object);
-  return '';
+  return renderHelper(object, width, height);
 }
 
 /** Строит автономный SVG snapshot Эскиз PRO: фон, размеры, сноски, модули и коммуникации. */
@@ -302,7 +350,10 @@ export function buildEskizSketchSvg(project: EskizProject, options: EskizSketchS
   const height = Math.max(1, project.image.height);
   const markerMode = options.moduleMarkerMode ?? 'compact';
   const showCommunicationSizeBadges = options.showCommunicationSizeBadges !== false;
-  const communications = (options.communications ?? []).filter((marker) => marker.eskizId === project.id);
+  const layers = mergedLayerVisibility(options);
+  const showAnnotations = options.showAnnotations !== false;
+  const showCommunications = showAnnotations && layers.communications !== false;
+  const communications = showCommunications ? (options.communications ?? []).filter((marker) => marker.eskizId === project.id) : [];
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
     <defs>
       <marker id="eskizFactoryDimArrow" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto-start-reverse">
@@ -324,8 +375,8 @@ export function buildEskizSketchSvg(project: EskizProject, options: EskizSketchS
       </style>
     </defs>
     <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff" />
-    <image href="${xml(project.image.dataUrl)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="none"${imageFilter(project)} />
-    ${project.objects.map((object) => renderObject(object, markerMode)).join('\n')}
+    ${options.showImage === false ? '' : `<image href="${xml(project.image.dataUrl)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="none"${imageFilter(project)} />`}
+    ${project.objects.map((object) => renderObject(object, markerMode, options, layers, width, height)).join('\n')}
     ${communications.map((marker) => renderCommunication(marker, width, height, showCommunicationSizeBadges)).join('\n')}
   </svg>`;
 }

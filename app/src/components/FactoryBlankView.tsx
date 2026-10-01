@@ -336,6 +336,7 @@ export default function FactoryBlankView(props: {
         ? await renderEskizSketchPng(selectedSketch, {
           widthPx: sketchSize.width,
           heightPx: sketchSize.height,
+          ...(project.eskizPro?.exportView ?? {}),
           frame: 'none',
           moduleMarkerMode: sketchMarkerMode,
           communications: showSketchCommunications ? (project.eskizPro?.communications ?? []) : [],
@@ -349,6 +350,7 @@ export default function FactoryBlankView(props: {
         ? await renderEskizSketchPng(selectedSketch, {
           widthPx: techSketchSize.width,
           heightPx: techSketchSize.height,
+          ...(project.eskizPro?.exportView ?? {}),
           frame: 'none',
           moduleMarkerMode: sketchMarkerMode,
           communications: showSketchCommunications ? (project.eskizPro?.communications ?? []) : [],

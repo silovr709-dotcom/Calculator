@@ -353,6 +353,20 @@ export interface EskizCommunicationMarker {
   updatedAt?: string;
 }
 
+export type EskizLayerKey = 'dimensions' | 'modules' | 'communications' | 'callouts' | 'comments' | 'equipment' | 'links';
+export type EskizLayerVisibility = Record<EskizLayerKey, boolean>;
+
+export interface EskizExportViewSettings {
+  /** false — не выводить фон/скрин проекта в PNG/PDF экспорте Эскиз PRO. */
+  showImage?: boolean;
+  /** false — скрыть все рабочие пометки в PNG/PDF экспорте Эскиз PRO. */
+  showAnnotations?: boolean;
+  /** false — скрыть вспомогательные точки/направляющие в редакторе и экспорте, когда они поддерживаются. */
+  showHelpers?: boolean;
+  /** Видимость отдельных слоёв: размеры, модули, коммуникации, сноски, комментарии, техника, ссылки. */
+  layerVisibility?: Partial<EskizLayerVisibility>;
+}
+
 export interface EskizProIntegration {
   linkedProjectIds?: string[];
   activeProjectId?: string | null;
@@ -364,6 +378,8 @@ export interface EskizProIntegration {
   moduleMarkerMode?: 'full' | 'compact' | 'hidden';
   /** false — скрыть плашки габаритов/высот рядом со всеми коммуникациями в редакторе, КП и экспортах. */
   showCommunicationSizeBadges?: boolean;
+  /** Текущее состояние слоёв/фона Эскиз PRO; экспорт PNG/PDF повторяет то, что скрыто в редакторе. */
+  exportView?: EskizExportViewSettings;
   /** Связка: ключ маркера Эскиз PRO (`eskizId:objectId`) → id KitchenModule в расчёте. */
   moduleBindings?: Record<string, string>;
   /** Коммуникации, нанесённые поверх snapshot: розетки, вода, канализация, газ, вентиляция и расстояния до точек. */

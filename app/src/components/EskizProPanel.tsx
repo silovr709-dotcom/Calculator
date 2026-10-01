@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizProIntegration, ExtraFacadePart, FacadePart, KitchenModule, Pricebook, PriceItem, Project, SlotKey } from '../types';
+import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizExportViewSettings, EskizProIntegration, ExtraFacadePart, FacadePart, KitchenModule, Pricebook, PriceItem, Project, SlotKey } from '../types';
 import {
   collectEskizModuleMarkers,
   downloadEskizFile,
@@ -526,6 +526,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const moduleBindings = eskizPro.moduleBindings ?? EMPTY_BINDINGS;
   const communications = eskizPro.communications ?? EMPTY_COMMUNICATIONS;
   const showCommunicationSizeBadges = eskizPro.showCommunicationSizeBadges !== false;
+  const exportViewSettings = eskizPro.exportView ?? {};
   const linkedModuleCount = moduleMarkers.filter((marker) => Boolean(moduleBindings[marker.key])).length;
   const activeMarker = moduleMarkers.find((marker) => marker.key === activeMarkerKey) ?? null;
   const activeModuleId = activeMarker ? moduleBindings[activeMarker.key] : null;
@@ -627,7 +628,10 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     setMessage(`Файл «${activePreviewProject.title}.eskiz» экспортирован. Его можно импортировать обратно через «Импорт .eskiz».`);
   };
 
-  const sketchExportOptions = (eskizProject: EskizProject) => ({
+  const sketchExportOptions = (eskizProject: EskizProject, viewOverride?: EskizExportViewSettings) => ({
+    ...exportViewSettings,
+    ...(viewOverride ?? {}),
+    layerVisibility: { ...(exportViewSettings.layerVisibility ?? {}), ...(viewOverride?.layerVisibility ?? {}) },
     moduleMarkerMode,
     communications,
     showCommunicationSizeBadges,
@@ -635,7 +639,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     subtitle: `${project.name}${project.client ? ` · ${project.client}` : ''} · ${eskizProject.title}`,
   });
 
-  const exportEskizAs = async (format: 'png' | 'pdf', eskizProject = activePreviewProject) => {
+  const exportEskizAs = async (format: 'png' | 'pdf', eskizProject = activePreviewProject, viewOverride?: EskizExportViewSettings) => {
     if (!eskizProject) {
       setMessage('Сначала загрузите или создайте эскиз в Эскиз PRO.');
       return;
@@ -644,11 +648,11 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     setMessage(format === 'png' ? 'Готовлю картинку Эскиз PRO…' : 'Готовлю PDF Эскиз PRO…');
     try {
       if (format === 'png') {
-        await downloadEskizSketchPng(eskizProject, sketchExportOptions(eskizProject));
-        setMessage(`Картинка PNG «${eskizProject.title}» экспортирована. Настройки скрытия размеров коммуникаций сохранены.`);
+        await downloadEskizSketchPng(eskizProject, sketchExportOptions(eskizProject, viewOverride));
+        setMessage(`Картинка PNG «${eskizProject.title}» экспортирована. Скрытые слои Эскиз PRO не попали в экспорт.`);
       } else {
-        await downloadEskizSketchPdf(eskizProject, sketchExportOptions(eskizProject));
-        setMessage(`PDF «${eskizProject.title}» экспортирован. Настройки скрытия размеров коммуникаций сохранены.`);
+        await downloadEskizSketchPdf(eskizProject, sketchExportOptions(eskizProject, viewOverride));
+        setMessage(`PDF «${eskizProject.title}» экспортирован. Скрытые слои Эскиз PRO не попали в экспорт.`);
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Не удалось экспортировать Эскиз PRO');
@@ -907,6 +911,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             communications={communications}
             moduleSummaries={moduleSummaries}
             showCommunicationSizeBadges={showCommunicationSizeBadges}
+            exportViewSettings={exportViewSettings}
             activeCommunicationId={activeCommunicationId}
             communicationAddKind={communicationAddKind}
             pickingDistancePoint={Boolean(distancePointPick)}
@@ -914,8 +919,9 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             onProjectChange={saveEmbeddedProject}
             onProjectImport={saveEmbeddedProject}
             onShowCommunicationSizeBadgesChange={(value) => updateEskizPro({ showCommunicationSizeBadges: value })}
-            onExportImage={(eskizProject) => void exportEskizAs('png', eskizProject)}
-            onExportPdf={(eskizProject) => void exportEskizAs('pdf', eskizProject)}
+            onExportViewSettingsChange={(settings) => updateEskizPro({ exportView: settings })}
+            onExportImage={(eskizProject, settings) => void exportEskizAs('png', eskizProject, settings)}
+            onExportPdf={(eskizProject, settings) => void exportEskizAs('pdf', eskizProject, settings)}
             exportBusy={exportingSketch !== null}
             onModuleObjectClick={handlePreviewModuleClick}
             onStartCommunicationPlacement={startCommunicationPlacement}

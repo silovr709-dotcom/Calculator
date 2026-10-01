@@ -14,6 +14,8 @@ const project: EskizProject = {
     { id: 'd1', type: 'dimension', x: 10, y: 20, x2: 210, y2: 20, orientation: 'horizontal', value: '2000', color: '#111827', fontSize: 14, lineWidth: 2 },
     { id: 'm1', type: 'module', x: 120, y: 160, number: 'М1', description: 'Низ 600', color: '#7c3aed', fontSize: 12 },
     { id: 'c1', type: 'comment', x: 40, y: 80, text: 'Важно', color: '#b45309', fontSize: 12 },
+    { id: 'a1', type: 'anchor', x: 70, y: 90, label: 'Точка А', color: '#0f766e', fontSize: 12 },
+    { id: 'g1', type: 'guide', x: 180, y: 140, orientation: 'vertical', color: '#64748b', fontSize: 12 },
   ],
   header: { enabled: true, project: 'Кухня Иванов', room: 'Кухня', date: '01.10.2026', variant: 'A' },
   integration: {},
@@ -47,6 +49,40 @@ describe('buildEskizSketchSvg', () => {
     const svg = buildEskizSketchSvg(project, { moduleMarkerMode: 'hidden' });
     expect(svg).not.toContain('Низ 600');
     expect(svg).toContain('2000 мм');
+  });
+
+  it('уважает скрытие отдельных слоёв редактора при SVG/PNG/PDF-рендеринге', () => {
+    const svg = buildEskizSketchSvg(project, {
+      communications: [communication],
+      layerVisibility: { dimensions: false, modules: false, comments: false, communications: false },
+    });
+    expect(svg).not.toContain('2000 мм');
+    expect(svg).not.toContain('Низ 600');
+    expect(svg).not.toContain('Важно');
+    expect(svg).not.toContain('Розетка ПММ');
+    expect(svg).toContain('Точка А');
+  });
+
+  it('уважает скрытие всех пометок, вспомогательных объектов и фонового изображения', () => {
+    const svg = buildEskizSketchSvg(project, {
+      communications: [communication],
+      showImage: false,
+      showAnnotations: false,
+      showHelpers: false,
+    });
+    expect(svg).not.toContain('data:image/png;base64,AAA=');
+    expect(svg).not.toContain('2000 мм');
+    expect(svg).not.toContain('Низ 600');
+    expect(svg).not.toContain('Важно');
+    expect(svg).not.toContain('Розетка ПММ');
+    expect(svg).not.toContain('Точка А');
+    expect(svg).not.toContain('stroke-dasharray="8 6"');
+  });
+
+  it('оставляет объект скрытым персональным переключателем даже при включённом слое', () => {
+    const svg = buildEskizSketchSvg({ ...project, objects: project.objects.map((object) => object.id === 'd1' ? { ...object, hidden: true } : object) }, { layerVisibility: { dimensions: true } });
+    expect(svg).not.toContain('2000 мм');
+    expect(svg).toContain('Низ 600');
   });
 
   it('не выводит рядом с коммуникацией плашку габарита, если она скрыта у маркера', () => {
