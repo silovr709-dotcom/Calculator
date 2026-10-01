@@ -115,6 +115,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const eskizClientMode = project.eskizPro?.clientMode ?? 'active';
   const linkedEskizProjects = eskizClientMode === 'all' ? allLinkedEskizProjects : (activeEskizProject ? [activeEskizProject] : allLinkedEskizProjects.slice(0, 1));
   const clientSketchVisible = linkedEskizProjects.length > 0 && project.eskizPro?.showInClient !== false;
+  const showCommunicationSizeBadges = project.eskizPro?.showCommunicationSizeBadges !== false;
   const newestEskiz = allLinkedEskizProjects.reduce<NonNullable<typeof activeEskizProject> | null>((latest, item) => (!latest || item.updatedAt > latest.updatedAt ? item : latest), null);
   const eskizModuleIds = new Set(Object.values(project.eskizPro?.moduleBindings ?? {}));
   const eskizModules = (project.modules ?? []).filter((module) => eskizModuleIds.has(module.id));
@@ -236,7 +237,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         {clientSketchVisible && (
           <section className="cd-sketch-pro">
             <div className="cd-section-head"><h3>Эскиз PRO</h3><span>{isTechnical ? 'внешний эскиз со скрином проекта и размерными аннотациями' : 'схема из внешнего Эскиз PRO'}</span></div>
-            {linkedEskizProjects.map((eskiz) => <EskizProjectPreview key={eskiz.id} project={eskiz} compact={!isTechnical} moduleMarkerMode={project.eskizPro?.moduleMarkerMode ?? 'full'} communicationMarkers={(project.eskizPro?.communications ?? []).filter((marker) => marker.showInClient !== false)} />)}
+            {linkedEskizProjects.map((eskiz) => <EskizProjectPreview key={eskiz.id} project={eskiz} compact={!isTechnical} moduleMarkerMode={project.eskizPro?.moduleMarkerMode ?? 'full'} communicationMarkers={(project.eskizPro?.communications ?? []).filter((marker) => marker.showInClient !== false)} showCommunicationSizeBadges={showCommunicationSizeBadges} />)}
             {eskizModules.length > 0 && (
               <div className="cd-eskiz-modules">
                 <b>Модули, добавленные с эскиза</b>

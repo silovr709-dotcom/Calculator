@@ -1,4 +1,4 @@
-import type { EskizProSnapshot, KitchenModule, Project } from '../types';
+import type { EskizCommunicationMarker, EskizProSnapshot, KitchenModule, Project } from '../types';
 import { newModule } from './modules';
 
 export type EskizPoint = { x: number; y: number };
@@ -58,6 +58,19 @@ export interface EskizProject {
   integration: { projectId?: string; clientId?: string };
 }
 
+export interface EskizFileBundle {
+  project: EskizProject;
+  communications: EskizCommunicationMarker[];
+}
+
+export interface EskizFilePayload {
+  format: 'recept-eskiz';
+  version: 1;
+  exportedAt: string;
+  project: EskizProject;
+  communications?: EskizCommunicationMarker[];
+}
+
 export interface EskizModuleMarker {
   key: string;
   eskizId: string;
@@ -105,7 +118,44 @@ export function upsertEskizSnapshot(snapshots: EskizProSnapshot[] | undefined, p
   return [snapshotFromEskizProject(project), ...next].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-export async function readEskizFile(file: File): Promise<EskizProject> {
+export function eskizFilePayload(project: EskizProject, communications: EskizCommunicationMarker[] = []): EskizFilePayload {
+  const projectCommunications = communications.filter((marker) => marker.eskizId === project.id);
+  return {
+    format: 'recept-eskiz',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    project,
+    ...(projectCommunications.length > 0 ? { communications: projectCommunications } : {}),
+  };
+}
+
+function safeFilePart(value: string): string {
+  return (value || 'eskiz')
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80) || 'eskiz';
+}
+
+export function eskizFileName(project: EskizProject): string {
+  return `${safeFilePart(project.title || project.image.name)}.eskiz`;
+}
+
+export function downloadEskizFile(project: EskizProject, communications: EskizCommunicationMarker[] = []): void {
+  const payload = JSON.stringify(eskizFilePayload(project, communications), null, 2);
+  const blob = new Blob([payload], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = eskizFileName(project);
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+export async function readEskizFileBundle(file: File): Promise<EskizFileBundle> {
   if (!file.name.toLowerCase().endsWith('.eskiz') && file.type && !file.type.includes('json')) throw new Error('Выберите файл проекта .eskiz');
   let parsed: unknown;
   try {
@@ -113,9 +163,17 @@ export async function readEskizFile(file: File): Promise<EskizProject> {
   } catch {
     throw new Error('Файл .eskiz повреждён или имеет неверный формат');
   }
-  const payload = parsed as { format?: string; project?: unknown };
-  if (payload.format !== 'recept-eskiz' || !isEskizProject(payload.project)) throw new Error('Это не проект Эскиз PRO или его версия не поддерживается');
-  return payload.project;
+  const payload = parsed as { format?: string; project?: unknown; communications?: unknown };
+  const importedProject = payload.project;
+  if (payload.format !== 'recept-eskiz' || !isEskizProject(importedProject)) throw new Error('Это не проект Эскиз PRO или его версия не поддерживается');
+  const communications = Array.isArray(payload.communications)
+    ? payload.communications.filter((marker): marker is EskizCommunicationMarker => isEskizCommunicationMarker(marker, importedProject.id))
+    : [];
+  return { project: importedProject, communications };
+}
+
+export async function readEskizFile(file: File): Promise<EskizProject> {
+  return (await readEskizFileBundle(file)).project;
 }
 
 export function isEskizProject(value: unknown): value is EskizProject {
@@ -132,6 +190,19 @@ export function isEskizProject(value: unknown): value is EskizProject {
     && typeof project.image?.height === 'number'
     && Array.isArray(project.objects)
     && Boolean(project.header);
+}
+
+export function isEskizCommunicationMarker(value: unknown, eskizId?: string): value is EskizCommunicationMarker {
+  if (!value || typeof value !== 'object') return false;
+  const marker = value as Partial<EskizCommunicationMarker>;
+  return typeof marker.id === 'string'
+    && typeof marker.eskizId === 'string'
+    && (!eskizId || marker.eskizId === eskizId)
+    && typeof marker.kind === 'string'
+    && typeof marker.name === 'string'
+    && typeof marker.x === 'number'
+    && typeof marker.y === 'number'
+    && typeof marker.createdAt === 'string';
 }
 
 const normalizeText = (value: string) => value.toLocaleLowerCase('ru').replace(/ё/g, 'е');

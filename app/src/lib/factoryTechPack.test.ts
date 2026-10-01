@@ -111,6 +111,13 @@ describe('factoryTechPack', () => {
     expect(rows[0].distances).toContain('320 мм');
   });
 
+  it('скрывает габариты коммуникаций в техлисте, если плашка размера отключена', () => {
+    const hiddenProject = { ...project, eskizPro: { ...project.eskizPro, communications: project.eskizPro?.communications?.map((marker) => ({ ...marker, showSizeBadge: false })) } };
+    const rows = buildFactoryTechCommunicationRows(hiddenProject, eskiz);
+    expect(rows[0].size).toBe('скрыто на эскизе');
+    expect(rows[0].distances).toContain('320 мм');
+  });
+
   it('собирает ошибки готовности для фабрики', () => {
     const rows = buildFactoryTechReadinessRows({ project, pricebook, eskizProject: eskiz, blankIssues: [] });
     expect(rows.some((row) => row.level === 'error' && row.text.includes('М2'))).toBe(true);

@@ -143,10 +143,11 @@ export default function FactoryBlankView(props: {
   const sketchEnabled = sketchSettings.enabled ?? (eskizSnapshots.length > 0);
   const sketchMarkerMode: EskizSketchModuleMarkerMode = sketchSettings.moduleMarkerMode ?? project.eskizPro?.moduleMarkerMode ?? 'compact';
   const showSketchCommunications = sketchSettings.showCommunications ?? true;
+  const showSketchCommunicationSizeBadges = project.eskizPro?.showCommunicationSizeBadges !== false && sketchSettings.showCommunicationSizeBadges !== false;
   const includeTechSheet = sketchSettings.includeTechSheet ?? true;
   const canInsertSketch = Boolean(sheetMap?.sketch && selectedSketch && sketchEnabled);
   const techModuleRows = buildFactoryTechModuleRows(project, pricebook, selectedSketch);
-  const techCommunicationRows = showSketchCommunications ? buildFactoryTechCommunicationRows(project, selectedSketch) : [];
+  const techCommunicationRows = showSketchCommunications ? buildFactoryTechCommunicationRows(project, selectedSketch, showSketchCommunicationSizeBadges) : [];
   const techReadinessRows = buildFactoryTechReadinessRows({ project, pricebook, eskizProject: selectedSketch, blankIssues: issues, includeCommunications: showSketchCommunications });
   const techSummary = factoryTechReadinessSummary(techReadinessRows);
   const issueKeys = new Set(issues.map((i) => i.fieldKey));
@@ -169,6 +170,7 @@ export default function FactoryBlankView(props: {
           heightPx: sheetMap.sketch.targetPx.height,
           moduleMarkerMode: sketchMarkerMode,
           communications: showSketchCommunications ? (project.eskizPro?.communications ?? []) : [],
+          showCommunicationSizeBadges: showSketchCommunicationSizeBadges,
           title: 'Эскиз PRO для фабрики',
           subtitle: `${selectedSketch.title} · ${selectedSketch.image.name}`,
         })
@@ -179,6 +181,7 @@ export default function FactoryBlankView(props: {
           heightPx: 900,
           moduleMarkerMode: sketchMarkerMode,
           communications: showSketchCommunications ? (project.eskizPro?.communications ?? []) : [],
+          showCommunicationSizeBadges: showSketchCommunicationSizeBadges,
           title: 'Эскиз PRO — технический лист',
           subtitle: `${project.name}${project.client ? ` · ${project.client}` : ''}`,
         })
@@ -292,6 +295,7 @@ export default function FactoryBlankView(props: {
                   </select>
                 </label>
                 <label className="toggle"><input type="checkbox" checked={showSketchCommunications} onChange={(e) => updateSketchSettings({ showCommunications: e.target.checked })} /> коммуникации и расстояния</label>
+                <label className="toggle"><input type="checkbox" checked={showSketchCommunicationSizeBadges} disabled={!sketchEnabled || !showSketchCommunications || project.eskizPro?.showCommunicationSizeBadges === false} onChange={(e) => updateSketchSettings({ showCommunicationSizeBadges: e.target.checked })} /> габариты/высоты рядом с коммуникациями</label>
                 <label className="toggle"><input type="checkbox" checked={includeTechSheet} onChange={(e) => updateSketchSettings({ includeTechSheet: e.target.checked })} /> отдельный лист «Эскиз PRO + расшифровка»</label>
               </div>
             )}
@@ -309,6 +313,7 @@ export default function FactoryBlankView(props: {
                 compact
                 moduleMarkerMode={sketchMarkerMode}
                 communicationMarkers={showSketchCommunications ? (project.eskizPro?.communications ?? []) : []}
+                showCommunicationSizeBadges={showSketchCommunicationSizeBadges}
               />
             </div>
           ) : (
@@ -325,7 +330,7 @@ export default function FactoryBlankView(props: {
             <label className="toggle"><input type="checkbox" checked={includeTechSheet} onChange={(e) => updateSketchSettings({ includeTechSheet: e.target.checked })} /> добавить отдельный лист «Эскиз PRO + расшифровка»</label>
             {includeTechSheet && <div className={`blank-tech-summary ${techSummary.errors > 0 ? 'bad' : techSummary.warnings > 0 ? 'warn' : 'ok'}`}><b>{techSummary.errors > 0 ? 'Нужна проверка перед фабрикой' : techSummary.warnings > 0 ? 'Есть предупреждения' : 'Техлист готов'}</b><span>{techSummary.errors} ошибок · {techSummary.warnings} предупреждений · {techModuleRows.length} строк модулей · {techCommunicationRows.length} коммуникаций</span></div>}
           </div>
-          {selectedSketch && includeTechSheet && <div className="blank-sketch-preview"><EskizProjectPreview project={selectedSketch} compact moduleMarkerMode={sketchMarkerMode} communicationMarkers={showSketchCommunications ? (project.eskizPro?.communications ?? []) : []} /></div>}
+          {selectedSketch && includeTechSheet && <div className="blank-sketch-preview"><EskizProjectPreview project={selectedSketch} compact moduleMarkerMode={sketchMarkerMode} communicationMarkers={showSketchCommunications ? (project.eskizPro?.communications ?? []) : []} showCommunicationSizeBadges={showSketchCommunicationSizeBadges} /></div>}
         </div>
       )}
 

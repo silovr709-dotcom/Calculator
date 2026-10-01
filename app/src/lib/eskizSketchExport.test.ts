@@ -48,4 +48,19 @@ describe('buildEskizSketchSvg', () => {
     expect(svg).not.toContain('Низ 600');
     expect(svg).toContain('2000 мм');
   });
+
+  it('не выводит рядом с коммуникацией плашку габарита, если она скрыта у маркера', () => {
+    const svg = buildEskizSketchSvg(project, { communications: [{ ...communication, showSizeBadge: false }] });
+    expect(svg).not.toContain('70×70 мм');
+    expect(svg).not.toMatch(/<text[^>]*>70×70<\/text>/);
+    expect(svg).toContain('от угла: 300 мм');
+    expect(svg).toContain('Розетка ПММ');
+  });
+
+  it('не выводит плашки габаритов коммуникаций при глобальном отключении для экспорта', () => {
+    const svg = buildEskizSketchSvg(project, { communications: [communication], showCommunicationSizeBadges: false });
+    expect(svg).not.toContain('70×70 мм');
+    expect(svg).not.toMatch(/<text[^>]*>70×70<\/text>/);
+    expect(svg).toContain('от угла: 300 мм');
+  });
 });

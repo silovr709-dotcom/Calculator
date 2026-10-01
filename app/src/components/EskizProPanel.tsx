@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizProIntegration, ExtraFacadePart, FacadePart, KitchenModule, Pricebook, PriceItem, Project, SlotKey } from '../types';
 import {
   collectEskizModuleMarkers,
+  downloadEskizFile,
   parseEskizModuleMarker,
-  readEskizFile,
+  readEskizFileBundle,
   snapshotProject,
   syncEskizModulesToCalculation,
   upsertEskizSnapshot,
@@ -521,6 +522,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const moduleMarkers = useMemo(() => collectEskizModuleMarkers(linkedProjects), [linkedProjects]);
   const moduleBindings = eskizPro.moduleBindings ?? EMPTY_BINDINGS;
   const communications = eskizPro.communications ?? EMPTY_COMMUNICATIONS;
+  const showCommunicationSizeBadges = eskizPro.showCommunicationSizeBadges !== false;
   const linkedModuleCount = moduleMarkers.filter((marker) => Boolean(moduleBindings[marker.key])).length;
   const activeMarker = moduleMarkers.find((marker) => marker.key === activeMarkerKey) ?? null;
   const activeModuleId = activeMarker ? moduleBindings[activeMarker.key] : null;
@@ -562,17 +564,20 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
 
   const updateEskizPro = useCallback((patch: Partial<EskizProIntegration>) => onChange({ ...project, eskizPro: { ...eskizPro, ...patch } }), [onChange, project, eskizPro]);
 
-  const saveEmbeddedProject = useCallback((embeddedProject: EskizProject) => {
+  const saveEmbeddedProject = useCallback((embeddedProject: EskizProject, importedCommunications?: EskizCommunicationMarker[]) => {
     const alreadyLinked = linkedIds.includes(embeddedProject.id);
+    const normalizedCommunications = (importedCommunications ?? []).map((marker) => ({ ...marker, eskizId: embeddedProject.id }));
     updateEskizPro({
       linkedProjectIds: unique([embeddedProject.id, ...linkedIds]),
       activeProjectId: embeddedProject.id,
       showInClient,
       clientMode,
       snapshots: upsertEskizSnapshot(snapshots, embeddedProject),
+      ...(importedCommunications ? { communications: [...normalizedCommunications, ...communications.filter((item) => item.eskizId !== embeddedProject.id)] } : {}),
     });
-    if (!alreadyLinked) setMessage(`Эскиз «${embeddedProject.title}» создан внутри калькулятора и привязан к проекту.`);
-  }, [clientMode, linkedIds, showInClient, snapshots, updateEskizPro]);
+    if (importedCommunications) setMessage(`Файл «${embeddedProject.title}» импортирован: коммуникаций ${normalizedCommunications.length}.`);
+    else if (!alreadyLinked) setMessage(`Эскиз «${embeddedProject.title}» создан внутри калькулятора и привязан к проекту.`);
+  }, [clientMode, communications, linkedIds, showInClient, snapshots, updateEskizPro]);
 
   const detach = (id: string) => {
     const nextIds = linkedIds.filter((item) => item !== id);
@@ -590,20 +595,33 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     if (!file) return;
     setMessage('');
     try {
-      const imported = await readEskizFile(file);
+      const imported = await readEskizFileBundle(file);
+      const normalizedCommunications = imported.communications.map((marker) => ({ ...marker, eskizId: imported.project.id }));
       updateEskizPro({
-        linkedProjectIds: unique([imported.id, ...linkedIds]),
-        activeProjectId: imported.id,
+        linkedProjectIds: unique([imported.project.id, ...linkedIds]),
+        activeProjectId: imported.project.id,
         showInClient,
         clientMode,
-        snapshots: upsertEskizSnapshot(snapshots, imported),
+        snapshots: upsertEskizSnapshot(snapshots, imported.project),
+        communications: [...normalizedCommunications, ...communications.filter((item) => item.eskizId !== imported.project.id)],
       });
-      setMessage(`Файл «${imported.title}» импортирован и привязан к проекту.`);
+      setMessage(normalizedCommunications.length > 0
+        ? `Файл «${imported.project.title}» импортирован и привязан к проекту. Коммуникаций: ${normalizedCommunications.length}.`
+        : `Файл «${imported.project.title}» импортирован и привязан к проекту.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Не удалось импортировать .eskiz');
     } finally {
       if (fileRef.current) fileRef.current.value = '';
     }
+  };
+
+  const exportActiveEskizFile = () => {
+    if (!activePreviewProject) {
+      setMessage('Сначала загрузите или создайте эскиз в Эскиз PRO.');
+      return;
+    }
+    downloadEskizFile(activePreviewProject, communications.filter((marker) => marker.eskizId === activePreviewProject.id));
+    setMessage(`Файл «${activePreviewProject.title}.eskiz» экспортирован. Его можно импортировать обратно через «Импорт .eskiz».`);
   };
 
   const syncModulesToCalculation = () => {
@@ -834,6 +852,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
         </div>
         <div className="actions">
           <button className="btn ghost" onClick={() => fileRef.current?.click()}>Импорт старого .eskiz</button>
+          <button className="btn ghost" disabled={!activePreviewProject} onClick={exportActiveEskizFile}>Экспорт файла Эскиз</button>
           <button className="btn ghost" onClick={() => setFullScreenSketch(true)}>Открыть Эскиз PRO на весь экран</button>
           <button className="btn primary" disabled={!activePreviewProject} onClick={syncModulesToCalculation}>Модули → просчёт</button>
         </div>
@@ -852,11 +871,14 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             calculatorProjectClient={project.client}
             communications={communications}
             moduleSummaries={moduleSummaries}
+            showCommunicationSizeBadges={showCommunicationSizeBadges}
             activeCommunicationId={activeCommunicationId}
             communicationAddKind={communicationAddKind}
             pickingDistancePoint={Boolean(distancePointPick)}
             fullScreen={fullScreenSketch}
             onProjectChange={saveEmbeddedProject}
+            onProjectImport={saveEmbeddedProject}
+            onShowCommunicationSizeBadgesChange={(value) => updateEskizPro({ showCommunicationSizeBadges: value })}
             onModuleObjectClick={handlePreviewModuleClick}
             onStartCommunicationPlacement={startCommunicationPlacement}
             onStartCommunicationDistance={(communicationId) => startFreeCommunicationDistance(communicationId)}
@@ -895,6 +917,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
               <label className="chk-row"><input type="checkbox" checked={showInClient} onChange={(event) => updateEskizPro({ showInClient: event.target.checked })} /> Вставить Эскиз PRO в КП</label>
               <label>Что вставлять<select value={clientMode} onChange={(event) => updateEskizPro({ clientMode: event.target.value as EskizProIntegration['clientMode'] })}><option value="active">Только главный эскиз</option><option value="all">Все связанные эскизы</option></select></label>
               <label>Маркеры модулей в выгрузке<select value={moduleMarkerMode} onChange={(event) => updateEskizPro({ moduleMarkerMode: event.target.value as EskizModuleMarkerMode })}><option value="full">Полные плашки</option><option value="compact">Компактные точки</option><option value="hidden">Скрыть маркеры</option></select></label>
+              <label className="chk-row"><input type="checkbox" checked={showCommunicationSizeBadges} onChange={(event) => updateEskizPro({ showCommunicationSizeBadges: event.target.checked })} /> Размеры/высоты рядом с коммуникациями в КП и экспортах</label>
             </div>
             <div className="eskiz-pro-status-cards">
               <div><b>{linkedIds.length}</b><span>привязано</span></div>
@@ -903,6 +926,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             </div>
             <div className="actions eskiz-pro-import-actions">
               <button className="btn ghost" onClick={() => fileRef.current?.click()}>Импорт .eskiz</button>
+              <button className="btn ghost" disabled={!activePreviewProject} onClick={exportActiveEskizFile}>Экспорт .eskiz</button>
             </div>
             {message && <div className="eskiz-pro-message muted small">{message}</div>}
           </section>
@@ -938,7 +962,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
                         <button className="btn tiny ghost" onClick={() => updateEskizPro({ activeProjectId: id })}>Главный</button>
                         <button className="btn tiny danger" onClick={() => detach(id)}>Убрать</button>
                       </div>
-                      {previewProject && <EskizProjectPreview project={previewProject} compact activeModuleKey={activeMarkerKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} communicationMarkers={communications} activeCommunicationId={activeCommunicationId} onModuleClick={handlePreviewModuleClick} onCommunicationClick={handleCommunicationClick} />}
+                      {previewProject && <EskizProjectPreview project={previewProject} compact activeModuleKey={activeMarkerKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} communicationMarkers={communications} showCommunicationSizeBadges={showCommunicationSizeBadges} activeCommunicationId={activeCommunicationId} onModuleClick={handlePreviewModuleClick} onCommunicationClick={handleCommunicationClick} />}
                     </article>
                   );
                 })}
@@ -951,7 +975,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       {linkedProjects.length > 0 && (
         <section className="card eskiz-pro-project-preview">
           <div className="section-head"><div><h3>Как это будет выглядеть в КП</h3><p className="muted small">Рендерим сохранённый snapshot из настоящего Эскиз PRO.</p></div></div>
-          {linkedProjects.map((item) => <EskizProjectPreview key={item.id} project={item} activeModuleKey={activeMarkerKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} communicationMarkers={communications} activeCommunicationId={activeCommunicationId} onModuleClick={handlePreviewModuleClick} onCommunicationClick={handleCommunicationClick} />)}
+          {linkedProjects.map((item) => <EskizProjectPreview key={item.id} project={item} activeModuleKey={activeMarkerKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} communicationMarkers={communications} showCommunicationSizeBadges={showCommunicationSizeBadges} activeCommunicationId={activeCommunicationId} onModuleClick={handlePreviewModuleClick} onCommunicationClick={handleCommunicationClick} />)}
         </section>
       )}
     </section>

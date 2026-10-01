@@ -224,8 +224,8 @@ function CommunicationMarkerIcon({ marker, active = false }: { marker: EskizComm
   </g>;
 }
 
-function CommunicationMeasureBadges({ marker, width, height }: { marker: EskizCommunicationMarker; width: number; height: number }) {
-  if (marker.showSizeBadge === false) return null;
+function CommunicationMeasureBadges({ marker, width, height, showSizeBadges }: { marker: EskizCommunicationMarker; width: number; height: number; showSizeBadges: boolean }) {
+  if (!showSizeBadges || marker.showSizeBadge === false) return null;
   const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
   const values = [communicationCompactSizeText(marker), communicationElevationText(marker)].filter(Boolean);
   if (values.length === 0) return null;
@@ -241,10 +241,10 @@ function CommunicationMeasureBadges({ marker, width, height }: { marker: EskizCo
   })}</g>;
 }
 
-function CommunicationPreview(props: { marker: EskizCommunicationMarker; width: number; height: number; active?: boolean; onCommunicationClick?: (marker: EskizCommunicationMarker) => void }) {
-  const { marker, width, height, active = false, onCommunicationClick } = props;
+function CommunicationPreview(props: { marker: EskizCommunicationMarker; width: number; height: number; active?: boolean; showSizeBadges: boolean; onCommunicationClick?: (marker: EskizCommunicationMarker) => void }) {
+  const { marker, width, height, active = false, showSizeBadges, onCommunicationClick } = props;
   const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
-  const size = communicationSizeText(marker);
+  const size = showSizeBadges && marker.showSizeBadge !== false ? communicationSizeText(marker) : '';
   const distances = marker.distances ?? [];
   const clickProps = onCommunicationClick ? {
     role: 'button' as const,
@@ -278,7 +278,7 @@ function CommunicationPreview(props: { marker: EskizCommunicationMarker; width: 
         </g>;
       })}
       <CommunicationMarkerIcon marker={marker} active={active} />
-      <CommunicationMeasureBadges marker={marker} width={width} height={height} />
+      <CommunicationMeasureBadges marker={marker} width={width} height={height} showSizeBadges={showSizeBadges} />
     </g>
   );
 }
@@ -304,12 +304,13 @@ type EskizProjectPreviewProps = {
   moduleStatuses?: Record<string, EskizModulePreviewStatus>;
   moduleMarkerMode?: EskizModuleMarkerMode;
   communicationMarkers?: EskizCommunicationMarker[];
+  showCommunicationSizeBadges?: boolean;
   activeCommunicationId?: string | null;
   onModuleClick?: (projectId: string, object: EskizModuleObject) => void;
   onCommunicationClick?: (projectId: string, marker: EskizCommunicationMarker) => void;
 };
 
-export default function EskizProjectPreview({ project, compact = false, activeModuleKey = null, moduleBindings, moduleStatuses, moduleMarkerMode = 'full', communicationMarkers = [], activeCommunicationId = null, onModuleClick, onCommunicationClick }: EskizProjectPreviewProps) {
+export default function EskizProjectPreview({ project, compact = false, activeModuleKey = null, moduleBindings, moduleStatuses, moduleMarkerMode = 'full', communicationMarkers = [], showCommunicationSizeBadges = true, activeCommunicationId = null, onModuleClick, onCommunicationClick }: EskizProjectPreviewProps) {
   const width = Math.max(1, project.image.width);
   const height = Math.max(1, project.image.height);
   const projectCommunications = communicationMarkers.filter((marker) => marker.eskizId === project.id);
@@ -346,7 +347,7 @@ export default function EskizProjectPreview({ project, compact = false, activeMo
           </defs>
           <image href={project.image.dataUrl} x="0" y="0" width={width} height={height} preserveAspectRatio="none" style={{ filter: imageFilter(project) }} />
           {project.objects.map((object) => <ObjectPreview key={object.id} object={object} projectId={project.id} activeModuleKey={activeModuleKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} onModuleClick={onModuleClick} />)}
-          {projectCommunications.map((marker) => <CommunicationPreview key={marker.id} marker={marker} width={width} height={height} active={marker.id === activeCommunicationId} onCommunicationClick={(item) => onCommunicationClick?.(project.id, item)} />)}
+          {projectCommunications.map((marker) => <CommunicationPreview key={marker.id} marker={marker} width={width} height={height} showSizeBadges={showCommunicationSizeBadges} active={marker.id === activeCommunicationId} onCommunicationClick={(item) => onCommunicationClick?.(project.id, item)} />)}
         </svg>
       </div>
       {communicationLegend.length > 0 && <div className="eskiz-preview-communication-legend">{communicationLegend.map((marker) => {

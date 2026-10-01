@@ -357,6 +357,8 @@ export interface EskizProIntegration {
   clientMode?: 'active' | 'all';
   /** Как показывать маркеры модулей на выгружаемом/клиентском эскизе: полные плашки, компактные точки или скрыть. */
   moduleMarkerMode?: 'full' | 'compact' | 'hidden';
+  /** false — скрыть плашки габаритов/высот рядом со всеми коммуникациями в редакторе, КП и экспортах. */
+  showCommunicationSizeBadges?: boolean;
   /** Связка: ключ маркера Эскиз PRO (`eskizId:objectId`) → id KitchenModule в расчёте. */
   moduleBindings?: Record<string, string>;
   /** Коммуникации, нанесённые поверх snapshot: розетки, вода, канализация, газ, вентиляция и расстояния до точек. */
@@ -373,6 +375,8 @@ export interface FactoryBlankSketchSettings {
   moduleMarkerMode?: 'full' | 'compact' | 'hidden';
   /** false — не добавлять в картинку фабричного бланка розетки/воду/газ/вентиляцию. */
   showCommunications?: boolean;
+  /** false — скрыть плашки габаритов/высот рядом с коммуникациями именно в фабричном Excel-экспорте. */
+  showCommunicationSizeBadges?: boolean;
   /** false — не добавлять отдельный лист с крупным эскизом, расшифровкой маркеров и проверками. Отсутствие поля = добавлять. */
   includeTechSheet?: boolean;
 }

@@ -7,6 +7,8 @@ export type EskizSketchModuleMarkerMode = 'full' | 'compact' | 'hidden';
 export interface EskizSketchSvgOptions {
   moduleMarkerMode?: EskizSketchModuleMarkerMode;
   communications?: EskizCommunicationMarker[];
+  /** false — не выводить рядом с коммуникациями плашки их габаритов/высот. Линии расстояний остаются. */
+  showCommunicationSizeBadges?: boolean;
 }
 
 export interface EskizSketchPngOptions extends EskizSketchSvgOptions {
@@ -196,8 +198,8 @@ function renderCommunicationIcon(marker: EskizCommunicationMarker, active = fals
   return `<g transform="translate(${marker.x} ${marker.y})"><g transform="scale(${scale})"><circle r="${active ? 22 : 18}" fill="${meta.color}" opacity="${active ? .18 : .1}" />${socketNodes}${switchNodes}${otherNode}</g></g>`;
 }
 
-function renderCommunicationMeasureBadges(marker: EskizCommunicationMarker, width: number, height: number) {
-  if (marker.showSizeBadge === false) return '';
+function renderCommunicationMeasureBadges(marker: EskizCommunicationMarker, width: number, height: number, showSizeBadges: boolean) {
+  if (!showSizeBadges || marker.showSizeBadge === false) return '';
   const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
   const values = [communicationCompactSizeText(marker), communicationElevationText(marker)].filter(Boolean);
   if (values.length === 0) return '';
@@ -213,9 +215,9 @@ function renderCommunicationMeasureBadges(marker: EskizCommunicationMarker, widt
   }).join('');
 }
 
-function renderCommunication(marker: EskizCommunicationMarker, width: number, height: number) {
+function renderCommunication(marker: EskizCommunicationMarker, width: number, height: number, showSizeBadges: boolean) {
   const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
-  const size = communicationSizeText(marker);
+  const size = showSizeBadges && marker.showSizeBadge !== false ? communicationSizeText(marker) : '';
   const distances = marker.distances ?? [];
   return `<g class="communication">
     <title>${xml([marker.name || meta.label, size, marker.note].filter(Boolean).join(' · '))}</title>
@@ -232,7 +234,7 @@ function renderCommunication(marker: EskizCommunicationMarker, width: number, he
       </g>`;
     }).join('')}
     ${renderCommunicationIcon(marker)}
-    ${renderCommunicationMeasureBadges(marker, width, height)}
+    ${renderCommunicationMeasureBadges(marker, width, height, showSizeBadges)}
   </g>`;
 }
 
@@ -250,6 +252,7 @@ export function buildEskizSketchSvg(project: EskizProject, options: EskizSketchS
   const width = Math.max(1, project.image.width);
   const height = Math.max(1, project.image.height);
   const markerMode = options.moduleMarkerMode ?? 'compact';
+  const showCommunicationSizeBadges = options.showCommunicationSizeBadges !== false;
   const communications = (options.communications ?? []).filter((marker) => marker.eskizId === project.id);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
     <defs>
@@ -274,7 +277,7 @@ export function buildEskizSketchSvg(project: EskizProject, options: EskizSketchS
     <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff" />
     <image href="${xml(project.image.dataUrl)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="none"${imageFilter(project)} />
     ${project.objects.map((object) => renderObject(object, markerMode)).join('\n')}
-    ${communications.map((marker) => renderCommunication(marker, width, height)).join('\n')}
+    ${communications.map((marker) => renderCommunication(marker, width, height, showCommunicationSizeBadges)).join('\n')}
   </svg>`;
 }
 

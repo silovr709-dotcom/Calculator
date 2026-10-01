@@ -135,16 +135,18 @@ export function buildFactoryTechModuleRows(project: Project, pricebook: Priceboo
   return rows;
 }
 
-export function buildFactoryTechCommunicationRows(project: Project, eskizProject: EskizProject | null): FactoryTechCommunicationRow[] {
+export function buildFactoryTechCommunicationRows(project: Project, eskizProject: EskizProject | null, showCommunicationSizeBadges = project.eskizPro?.showCommunicationSizeBadges !== false): FactoryTechCommunicationRow[] {
   const eskizId = eskizProject?.id;
   const communications = (project.eskizPro?.communications ?? []).filter((marker) => !eskizId || marker.eskizId === eskizId);
+  const effectiveShowCommunicationSizeBadges = showCommunicationSizeBadges && project.eskizPro?.showCommunicationSizeBadges !== false;
   return communications.map((marker) => {
     const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
     const distances = (marker.distances ?? []).map((distance) => `${distance.label || COMMUNICATION_ANCHOR_LABELS[distance.anchor]}: ${communicationDistanceText(distance.valueMm)}`);
+    const showSize = effectiveShowCommunicationSizeBadges && marker.showSizeBadge !== false;
     return {
       kind: meta.label,
       name: marker.name || meta.defaultName,
-      size: communicationSizeText(marker) || '—',
+      size: showSize ? (communicationSizeText(marker) || '—') : 'скрыто на эскизе',
       location: `x=${Math.round(marker.x)}, y=${Math.round(marker.y)}`,
       distances: distances.length ? distances.join('\n') : '—',
       note: marker.note ?? '',

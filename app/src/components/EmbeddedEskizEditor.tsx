@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ChangeEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizEquipmentType, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
-import { readEskizFile } from '../lib/eskizPro';
+import { downloadEskizFile, readEskizFileBundle } from '../lib/eskizPro';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, COMMUNICATION_KINDS, COMMUNICATION_VISUAL_SCALE_MAX, COMMUNICATION_VISUAL_SCALE_MIN, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale, defaultCommunicationDimensions, normalizeCommunicationVisualScale } from '../lib/eskizCommunications';
 
 type Tool = 'select' | 'free-dimension' | 'h-dimension' | 'v-dimension' | 'chain' | 'anchor' | 'h-guide' | 'v-guide' | 'module' | 'callout' | 'comment' | 'equipment' | 'link';
@@ -43,10 +43,13 @@ type Props = {
   calculatorProjectClient?: string;
   communications: EskizCommunicationMarker[];
   moduleSummaries?: Record<string, ModuleSummary>;
+  showCommunicationSizeBadges?: boolean;
   activeCommunicationId?: string | null;
   communicationAddKind?: EskizCommunicationKind | null;
   pickingDistancePoint?: boolean;
   onProjectChange: (project: EskizProject) => void;
+  onProjectImport?: (project: EskizProject, communications: EskizCommunicationMarker[]) => void;
+  onShowCommunicationSizeBadgesChange?: (value: boolean) => void;
   onModuleObjectClick?: (projectId: string, object: EskizModuleObject) => void;
   onStartCommunicationPlacement: (kind: EskizCommunicationKind) => void;
   onStartCommunicationDistance: (communicationId: string) => void;
@@ -344,7 +347,7 @@ export default function EmbeddedEskizEditor(props: Props) {
   const [showImage, setShowImage] = useState(true);
   const [showAnnotations, setShowAnnotations] = useState(true);
   const [showHelpers, setShowHelpers] = useState(true);
-  const [showCommunicationMeasures, setShowCommunicationMeasures] = useState(true);
+  const showCommunicationMeasures = props.showCommunicationSizeBadges !== false;
   const [layerVisibility, setLayerVisibility] = useState<EskizLayerVisibility>(DEFAULT_LAYER_VISIBILITY);
   const [lastDrawingTool, setLastDrawingTool] = useState<Tool>('free-dimension');
   const [saved, setSaved] = useState(true);
@@ -376,6 +379,11 @@ export default function EmbeddedEskizEditor(props: Props) {
   const activeCommunication = project ? props.communications.find((marker) => marker.id === props.activeCommunicationId && marker.eskizId === project.id) ?? null : null;
   const communicationDraftEnd = props.pickingDistancePoint && activeCommunication ? communicationDraftPoint ?? { x: activeCommunication.x + 140, y: activeCommunication.y } : null;
   const chosen = project?.objects.find((object) => object.id === selected);
+  const onShowCommunicationSizeBadgesChange = props.onShowCommunicationSizeBadgesChange;
+
+  const setCommunicationMeasuresVisible = useCallback((value: boolean) => {
+    onShowCommunicationSizeBadgesChange?.(value);
+  }, [onShowCommunicationSizeBadgesChange]);
 
   const zoomTo = useCallback((nextZoom: number | ((currentZoom: number) => number), anchorClient?: Point) => {
     const current = project;
@@ -1059,13 +1067,21 @@ export default function EmbeddedEskizEditor(props: Props) {
     if (!file) return;
     setError('');
     try {
-      const imported = await readEskizFile(file);
-      setProject(imported);
-      props.onProjectChange(imported);
+      const imported = await readEskizFileBundle(file);
+      setProject(imported.project);
+      if (props.onProjectImport) props.onProjectImport(imported.project, imported.communications);
+      else props.onProjectChange(imported.project);
       setSaved(true);
+      setError(imported.communications.length > 0 ? `Импортировано: ${imported.project.title}, коммуникаций ${imported.communications.length}` : 'Файл .eskiz импортирован');
     } catch (errorValue) {
       setError(errorValue instanceof Error ? errorValue.message : 'Не удалось импортировать .eskiz');
     }
+  };
+
+  const exportProject = () => {
+    if (!project) return;
+    downloadEskizFile(project, props.communications.filter((marker) => marker.eskizId === project.id));
+    setError('Файл .eskiz скачан. В нём сохранены эскиз и коммуникации этого полотна.');
   };
 
   const onFileInput = (handler: (file?: File) => void) => (event: ChangeEvent<HTMLInputElement>) => {
@@ -1108,6 +1124,7 @@ export default function EmbeddedEskizEditor(props: Props) {
         <button className="btn tiny ghost" onClick={redo}>↷</button>
         <button className="btn tiny ghost" onClick={() => imageInputRef.current?.click()}>Новый скрин</button>
         <button className="btn tiny ghost" onClick={() => projectInputRef.current?.click()}>Импорт .eskiz</button>
+        <button className="btn tiny ghost" onClick={exportProject}>Экспорт .eskiz</button>
         <button className="btn tiny primary" onClick={saveNow}>Сохранить</button>
       </div>
     </header>
@@ -1186,7 +1203,7 @@ export default function EmbeddedEskizEditor(props: Props) {
       </section>
       {quickEdit && <div className="embedded-eskiz-quick" style={{ left: Math.min(quickEdit.left + 14, window.innerWidth - 210), top: Math.min(quickEdit.top + 14, window.innerHeight - 105) }}><span>Размер</span><div><input autoFocus inputMode="decimal" value={quickEdit.value} onChange={(event) => setQuickEdit({ ...quickEdit, value: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); finishQuickEdit(false); } if (event.key === 'Tab') { event.preventDefault(); finishQuickEdit(true); } if (event.key === 'Escape') { event.preventDefault(); setQuickEdit(null); } }} /><b>мм</b></div><small>Enter — готово · Tab — следующий</small></div>}
       {communicationQuickEdit && inlineCommunication && <CommunicationQuickPopover key={`${communicationQuickEdit.mode}-${communicationQuickEdit.communicationId}-${communicationQuickEdit.mode === 'distance' ? communicationQuickEdit.distanceId : 'marker'}`} edit={communicationQuickEdit} marker={inlineCommunication} onChange={(patch) => props.onCommunicationChange(inlineCommunication.id, patch)} onDistanceChange={(distanceId, patch) => props.onCommunicationDistanceChange(inlineCommunication.id, distanceId, patch)} onStartDistance={() => { startCommunicationDistance(inlineCommunication.id); setCommunicationQuickEdit(null); }} onClose={() => setCommunicationQuickEdit(null)} />}
-      {sidebarOpen && <Inspector project={project} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} moduleSummaries={props.moduleSummaries} onModuleObjectClick={(projectId, object) => { props.onProjectChange(project); props.onModuleObjectClick?.(projectId, object); }} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} showCommunicationMeasures={showCommunicationMeasures} layerVisibility={layerVisibility} onShowImage={setShowImage} onShowAnnotations={setShowAnnotations} onShowHelpers={setShowHelpers} onShowCommunicationMeasures={setShowCommunicationMeasures} onLayerVisibility={(key, value) => setLayerVisibility((current) => ({ ...current, [key]: value }))} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); setCommunicationQuickEdit(null); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceAddSet={props.onCommunicationDistanceAddSet} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
+      {sidebarOpen && <Inspector project={project} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} moduleSummaries={props.moduleSummaries} onModuleObjectClick={(projectId, object) => { props.onProjectChange(project); props.onModuleObjectClick?.(projectId, object); }} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} showCommunicationMeasures={showCommunicationMeasures} layerVisibility={layerVisibility} onShowImage={setShowImage} onShowAnnotations={setShowAnnotations} onShowHelpers={setShowHelpers} onShowCommunicationMeasures={setCommunicationMeasuresVisible} onLayerVisibility={(key, value) => setLayerVisibility((current) => ({ ...current, [key]: value }))} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); setCommunicationQuickEdit(null); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceAddSet={props.onCommunicationDistanceAddSet} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
     </div>
     <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span>Ctrl/⌘ + колесо — точное приближение под курсором · Пробел — перемещение</span><div><button onClick={() => zoomTo((value) => value / ZOOM_FACTOR)}>−</button><button onClick={fit}>Вписать · {Math.round(zoom * 100)}%</button><button onClick={() => zoomTo((value) => value * ZOOM_FACTOR)}>+</button></div></footer>
   </div>;
