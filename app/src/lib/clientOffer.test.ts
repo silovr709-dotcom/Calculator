@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LineCalc, ProjectLine } from '../types';
 import { roundClientPrice } from './engine';
-import { buildClientOfferDetails, moduleLinePrefix, moduleNoteMatches, stripModuleNote } from './clientOffer';
+import { buildClientOfferDetails, buildClientProjectSummary, clientSketchSummaryLines, moduleLinePrefix, moduleNoteMatches, stripModuleNote } from './clientOffer';
 
 const line = (patch: Partial<ProjectLine>): ProjectLine => ({
   id: patch.id ?? 'ln',
@@ -69,5 +69,23 @@ describe('детализация КП клиента', () => {
     expect(details[0].details).toEqual(['Фасад двери 1: 396×716 мм', 'Фасад двери 2: 396×716 мм']);
     expect(details[1].kindLabel).toBe('Петли');
     expect(details[1].qty).toBe(4);
+  });
+
+  it('готовит компактную сводку для плашки на клиентском эскизе', () => {
+    const lines = [
+      line({ id: 'body', itemId: 'body-a', category: 'Корпуса ЛДСП', group: 'Корпуса', name: 'ЛДСП корпус', unit: 'м²', priceBasis: 'm2', qty: 1 }),
+      line({ id: 'facade', itemId: 'facade-a', category: 'Фасады: МДФ ПВХ', group: 'Фасады', name: 'МДФ ПВХ', unit: 'м²', priceBasis: 'm2', qty: 3 }),
+      line({ id: 'hinge', itemId: 'hinge-a', category: 'Петли', group: 'Фурнитура', name: 'Петля Boyard', unit: 'шт', priceBasis: 'unit', qty: 6 }),
+    ];
+    const lineCalcs = new Map([
+      ['body', calc('body', 2.4, 18000)],
+      ['facade', calc('facade', 1.62, 32000)],
+      ['hinge', calc('hinge', 6, 1020)],
+    ]);
+    const summary = buildClientProjectSummary(buildClientOfferDetails(lines, lineCalcs), 2);
+    expect(summary.facadeAreaM2).toBeCloseTo(1.62);
+    expect(summary.hingeQty).toBe(6);
+    expect(summary.bodyTotal).toBe(18000);
+    expect(clientSketchSummaryLines(summary).join('\n')).toContain('Петли: 6 шт');
   });
 });

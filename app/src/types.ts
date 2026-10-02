@@ -130,12 +130,38 @@ export type WizardStepId = 'data' | 'shape' | 'materials' | 'modules' | 'review'
 
 export type ClientOfferPresentationMode = 'brief' | 'detailed' | 'technical';
 
+export interface ClientDocumentPackageSettings {
+  /** Включить титульное коммерческое предложение/сводку. */
+  includeOffer?: boolean;
+  /** Включить Эскиз PRO с клиентскими слоями. */
+  includeSketch?: boolean;
+  /** Включить компактную спецификацию состава. */
+  includeSpecification?: boolean;
+  /** Включить черновик договора по типовому шаблону. */
+  includeContract?: boolean;
+  /** Включить товарный чек/квитанцию для клиента. */
+  includeReceipt?: boolean;
+  /** Компактный режим: меньше пояснений и плотнее таблицы. */
+  compact?: boolean;
+  /** Показывать поверх эскиза сводку: петли, м² фасадов, корпуса и ключевые суммы. */
+  sketchSummaryOverlay?: boolean;
+}
+
 export interface ClientOfferSettings {
   validUntil?: string;
   paymentTerms?: string;
   installation?: string;
   delivery?: string;
   notes?: string;
+  /** Реквизиты/название продавца для пакета документов; позже можно заменить вашим шаблоном договора. */
+  sellerName?: string;
+  sellerDetails?: string;
+  contractNumber?: string;
+  contractCity?: string;
+  clientContacts?: string;
+  productionTerms?: string;
+  warranty?: string;
+  documentPackage?: ClientDocumentPackageSettings;
   /** Режим детализации клиентского КП: короткое письмо, рабочая детализация или техническое приложение. */
   presentationMode?: ClientOfferPresentationMode;
   /** false — скрыть суммы внутри комплектации и оставить только итоги модулей/проекта. */

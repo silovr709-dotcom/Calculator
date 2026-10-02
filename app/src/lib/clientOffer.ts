@@ -1,4 +1,5 @@
 import type { LineCalc, PriceBasis, ProjectLine } from '../types';
+import { fmtMoney, fmtNum } from './format';
 
 export type ClientOfferDetailKind =
   | 'body'
@@ -33,6 +34,17 @@ export interface ClientOfferDetail {
   clientSum: number | null;
   hasUnpriced: boolean;
   sort: number;
+}
+
+export interface ClientProjectSummary {
+  moduleCount: number;
+  facadeQty: number;
+  facadeAreaM2: number;
+  hingeQty: number;
+  hingeTypes: { name: string; qty: number }[];
+  bodyTotal: number;
+  facadeTotal: number;
+  hardwareTotal: number;
 }
 
 interface ClientKindMeta {
@@ -209,4 +221,46 @@ export function buildClientOfferDetails(lines: ProjectLine[], lineCalcs: Map<str
   return Array.from(acc.values())
     .map(({ priced, ...row }) => ({ ...row, clientSum: priced ? row.clientSum : null }))
     .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name, 'ru'));
+}
+
+function sumClient(details: ClientOfferDetail[], kinds: ClientOfferDetailKind[]): number {
+  const allowed = new Set(kinds);
+  return details
+    .filter((detail) => allowed.has(detail.kind))
+    .reduce((sum, detail) => sum + (detail.clientSum ?? 0), 0);
+}
+
+/** Сводка для клиентского пакета и плашки поверх эскиза: только клиентские суммы, без себестоимости. */
+export function buildClientProjectSummary(details: ClientOfferDetail[], moduleCount = 0): ClientProjectSummary {
+  const facadeDetails = details.filter((detail) => detail.kind === 'facade' || detail.kind === 'frame');
+  const hingeDetails = details.filter((detail) => detail.kind === 'hinge');
+  return {
+    moduleCount,
+    facadeQty: facadeDetails.reduce((sum, detail) => sum + detail.qty, 0),
+    facadeAreaM2: facadeDetails.reduce((sum, detail) => {
+      const unit = detail.unit.toLocaleLowerCase('ru-RU');
+      return detail.priceBasis === 'm2' || unit.includes('м²') || unit.includes('м2') ? sum + detail.qtyEffective : sum;
+    }, 0),
+    hingeQty: hingeDetails.reduce((sum, detail) => sum + detail.qty, 0),
+    hingeTypes: hingeDetails.map((detail) => ({ name: detail.name, qty: detail.qty })),
+    bodyTotal: sumClient(details, ['body', 'bodySurcharge', 'shelf']),
+    facadeTotal: sumClient(details, ['facade', 'frame']),
+    hardwareTotal: sumClient(details, ['hinge', 'drawerSys', 'lift', 'handle', 'legs']),
+  };
+}
+
+/** Короткие строки, которые можно положить компактной плашкой на эскиз. */
+export function clientSketchSummaryLines(summary: ClientProjectSummary): string[] {
+  const hingeNames = summary.hingeTypes
+    .slice(0, 2)
+    .map((item) => `${item.name} — ${fmtNum(item.qty, 3)} шт`);
+  const extraHinges = summary.hingeTypes.length > 2 ? `ещё ${summary.hingeTypes.length - 2}` : '';
+  return [
+    summary.moduleCount > 0 ? `Модули: ${fmtNum(summary.moduleCount, 3)} шт` : '',
+    summary.hingeQty > 0 ? `Петли: ${fmtNum(summary.hingeQty, 3)} шт${hingeNames.length ? ` (${[...hingeNames, extraHinges].filter(Boolean).join('; ')})` : ''}` : '',
+    summary.facadeAreaM2 > 0 ? `Фасады: ${fmtNum(summary.facadeAreaM2, 2)} м²${summary.facadeQty > 0 ? ` / ${fmtNum(summary.facadeQty, 3)} шт` : ''}` : summary.facadeQty > 0 ? `Фасады: ${fmtNum(summary.facadeQty, 3)} шт` : '',
+    summary.bodyTotal > 0 ? `Корпуса: ${fmtMoney(summary.bodyTotal)}` : '',
+    summary.facadeTotal > 0 ? `Фасады сумма: ${fmtMoney(summary.facadeTotal)}` : '',
+    summary.hardwareTotal > 0 ? `Фурнитура: ${fmtMoney(summary.hardwareTotal)}` : '',
+  ].filter(Boolean);
 }

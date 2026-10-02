@@ -1,11 +1,14 @@
-import type { ClientOfferPresentationMode, ClientOfferSettings, EskizExportViewSettings, EskizLayerKey, EskizProIntegration, Pricebook, Project } from '../types';
+import { useState } from 'react';
+import type { ClientDocumentPackageSettings, ClientOfferPresentationMode, ClientOfferSettings, EskizExportViewSettings, EskizLayerKey, EskizProIntegration, Pricebook, Project } from '../types';
 import type { ClientOfferDetail, ClientOfferDetailKind } from '../lib/clientOffer';
 import { calcTotals } from '../lib/engine';
 import { calculateVariant } from '../lib/variants';
-import { buildClientOfferDetails, isModuleLine, moduleNoteMatches, stripModuleNote } from '../lib/clientOffer';
+import { buildClientOfferDetails, buildClientProjectSummary, clientSketchSummaryLines, isModuleLine, moduleNoteMatches, stripModuleNote } from '../lib/clientOffer';
 import { fmtMoney, fmtDate, fmtNum } from '../lib/format';
 import { exportClientXlsx } from '../lib/exporters';
-import { snapshotProject } from '../lib/eskizPro';
+import { snapshotProject, type EskizProject } from '../lib/eskizPro';
+import { renderEskizSketchPng } from '../lib/eskizSketchExport';
+import { downloadClientDocumentPackageHtml, normalizeClientDocumentPackage } from '../lib/clientPackage';
 import EskizProjectPreview from './EskizProjectPreview';
 
 /** Строка модуля в клиентской версии — без закупочных цен и внутренних данных. */
@@ -34,6 +37,16 @@ const CLIENT_ESKIZ_LAYERS: { key: EskizLayerKey; label: string }[] = [
   { key: 'equipment', label: 'Техника' },
   { key: 'links', label: 'Ссылки' },
 ];
+
+function fitEskizPackageSize(project: EskizProject, box = { width: 1500, height: 900 }) {
+  const sourceWidth = Math.max(1, project.image.width);
+  const sourceHeight = Math.max(1, project.image.height);
+  const scale = Math.min(box.width / sourceWidth, box.height / sourceHeight);
+  return {
+    width: Math.max(1, Math.round(sourceWidth * scale)),
+    height: Math.max(1, Math.round(sourceHeight * scale)),
+  };
+}
 
 function detailQtyText(detail: ClientOfferDetail): string {
   const unit = detail.unit || 'шт';
@@ -104,6 +117,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   onOfferChange?: (offer: ClientOfferSettings) => void;
   onEskizProChange?: (eskizPro: EskizProIntegration) => void;
 }) {
+  const [packageExporting, setPackageExporting] = useState(false);
   const groups = moduleGroups ?? [];
   const baseProjectForVariants: Project = { ...project, lines: project.lines.filter((line) => !isModuleLine(line)) };
   const selectedVariant = project.variants?.find((variant) => variant.id === project.selectedVariantId);
@@ -155,9 +169,13 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   };
   const variantSummaries = visibleVariants.map((variant) => ({ variant, totals: pricebook ? calculateVariant(baseProjectForVariants, pricebook, variant).totals : null }));
   const updateOffer = (patch: Partial<ClientOfferSettings>) => onOfferChange?.({ ...(project.clientOffer ?? {}), ...patch });
+  const packageSettings = normalizeClientDocumentPackage(project.clientOffer?.documentPackage);
+  const updatePackageSettings = (patch: Partial<ClientDocumentPackageSettings>) => updateOffer({ documentPackage: { ...packageSettings, ...patch } });
   const extraDetails = buildClientOfferDetails(extraLines, lineCalcs);
   const allDetails = buildClientOfferDetails(activeCalculation.lines, lineCalcs);
   const moduleQty = groups.reduce((sum, group) => sum + group.qty, 0);
+  const projectSummary = buildClientProjectSummary(allDetails, moduleQty);
+  const sketchSummaryLines = clientSketchSummaryLines(projectSummary);
   const facadeQty = sumKind(allDetails, ['facade', 'frame']);
   const hingeQty = sumKind(allDetails, ['hinge']);
   const drawerQty = sumKind(allDetails, ['drawerSys']);
@@ -174,12 +192,46 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   ].filter(Boolean);
   const materialHighlights = uniqueHighlights(allDetails, ['body', 'facade', 'frame', 'worktop', 'wallPanel', 'handle'], isTechnical ? 10 : 6);
 
+  const exportClientPackage = async () => {
+    setPackageExporting(true);
+    try {
+      const sketchProjects = packageSettings.includeSketch && clientSketchVisible ? linkedEskizProjects : [];
+      const sketches = await Promise.all(sketchProjects.map(async (eskiz) => {
+        const size = fitEskizPackageSize(eskiz);
+        const image = await renderEskizSketchPng(eskiz, {
+          widthPx: size.width,
+          heightPx: size.height,
+          ...(eskizViewSettings ?? {}),
+          frame: 'none',
+          moduleMarkerMode: project.eskizPro?.moduleMarkerMode ?? 'full',
+          communications: (project.eskizPro?.communications ?? []).filter((marker) => marker.showInClient !== false),
+          showCommunicationSizeBadges,
+        });
+        return { title: eskiz.title, imageDataUrl: image.base64 };
+      }));
+      downloadClientDocumentPackageHtml({
+        project: { ...project, lines: activeCalculation.lines, settings: selectedVariant?.settings ?? project.settings },
+        offer: project.clientOffer ?? {},
+        details: allDetails,
+        modules: groups.map((group) => ({ title: group.title, sub: group.sub, qty: group.qty, total: groupSum(group) })),
+        total: totals.client,
+        summary: projectSummary,
+        sketches,
+      });
+    } catch (error) {
+      alert(`Не получилось собрать пакет клиента: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setPackageExporting(false);
+    }
+  };
+
   return (
     <div className="client-view">
       <div className="client-toolbar no-print">
         <div className="muted small">Клиент видит только этот документ: без себестоимости, закупочных цен и внутренних данных.{selectedVariant && <> Активен вариант: <b>{selectedVariant.name}</b>.</>}</div>
         <div className="client-toolbar-actions">
           <button className="btn ghost" onClick={() => exportClientXlsx({ ...project, lines: activeCalculation.lines, settings: selectedVariant?.settings ?? project.settings })}>Excel для клиента</button>
+          <button className="btn ghost" disabled={packageExporting} onClick={exportClientPackage}>{packageExporting ? 'Собираю пакет…' : 'Пакет клиента .html'}</button>
           <button className="btn primary" onClick={() => window.print()}>Печать / PDF</button>
         </div>
       </div>
@@ -200,6 +252,29 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           </label>
           <label className="client-detail-price-toggle"><input type="checkbox" checked={showDetailPrices} onChange={(event) => updateOffer({ showDetailPrices: event.target.checked })} /> Показывать суммы в детализации</label>
           <label className="span-2">Примечания для клиента<textarea rows={2} value={project.clientOffer?.notes ?? ''} onChange={(event) => updateOffer({ notes: event.target.value })} /></label>
+        </div>
+        <div className="client-package-control">
+          <div className="client-package-head">
+            <div><b>Пакет документов для клиента</b><span>Сейчас используется компактный типовой шаблон договора/чека; когда пришлёте ваши документы — подставим фирменную форму.</span></div>
+            <button type="button" className="btn tiny primary" disabled={packageExporting} onClick={exportClientPackage}>{packageExporting ? 'Собираю…' : 'Скачать пакет'}</button>
+          </div>
+          <div className="client-package-options">
+            <label><input type="checkbox" checked={packageSettings.includeOffer} onChange={(event) => updatePackageSettings({ includeOffer: event.target.checked })} /> КП/сводка</label>
+            <label><input type="checkbox" checked={packageSettings.includeSketch} onChange={(event) => updatePackageSettings({ includeSketch: event.target.checked })} /> Эскиз</label>
+            <label><input type="checkbox" checked={packageSettings.includeSpecification} onChange={(event) => updatePackageSettings({ includeSpecification: event.target.checked })} /> Спецификация</label>
+            <label><input type="checkbox" checked={packageSettings.includeContract} onChange={(event) => updatePackageSettings({ includeContract: event.target.checked })} /> Договор</label>
+            <label><input type="checkbox" checked={packageSettings.includeReceipt} onChange={(event) => updatePackageSettings({ includeReceipt: event.target.checked })} /> Товарный чек</label>
+            <label><input type="checkbox" checked={packageSettings.sketchSummaryOverlay} onChange={(event) => updatePackageSettings({ sketchSummaryOverlay: event.target.checked })} /> Сводка на эскизе</label>
+            <label><input type="checkbox" checked={packageSettings.compact} onChange={(event) => updatePackageSettings({ compact: event.target.checked })} /> Компактно</label>
+          </div>
+          <div className="client-package-fields">
+            <label>Исполнитель<input value={project.clientOffer?.sellerName ?? ''} placeholder="Название / ИП / ООО" onChange={(event) => updateOffer({ sellerName: event.target.value })} /></label>
+            <label>№ договора<input value={project.clientOffer?.contractNumber ?? ''} placeholder="авто из проекта" onChange={(event) => updateOffer({ contractNumber: event.target.value })} /></label>
+            <label>Срок изготовления<input value={project.clientOffer?.productionTerms ?? ''} placeholder="например, 35 рабочих дней" onChange={(event) => updateOffer({ productionTerms: event.target.value })} /></label>
+            <label>Гарантия<input value={project.clientOffer?.warranty ?? ''} placeholder="например, 12 месяцев" onChange={(event) => updateOffer({ warranty: event.target.value })} /></label>
+            <label className="span-2">Реквизиты исполнителя<textarea rows={2} value={project.clientOffer?.sellerDetails ?? ''} placeholder="ИНН, адрес, телефон — появятся в договоре и чеке" onChange={(event) => updateOffer({ sellerDetails: event.target.value })} /></label>
+            <label>Контакты клиента<textarea rows={2} value={project.clientOffer?.clientContacts ?? ''} placeholder="телефон, адрес" onChange={(event) => updateOffer({ clientContacts: event.target.value })} /></label>
+          </div>
         </div>
         <div className="client-eskiz-control">
           <div>
@@ -245,8 +320,9 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           </div>
           <div className="cd-summary-facts">
             <div><b>{fmtNum(moduleQty, 3)}</b><span>модулей</span></div>
-            <div><b>{fmtNum(facadeQty, 3)}</b><span>фасадов / рамок</span></div>
-            <div><b>{fmtNum(hingeQty + drawerQty + liftQty, 3)}</b><span>узлов фурнитуры</span></div>
+            <div><b>{projectSummary.facadeAreaM2 > 0 ? fmtNum(projectSummary.facadeAreaM2, 2) : fmtNum(facadeQty, 3)}</b><span>{projectSummary.facadeAreaM2 > 0 ? 'м² фасадов' : 'фасадов / рамок'}</span></div>
+            <div><b>{fmtNum(hingeQty, 3)}</b><span>петель</span></div>
+            <div><b>{fmtMoney(projectSummary.bodyTotal)}</b><span>корпуса общ.</span></div>
           </div>
           {includedChips.length > 0 && <div className="cd-included"><b>В предложение входит</b><div>{includedChips.map((chip) => <span key={chip}>{chip}</span>)}</div></div>}
           {materialHighlights.length > 0 && <div className="cd-materials"><b>Ключевые материалы</b><ul>{materialHighlights.map((item) => <li key={item}>{item}</li>)}</ul></div>}
@@ -264,7 +340,10 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         {clientSketchVisible && (
           <section className="cd-sketch-pro">
             <div className="cd-section-head"><h3>Эскиз PRO</h3><span>{isTechnical ? 'внешний эскиз со скрином проекта и размерными аннотациями' : 'схема из внешнего Эскиз PRO'}</span></div>
-            {linkedEskizProjects.map((eskiz) => <EskizProjectPreview key={eskiz.id} project={eskiz} compact={!isTechnical} moduleMarkerMode={project.eskizPro?.moduleMarkerMode ?? 'full'} communicationMarkers={(project.eskizPro?.communications ?? []).filter((marker) => marker.showInClient !== false)} showCommunicationSizeBadges={showCommunicationSizeBadges} viewSettings={eskizViewSettings} />)}
+            {linkedEskizProjects.map((eskiz) => <div key={eskiz.id} className="cd-sketch-wrap">
+              <EskizProjectPreview project={eskiz} compact={!isTechnical} moduleMarkerMode={project.eskizPro?.moduleMarkerMode ?? 'full'} communicationMarkers={(project.eskizPro?.communications ?? []).filter((marker) => marker.showInClient !== false)} showCommunicationSizeBadges={showCommunicationSizeBadges} viewSettings={eskizViewSettings} />
+              {packageSettings.sketchSummaryOverlay && sketchSummaryLines.length > 0 && <div className="cd-sketch-summary"><b>Сводка проекта</b>{sketchSummaryLines.slice(0, isTechnical ? 6 : 4).map((line) => <span key={line}>{line}</span>)}</div>}
+            </div>)}
             {eskizModules.length > 0 && (
               <div className="cd-eskiz-modules">
                 <b>Модули, добавленные с эскиза</b>
@@ -330,6 +409,14 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         <div className="cd-total">Итоговая стоимость: <b>{fmtMoney(totals.client)}</b></div>
         {project.clientOffer?.notes && <div className="cd-comment"><b>Примечания:</b><br />{project.clientOffer.notes}</div>}
         {project.comment && <div className="cd-comment">{project.comment}</div>}
+
+        {(packageSettings.includeContract || packageSettings.includeReceipt) && (
+          <section className="cd-package-docs">
+            <div className="cd-section-head"><h3>Пакет документов</h3><span>черновые типовые формы — позже заменим на ваши шаблоны</span></div>
+            {packageSettings.includeContract && <article className="cd-legal-card"><h4>Договор на изготовление мебели</h4><p><b>Исполнитель:</b> {project.clientOffer?.sellerName || 'Исполнитель / мебельное ателье'} · <b>Заказчик:</b> {project.client || '—'} · <b>№:</b> {project.clientOffer?.contractNumber || project.id.slice(0, 8).toUpperCase()}</p><p>Предмет: изготовление и/или комплектация мебельного изделия по согласованному эскизу, спецификации и коммерческому предложению. Стоимость: <b>{fmtMoney(totals.client)}</b>. Оплата: {project.clientOffer?.paymentTerms || 'по согласованию'}. Срок: {project.clientOffer?.productionTerms || 'после утверждения размеров и материалов'}. Гарантия: {project.clientOffer?.warranty || '12 месяцев, если иное не указано'}.</p><div className="cd-sign-row"><span>Исполнитель __________________</span><span>Заказчик __________________</span></div></article>}
+            {packageSettings.includeReceipt && <article className="cd-legal-card"><h4>Товарный чек</h4><div className="cd-receipt-grid"><span>Комплект мебели по проекту</span><b>{fmtMoney(totals.client)}</b><span>Корпуса общ.</span><b>{fmtMoney(projectSummary.bodyTotal)}</b><span>Фасады</span><b>{projectSummary.facadeAreaM2 > 0 ? `${fmtNum(projectSummary.facadeAreaM2, 2)} м² · ${fmtMoney(projectSummary.facadeTotal)}` : fmtMoney(projectSummary.facadeTotal)}</b><span>Фурнитура</span><b>{fmtMoney(projectSummary.hardwareTotal)}</b></div><div className="cd-sign-row"><span>Продавец __________________</span><span>Покупатель __________________</span></div></article>}
+          </section>
+        )}
       </div>
     </div>
   );
