@@ -322,6 +322,28 @@ export default function ModulesPanel(props: {
         {allProblems.some((p) => p.critical) && <span className="warn">⛔ есть позиции с неполными данными — см. проверку внизу</span>}
       </div>
 
+      <section className="module-workbench-panel no-print" aria-label="Рабочее место модулей кухни">
+        <div className="module-workbench-main">
+          <span className="eyebrow">Состав кухни</span>
+          <h3>{mods.length > 0 ? 'Список модулей → выбранная позиция → проверка' : 'Добавьте первый модуль кухни'}</h3>
+          <p>Таблица остаётся быстрой для ввода габаритов, а карточка выбранной позиции ниже содержит материалы, фасады, петли, надбавки и расшифровку расчёта.</p>
+        </div>
+        <div className="module-workbench-steps">
+          <span className={mods.length > 0 ? 'ready' : ''}><b>{mods.length || '—'}</b><small>модулей</small></span>
+          <span className={sel ? 'ready' : ''}><b>{sel ? sel.name.slice(0, 18) : 'выберите'}</b><small>редактор позиции</small></span>
+          <span className={summary.facades > 0 ? 'ready' : ''}><b>{summary.facades}</b><small>фасадов</small></span>
+          <span className={allProblems.length === 0 ? 'ready' : allProblems.some((p) => p.critical) ? 'bad' : 'warn'}><b>{allProblems.length || 'ок'}</b><small>проверка</small></span>
+        </div>
+        <aside className="module-workbench-current">
+          {sel ? <>
+            <b>{sel.name}</b>
+            <span>{sel.widthMm || '—'}×{sel.heightMm || '—'}×{sel.depthMm || '—'} мм · {sel.qty} шт</span>
+            <span>{selectedBody ? selectedBody.name.slice(0, 48) : 'корпус не выбран'}</span>
+            <strong>{selectedModuleCalculation ? fmtMoney(selectedModuleCalculation.totals.cost) : '—'}</strong>
+          </> : <><b>Нет выбранной позиции</b><span>Кликните по строке модуля — ниже откроется полный редактор.</span></>}
+        </aside>
+      </section>
+
       {showPlanner && <WallPlanner project={project} onChange={props.onChange} onClose={() => setShowPlanner(false)} />}
       {showBulkEdit && <BulkEditPanel modules={mods} selectedIds={selectedIds} pricebook={pricebook} onApply={(next) => props.onChange({ ...project, modules: next })} onClose={() => setShowBulkEdit(false)} />}
 

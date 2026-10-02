@@ -3734,3 +3734,56 @@ select option { background: #fff !important; color: #102037 !important; }
   .client-document-actions.big, .blank-workflow-steps, .quick-route-panel { grid-template-columns: 1fr; }
   .quick-express-grid .totals-col, .quick-detail-grid .totals-col { position: static; }
 }
+
+/* ---------- Module workbench guidance ---------- */
+.module-workbench-panel {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(320px, 1.35fr) minmax(220px, .85fr);
+  gap: 12px;
+  align-items: stretch;
+  margin: 0 0 14px;
+  padding: 14px;
+  border: 1px solid rgba(15,47,87,.14);
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(239,246,255,.86));
+  box-shadow: 0 14px 34px rgba(15,47,87,.07);
+}
+.module-workbench-main h3 { margin: 4px 0 5px; color: #0b3a75; font-size: 20px; letter-spacing: -.02em; }
+.module-workbench-main p { margin: 0; color: #52667a; font-size: 12.5px; line-height: 1.42; }
+.module-workbench-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.module-workbench-steps span {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #d7e4ef;
+  border-radius: 14px;
+  background: #fff;
+  color: #0f2f57;
+}
+.module-workbench-steps span.ready { background: #f0fdf4; border-color: rgba(34,197,94,.30); }
+.module-workbench-steps span.warn { background: #fffbeb; border-color: rgba(245,158,11,.36); }
+.module-workbench-steps span.bad { background: #fff1f2; border-color: rgba(220,38,38,.30); }
+.module-workbench-steps b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #0b3a75; font-size: 15px; }
+.module-workbench-steps small { color: #64748b; font-size: 10.5px; font-weight: 850; }
+.module-workbench-current {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 16px;
+  background: #0b3a75;
+  color: #fff;
+}
+.module-workbench-current b { color: #fff; font-size: 14px; }
+.module-workbench-current span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(255,255,255,.76); font-size: 11px; }
+.module-workbench-current strong { margin-top: auto; color: #fff; font-size: 20px; }
+@media (max-width: 1180px) {
+  .module-workbench-panel { grid-template-columns: 1fr; }
+  .module-workbench-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .module-workbench-steps { grid-template-columns: 1fr; }
+}
