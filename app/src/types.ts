@@ -140,7 +140,7 @@ export interface ClientDocumentPackageSettings {
   includeSpecification?: boolean;
   /** Включить черновик договора по типовому шаблону. */
   includeContract?: boolean;
-  /** Включить товарный чек/квитанцию для клиента. */
+  /** Включить фирменный бланк заказа для клиента. */
   includeReceipt?: boolean;
   /** Компактный режим: меньше пояснений и плотнее таблицы. */
   compact?: boolean;
@@ -159,7 +159,15 @@ export interface ClientOfferSettings {
   sellerDetails?: string;
   contractNumber?: string;
   contractCity?: string;
+  /** Сумма предоплаты/задатка для фирменного договора. Если пусто — берём процент из условий оплаты или оставляем прочерк. */
+  contractPrepayment?: string;
+  /** Сумма доплаты для фирменного договора. Если пусто — считаем от итога и предоплаты, когда это возможно. */
+  contractRemainder?: string;
   clientContacts?: string;
+  clientPassport?: string;
+  clientAddress?: string;
+  clientPhone?: string;
+  clientEmail?: string;
   productionTerms?: string;
   warranty?: string;
   documentPackage?: ClientDocumentPackageSettings;

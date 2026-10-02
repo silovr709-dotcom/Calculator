@@ -8,7 +8,7 @@ import { fmtMoney, fmtDate, fmtNum } from '../lib/format';
 import { exportClientXlsx } from '../lib/exporters';
 import { snapshotProject } from '../lib/eskizPro';
 import { downloadEskizSketchPdf, renderEskizSketchPdf } from '../lib/eskizSketchExport';
-import { downloadClientContractDocx, downloadClientDocumentZip, downloadClientOfferDocx, downloadClientReceiptDocx, normalizeClientDocumentPackage, type ClientDocumentArgs } from '../lib/clientPackage';
+import { downloadClientContractDocx, downloadClientDocumentZip, downloadClientOfferDocx, downloadClientOrderBlankDoc, normalizeClientDocumentPackage, type ClientDocumentArgs } from '../lib/clientPackage';
 import EskizProjectPreview from './EskizProjectPreview';
 
 /** Строка модуля в клиентской версии — без закупочных цен и внутренних данных. */
@@ -254,21 +254,21 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
       <section className="card client-document-hub no-print" aria-label="Документы для клиента">
         <div className="client-document-hub-main">
           <span className="eyebrow">Клиентский пакет</span>
-          <h3>Отдельные файлы для клиента: эскиз, КП, договор и чек</h3>
-          <p>Выгрузка идёт не HTML: Word/PDF можно сразу отправлять, править и складывать в общий ZIP.</p>
+          <h3>Отдельные файлы для клиента: эскиз, КП, фирменный договор и бланк заказа</h3>
+          <p>Выгрузка идёт не HTML: КП и договор собираются в Word/PDF, бланк заказа добавляется в фирменном формате.</p>
         </div>
         <div className="client-document-actions big">
           <button type="button" className="btn ghost" disabled={packageExporting || !clientSketchVisible} onClick={exportSketchPdf}>Эскиз PDF</button>
           <button type="button" className="btn ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientOfferDocx(clientDocumentArgs), 'Не получилось выгрузить КП')}>Полное КП Word</button>
           <button type="button" className="btn ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientContractDocx(clientDocumentArgs), 'Не получилось выгрузить договор')}>Договор Word</button>
-          <button type="button" className="btn ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientReceiptDocx(clientDocumentArgs), 'Не получилось выгрузить товарный чек')}>Товарный чек Word</button>
+          <button type="button" className="btn ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientOrderBlankDoc(clientDocumentArgs), 'Не получилось выгрузить бланк заказа')}>Бланк заказа DOC</button>
           <button type="button" className="btn primary" disabled={packageExporting} onClick={exportClientPackage}>{packageExporting ? 'Собираю…' : 'Пакет ZIP'}</button>
         </div>
         <div className="client-document-includes">
           <span className={packageSettings.includeSketch && clientSketchVisible ? 'ready' : ''}>Эскиз</span>
           <span className={packageSettings.includeOffer ? 'ready' : ''}>КП</span>
           <span className={packageSettings.includeContract ? 'ready' : ''}>Договор</span>
-          <span className={packageSettings.includeReceipt ? 'ready' : ''}>Товарный чек</span>
+          <span className={packageSettings.includeReceipt ? 'ready' : ''}>Бланк заказа</span>
           <span className={packageSettings.sketchSummaryOverlay ? 'ready' : ''}>Сводка на эскизе</span>
         </div>
       </section>
@@ -307,17 +307,23 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
             <label><input type="checkbox" checked={packageSettings.includeSketch} onChange={(event) => updatePackageSettings({ includeSketch: event.target.checked })} /> Эскиз</label>
             <label><input type="checkbox" checked={packageSettings.includeSpecification} onChange={(event) => updatePackageSettings({ includeSpecification: event.target.checked })} /> Спецификация</label>
             <label><input type="checkbox" checked={packageSettings.includeContract} onChange={(event) => updatePackageSettings({ includeContract: event.target.checked })} /> Договор</label>
-            <label><input type="checkbox" checked={packageSettings.includeReceipt} onChange={(event) => updatePackageSettings({ includeReceipt: event.target.checked })} /> Товарный чек</label>
+            <label><input type="checkbox" checked={packageSettings.includeReceipt} onChange={(event) => updatePackageSettings({ includeReceipt: event.target.checked })} /> Бланк заказа</label>
             <label><input type="checkbox" checked={packageSettings.sketchSummaryOverlay} onChange={(event) => updatePackageSettings({ sketchSummaryOverlay: event.target.checked })} /> Сводка на эскизе</label>
             <label><input type="checkbox" checked={packageSettings.compact} onChange={(event) => updatePackageSettings({ compact: event.target.checked })} /> Компактно</label>
           </div>
           <div className="client-package-fields">
             <label>Исполнитель<input value={project.clientOffer?.sellerName ?? ''} placeholder="Название / ИП / ООО" onChange={(event) => updateOffer({ sellerName: event.target.value })} /></label>
             <label>№ договора<input value={project.clientOffer?.contractNumber ?? ''} placeholder="авто из проекта" onChange={(event) => updateOffer({ contractNumber: event.target.value })} /></label>
-            <label>Срок изготовления<input value={project.clientOffer?.productionTerms ?? ''} placeholder="например, 35 рабочих дней" onChange={(event) => updateOffer({ productionTerms: event.target.value })} /></label>
+            <label>Предоплата / задаток<input value={project.clientOffer?.contractPrepayment ?? ''} placeholder="например, 50% или 120 000" onChange={(event) => updateOffer({ contractPrepayment: event.target.value })} /></label>
+            <label>Доплата<input value={project.clientOffer?.contractRemainder ?? ''} placeholder="авто: итог − предоплата" onChange={(event) => updateOffer({ contractRemainder: event.target.value })} /></label>
+            <label>Срок изготовления<input value={project.clientOffer?.productionTerms ?? ''} placeholder="например, 45 рабочих дней" onChange={(event) => updateOffer({ productionTerms: event.target.value })} /></label>
             <label>Гарантия<input value={project.clientOffer?.warranty ?? ''} placeholder="например, 12 месяцев" onChange={(event) => updateOffer({ warranty: event.target.value })} /></label>
-            <label className="span-2">Реквизиты исполнителя<textarea rows={2} value={project.clientOffer?.sellerDetails ?? ''} placeholder="ИНН, адрес, телефон — появятся в договоре и чеке" onChange={(event) => updateOffer({ sellerDetails: event.target.value })} /></label>
-            <label>Контакты клиента<textarea rows={2} value={project.clientOffer?.clientContacts ?? ''} placeholder="телефон, адрес" onChange={(event) => updateOffer({ clientContacts: event.target.value })} /></label>
+            <label className="span-2">Реквизиты исполнителя<textarea rows={2} value={project.clientOffer?.sellerDetails ?? ''} placeholder="ИНН, адрес, телефон — появятся в договоре и бланке" onChange={(event) => updateOffer({ sellerDetails: event.target.value })} /></label>
+            <label>Паспорт клиента<input value={project.clientOffer?.clientPassport ?? ''} placeholder="серия, номер, кем и когда выдан" onChange={(event) => updateOffer({ clientPassport: event.target.value })} /></label>
+            <label>Адрес клиента<input value={project.clientOffer?.clientAddress ?? ''} placeholder="адрес регистрации / доставки" onChange={(event) => updateOffer({ clientAddress: event.target.value })} /></label>
+            <label>Телефон клиента<input value={project.clientOffer?.clientPhone ?? ''} placeholder="+7…" onChange={(event) => updateOffer({ clientPhone: event.target.value })} /></label>
+            <label>E-mail клиента<input value={project.clientOffer?.clientEmail ?? ''} placeholder="email@example.ru" onChange={(event) => updateOffer({ clientEmail: event.target.value })} /></label>
+            <label className="span-2">Контакты клиента / комментарий<textarea rows={2} value={project.clientOffer?.clientContacts ?? ''} placeholder="дополнительные контакты, адрес доставки, примечания" onChange={(event) => updateOffer({ clientContacts: event.target.value })} /></label>
           </div>
         </div>
         <div className="client-eskiz-control">
@@ -482,7 +488,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           <section className="cd-package-docs">
             <div className="cd-section-head"><h3>Пакет документов</h3><span>черновые типовые формы — позже заменим на ваши шаблоны</span></div>
             {packageSettings.includeContract && <article className="cd-legal-card"><h4>Договор на изготовление мебели</h4><p><b>Исполнитель:</b> {project.clientOffer?.sellerName || 'Исполнитель / мебельное ателье'} · <b>Заказчик:</b> {project.client || '—'} · <b>№:</b> {project.clientOffer?.contractNumber || project.id.slice(0, 8).toUpperCase()}</p><p>Предмет: изготовление и/или комплектация мебельного изделия по согласованному эскизу, спецификации и коммерческому предложению. Стоимость: <b>{fmtMoney(totals.client)}</b>. Оплата: {project.clientOffer?.paymentTerms || 'по согласованию'}. Срок: {project.clientOffer?.productionTerms || 'после утверждения размеров и материалов'}. Гарантия: {project.clientOffer?.warranty || '12 месяцев, если иное не указано'}.</p><div className="cd-sign-row"><span>Исполнитель __________________</span><span>Заказчик __________________</span></div></article>}
-            {packageSettings.includeReceipt && <article className="cd-legal-card"><h4>Товарный чек</h4><div className="cd-receipt-grid"><span>Комплект мебели по проекту</span><b>{fmtMoney(totals.client)}</b><span>Корпуса общ.</span><b>{fmtMoney(projectSummary.bodyTotal)}</b><span>Фасады</span><b>{projectSummary.facadeAreaM2 > 0 ? `${fmtNum(projectSummary.facadeAreaM2, 2)} м² · ${fmtMoney(projectSummary.facadeTotal)}` : fmtMoney(projectSummary.facadeTotal)}</b><span>Фурнитура</span><b>{fmtMoney(projectSummary.hardwareTotal)}</b></div><div className="cd-sign-row"><span>Продавец __________________</span><span>Покупатель __________________</span></div></article>}
+            {packageSettings.includeReceipt && <article className="cd-legal-card"><h4>Бланк заказа</h4><p>В ZIP будет добавлен ваш фирменный файл «Бланк заказа» в исходном формате DOC. Основные суммы для заполнения: итог <b>{fmtMoney(totals.client)}</b>, корпуса {fmtMoney(projectSummary.bodyTotal)}, фасады {projectSummary.facadeAreaM2 > 0 ? `${fmtNum(projectSummary.facadeAreaM2, 2)} м² · ${fmtMoney(projectSummary.facadeTotal)}` : fmtMoney(projectSummary.facadeTotal)}, фурнитура {fmtMoney(projectSummary.hardwareTotal)}.</p><div className="cd-sign-row"><span>Продавец __________________</span><span>Покупатель __________________</span></div></article>}
           </section>
         )}
       </div>

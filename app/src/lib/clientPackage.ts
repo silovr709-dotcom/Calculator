@@ -45,6 +45,232 @@ export function normalizeClientDocumentPackage(settings?: ClientDocumentPackageS
 
 const encoder = new TextEncoder();
 
+const CLIENT_CONTRACT_TEMPLATE = 'templates/client/contract-template.docx';
+const CLIENT_ORDER_BLANK_TEMPLATE = 'templates/client/order-blank-template.doc';
+
+type ZipTemplateEntry = {
+  name: string;
+  nameBytes: Uint8Array;
+  method: number;
+  flags: number;
+  time: number;
+  date: number;
+  crc: number;
+  compressedSize: number;
+  uncompressedSize: number;
+  compressedBytes: Uint8Array;
+};
+
+function publicUrl(path: string): string {
+  const base = typeof import.meta !== 'undefined' ? import.meta.env.BASE_URL : '/';
+  return `${base}${path}`;
+}
+
+async function fetchPublicBytes(path: string): Promise<Uint8Array> {
+  if (typeof fetch !== 'function') throw new Error('fetch is not available');
+  const res = await fetch(publicUrl(path));
+  if (!res.ok) throw new Error(`template ${path} not found`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+function readU16(view: DataView, offset: number): number { return view.getUint16(offset, true); }
+function readU32(view: DataView, offset: number): number { return view.getUint32(offset, true); }
+
+function parseZipLocalEntries(bytes: Uint8Array): ZipTemplateEntry[] {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const entries: ZipTemplateEntry[] = [];
+  let offset = 0;
+  while (offset + 30 <= bytes.length && readU32(view, offset) === 0x04034b50) {
+    const flags = readU16(view, offset + 6);
+    const method = readU16(view, offset + 8);
+    const time = readU16(view, offset + 10);
+    const date = readU16(view, offset + 12);
+    const crc = readU32(view, offset + 14);
+    const compressedSize = readU32(view, offset + 18);
+    const uncompressedSize = readU32(view, offset + 22);
+    const nameLength = readU16(view, offset + 26);
+    const extraLength = readU16(view, offset + 28);
+    if (flags & 0x0008) throw new Error('DOCX template uses unsupported data descriptors');
+    const nameStart = offset + 30;
+    const dataStart = nameStart + nameLength + extraLength;
+    const dataEnd = dataStart + compressedSize;
+    const nameBytes = bytes.slice(nameStart, nameStart + nameLength);
+    const name = new TextDecoder().decode(nameBytes);
+    entries.push({ name, nameBytes, method, flags, time, date, crc, compressedSize, uncompressedSize, compressedBytes: bytes.slice(dataStart, dataEnd) });
+    offset = dataEnd;
+  }
+  return entries;
+}
+
+async function inflateZipEntry(entry: ZipTemplateEntry): Promise<Uint8Array> {
+  if (entry.method === 0) return entry.compressedBytes;
+  if (entry.method !== 8 || typeof DecompressionStream !== 'function') throw new Error(`Unsupported DOCX compression method: ${entry.method}`);
+  const compressedBuffer = entry.compressedBytes.buffer.slice(entry.compressedBytes.byteOffset, entry.compressedBytes.byteOffset + entry.compressedBytes.byteLength) as ArrayBuffer;
+  const stream = new Blob([compressedBuffer]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+function unxml(value: string): string {
+  return value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+function replaceVisibleText(documentXml: string, replacements: { find: string; replace: string; occurrence?: number }[]): string {
+  const tokenRegex = /<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g;
+  const tokens: { contentStart: number; contentEnd: number; text: string }[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = tokenRegex.exec(documentXml))) {
+    const contentStart = match.index + match[0].indexOf('>') + 1;
+    tokens.push({ contentStart, contentEnd: contentStart + match[1].length, text: unxml(match[1]) });
+  }
+  const rebuildCombined = () => tokens.map((token) => token.text).join('');
+  const replaceOnce = (find: string, replacement: string, occurrence = 1) => {
+    if (!find) return;
+    const combined = rebuildCombined();
+    let index = -1;
+    let from = 0;
+    for (let i = 0; i < occurrence; i += 1) {
+      index = combined.indexOf(find, from);
+      if (index < 0) return;
+      from = index + find.length;
+    }
+    const end = index + find.length;
+    let cursor = 0;
+    let first = -1;
+    let last = -1;
+    let startInFirst = 0;
+    let endInLast = 0;
+    for (let i = 0; i < tokens.length; i += 1) {
+      const next = cursor + tokens[i].text.length;
+      if (first < 0 && index >= cursor && index <= next) { first = i; startInFirst = index - cursor; }
+      if (first >= 0 && end >= cursor && end <= next) { last = i; endInLast = end - cursor; break; }
+      cursor = next;
+    }
+    if (first < 0 || last < 0) return;
+    if (first === last) {
+      const text = tokens[first].text;
+      tokens[first].text = `${text.slice(0, startInFirst)}${replacement}${text.slice(endInLast)}`;
+      return;
+    }
+    const firstText = tokens[first].text;
+    const lastText = tokens[last].text;
+    tokens[first].text = `${firstText.slice(0, startInFirst)}${replacement}`;
+    for (let i = first + 1; i < last; i += 1) tokens[i].text = '';
+    tokens[last].text = lastText.slice(endInLast);
+  };
+  for (const replacement of replacements) replaceOnce(replacement.find, replacement.replace, replacement.occurrence);
+
+  let out = '';
+  let lastOffset = 0;
+  for (const token of tokens) {
+    out += documentXml.slice(lastOffset, token.contentStart) + xml(token.text);
+    lastOffset = token.contentEnd;
+  }
+  return out + documentXml.slice(lastOffset);
+}
+
+function formatContractDate(project: Project): string {
+  const m = project.date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : fmtDate(project.date);
+}
+
+function moneyDigits(value: number): string {
+  return fmtMoney(value).replace(/\s*₽\s*$/u, '').trim();
+}
+
+function parseMoneyLike(value: string | undefined, total: number): number | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+  const pct = raw.match(/(\d+(?:[,.]\d+)?)\s*%/);
+  if (pct) return total * Number(pct[1].replace(',', '.')) / 100;
+  const numeric = raw.replace(/[^\d,.-]/g, '').replace(',', '.');
+  const parsed = Number(numeric);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function contractPrepaymentText(offer: ClientOfferSettings, total: number): { text: string; amount: number | null } {
+  const fromField = parseMoneyLike(offer.contractPrepayment, total);
+  if (fromField != null) return { text: moneyDigits(fromField), amount: fromField };
+  const fromPaymentTerms = parseMoneyLike(offer.paymentTerms, total);
+  if (fromPaymentTerms != null) return { text: moneyDigits(fromPaymentTerms), amount: fromPaymentTerms };
+  return { text: '________', amount: null };
+}
+
+function contractRemainderText(offer: ClientOfferSettings, total: number, prepayment: number | null): string {
+  const fromField = parseMoneyLike(offer.contractRemainder, total);
+  if (fromField != null) return moneyDigits(fromField);
+  if (prepayment != null) return moneyDigits(Math.max(0, total - prepayment));
+  return '________';
+}
+
+async function zipWithReplacedDocumentXml(templateBytes: Uint8Array, nextDocumentXml: string): Promise<Blob> {
+  const entries = parseZipLocalEntries(templateBytes);
+  const stamp = dosDateTime();
+  const localParts: Uint8Array[] = [];
+  const centralParts: Uint8Array[] = [];
+  const prepared: { nameBytes: Uint8Array; method: number; time: number; date: number; crc: number; compressedBytes: Uint8Array; uncompressedSize: number; offset: number }[] = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const isDocument = entry.name === 'word/document.xml';
+    const payload = isDocument ? encoder.encode(nextDocumentXml) : entry.compressedBytes;
+    const method = isDocument ? 0 : entry.method;
+    const crc = isDocument ? crc32(payload) : entry.crc;
+    const uncompressedSize = isDocument ? payload.length : entry.uncompressedSize;
+    const time = isDocument ? stamp.time : entry.time;
+    const date = isDocument ? stamp.date : entry.date;
+    const flags = 0x0800;
+    const localHeader = concat([
+      u32(0x04034b50), u16(20), u16(flags), u16(method), u16(time), u16(date), u32(crc), u32(payload.length), u32(uncompressedSize), u16(entry.nameBytes.length), u16(0), entry.nameBytes,
+    ]);
+    prepared.push({ nameBytes: entry.nameBytes, method, time, date, crc, compressedBytes: payload, uncompressedSize, offset });
+    localParts.push(localHeader, payload);
+    offset += localHeader.length + payload.length;
+  }
+  const centralStart = offset;
+  for (const entry of prepared) {
+    centralParts.push(concat([
+      u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(entry.method), u16(entry.time), u16(entry.date), u32(entry.crc), u32(entry.compressedBytes.length), u32(entry.uncompressedSize), u16(entry.nameBytes.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(entry.offset), entry.nameBytes,
+    ]));
+  }
+  const central = concat(centralParts);
+  const end = concat([u32(0x06054b50), u16(0), u16(0), u16(prepared.length), u16(prepared.length), u32(central.length), u32(centralStart), u16(0)]);
+  const zipBytes = concat([...localParts, central, end]);
+  const buffer = zipBytes.buffer.slice(zipBytes.byteOffset, zipBytes.byteOffset + zipBytes.byteLength) as ArrayBuffer;
+  return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+}
+
+async function buildClientContractFromTemplate(args: ClientDocumentArgs): Promise<Blob> {
+  const templateBytes = await fetchPublicBytes(CLIENT_CONTRACT_TEMPLATE);
+  const entries = parseZipLocalEntries(templateBytes);
+  const documentEntry = entries.find((entry) => entry.name === 'word/document.xml');
+  if (!documentEntry) throw new Error('word/document.xml not found in contract template');
+  const originalXml = new TextDecoder().decode(await inflateZipEntry(documentEntry));
+  const prepayment = contractPrepaymentText(args.offer, args.total);
+  const remainder = contractRemainderText(args.offer, args.total, prepayment.amount);
+  const clientName = args.project.client?.trim() || '_________________________________';
+  const productionTerms = args.offer.productionTerms?.trim().replace(/^в\s+течени[еи]\s+/i, '') || 'сорока пяти рабочих дней';
+  const replacements = [
+    { find: '130', replace: contractNumber(args.project, args.offer) },
+    { find: '27.07.2026', replace: formatContractDate(args.project) },
+    { find: 'Деригина Татьяна Олеговна', replace: clientName },
+    { find: '23 000', replace: moneyDigits(args.total) },
+    { find: '________', replace: prepayment.text, occurrence: 1 },
+    { find: '________', replace: remainder, occurrence: 1 },
+    { find: 'сорока пяти рабочих дней', replace: productionTerms },
+    ...(args.offer.warranty?.trim() ? [{ find: 'Гарантия 12месяцев', replace: `Гарантия ${args.offer.warranty.trim()}` }] : []),
+    ...(args.offer.clientPassport?.trim() ? [{ find: '________________________________________________________________________', replace: args.offer.clientPassport.trim(), occurrence: 1 }] : []),
+    ...(args.offer.clientAddress?.trim() ? [{ find: '____________________________________________________________________________', replace: args.offer.clientAddress.trim(), occurrence: 1 }] : []),
+    ...(args.offer.clientPhone?.trim() ? [{ find: '____________________________________', replace: args.offer.clientPhone.trim(), occurrence: 1 }] : []),
+    ...(args.offer.clientEmail?.trim() ? [{ find: '___________________________', replace: args.offer.clientEmail.trim(), occurrence: 1 }] : []),
+  ];
+  const documentXml = replaceVisibleText(originalXml, replacements);
+  return zipWithReplacedDocumentXml(templateBytes, documentXml);
+}
+
 function xml(value: unknown): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -208,11 +434,25 @@ export async function buildClientOfferDocx(args: ClientDocumentArgs): Promise<Bl
 }
 
 export async function buildClientContractDocx(args: ClientDocumentArgs): Promise<Blob> {
-  return docxBlob(`${args.project.name} — договор`, contractBlocks(args));
+  try {
+    return await buildClientContractFromTemplate(args);
+  } catch {
+    return docxBlob(`${args.project.name} — договор`, contractBlocks(args));
+  }
 }
 
 export async function buildClientReceiptDocx(args: ClientDocumentArgs): Promise<Blob> {
   return docxBlob(`${args.project.name} — товарный чек`, receiptBlocks(args));
+}
+
+export async function buildClientOrderBlankDoc(args: ClientDocumentArgs): Promise<Blob> {
+  try {
+    const bytes = await fetchPublicBytes(CLIENT_ORDER_BLANK_TEMPLATE);
+    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    return new Blob([buffer], { type: 'application/msword' });
+  } catch {
+    return docxBlob(`${args.project.name} — бланк заказа`, receiptBlocks(args));
+  }
 }
 
 export async function downloadClientOfferDocx(args: ClientDocumentArgs): Promise<void> {
@@ -227,12 +467,16 @@ export async function downloadClientReceiptDocx(args: ClientDocumentArgs): Promi
   downloadFile(`${safeFilePart(args.project.name)} — товарный чек.docx`, await buildClientReceiptDocx(args));
 }
 
+export async function downloadClientOrderBlankDoc(args: ClientDocumentArgs): Promise<void> {
+  downloadFile(`${safeFilePart(args.project.name)} — бланк заказа.doc`, await buildClientOrderBlankDoc(args));
+}
+
 export async function downloadClientDocumentZip(args: ClientDocumentArgs, sketchFiles: ClientPackageSketchFile[] = []): Promise<void> {
   const settings = normalizeClientDocumentPackage(args.offer.documentPackage);
   const files: ZipInput[] = [];
   if (settings.includeOffer || settings.includeSpecification) files.push({ name: `${safeFilePart(args.project.name)} — полное КП.docx`, data: await buildClientOfferDocx(args) });
   if (settings.includeContract) files.push({ name: `${safeFilePart(args.project.name)} — договор.docx`, data: await buildClientContractDocx(args) });
-  if (settings.includeReceipt) files.push({ name: `${safeFilePart(args.project.name)} — товарный чек.docx`, data: await buildClientReceiptDocx(args) });
+  if (settings.includeReceipt) files.push({ name: `${safeFilePart(args.project.name)} — бланк заказа.doc`, data: await buildClientOrderBlankDoc(args) });
   if (settings.includeSketch) files.push(...sketchFiles.map((file, index) => ({ name: file.fileName || `Эскиз ${index + 1} — ${safeFilePart(file.title)}.pdf`, data: file.blob })));
   downloadFile(`${safeFilePart(args.project.name)} — пакет клиента.zip`, await zipFiles(files, 'application/zip'));
 }
