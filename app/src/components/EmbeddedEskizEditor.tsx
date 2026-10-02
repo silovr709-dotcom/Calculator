@@ -479,14 +479,17 @@ export default function EmbeddedEskizEditor(props: Props) {
     });
   }, [project]);
 
+  const projectImageWidth = project?.image.width ?? 0;
+  const projectImageHeight = project?.image.height ?? 0;
+  const projectHeaderEnabled = Boolean(project?.header.enabled);
+
   const fit = useCallback(() => {
-    const current = project;
     const viewport = viewportRef.current;
-    if (!current || !viewport) return;
-    const headerReserve = current.header.enabled ? 54 : 0;
+    if (!projectImageWidth || !projectImageHeight || !viewport) return;
+    const headerReserve = projectHeaderEnabled ? 54 : 0;
     const availableWidth = Math.max(180, viewport.clientWidth - 64);
     const availableHeight = Math.max(180, viewport.clientHeight - headerReserve - 72);
-    const next = clampZoom(Math.min(availableWidth / current.image.width, availableHeight / current.image.height, 1.35));
+    const next = clampZoom(Math.min(availableWidth / projectImageWidth, availableHeight / projectImageHeight, 1.35));
     setZoom(next);
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
@@ -496,7 +499,7 @@ export default function EmbeddedEskizEditor(props: Props) {
         nextViewport.scrollTop = 0;
       });
     });
-  }, [project]);
+  }, [projectHeaderEnabled, projectImageHeight, projectImageWidth]);
 
   const handleViewportWheel = useCallback((event: ReactWheelEvent<HTMLElement>) => {
     if (!(event.ctrlKey || event.metaKey || event.altKey)) return;
