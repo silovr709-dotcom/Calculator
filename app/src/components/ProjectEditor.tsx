@@ -21,6 +21,35 @@ import { exportInternalXlsx, exportClientXlsx, exportInternalCsv, exportProjectJ
 import QRCode from 'qrcode';
 import { makeProjectShareUrl } from '../lib/sync';
 
+type ProjectTab = 'modules' | 'sketch' | 'order' | 'lines' | 'photos' | 'settings' | 'client' | 'check' | 'variants' | 'measurement';
+type ProjectStage = 'composition' | 'eskiz' | 'check' | 'client' | 'order';
+type ReadinessStatus = 'ready' | 'warning' | 'error' | 'idle';
+
+const PROJECT_STAGE_LABELS: Record<ProjectStage, { label: string; hint: string; step: string }> = {
+  composition: { label: 'Состав', hint: 'модули, доп. позиции, варианты и цена', step: '1' },
+  eskiz: { label: 'Эскиз / замер', hint: 'Эскиз PRO, замер и фото', step: '2' },
+  check: { label: 'Проверка', hint: 'ошибки, предупреждения и рекомендации', step: '3' },
+  client: { label: 'Клиент', hint: 'КП, эскиз, договор и чек', step: '4' },
+  order: { label: 'Заказ', hint: 'CRM, закупка и фабрика', step: '5' },
+};
+
+const PROJECT_STAGE_ORDER: ProjectStage[] = ['composition', 'eskiz', 'check', 'client', 'order'];
+const PROJECT_STAGE_DEFAULT_TAB: Record<ProjectStage, ProjectTab> = {
+  composition: 'modules',
+  eskiz: 'sketch',
+  check: 'check',
+  client: 'client',
+  order: 'order',
+};
+
+function stageForTab(tab: ProjectTab): ProjectStage {
+  if (tab === 'modules' || tab === 'lines' || tab === 'variants' || tab === 'settings') return 'composition';
+  if (tab === 'sketch' || tab === 'measurement' || tab === 'photos') return 'eskiz';
+  if (tab === 'client') return 'client';
+  if (tab === 'order') return 'order';
+  return 'check';
+}
+
 export default function ProjectEditor(props: {
   project: Project;
   pricebook: Pricebook;
@@ -36,7 +65,7 @@ export default function ProjectEditor(props: {
   onOpenFactoryBlank?: () => void;
 }) {
   const { project, pricebook } = props;
-  const [tab, setTab] = useState<'modules' | 'sketch' | 'order' | 'lines' | 'photos' | 'settings' | 'client' | 'check' | 'variants' | 'measurement'>(
+  const [tab, setTab] = useState<ProjectTab>(
     () => ((project.modules?.length ?? 0) > 0 || project.lines.length === 0 ? 'modules' : 'lines'),
   );
   const [editorMode, setEditorMode] = useState<'wizard' | 'advanced'>(() => project.wizardMode ?? 'advanced');
@@ -85,6 +114,88 @@ export default function ProjectEditor(props: {
   );
   const projectValidation = useMemo(() => validateProject(project, pricebook), [project, pricebook]);
   const outProject = useMemo(() => ({ ...project, lines: combinedLines }), [project, combinedLines]);
+  const moduleCount = project.modules?.length ?? 0;
+  const sketchCount = project.eskizPro?.snapshots?.length ?? 0;
+  const photoCount = project.photos?.length ?? 0;
+  const variantCount = project.variants?.length ?? 0;
+  const hasMeasurement = Boolean(project.measurement);
+  const unresolvedCriticals = projectValidation.errors.length + moduleCriticals;
+  const unresolvedWarnings = projectValidation.warnings.length;
+  const activeStage = stageForTab(tab);
+  const orderStatusLabels: Record<Project['status'], string> = { draft: 'черновик', sent: 'КП отправлено', approved: 'согласован', archived: 'архив' };
+
+  const openProjectTab = (nextTab: ProjectTab) => {
+    setTab(nextTab);
+    if (editorMode !== 'advanced') setEditorMode('advanced');
+    if (project.wizardMode !== 'advanced') props.onChange({ ...project, wizardMode: 'advanced' });
+  };
+  const openStage = (stage: ProjectStage) => openProjectTab(PROJECT_STAGE_DEFAULT_TAB[stage]);
+  const nextAction = moduleCount === 0
+    ? { label: 'Добавить модули', tab: 'modules' as ProjectTab, hint: 'Начните с состава кухни: корпуса, фасады, фурнитура.' }
+    : moduleCriticals > 0
+      ? { label: 'Заполнить модули', tab: 'modules' as ProjectTab, hint: 'Есть обязательные параметры модулей, которые не входят в цену.' }
+      : sketchCount === 0
+        ? { label: 'Открыть Эскиз PRO', tab: 'sketch' as ProjectTab, hint: 'Добавьте скрин, размеры, маркеры модулей и коммуникации.' }
+        : unresolvedCriticals > 0 || unresolvedWarnings > 0
+          ? { label: 'Открыть проверку', tab: 'check' as ProjectTab, hint: 'Закройте ошибки и подтвердите предупреждения перед КП/фабрикой.' }
+          : project.status === 'draft'
+            ? { label: 'Собрать КП клиенту', tab: 'client' as ProjectTab, hint: 'Сформируйте клиентский пакет: эскиз, КП, договор и чек.' }
+            : { label: 'Перейти к заказу', tab: 'order' as ProjectTab, hint: 'Контроль статуса, закупки, версий КП и передачи на фабрику.' };
+  const readinessItems: { key: ProjectStage; label: string; value: string; status: ReadinessStatus; tab: ProjectTab }[] = [
+    {
+      key: 'composition',
+      label: 'Состав',
+      value: moduleCount > 0 ? `${moduleCount} модулей${project.lines.length ? ` + ${project.lines.length} доп.` : ''}` : project.lines.length ? `${project.lines.length} доп. строк` : 'нужно заполнить',
+      status: moduleCount === 0 ? 'warning' : moduleCriticals > 0 ? 'error' : 'ready',
+      tab: 'modules',
+    },
+    {
+      key: 'eskiz',
+      label: 'Эскиз / замер',
+      value: [sketchCount ? `${sketchCount} эскизов` : '', hasMeasurement ? 'замер' : '', photoCount ? `${photoCount} фото` : ''].filter(Boolean).join(' · ') || 'ещё пусто',
+      status: sketchCount > 0 || hasMeasurement || photoCount > 0 ? 'ready' : 'warning',
+      tab: 'sketch',
+    },
+    {
+      key: 'check',
+      label: 'Проверка',
+      value: unresolvedCriticals > 0 ? `${unresolvedCriticals} критично` : unresolvedWarnings > 0 ? `${unresolvedWarnings} предупрежд.` : 'готово',
+      status: unresolvedCriticals > 0 ? 'error' : unresolvedWarnings > 0 ? 'warning' : 'ready',
+      tab: 'check',
+    },
+    {
+      key: 'client',
+      label: 'Клиент',
+      value: project.clientOffer ? 'КП настроено' : 'документы готовы к сборке',
+      status: unresolvedCriticals > 0 ? 'idle' : 'ready',
+      tab: 'client',
+    },
+    {
+      key: 'order',
+      label: 'Заказ',
+      value: orderStatusLabels[project.status],
+      status: project.status === 'approved' || project.status === 'sent' ? 'ready' : project.status === 'archived' ? 'idle' : 'warning',
+      tab: 'order',
+    },
+  ];
+  const subTabs: { tab: ProjectTab; label: string; badge?: string | number; hint?: string }[] = activeStage === 'composition'
+    ? [
+      { tab: 'modules', label: 'Модули кухни', badge: moduleCount || undefined, hint: 'основной состав' },
+      { tab: 'lines', label: 'Доп. позиции', badge: project.lines.length || undefined, hint: 'столешницы, мойки, работы' },
+      { tab: 'variants', label: 'Варианты', badge: variantCount || undefined, hint: 'сравнение комплектаций' },
+      { tab: 'settings', label: 'Наценка и расходы', hint: 'цена проекта' },
+    ]
+    : activeStage === 'eskiz'
+      ? [
+        { tab: 'sketch', label: 'Эскиз PRO', badge: sketchCount || undefined, hint: 'основное полотно' },
+        { tab: 'measurement', label: 'Замер', hint: 'данные помещения' },
+        { tab: 'photos', label: 'Фото', badge: photoCount || undefined, hint: 'замеры и объект' },
+      ]
+      : activeStage === 'check'
+        ? [{ tab: 'check', label: 'Центр проверки', badge: unresolvedCriticals || unresolvedWarnings || undefined, hint: 'ошибки и рекомендации' }]
+        : activeStage === 'client'
+          ? [{ tab: 'client', label: 'КП и документы', hint: 'эскиз, КП, договор, чек, ZIP' }]
+          : [{ tab: 'order', label: 'Центр заказа', hint: 'статус, закупка, фабрика' }];
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -121,7 +232,7 @@ export default function ProjectEditor(props: {
             <button className="btn tiny ghost" onClick={() => setEditMeta(true)}>изменить</button>
           </div>
         </div>
-        <div className="actions">
+        <div className="actions project-head-actions">
           <select
             value={project.status}
             onChange={(e) => props.onChange({ ...project, status: e.target.value as Project['status'] })}
@@ -134,21 +245,26 @@ export default function ProjectEditor(props: {
           </select>
           <button className="btn ghost" disabled={!props.canUndo} title="Отменить последнее изменение проекта (Ctrl+Z)" onClick={props.onUndo}>↶ Отменить</button>
           <div className="dropdown">
-            <button className="btn ghost">Экспорт ▾</button>
+            <button className="btn ghost">Документы / экспорт ▾</button>
             <div className="dropdown-menu">
               <button onClick={() => exportInternalXlsx(outProject)}>Excel — внутренний расчёт</button>
               <button onClick={() => exportClientXlsx(outProject)}>Excel — коммерческое предложение</button>
               <button onClick={() => exportInternalCsv(outProject)}>CSV — внутренний расчёт</button>
               <button onClick={() => exportProjectJson(project)}>Файл проекта (.json)</button>
-              <button onClick={() => setShowQrModal(true)}>📱 Открыть на телефоне (QR-код)</button>
+              <button onClick={() => setShowQrModal(true)}>Открыть на телефоне (QR-код)</button>
             </div>
           </div>
           {props.onOpenFactoryBlank && (
-            <button className="btn ghost" title="Калькулятор → данные проекта → бланк → проверка → документ" onClick={props.onOpenFactoryBlank}>📋 Бланк на фабрику</button>
+            <button className="btn ghost" title="Калькулятор → данные проекта → бланк → проверка → документ" onClick={props.onOpenFactoryBlank}>Бланк на фабрику</button>
           )}
-          <button className="btn ghost" onClick={props.onDuplicate}>Дублировать</button>
-          <button className="btn ghost" onClick={() => { const n = prompt('Название шаблона:', project.name); if (n) props.onSaveTemplate(n); }}>В шаблон</button>
-          <button className="btn danger ghost" onClick={props.onDelete}>Удалить</button>
+          <div className="dropdown">
+            <button className="btn ghost">Ещё ▾</button>
+            <div className="dropdown-menu">
+              <button onClick={props.onDuplicate}>Дублировать проект</button>
+              <button onClick={() => { const n = prompt('Название шаблона:', project.name); if (n) props.onSaveTemplate(n); }}>Сохранить как шаблон</button>
+              <button className="danger-menu-item" onClick={props.onDelete}>Удалить проект</button>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -186,9 +302,26 @@ export default function ProjectEditor(props: {
         </div>
       )}
 
+      <section className="project-readiness-panel no-print" aria-label="Готовность проекта">
+        <div className="project-readiness-main">
+          <span className="eyebrow">Маршрут проекта</span>
+          <h2>{unresolvedCriticals > 0 ? 'Проект требует доработки' : unresolvedWarnings > 0 ? 'Проект почти готов' : 'Проект готов к следующему шагу'}</h2>
+          <p>{nextAction.hint}</p>
+        </div>
+        <div className="project-readiness-steps">
+          {readinessItems.map((item) => (
+            <button key={item.key} type="button" className={`project-readiness-step ${item.status} ${activeStage === item.key ? 'active' : ''}`} onClick={() => openProjectTab(item.tab)}>
+              <span>{item.label}</span>
+              <b>{item.value}</b>
+            </button>
+          ))}
+        </div>
+        <button type="button" className="btn primary project-next-action" onClick={() => openProjectTab(nextAction.tab)}>{nextAction.label}</button>
+      </section>
+
       <div className="editor-mode-bar no-print">
-        <div><b>{editorMode === 'wizard' ? 'Мастер сборки' : 'Продвинутый режим'}</b><span className="muted small"> {editorMode === 'wizard' ? ' · шаги проведут по обязательным данным' : ' · все вкладки и быстрый доступ'}</span></div>
-        <button className="btn tiny ghost" onClick={() => { const next = editorMode === 'wizard' ? 'advanced' : 'wizard'; setEditorMode(next); props.onChange({ ...project, wizardMode: next }); }}>{editorMode === 'wizard' ? 'Перейти к вкладкам' : 'Открыть мастер'}</button>
+        <div><b>{editorMode === 'wizard' ? 'Мастер сборки' : 'Рабочий маршрут'}</b><span className="muted small"> {editorMode === 'wizard' ? ' · шаги проведут по обязательным данным' : ' · Состав → Эскиз/замер → Проверка → Клиент → Заказ'}</span></div>
+        <button className="btn tiny ghost" onClick={() => { const next = editorMode === 'wizard' ? 'advanced' : 'wizard'; setEditorMode(next); props.onChange({ ...project, wizardMode: next }); }}>{editorMode === 'wizard' ? 'Перейти к маршруту' : 'Открыть мастер'}</button>
       </div>
       {editorMode === 'wizard' ? (
         <KitchenWizard
@@ -199,19 +332,18 @@ export default function ProjectEditor(props: {
           onOpenAdvanced={() => { setEditorMode('advanced'); props.onChange({ ...project, wizardMode: 'advanced' }); }}
         />
       ) : (<>
-      <div className="tabs">
-        <button className={tab === 'modules' ? 'active' : ''} onClick={() => setTab('modules')}>
-          Позиции кухни{(project.modules?.length ?? 0) > 0 ? ` (${project.modules!.length})` : ''}{moduleCriticals > 0 ? ' ⛔' : ''}
-        </button>
-        <button className={tab === 'sketch' ? 'active' : ''} onClick={() => setTab('sketch')}>🎨 Эскиз PRO</button>
-        <button className={tab === 'check' ? 'active' : ''} onClick={() => setTab('check')}>✓ Проверка</button>
-        <button className={tab === 'order' ? 'active' : ''} onClick={() => setTab('order')}>📦 Центр заказа</button>
-        <button className={tab === 'variants' ? 'active' : ''} onClick={() => setTab('variants')}>Варианты</button>
-        <button className={tab === 'measurement' ? 'active' : ''} onClick={() => setTab('measurement')}>📏 Замер</button>
-        <button className={tab === 'lines' ? 'active' : ''} onClick={() => setTab('lines')}>Доп. позиции и строки</button>
-        <button className={tab === 'photos' ? 'active' : ''} onClick={() => setTab('photos')}>Фото{(project.photos?.length ?? 0) > 0 ? ` (${project.photos!.length})` : ''}</button>
-        <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>Настройки проекта</button>
-        <button className={tab === 'client' ? 'active' : ''} onClick={() => setTab('client')}>Клиентская версия</button>
+      <div className="project-stage-nav no-print" aria-label="Этапы проекта">
+        {PROJECT_STAGE_ORDER.map((stage) => {
+          const meta = PROJECT_STAGE_LABELS[stage];
+          return <button key={stage} type="button" className={activeStage === stage ? 'active' : ''} onClick={() => openStage(stage)}>
+            <i>{meta.step}</i><span>{meta.label}<small>{meta.hint}</small></span>
+          </button>;
+        })}
+      </div>
+      <div className="project-subtabs no-print" aria-label="Разделы текущего этапа">
+        {subTabs.map((item) => <button key={item.tab} type="button" className={tab === item.tab ? 'active' : ''} onClick={() => openProjectTab(item.tab)}>
+          <span>{item.label}{item.badge ? ` (${item.badge})` : ''}</span>{item.hint && <small>{item.hint}</small>}
+        </button>)}
       </div>
 
       {tab === 'photos' && <PhotosPanel project={project} onChange={props.onChange} />}

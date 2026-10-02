@@ -276,31 +276,40 @@ const persistTemplates = useCallback((next: Template[]) => {
           <div className="brand-sub">J.A.R.V.I.S. kitchen operations</div>
           <div className="brand-pro">PRO</div>
         </div>
-        <nav>
-          <button className={view.kind === 'dashboard' ? 'active' : ''} onClick={() => setView({ kind: 'dashboard' })}>
-            <span className="nav-icon nav-projects" aria-hidden="true" />Проекты<span className="nav-count">{projects.length}</span>
-          </button>
-          <button className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>
-            <span className="nav-icon nav-quick" aria-hidden="true" />Быстрый расчёт
-          </button>
-          <button className={view.kind === 'factory' ? 'active' : ''} onClick={() => setView({ kind: 'factory' })}>
-            <span className="nav-icon nav-factory" aria-hidden="true" />Бланк на фабрику
-          </button>
-          <button className={view.kind === 'kb' ? 'active' : ''} onClick={() => setView({ kind: 'kb' })}>
-            <span className="nav-icon nav-kb" aria-hidden="true" />База знаний<span className="nav-count">{kbArticles.length}</span>
-          </button>
-          <button className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => setView({ kind: 'pricebook' })}>
-            <span className="nav-icon nav-price" aria-hidden="true" />Прайс и версии
-          </button>
-          <button className={view.kind === 'settings' ? 'active' : ''} onClick={() => setView({ kind: 'settings' })}>
-            <span className="nav-icon nav-settings" aria-hidden="true" />Настройки
-          </button>
-          <button className={view.kind === 'sync' ? 'active' : ''} onClick={() => setView({ kind: 'sync' })}>
-            <span className="nav-icon nav-sync" aria-hidden="true" />Синхронизация
-            {syncConfig.enabled && (
-              <span className={`nav-sync-badge ${syncStatus}`} title={`Синхронизация: ${syncStatus === 'synced' ? 'в сети' : syncStatus === 'syncing' ? 'обновление...' : 'офлайн'}`} />
-            )}
-          </button>
+        <nav className="sidebar-nav" aria-label="Главная навигация">
+          <div className="sidebar-nav-group">
+            <div className="sidebar-nav-title">Работа</div>
+            <button className={view.kind === 'dashboard' ? 'active' : ''} onClick={() => setView({ kind: 'dashboard' })}>
+              <span className="nav-icon nav-projects" aria-hidden="true" />Проекты<span className="nav-count">{projects.length}</span>
+            </button>
+            <button className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>
+              <span className="nav-icon nav-quick" aria-hidden="true" />Быстрый расчёт
+            </button>
+            <button className={view.kind === 'factory' ? 'active' : ''} onClick={() => setView({ kind: 'factory' })}>
+              <span className="nav-icon nav-factory" aria-hidden="true" />Бланк на фабрику
+            </button>
+          </div>
+          <div className="sidebar-nav-group">
+            <div className="sidebar-nav-title">Справочники</div>
+            <button className={view.kind === 'kb' ? 'active' : ''} onClick={() => setView({ kind: 'kb' })}>
+              <span className="nav-icon nav-kb" aria-hidden="true" />База знаний<span className="nav-count">{kbArticles.length}</span>
+            </button>
+            <button className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => setView({ kind: 'pricebook' })}>
+              <span className="nav-icon nav-price" aria-hidden="true" />Прайс и версии
+            </button>
+          </div>
+          <div className="sidebar-nav-group">
+            <div className="sidebar-nav-title">Система</div>
+            <button className={view.kind === 'sync' ? 'active' : ''} onClick={() => setView({ kind: 'sync' })}>
+              <span className="nav-icon nav-sync" aria-hidden="true" />Синхронизация
+              {syncConfig.enabled && (
+                <span className={`nav-sync-badge ${syncStatus}`} title={`Синхронизация: ${syncStatus === 'synced' ? 'в сети' : syncStatus === 'syncing' ? 'обновление...' : 'офлайн'}`} />
+              )}
+            </button>
+            <button className={view.kind === 'settings' ? 'active' : ''} onClick={() => setView({ kind: 'settings' })}>
+              <span className="nav-icon nav-settings" aria-hidden="true" />Настройки
+            </button>
+          </div>
         </nav>
         <div className="sidebar-foot">
           <div className="pb-badge" title={activePricebook.meta.sourceFile}>
