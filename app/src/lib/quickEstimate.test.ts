@@ -62,6 +62,22 @@ describe('экспресс-оценка кухни', () => {
     expect(estimate.tolerancePct).toBeGreaterThan(0.08);
   });
 
+  it('подбирает постформинг хлыстом 600×3000, а не угловым куском 800×800', () => {
+    const estimate = buildQuickEstimate({ ...baseInput, worktopTier: 'ms-38-cat1', worktopLengthMm: 2400 }, pb);
+    const worktop = estimate.lines.find((line) => line.category === 'Столешницы: Мир Столешниц (постформинг)');
+    expect(worktop).toBeTruthy();
+    expect(worktop?.name).toMatch(/600\*3000/);
+    expect(worktop?.name).not.toMatch(/800\*800/);
+    expect(worktop?.qty).toBe(1);
+  });
+
+  it('подбирает категории разных производителей столешниц в экспресс-расчёте', () => {
+    const soyuz = buildQuickEstimate({ ...baseInput, worktopTier: 'souz-38-premium-plus', worktopLengthMm: 2400 }, pb);
+    const worktop = soyuz.lines.find((line) => line.category === 'Столешницы: СОЮЗ (постформинг)');
+    expect(worktop?.name).toMatch(/600\*3000\*38/);
+    expect(worktop?.name).toMatch(/Premium\+/);
+  });
+
   it('подбирает компакт-плиту хлыстом, а не теряет длину формата 3.050/4.200', () => {
     const estimate = buildQuickEstimate({ ...baseInput, worktopTier: 'compact', worktopLengthMm: 3050 }, pb);
     const worktop = estimate.lines.find((line) => line.category.startsWith('Столешницы: компакт-плита'));

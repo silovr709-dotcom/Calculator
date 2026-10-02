@@ -326,7 +326,7 @@ export default function ModulesPanel(props: {
         <div className="module-workbench-main">
           <span className="eyebrow">Состав кухни</span>
           <h3>{mods.length > 0 ? 'Список модулей → выбранная позиция → проверка' : 'Добавьте первый модуль кухни'}</h3>
-          <p>Таблица остаётся быстрой для ввода габаритов, а карточка выбранной позиции ниже содержит материалы, фасады, петли, надбавки и расшифровку расчёта.</p>
+          <p>Слева остаётся быстрый список и табличный ввод, справа сразу открывается редактор выбранного модуля: не нужно листать под всей таблицей.</p>
         </div>
         <div className="module-workbench-steps">
           <span className={mods.length > 0 ? 'ready' : ''}><b>{mods.length || '—'}</b><small>модулей</small></span>
@@ -347,11 +347,36 @@ export default function ModulesPanel(props: {
       {showPlanner && <WallPlanner project={project} onChange={props.onChange} onClose={() => setShowPlanner(false)} />}
       {showBulkEdit && <BulkEditPanel modules={mods} selectedIds={selectedIds} pricebook={pricebook} onApply={(next) => props.onChange({ ...project, modules: next })} onClose={() => setShowBulkEdit(false)} />}
 
-      {/* Таблица позиций */}
+      {/* Рабочая область: список модулей + редактор выбранной позиции */}
       {mods.length === 0 ? (
         <div className="empty">Позиций пока нет. Нажмите «+ Добавить позицию», выберите тип (нижний шкаф, пенал…), затем задайте размеры и комплектацию.</div>
       ) : (
-        <>
+        <div className="module-master-detail">
+          <section className="card module-list-card">
+            <div className="module-list-head">
+              <div>
+                <span className="eyebrow">Модули проекта</span>
+                <h3>Выберите позицию — редактор открыт справа</h3>
+              </div>
+              <span className="module-list-count">{mods.length} поз.</span>
+            </div>
+            <div className="module-card-list" aria-label="Быстрый выбор модуля">
+              {mods.map((m, idx) => {
+                const c = checks.get(m.id)!;
+                const body = resolveSlot(m, 'body', defaults, pricebook).item;
+                const filled = ALL_SLOTS.filter((k) => slotNeed(m, k) > 0 || k === 'body');
+                const chosen = filled.filter((k) => resolveSlot(m, k, defaults, pricebook).item);
+                return (
+                  <button type="button" key={m.id} className={`module-mini-card ${selId === m.id ? 'active' : ''} ${c.level !== 'ok' ? c.level : ''}`} onClick={() => setSelId(m.id)}>
+                    <span className="module-mini-line top"><b>{idx + 1}. {m.name}</b><em>{fmtMoney(costs.get(m.id) ?? 0)}</em></span>
+                    <span className="module-mini-line"><small>{m.type}</small><small>{m.widthMm || '—'}×{m.heightMm || '—'}×{m.depthMm || '—'} мм · {m.qty} шт</small></span>
+                    <span className="module-mini-line"><small>{body ? body.name.slice(0, 34) : 'корпус не выбран'}</small><small>{chosen.length}/{filled.length} слотов {statusDot(c.level)}</small></span>
+                  </button>
+                );
+              })}
+            </div>
+            <details className="module-spreadsheet-panel" open>
+              <summary>Табличный ввод размеров и количества</summary>
           <div className="module-order-hint">↕ Порядок позиций задаёт порядок модулей в эскизе · ⌨ Enter/Tab — следующее поле · ↑↓ — между строк · Ctrl+D — заполнить с верхней позиции</div>
           <table className="table modules" ref={tableRef} onKeyDown={onTableKeyDown}>
             <thead>
@@ -440,12 +465,11 @@ export default function ModulesPanel(props: {
             })}
             </tbody>
           </table>
-        </>
-      )}
 
-      {/* Редактор выбранной позиции */}
-      {sel && (
-        <section className="card mod-editor">
+            </details>
+          </section>
+          {sel ? (
+            <section className="card mod-editor module-editor-panel">
           <h3>Позиция: {sel.name} {statusDot(checks.get(sel.id)!.level)}</h3>
           <div className="grid4">
             <label>Название<input value={sel.name} onChange={(e) => updMod(sel.id, { name: e.target.value })} /></label>
@@ -713,6 +737,14 @@ export default function ModulesPanel(props: {
             </div>
           )}
         </section>
+          ) : (
+            <section className="card module-editor-empty">
+              <span className="eyebrow">Редактор позиции</span>
+              <h3>Выберите модуль слева</h3>
+              <p className="muted">Редактор больше не прячется под длинным списком модулей: карточка выбранной позиции открывается в правой колонке и остаётся рядом с таблицей.</p>
+            </section>
+          )}
+        </div>
       )}
 
       {/* Проверка перед расчётом */}

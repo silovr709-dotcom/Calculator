@@ -10,8 +10,12 @@ export type QuickFacadeTier =
   | 'tss';
 export type QuickWorktopTier =
   | 'none' | 'postforming-26' | 'postforming-38' | 'compact'
-  | 'ms-26-cat1' | 'ms-26-cat2' | 'ms-38-cat1' | 'ms-38-cat2'
-  | 'souz-universal' | 'souz-premium' | 'slotex-e1' | 'arkobaleno-650';
+  | 'ms-26-cat1' | 'ms-26-cat2' | 'ms-26-cat3' | 'ms-26-cat5' | 'ms-26-cat7'
+  | 'ms-38-cat1' | 'ms-38-cat2' | 'ms-38-cat3' | 'ms-38-cat5' | 'ms-38-cat7'
+  | 'souz-universal' | 'souz-premium'
+  | 'souz-26-universal' | 'souz-26-classic' | 'souz-26-standart' | 'souz-26-premium' | 'souz-26-premium-plus'
+  | 'souz-38-universal' | 'souz-38-classic' | 'souz-38-standart' | 'souz-38-premium' | 'souz-38-premium-plus'
+  | 'slotex-e1' | 'slotex-e2' | 'slotex-e3' | 'arkobaleno-650' | 'arkobaleno-1320';
 export type QuickHardwareTier = 'standard' | 'soft-close' | 'blum' | 'boyard-soft-close' | 'titus-soft-close' | 'blum-soft-close';
 
 export interface QuickEstimateInput {
@@ -106,6 +110,28 @@ function lengthOfLongItem(item: PriceItem): number | null {
 
 function sheetLengthForEstimate(item: PriceItem): number {
   return lengthOfLongItem(item) ?? sheetLengthOf(item);
+}
+
+function itemFullText(item: PriceItem): string {
+  return `${item.attrs?.['формат'] ?? ''} ${item.attrs?.['толщина'] ?? ''} ${item.attrs?.['категория'] ?? ''} ${item.attrs?.['серия'] ?? ''} ${item.name}`;
+}
+
+function isFormat600x3000(item: PriceItem, thickness?: '26' | '38'): boolean {
+  const text = itemFullText(item).replace(/\s+/g, '').toLowerCase();
+  if (!/(?:^|[^\d])600(?:\*|х|x)3000/.test(text)) return false;
+  if (thickness && !new RegExp(`(?:\\*|х|x)${thickness}(?:мм)?|${thickness}мм`).test(text)) return false;
+  return true;
+}
+
+function isMainWorktopSheet(item: PriceItem): boolean {
+  const text = norm(itemFullText(item));
+  return item.priceBasis === 'sheet'
+    && text.includes('столешниц')
+    && !text.includes('стеновая панель')
+    && !text.includes('800*800')
+    && !text.includes('800х800')
+    && !text.includes('800x800')
+    && sheetLengthForEstimate(item) >= 3000;
 }
 
 function byScore<T>(items: T[], score: (item: T) => number): T | null {
@@ -300,34 +326,53 @@ function facadeTierLabel(tier: QuickFacadeTier): string {
 function pickWorktop(pricebook: Pricebook, tier: QuickWorktopTier): PriceItem | null {
   if (tier === 'none') return null;
   const byCat = (category: string) => fixedItems(pricebook, (item) => item.category === category && item.priceBasis === 'sheet');
+  const mirSheets = () => byCat('Столешницы: Мир Столешниц (постформинг)').filter((item) => isMainWorktopSheet(item) && isFormat600x3000(item));
+  const souzSheets = () => byCat('Столешницы: СОЮЗ (постформинг)').filter((item) => isMainWorktopSheet(item) && isFormat600x3000(item));
   const pickMir = (thickness: '26' | '38', category: string) => byPricePercentile(
-    byCat('Столешницы: Мир Столешниц (постформинг)').filter((item) =>
-      norm(item.name).includes('столешница')
-      && `${item.attrs?.['толщина'] ?? ''} ${item.name}`.includes(thickness)
-      && tierIncludes(item, category)),
+    mirSheets().filter((item) => isFormat600x3000(item, thickness) && tierIncludes(item, category)),
     0.25,
   );
-  const pickSoyuz = (category: string) => byPricePercentile(
-    byCat('Столешницы: СОЮЗ (постформинг)').filter((item) =>
-      norm(item.name).includes('столешница')
-      && tierIncludes(item, category)
-      && /(?:600\*3000\*(?:26|38)|600\*3000)/.test(`${item.attrs?.['формат'] ?? ''} ${item.name}`)),
+  const pickSoyuz = (thickness: '26' | '38', category: string) => byPricePercentile(
+    souzSheets().filter((item) => isFormat600x3000(item, thickness) && tierIncludes(item, category)),
     0.25,
   );
-  if (tier === 'ms-26-cat1') return pickMir('26', '1 категория') ?? byPricePercentile(byCat('Столешницы: Мир Столешниц (постформинг)'), 0.15);
-  if (tier === 'ms-26-cat2') return pickMir('26', '2 категория') ?? byPricePercentile(byCat('Столешницы: Мир Столешниц (постформинг)'), 0.25);
-  if (tier === 'ms-38-cat1') return pickMir('38', '1 категория') ?? byPricePercentile(byCat('Столешницы: Мир Столешниц (постформинг)'), 0.25);
-  if (tier === 'ms-38-cat2') return pickMir('38', '2 категория') ?? byPricePercentile(byCat('Столешницы: Мир Столешниц (постформинг)'), 0.35);
-  if (tier === 'souz-universal') return pickSoyuz('Universal') ?? byPricePercentile(byCat('Столешницы: СОЮЗ (постформинг)'), 0.15);
-  if (tier === 'souz-premium') return pickSoyuz('Premium') ?? byPricePercentile(byCat('Столешницы: СОЮЗ (постформинг)'), 0.70);
-  if (tier === 'slotex-e1') return byPricePercentile(
-    byCat('Столешницы: компакт-плита Slotex').filter((item) => tierIncludes(item, 'E1') && /(?:650|600|1320)/.test(`${item.attrs?.['формат'] ?? ''} ${item.name}`)),
-    0.25,
-  ) ?? byPricePercentile(byCat('Столешницы: компакт-плита Slotex'), 0.25);
+  if (tier === 'ms-26-cat1') return pickMir('26', '1 категория') ?? byPricePercentile(mirSheets().filter((item) => isFormat600x3000(item, '26')), 0.10);
+  if (tier === 'ms-26-cat2') return pickMir('26', '2 категория') ?? byPricePercentile(mirSheets().filter((item) => isFormat600x3000(item, '26')), 0.20);
+  if (tier === 'ms-26-cat3') return pickMir('26', '3 категория') ?? byPricePercentile(mirSheets().filter((item) => isFormat600x3000(item, '26')), 0.30);
+  if (tier === 'ms-26-cat5') return pickMir('26', '5 категория') ?? byPricePercentile(mirSheets().filter((item) => isFormat600x3000(item, '26')), 0.50);
+  if (tier === 'ms-26-cat7') return pickMir('26', '7 категория') ?? byPricePercentile(mirSheets().filter((item) => isFormat600x3000(item, '26')), 0.70);
+  if (tier === 'ms-38-cat1') return pickMir('38', '1 категория') ?? byPricePercentile(mirSheets().filter((item) => isFormat600x3000(item, '38')), 0.10);
+  if (tier === 'ms-38-cat2') return pickMir('38', '2 категория') ?? byPricePercentile(mirSheets().filter((item) => isFormat600x3000(item, '38')), 0.20);
+  if (tier === 'ms-38-cat3') return pickMir('38', '3 категория') ?? byPricePercentile(mirSheets().filter((item) => isFormat600x3000(item, '38')), 0.30);
+  if (tier === 'ms-38-cat5') return pickMir('38', '5 категория') ?? byPricePercentile(mirSheets().filter((item) => isFormat600x3000(item, '38')), 0.50);
+  if (tier === 'ms-38-cat7') return pickMir('38', '7 категория') ?? byPricePercentile(mirSheets().filter((item) => isFormat600x3000(item, '38')), 0.70);
+  if (tier === 'souz-universal') return pickSoyuz('38', 'Universal') ?? byPricePercentile(souzSheets(), 0.10);
+  if (tier === 'souz-premium') return pickSoyuz('38', 'Premium') ?? byPricePercentile(souzSheets(), 0.70);
+  if (tier === 'souz-26-universal') return pickSoyuz('26', 'Universal') ?? byPricePercentile(souzSheets().filter((item) => isFormat600x3000(item, '26')), 0.10);
+  if (tier === 'souz-26-classic') return pickSoyuz('26', 'Classic') ?? byPricePercentile(souzSheets().filter((item) => isFormat600x3000(item, '26')), 0.30);
+  if (tier === 'souz-26-standart') return pickSoyuz('26', 'Standart pro') ?? byPricePercentile(souzSheets().filter((item) => isFormat600x3000(item, '26')), 0.45);
+  if (tier === 'souz-26-premium') return pickSoyuz('26', 'Premium') ?? byPricePercentile(souzSheets().filter((item) => isFormat600x3000(item, '26')), 0.70);
+  if (tier === 'souz-26-premium-plus') return pickSoyuz('26', 'Premium+') ?? byPricePercentile(souzSheets().filter((item) => isFormat600x3000(item, '26')), 0.90);
+  if (tier === 'souz-38-universal') return pickSoyuz('38', 'Universal') ?? byPricePercentile(souzSheets().filter((item) => isFormat600x3000(item, '38')), 0.10);
+  if (tier === 'souz-38-classic') return pickSoyuz('38', 'Classic') ?? byPricePercentile(souzSheets().filter((item) => isFormat600x3000(item, '38')), 0.30);
+  if (tier === 'souz-38-standart') return pickSoyuz('38', 'Standart pro') ?? byPricePercentile(souzSheets().filter((item) => isFormat600x3000(item, '38')), 0.45);
+  if (tier === 'souz-38-premium') return pickSoyuz('38', 'Premium') ?? byPricePercentile(souzSheets().filter((item) => isFormat600x3000(item, '38')), 0.70);
+  if (tier === 'souz-38-premium-plus') return pickSoyuz('38', 'Premium+') ?? byPricePercentile(souzSheets().filter((item) => isFormat600x3000(item, '38')), 0.90);
+  if (tier === 'slotex-e1' || tier === 'slotex-e2' || tier === 'slotex-e3') {
+    const series = tier === 'slotex-e1' ? 'E1' : tier === 'slotex-e2' ? 'E2' : 'E3';
+    return byPricePercentile(
+      byCat('Столешницы: компакт-плита Slotex').filter((item) => tierIncludes(item, series) && /(?:650|600|1320)/.test(`${item.attrs?.['формат'] ?? ''} ${item.name}`)),
+      0.25,
+    ) ?? byPricePercentile(byCat('Столешницы: компакт-плита Slotex').filter((item) => tierIncludes(item, series)), 0.25);
+  }
   if (tier === 'arkobaleno-650') return byPricePercentile(
     byCat('Столешницы: компакт-плита Arkobaleno').filter((item) => /650/.test(`${item.attrs?.['формат'] ?? ''} ${item.name}`)),
     0.25,
   ) ?? byPricePercentile(byCat('Столешницы: компакт-плита Arkobaleno'), 0.25);
+  if (tier === 'arkobaleno-1320') return byPricePercentile(
+    byCat('Столешницы: компакт-плита Arkobaleno').filter((item) => /1320/.test(`${item.attrs?.['формат'] ?? ''} ${item.name}`)),
+    0.25,
+  ) ?? byPricePercentile(byCat('Столешницы: компакт-плита Arkobaleno'), 0.45);
   if (tier === 'compact') {
     const compact = fixedItems(pricebook, (item) => item.category.startsWith('Столешницы: компакт-плита')
       && item.priceBasis === 'sheet'
@@ -335,10 +380,7 @@ function pickWorktop(pricebook: Pricebook, tier: QuickWorktopTier): PriceItem | 
     return byPricePercentile(compact, 0.25);
   }
   const thickness = tier === 'postforming-26' ? '26' : '38';
-  const items = fixedItems(pricebook, (item) => item.category === 'Столешницы: Мир Столешниц (постформинг)'
-    && item.priceBasis === 'sheet'
-    && norm(item.name).includes('столешница')
-    && `${item.attrs?.['толщина'] ?? ''} ${item.name}`.includes(thickness));
+  const items = mirSheets().filter((item) => isFormat600x3000(item, thickness));
   return byPricePercentile(items, 0.35);
 }
 

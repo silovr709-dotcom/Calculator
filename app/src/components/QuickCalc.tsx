@@ -233,15 +233,20 @@ const FACADE_CHIPS: Chip[] = [
   { label: 'Стекло/зеркало', pred: (i) => i.category === 'Фасады: Стекло и зеркала' },
 ];
 
+const worktopText = (i: PriceItem) => `${i.attrs?.['формат'] ?? ''} ${i.attrs?.['толщина'] ?? ''} ${i.attrs?.['категория'] ?? ''} ${i.attrs?.['серия'] ?? ''} ${i.name}`;
+const isMainWorktopHlyst = (i: PriceItem) => /(?:^|[^\d])600\s*(?:\*|х|x)\s*3000/i.test(worktopText(i)) && !/800\s*(?:\*|х|x)\s*800/i.test(worktopText(i));
 const WORKTOP_CHIPS: Chip[] = [
-  { label: 'МС 26 мм', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' && `${i.attrs?.['толщина'] ?? ''}`.includes('26') },
-  { label: 'МС 38 мм', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' && `${i.attrs?.['толщина'] ?? ''}`.includes('38') },
-  { label: 'МС 1 кат', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' && `${i.attrs?.['категория'] ?? ''}`.startsWith('1 ') },
-  { label: 'МС 2 кат', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' && `${i.attrs?.['категория'] ?? ''}`.startsWith('2 ') },
-  { label: 'СОЮЗ Universal', pred: (i) => i.category === 'Столешницы: СОЮЗ (постформинг)' && `${i.attrs?.['категория'] ?? ''}` === 'Universal' },
-  { label: 'СОЮЗ Premium', pred: (i) => i.category === 'Столешницы: СОЮЗ (постформинг)' && `${i.attrs?.['категория'] ?? ''}`.includes('Premium') },
-  { label: 'Slotex compact', pred: (i) => i.category === 'Столешницы: компакт-плита Slotex' },
-  { label: 'Arkobaleno compact', pred: (i) => i.category === 'Столешницы: компакт-плита Arkobaleno' },
+  { label: 'МС хлыст 3000', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' && isMainWorktopHlyst(i) },
+  { label: 'МС 26 мм', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' && isMainWorktopHlyst(i) && `${i.attrs?.['толщина'] ?? ''}`.includes('26') },
+  { label: 'МС 38 мм', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' && isMainWorktopHlyst(i) && `${i.attrs?.['толщина'] ?? ''}`.includes('38') },
+  { label: 'МС 1–3 кат', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' && isMainWorktopHlyst(i) && /^[123] /.test(`${i.attrs?.['категория'] ?? ''}`) },
+  { label: 'МС 5–7 кат', pred: (i) => i.category === 'Столешницы: Мир Столешниц (постформинг)' && isMainWorktopHlyst(i) && /^[567] /.test(`${i.attrs?.['категория'] ?? ''}`) },
+  { label: 'СОЮЗ 26 мм', pred: (i) => i.category === 'Столешницы: СОЮЗ (постформинг)' && isMainWorktopHlyst(i) && /\*26\b/.test(worktopText(i)) },
+  { label: 'СОЮЗ 38 мм', pred: (i) => i.category === 'Столешницы: СОЮЗ (постформинг)' && isMainWorktopHlyst(i) && /\*38\b/.test(worktopText(i)) },
+  { label: 'СОЮЗ Universal/Classic', pred: (i) => i.category === 'Столешницы: СОЮЗ (постформинг)' && isMainWorktopHlyst(i) && /Universal|Classic/i.test(worktopText(i)) },
+  { label: 'СОЮЗ Premium+', pred: (i) => i.category === 'Столешницы: СОЮЗ (постформинг)' && isMainWorktopHlyst(i) && /Premium/i.test(worktopText(i)) },
+  { label: 'Slotex E1/E2/E3', pred: (i) => i.category === 'Столешницы: компакт-плита Slotex' && /E[123]/i.test(worktopText(i)) },
+  { label: 'Arkobaleno 650', pred: (i) => i.category === 'Столешницы: компакт-плита Arkobaleno' && /650/.test(worktopText(i)) },
   { label: 'Комплектующие', pred: (i) => i.category === 'Столешницы: комплектующие' },
 ];
 const HINGE_CHIPS: Chip[] = [
@@ -455,19 +460,38 @@ export default function QuickCalc(props: {
                 </label>
                 <label>Столешница
                   <select value={express.worktopTier} onChange={(event) => updateExpress({ worktopTier: event.target.value as QuickEstimateInput['worktopTier'] })}>
-                    <optgroup label="Мир Столешниц">
+                    <optgroup label="Мир Столешниц · хлыст 600×3000">
                       <option value="ms-26-cat1">МС 26 мм · 1 категория</option>
                       <option value="ms-26-cat2">МС 26 мм · 2 категория</option>
+                      <option value="ms-26-cat3">МС 26 мм · 3 категория</option>
+                      <option value="ms-26-cat5">МС 26 мм · 5 категория</option>
+                      <option value="ms-26-cat7">МС 26 мм · 7 категория</option>
                       <option value="ms-38-cat1">МС 38 мм · 1 категория</option>
                       <option value="ms-38-cat2">МС 38 мм · 2 категория</option>
+                      <option value="ms-38-cat3">МС 38 мм · 3 категория</option>
+                      <option value="ms-38-cat5">МС 38 мм · 5 категория</option>
+                      <option value="ms-38-cat7">МС 38 мм · 7 категория</option>
                     </optgroup>
-                    <optgroup label="СОЮЗ">
-                      <option value="souz-universal">СОЮЗ · Universal</option>
-                      <option value="souz-premium">СОЮЗ · Premium/Premium+</option>
+                    <optgroup label="СОЮЗ 26 мм · хлыст 600×3000">
+                      <option value="souz-26-universal">СОЮЗ 26 · Universal</option>
+                      <option value="souz-26-classic">СОЮЗ 26 · Classic</option>
+                      <option value="souz-26-standart">СОЮЗ 26 · Standart pro</option>
+                      <option value="souz-26-premium">СОЮЗ 26 · Premium</option>
+                      <option value="souz-26-premium-plus">СОЮЗ 26 · Premium+</option>
+                    </optgroup>
+                    <optgroup label="СОЮЗ 38 мм · хлыст 600×3000">
+                      <option value="souz-38-universal">СОЮЗ 38 · Universal</option>
+                      <option value="souz-38-classic">СОЮЗ 38 · Classic</option>
+                      <option value="souz-38-standart">СОЮЗ 38 · Standart pro</option>
+                      <option value="souz-38-premium">СОЮЗ 38 · Premium</option>
+                      <option value="souz-38-premium-plus">СОЮЗ 38 · Premium+</option>
                     </optgroup>
                     <optgroup label="Компакт">
                       <option value="slotex-e1">Компакт Slotex · E1</option>
+                      <option value="slotex-e2">Компакт Slotex · E2</option>
+                      <option value="slotex-e3">Компакт Slotex · E3</option>
                       <option value="arkobaleno-650">Компакт Arkobaleno · 650 мм</option>
+                      <option value="arkobaleno-1320">Компакт Arkobaleno · 1320 мм</option>
                       <option value="compact">Компакт-плита · средний подбор</option>
                     </optgroup>
                     <optgroup label="Быстрые старые уровни">
