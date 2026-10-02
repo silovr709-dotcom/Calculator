@@ -190,17 +190,10 @@ function renderModule(o: EskizModuleObject, markerMode: EskizSketchModuleMarkerM
 
 function renderHinge(o: EskizHingeObject) {
   const color = o.color || '#1d4ed8';
-  const size = clamp(o.fontSize || 20, 12, 44);
-  const leaf = size * .74;
-  const label = (o.label?.trim() || 'П').slice(0, 3);
+  const radius = clamp((o.fontSize || 18) * .28, 3.5, 6.5);
   return `<g class="hinge" transform="translate(${o.x} ${o.y})">
-    <circle r="${size * .76}" fill="${xml(color)}" opacity=".14" />
-    <circle r="${size * .5}" fill="#fff" stroke="${xml(color)}" stroke-width="2.2" />
-    <path d="M ${-leaf} ${-leaf * .54} C ${-leaf * .28} ${-leaf * .32}, ${-leaf * .28} ${leaf * .32}, ${-leaf} ${leaf * .54}" fill="none" stroke="${xml(color)}" stroke-width="2.1" stroke-linecap="round" />
-    <path d="M ${leaf} ${-leaf * .54} C ${leaf * .28} ${-leaf * .32}, ${leaf * .28} ${leaf * .32}, ${leaf} ${leaf * .54}" fill="none" stroke="${xml(color)}" stroke-width="2.1" stroke-linecap="round" />
-    <circle cx="${-leaf * .2}" cy="0" r="${Math.max(2.4, size * .14)}" fill="${xml(color)}" />
-    <circle cx="${leaf * .2}" cy="0" r="${Math.max(2.4, size * .14)}" fill="${xml(color)}" />
-    <text y="${size * 1.15}" text-anchor="middle" font-size="${Math.max(9, size * .48)}" font-weight="900" fill="${xml(color)}" stroke="#fff" stroke-width="3" paint-order="stroke">${xml(label)}</text>
+    <circle r="${radius + 2.2}" fill="#fff" opacity=".92" />
+    <circle r="${radius}" fill="${xml(color)}" stroke="#fff" stroke-width="1.4" />
     <title>${xml(o.label || 'Петля')}</title>
   </g>`;
 }

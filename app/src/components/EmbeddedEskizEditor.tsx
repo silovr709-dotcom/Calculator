@@ -735,7 +735,7 @@ export default function EmbeddedEskizEditor(props: Props) {
     const base = { id: uid('obj'), x: target.x, y: target.y, color: COLORS.ink, fontSize: 22 };
     let object: EskizObject;
     if (type === 'module') object = { ...base, type: 'module', number: nextModuleNumber(project.objects), description: '' };
-    else if (type === 'hinge') object = { ...base, type: 'hinge', label: 'Петля', side: 'auto', color: '#1d4ed8', fontSize: 20 };
+    else if (type === 'hinge') object = { ...base, type: 'hinge', label: 'Петля', side: 'auto', color: '#1d4ed8', fontSize: 18 };
     else if (type === 'comment') object = { ...base, type: 'comment', text: 'Новый комментарий' };
     else if (type === 'equipment') object = { ...base, type: 'equipment', text: 'ПММ 600', equipmentType: 'ПММ', color: COLORS.blue };
     else object = { ...base, type: 'link', text: 'Название ссылки', url: 'https://' };
@@ -1508,7 +1508,7 @@ function ObjectFields({ object, moduleSummary, onOpenModule, onObject, onSelectC
     {object.type === 'anchor' && <label>Название точки<input autoFocus value={object.label} onChange={(event) => onObject({ label: event.target.value } as Partial<EskizObject>)} /></label>}
     {object.type === 'guide' && <label>Ориентация<select value={object.orientation} onChange={(event) => onObject({ orientation: event.target.value } as Partial<EskizObject>)}><option value="horizontal">Горизонтальная</option><option value="vertical">Вертикальная</option></select></label>}
     {object.type === 'module' && <><div className={`embedded-eskiz-module-mini ${moduleSummary?.status ?? 'new'}`}><b>{moduleSummary ? moduleSummary.label : 'Модуль ещё не создан в просчёте'}</b><span>{moduleSummary?.body ?? 'Кликните «Редактор модуля», чтобы создать/открыть позицию расчёта.'}</span>{moduleSummary?.cost && <small>{moduleSummary.cost}{moduleSummary.lines != null ? ` · ${moduleSummary.lines} строк` : ''}</small>}<button type="button" onClick={onOpenModule}>{moduleSummary ? 'Редактор модуля' : 'Создать в просчёте'}</button></div><label>Номер модуля<input autoFocus value={object.number} onChange={(event) => onObject({ number: event.target.value } as Partial<EskizObject>)} /></label><label>Описание<textarea rows={4} placeholder={'600\nНиз'} value={object.description} onChange={(event) => onObject({ description: event.target.value } as Partial<EskizObject>)} /></label></>}
-    {object.type === 'hinge' && <><div className="embedded-eskiz-helper-card"><b>Отдельный слой «Петли»</b><span>Ставьте компактные метки на фасад/стойку; слой можно скрыть в документе и он не попадёт в экспорт.</span></div><label>Подпись петли<input autoFocus value={object.label} placeholder="Петля" onChange={(event) => onObject({ label: event.target.value } as Partial<EskizObject>)} /></label><label>Ориентация<select value={object.side ?? 'auto'} onChange={(event) => onObject({ side: event.target.value } as Partial<EskizObject>)}><option value="auto">Авто / точка</option><option value="left">Левая сторона</option><option value="right">Правая сторона</option><option value="top">Верхняя</option><option value="bottom">Нижняя</option></select></label></>}
+    {object.type === 'hinge' && <><div className="embedded-eskiz-helper-card"><b>Отдельный слой «Петли»</b><span>На эскизе петли показываются маленькими точками без подписи; слой можно скрыть в документе и экспорте.</span></div><label>Название в списке<input autoFocus value={object.label} placeholder="Петля" onChange={(event) => onObject({ label: event.target.value } as Partial<EskizObject>)} /></label></>}
     {(object.type === 'comment' || object.type === 'callout') && <label>Текст<textarea autoFocus rows={5} value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label>}
     {object.type === 'equipment' && <><label>Тип техники<select value={object.equipmentType} onChange={(event) => onObject({ equipmentType: event.target.value, text: event.target.value } as Partial<EskizObject>)}>{EQUIPMENT_TYPES.map((item) => <option key={item}>{item}</option>)}</select></label><label>Подпись<input autoFocus value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label><label>Ссылка на модель<input type="url" placeholder="https://…" value={object.url || ''} onChange={(event) => onObject({ url: event.target.value } as Partial<EskizObject>)} /></label></>}
     {object.type === 'link' && <><label>Название<input autoFocus value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label><label>URL<input type="url" placeholder="https://…" value={object.url || ''} onChange={(event) => onObject({ url: event.target.value } as Partial<EskizObject>)} /></label>{object.url && <a className="embedded-eskiz-test-link" href={object.url} target="_blank" rel="noreferrer">Открыть ссылку ↗</a>}</>}
@@ -1517,7 +1517,7 @@ function ObjectFields({ object, moduleSummary, onOpenModule, onObject, onSelectC
     <div className="embedded-eskiz-section-label">Положение</div><div className="embedded-eskiz-field-row"><label>X<input type="number" value={Math.round(object.x)} onChange={(event) => onObject({ x: +event.target.value } as Partial<EskizObject>)} /></label><label>Y<input type="number" value={Math.round(object.y)} onChange={(event) => onObject({ y: +event.target.value } as Partial<EskizObject>)} /></label></div>
     {hasFrame && <><div className="embedded-eskiz-section-label embedded-eskiz-section-label-action"><span>Размер рамки</span><button onClick={() => onObject({ width: undefined, height: undefined } as Partial<EskizObject>)}>По тексту</button></div><div className="embedded-eskiz-field-row"><label>Ширина<input type="number" min="60" placeholder="Авто" value={object.width ? Math.round(object.width) : ''} onChange={(event) => onObject({ width: event.target.value ? +event.target.value : undefined } as Partial<EskizObject>)} /></label><label>Высота<input type="number" min="36" placeholder="Авто" value={object.height ? Math.round(object.height) : ''} onChange={(event) => onObject({ height: event.target.value ? +event.target.value : undefined } as Partial<EskizObject>)} /></label></div></>}
     {object.type === 'dimension' && <div className="embedded-eskiz-field-row"><label>Конец X<input type="number" value={Math.round(object.x2)} onChange={(event) => onObject({ x2: +event.target.value } as Partial<EskizObject>)} /></label><label>Конец Y<input type="number" value={Math.round(object.y2)} onChange={(event) => onObject({ y2: +event.target.value } as Partial<EskizObject>)} /></label></div>}
-    <div className="embedded-eskiz-field-row"><label>Цвет<input className="embedded-eskiz-color-input" type="color" value={object.color} onChange={(event) => onObject({ color: event.target.value } as Partial<EskizObject>)} /></label><label>Размер текста<input type="number" min="12" max="64" value={object.fontSize} onChange={(event) => onObject({ fontSize: +event.target.value } as Partial<EskizObject>)} /></label></div>
+    <div className="embedded-eskiz-field-row"><label>Цвет<input className="embedded-eskiz-color-input" type="color" value={object.color} onChange={(event) => onObject({ color: event.target.value } as Partial<EskizObject>)} /></label><label>{object.type === 'hinge' ? 'Размер точки' : 'Размер текста'}<input type="number" min={object.type === 'hinge' ? 8 : 12} max={object.type === 'hinge' ? 28 : 64} value={object.fontSize} onChange={(event) => onObject({ fontSize: +event.target.value } as Partial<EskizObject>)} /></label></div>
   </div>;
 }
 
@@ -1644,19 +1644,13 @@ function DimensionObjectView({ object, selected, primary, onPointerDown, onHandl
 }
 
 function HingeObjectView({ object, selected, primary, onPointerDown }: { object: EskizHingeObject; selected: boolean; primary: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void }) {
-  const size = clamp(object.fontSize || 20, 12, 44);
-  const label = object.label?.trim() || 'П';
-  const compactLabel = label.length > 3 ? label.slice(0, 3) : label;
-  const leaf = size * .74;
+  const radius = clamp((object.fontSize || 18) * .28, 3.5, 6.5);
+  const hitRadius = Math.max(12, radius * 2.2);
   return <g className={`embedded-eskiz-object embedded-eskiz-hinge-object ${selected ? 'selected' : ''}`} transform={`translate(${object.x} ${object.y})`} onPointerDown={(event) => onPointerDown(event, object)}>
-    <circle r={size * .76} fill={object.color} opacity=".14" />
-    <circle r={size * .5} fill="#fff" stroke={object.color} strokeWidth={selected ? 3 : 2.2} />
-    <path d={`M ${-leaf} ${-leaf * .54} C ${-leaf * .28} ${-leaf * .32}, ${-leaf * .28} ${leaf * .32}, ${-leaf} ${leaf * .54}`} fill="none" stroke={object.color} strokeWidth="2.1" strokeLinecap="round" />
-    <path d={`M ${leaf} ${-leaf * .54} C ${leaf * .28} ${-leaf * .32}, ${leaf * .28} ${leaf * .32}, ${leaf} ${leaf * .54}`} fill="none" stroke={object.color} strokeWidth="2.1" strokeLinecap="round" />
-    <circle cx={-leaf * .2} cy={0} r={Math.max(2.4, size * .14)} fill={object.color} />
-    <circle cx={leaf * .2} cy={0} r={Math.max(2.4, size * .14)} fill={object.color} />
-    <text y={size * 1.15} textAnchor="middle" fontSize={Math.max(9, size * .48)} fontWeight="900" fill={object.color} stroke="#fff" strokeWidth="3" paintOrder="stroke">{compactLabel}</text>
-    {primary && <circle className="embedded-eskiz-hinge-selection" r={Math.max(7, size * .42)} fill="none" stroke="#2563eb" strokeDasharray="4 3" strokeWidth="1.4" />}
+    <circle r={hitRadius} fill="transparent" />
+    <circle r={radius + 2.2} fill="#fff" opacity=".92" />
+    <circle r={radius} fill={object.color} stroke="#fff" strokeWidth={selected ? 2.2 : 1.4} />
+    {primary && <circle className="embedded-eskiz-hinge-selection" r={Math.max(9, radius + 5)} fill="none" stroke="#2563eb" strokeDasharray="3 3" strokeWidth="1.2" />}
   </g>;
 }
 

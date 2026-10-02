@@ -179,18 +179,11 @@ function ModulePreview({ object: o, projectId, active = false, linked = false, s
 }
 
 function HingePreview({ object: o }: { object: EskizHingeObject }) {
-  const size = clamp(o.fontSize || 20, 12, 44);
-  const leaf = size * .74;
-  const label = (o.label?.trim() || 'П').slice(0, 3);
+  const radius = clamp((o.fontSize || 18) * .28, 3.5, 6.5);
   return (
     <g className="eskiz-preview-object eskiz-preview-hinge" transform={`translate(${o.x} ${o.y})`}>
-      <circle r={size * .76} fill={o.color} opacity=".14" />
-      <circle r={size * .5} fill="#fff" stroke={o.color} strokeWidth="2.2" />
-      <path d={`M ${-leaf} ${-leaf * .54} C ${-leaf * .28} ${-leaf * .32}, ${-leaf * .28} ${leaf * .32}, ${-leaf} ${leaf * .54}`} fill="none" stroke={o.color} strokeWidth="2.1" strokeLinecap="round" />
-      <path d={`M ${leaf} ${-leaf * .54} C ${leaf * .28} ${-leaf * .32}, ${leaf * .28} ${leaf * .32}, ${leaf} ${leaf * .54}`} fill="none" stroke={o.color} strokeWidth="2.1" strokeLinecap="round" />
-      <circle cx={-leaf * .2} cy={0} r={Math.max(2.4, size * .14)} fill={o.color} />
-      <circle cx={leaf * .2} cy={0} r={Math.max(2.4, size * .14)} fill={o.color} />
-      <text y={size * 1.15} textAnchor="middle" fontSize={Math.max(9, size * .48)} fontWeight="900" fill={o.color} stroke="#fff" strokeWidth="3" paintOrder="stroke">{label}</text>
+      <circle r={radius + 2.2} fill="#fff" opacity=".92" />
+      <circle r={radius} fill={o.color} stroke="#fff" strokeWidth="1.4" />
       <title>{o.label || 'Петля'}</title>
     </g>
   );

@@ -58,7 +58,8 @@ describe('buildEskizSketchSvg', () => {
     };
     const svg = buildEskizSketchSvg(withHinge);
     expect(svg).toContain('class="hinge"');
-    expect(svg).toContain('П1');
+    expect(svg).toContain('<title>П1</title>');
+    expect(svg).not.toContain('>П1</text>');
     const hidden = buildEskizSketchSvg(withHinge, { layerVisibility: { hinges: false } });
     expect(hidden).not.toContain('П1');
   });
