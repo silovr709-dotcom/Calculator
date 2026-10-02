@@ -3954,3 +3954,134 @@ select option { background: #fff !important; color: #102037 !important; }
 @media print {
   .cd-module-compact-note { padding: 5px 8px; }
 }
+
+/* ---------- Master-detail workspace pass: КП, проверка, заказ, бланк, каталог ---------- */
+.client-offer-workbench,
+.check-master-detail,
+.order-master-detail,
+.blank-master-detail {
+  display: grid;
+  grid-template-columns: minmax(320px, .9fr) minmax(0, 1.8fr);
+  gap: 16px;
+  align-items: start;
+}
+.client-offer-controls,
+.check-side-panel,
+.order-side-panel,
+.blank-side-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  padding-right: 2px;
+}
+.client-offer-preview,
+.check-detail-panel,
+.order-detail-panel,
+.blank-detail-panel { min-width: 0; }
+.client-offer-controls .client-document-hub {
+  grid-template-columns: 1fr;
+  margin-bottom: 0;
+}
+.client-offer-controls .client-document-actions.big { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.client-offer-controls .client-document-actions.big .btn.primary { grid-column: 1 / -1; }
+.client-offer-controls .client-offer-editor { margin: 0; }
+.client-offer-preview .client-doc { margin-top: 0; }
+.client-offer-preview::before,
+.check-detail-panel::before,
+.order-detail-panel::before,
+.blank-detail-panel::before {
+  content: attr(data-title);
+  display: none;
+}
+.check-master-detail .readiness-card { margin: 0; }
+.check-side-panel .check-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.check-side-panel .check-actions { margin: 0; }
+.check-side-panel .check-action-buttons { display: grid; grid-template-columns: 1fr; }
+.check-side-panel .check-toolbar {
+  border: 1px solid rgba(15,47,87,.12);
+  border-radius: 14px;
+  padding: 10px;
+  background: #f8fbff;
+}
+.check-detail-panel .check-groups { display: grid; gap: 10px; }
+.order-master-detail { grid-template-columns: minmax(360px, 1fr) minmax(0, 1.55fr); }
+.order-side-panel .order-workflow,
+.order-side-panel .order-actions,
+.order-side-panel .offer-versions,
+.order-side-panel .variant-compare-mini { margin: 0; }
+.order-side-panel .order-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.order-detail-panel { display: grid; gap: 12px; }
+.blank-master-detail { grid-template-columns: minmax(330px, .82fr) minmax(0, 1.75fr); }
+.blank-side-panel .blank-workflow-panel,
+.blank-side-panel .blank-controls,
+.blank-side-panel .blank-export-preview { margin: 0; }
+.blank-side-panel .blank-workflow-panel { grid-template-columns: 1fr; padding: 12px; }
+.blank-side-panel .blank-workflow-main h2 { font-size: 18px; }
+.blank-side-panel .blank-workflow-steps { grid-template-columns: 1fr; }
+.blank-side-panel .blank-workflow-steps button { min-height: 54px; }
+.blank-side-panel .blank-controls { display: grid; gap: 10px; }
+.blank-side-panel .blank-export-preview { display: grid; grid-template-columns: 1fr; gap: 7px; }
+.blank-detail-panel { display: grid; gap: 12px; }
+.picker-workbench-head {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #d7e4ef;
+  background: linear-gradient(135deg, #f8fbff, #eef6ff);
+}
+.picker-workbench-head span {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #d7e4ef;
+  border-radius: 14px;
+  background: #fff;
+}
+.picker-workbench-head b,
+.picker-workbench-head small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.picker-workbench-head b { color: #0b3a75; font-size: 13px; }
+.picker-workbench-head small { color: #64748b; font-size: 10.5px; font-weight: 800; }
+.picker .picker-right {
+  position: sticky;
+  top: 10px;
+  align-self: start;
+  max-height: calc(92vh - 130px);
+  overflow: auto;
+}
+@media (max-width: 1280px) {
+  .client-offer-workbench,
+  .check-master-detail,
+  .order-master-detail,
+  .blank-master-detail { grid-template-columns: 1fr; }
+  .client-offer-controls,
+  .check-side-panel,
+  .order-side-panel,
+  .blank-side-panel,
+  .picker .picker-right { position: static; max-height: none; overflow: visible; }
+  .client-offer-controls .client-document-actions.big { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .blank-side-panel .blank-workflow-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .client-offer-controls .client-document-actions.big,
+  .blank-side-panel .blank-workflow-steps,
+  .picker-workbench-head { grid-template-columns: 1fr; }
+}
+@media print {
+  .client-offer-workbench,
+  .check-master-detail,
+  .order-master-detail,
+  .blank-master-detail { display: block; }
+  .client-offer-controls,
+  .check-side-panel,
+  .order-side-panel,
+  .blank-side-panel { display: none !important; }
+}

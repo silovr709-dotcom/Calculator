@@ -213,6 +213,11 @@ export default function CatalogPicker(props: {
     <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
       <div className="modal wide">
         {props.title && <div className="picker-title">{props.title}</div>}
+        <div className="picker-workbench-head">
+          <span><b>{results.length}</b><small>найдено</small></span>
+          <span><b>{cat || 'все'}</b><small>категория</small></span>
+          <span><b>{sel ? 'выбрано' : 'выберите'}</b><small>{sel ? sel.name.slice(0, 34) : 'позицию из списка'}</small></span>
+        </div>
         <div className="picker">
           <div className="picker-left">
             <input

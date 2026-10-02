@@ -58,6 +58,8 @@ export default function ProjectCheckCenter(props: { project: Project; pricebook:
 
   return (
     <div className="check-center">
+      <div className="check-master-detail">
+        <aside className="check-side-panel">
       <div className={`readiness-card ${result.ready ? 'ready' : 'not-ready'}`}>
         <div><span className="eyebrow">ГОТОВНОСТЬ ПРОЕКТА</span><h2>{result.ready ? 'Проект готов к предложению' : 'Нужно проверить данные'}</h2><p>{result.ready ? 'Критических ошибок и неподтверждённых предупреждений нет.' : 'Исправьте ошибки или подтвердите предупреждения, чтобы итог не оказался занижен.'}</p></div>
         <div className="readiness-score"><b>{result.ready ? '✓' : result.errors.length + result.warnings.length}</b><span>{result.ready ? 'готово' : 'проблем'}</span></div>
@@ -67,7 +69,11 @@ export default function ProjectCheckCenter(props: { project: Project; pricebook:
       </div>
       {(recommendations.facades > 0 || recommendations.hinges > 0 || recommendations.surcharges > 0) && <section className="card check-actions"><div><h3>Рекомендации к применению</h3><p className="muted small">Ручные значения не изменяются. Нажатие кнопки применяет только показанные технические рекомендации ко всему проекту.</p></div><div className="check-action-buttons">{recommendations.facades > 0 && <button className="btn ghost" onClick={applyFacades}>Обновить фасады по техничке ({recommendations.facades})</button>}{recommendations.hinges > 0 && <button className="btn ghost" onClick={applyHinges}>Обновить петли по техничке ({recommendations.hinges})</button>}{recommendations.surcharges > 0 && <button className="btn ghost" onClick={applySurcharges}>Добавить наценки по габаритам ({recommendations.surcharges})</button>}</div></section>}
       <div className="check-toolbar"><label className="chk"><input type="checkbox" checked={onlyProblems} onChange={(event) => setOnlyProblems(event.target.checked)} /> Только проблемные позиции</label><span className="muted small">Ошибки сгруппированы по месту возникновения. Переход откроет нужную позицию.</span></div>
+        </aside>
+        <main className="check-detail-panel">
       {grouped.length === 0 ? <div className="ok-box">✅ Проблем не найдено. Можно переходить к итогам и КП.</div> : <div className="check-groups">{grouped.map(([group, issues]) => <section className="card check-group" key={group}><h3>{group}<span className="badge-count">{issues.length}</span></h3>{issues.map((issue) => <div className={`check-issue ${issue.severity}`} key={issue.id}><div className="check-icon">{issue.severity === 'error' ? '⛔' : issue.severity === 'warning' ? '⚠' : 'ℹ'}</div><div className="check-issue-content"><b>{issue.title}</b><span>{issue.message}</span><small><strong>Влияние на итог:</strong> {issue.impact}</small></div>{issue.entityId && <button className="btn tiny ghost" onClick={() => navigate(issue)}>Перейти к позиции</button>}</div>)}</section>)}</div>}
+        </main>
+      </div>
     </div>
   );
 }

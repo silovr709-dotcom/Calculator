@@ -251,6 +251,8 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         </div>
       </div>
 
+      <div className="client-offer-workbench">
+        <aside className="client-offer-controls no-print">
       <section className="card client-document-hub no-print" aria-label="Документы для клиента">
         <div className="client-document-hub-main">
           <span className="eyebrow">Клиентский пакет</span>
@@ -342,6 +344,8 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           </div>
         </div>
       </section>
+        </aside>
+        <main className="client-offer-preview">
 
       <div className={`client-doc client-doc-${presentationMode}`} id="client-doc">
         <header className="cd-hero">
@@ -491,6 +495,8 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
             {packageSettings.includeReceipt && <article className="cd-legal-card"><h4>Бланк заказа</h4><p>В ZIP будет добавлен ваш фирменный файл «Бланк заказа» в исходном формате DOC. Основные суммы для заполнения: итог <b>{fmtMoney(totals.client)}</b>, корпуса {fmtMoney(projectSummary.bodyTotal)}, фасады {projectSummary.facadeAreaM2 > 0 ? `${fmtNum(projectSummary.facadeAreaM2, 2)} м² · ${fmtMoney(projectSummary.facadeTotal)}` : fmtMoney(projectSummary.facadeTotal)}, фурнитура {fmtMoney(projectSummary.hardwareTotal)}.</p><div className="cd-sign-row"><span>Продавец __________________</span><span>Покупатель __________________</span></div></article>}
           </section>
         )}
+      </div>
+        </main>
       </div>
     </div>
   );

@@ -252,6 +252,8 @@ export default function OrderCenterPanel(props: {
         <div className={eskizMarkers.length === boundEskizMarkers.length ? 'ok' : 'warn'}><b>{boundEskizMarkers.length}/{eskizMarkers.length}</b><span>маркеров эскиза</span><small>{eskizMarkers.length ? 'связаны с просчётом' : 'эскиз без модулей'}</small></div>
       </section>
 
+      <div className="order-master-detail">
+        <aside className="order-side-panel">
       <section className="card order-workflow no-print">
         <div className="section-head"><div><h3>Статус заказа PRO</h3><p className="muted small">Мини-CRM для менеджера: этап, следующий контакт и что нужно сделать дальше.</p></div><span className="order-status-pill">{workflowStatus.label}<small>{workflowStatus.hint}</small></span></div>
         <div className="order-status-strip">
@@ -315,6 +317,8 @@ export default function OrderCenterPanel(props: {
           )}
         </section>
       </div>
+        </aside>
+        <main className="order-detail-panel">
 
       <section className="card procurement-card">
         <div className="section-head"><div><h3>Закупочный список</h3><p className="muted small">Сгруппировано по реальным строкам расчёта: корпуса, фасады, фурнитура, ручки, опоры и доп. позиции.</p></div><b>{filteredProcurement.length}/{procurement.length} поз.</b></div>
@@ -342,6 +346,8 @@ export default function OrderCenterPanel(props: {
         </div>
         {groupedIssues.length === 0 ? <div className="ok-box">✅ По выбранному фильтру проблем нет.</div> : groupedIssues.map(([group, issues]) => <div className="unresolved-group" key={group}><h4>{group}</h4>{issues.map((issue) => <div className={`unresolved-issue ${issue.severity}`} key={issue.id}><span>{issue.severity === 'error' ? '⛔' : '⚠'} <b>{issue.title}</b> — {issue.message}</span>{issue.entityId && <button className="btn tiny ghost" onClick={() => navigateIssue(issue)}>{issueActionLabel(issue)}</button>}</div>)}</div>)}
       </section>
+        </main>
+      </div>
     </div>
   );
 }

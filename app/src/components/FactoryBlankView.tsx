@@ -806,6 +806,8 @@ export default function FactoryBlankView(props: {
         </div>
       </header>
 
+      <div className="blank-master-detail">
+        <aside className="blank-side-panel no-print">
       <section className="blank-workflow-panel no-print" aria-label="Маршрут фабричного бланка">
         <div className="blank-workflow-main">
           <span className="eyebrow">Передача на фабрику</span>
@@ -852,6 +854,8 @@ export default function FactoryBlankView(props: {
         <div><b>{canInsertSketch ? selectedSketches.length : '—'}</b><span>Эскиз PRO в {sheetMap ? blankSketchRangeLabel(sheetMap) || 'нет поля' : 'нет шаблона'}</span></div>
         <div><b>{includeTechSheet ? 'да' : '—'}</b><span>отдельный лист: {techModuleRows.length} модулей · {techCommunicationRows.length} коммуникаций</span></div>
       </div>
+        </aside>
+        <main className="blank-detail-panel">
 
       {sheetMap?.sketch && (
         <div className="card blank-sketch-card no-print">
@@ -1062,6 +1066,9 @@ export default function FactoryBlankView(props: {
           )}
         </div>
       )}
+
+        </main>
+      </div>
 
       {/* Печатная форма: компактная таблица «пункт → значение» как на бланке */}
       <div className="blank-print">
