@@ -2004,6 +2004,7 @@ input:focus, select:focus, textarea:focus {
 .client-eskiz-layer-controls button:disabled { opacity: .45; cursor: not-allowed; }
 .client-package-control { margin-top: 12px; padding: 12px; border: 1px solid rgba(31, 111, 235, .18); border-radius: 14px; background: linear-gradient(135deg, rgba(239,246,255,.92), rgba(255,255,255,.86)); }
 .client-package-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.client-package-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .client-package-head b { display: block; color: #0f2f57; }
 .client-package-head span { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
 .client-package-options { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 10px; }

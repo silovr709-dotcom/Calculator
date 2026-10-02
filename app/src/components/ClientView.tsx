@@ -6,9 +6,9 @@ import { calculateVariant } from '../lib/variants';
 import { buildClientOfferDetails, buildClientProjectSummary, clientSketchSummaryLines, isModuleLine, moduleNoteMatches, stripModuleNote } from '../lib/clientOffer';
 import { fmtMoney, fmtDate, fmtNum } from '../lib/format';
 import { exportClientXlsx } from '../lib/exporters';
-import { snapshotProject, type EskizProject } from '../lib/eskizPro';
-import { renderEskizSketchPng } from '../lib/eskizSketchExport';
-import { downloadClientDocumentPackageHtml, normalizeClientDocumentPackage } from '../lib/clientPackage';
+import { snapshotProject } from '../lib/eskizPro';
+import { downloadEskizSketchPdf, renderEskizSketchPdf } from '../lib/eskizSketchExport';
+import { downloadClientContractDocx, downloadClientDocumentZip, downloadClientOfferDocx, downloadClientReceiptDocx, normalizeClientDocumentPackage, type ClientDocumentArgs } from '../lib/clientPackage';
 import EskizProjectPreview from './EskizProjectPreview';
 
 /** Строка модуля в клиентской версии — без закупочных цен и внутренних данных. */
@@ -37,16 +37,6 @@ const CLIENT_ESKIZ_LAYERS: { key: EskizLayerKey; label: string }[] = [
   { key: 'equipment', label: 'Техника' },
   { key: 'links', label: 'Ссылки' },
 ];
-
-function fitEskizPackageSize(project: EskizProject, box = { width: 1500, height: 900 }) {
-  const sourceWidth = Math.max(1, project.image.width);
-  const sourceHeight = Math.max(1, project.image.height);
-  const scale = Math.min(box.width / sourceWidth, box.height / sourceHeight);
-  return {
-    width: Math.max(1, Math.round(sourceWidth * scale)),
-    height: Math.max(1, Math.round(sourceHeight * scale)),
-  };
-}
 
 function detailQtyText(detail: ClientOfferDetail): string {
   const unit = detail.unit || 'шт';
@@ -191,39 +181,46 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
     hasKind(allDetails, ['sink']) ? 'Мойка / смеситель' : '',
   ].filter(Boolean);
   const materialHighlights = uniqueHighlights(allDetails, ['body', 'facade', 'frame', 'worktop', 'wallPanel', 'handle'], isTechnical ? 10 : 6);
-
-  const exportClientPackage = async () => {
+  const clientDocumentArgs: ClientDocumentArgs = {
+    project: { ...project, lines: activeCalculation.lines, settings: selectedVariant?.settings ?? project.settings },
+    offer: project.clientOffer ?? {},
+    details: allDetails,
+    modules: groups.map((group) => ({ title: group.title, sub: group.sub, qty: group.qty, total: groupSum(group) })),
+    total: totals.client,
+    summary: projectSummary,
+  };
+  const sketchPdfOptions = {
+    ...(eskizViewSettings ?? {}),
+    moduleMarkerMode: project.eskizPro?.moduleMarkerMode ?? 'full',
+    communications: (project.eskizPro?.communications ?? []).filter((marker) => marker.showInClient !== false),
+    showCommunicationSizeBadges,
+  };
+  const renderSketchFilesForPackage = async () => {
+    const sketchProjects = packageSettings.includeSketch && clientSketchVisible ? linkedEskizProjects : [];
+    return Promise.all(sketchProjects.map(async (eskiz, index) => {
+      const pdf = await renderEskizSketchPdf(eskiz, { ...sketchPdfOptions, title: eskiz.title });
+      return { title: eskiz.title, fileName: `Эскиз ${index + 1} — ${eskiz.title}.pdf`, blob: pdf.blob };
+    }));
+  };
+  const runClientDownload = async (task: () => Promise<void>, errorTitle: string) => {
     setPackageExporting(true);
     try {
-      const sketchProjects = packageSettings.includeSketch && clientSketchVisible ? linkedEskizProjects : [];
-      const sketches = await Promise.all(sketchProjects.map(async (eskiz) => {
-        const size = fitEskizPackageSize(eskiz);
-        const image = await renderEskizSketchPng(eskiz, {
-          widthPx: size.width,
-          heightPx: size.height,
-          ...(eskizViewSettings ?? {}),
-          frame: 'none',
-          moduleMarkerMode: project.eskizPro?.moduleMarkerMode ?? 'full',
-          communications: (project.eskizPro?.communications ?? []).filter((marker) => marker.showInClient !== false),
-          showCommunicationSizeBadges,
-        });
-        return { title: eskiz.title, imageDataUrl: image.base64 };
-      }));
-      downloadClientDocumentPackageHtml({
-        project: { ...project, lines: activeCalculation.lines, settings: selectedVariant?.settings ?? project.settings },
-        offer: project.clientOffer ?? {},
-        details: allDetails,
-        modules: groups.map((group) => ({ title: group.title, sub: group.sub, qty: group.qty, total: groupSum(group) })),
-        total: totals.client,
-        summary: projectSummary,
-        sketches,
-      });
+      await task();
     } catch (error) {
-      alert(`Не получилось собрать пакет клиента: ${error instanceof Error ? error.message : String(error)}`);
+      alert(`${errorTitle}: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setPackageExporting(false);
     }
   };
+  const exportSketchPdf = () => runClientDownload(async () => {
+    if (!clientSketchVisible || linkedEskizProjects.length === 0) { alert('Нет привязанного Эскиз PRO для выгрузки.'); return; }
+    for (const [index, eskiz] of linkedEskizProjects.entries()) {
+      await downloadEskizSketchPdf(eskiz, { ...sketchPdfOptions, title: eskiz.title, fileName: `Эскиз ${index + 1} — ${eskiz.title}.pdf` });
+    }
+  }, 'Не получилось выгрузить эскиз');
+  const exportClientPackage = () => runClientDownload(async () => {
+    await downloadClientDocumentZip(clientDocumentArgs, await renderSketchFilesForPackage());
+  }, 'Не получилось собрать пакет клиента');
 
   return (
     <div className="client-view">
@@ -231,7 +228,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         <div className="muted small">Клиент видит только этот документ: без себестоимости, закупочных цен и внутренних данных.{selectedVariant && <> Активен вариант: <b>{selectedVariant.name}</b>.</>}</div>
         <div className="client-toolbar-actions">
           <button className="btn ghost" onClick={() => exportClientXlsx({ ...project, lines: activeCalculation.lines, settings: selectedVariant?.settings ?? project.settings })}>Excel для клиента</button>
-          <button className="btn ghost" disabled={packageExporting} onClick={exportClientPackage}>{packageExporting ? 'Собираю пакет…' : 'Пакет клиента .html'}</button>
+          <button className="btn ghost" disabled={packageExporting} onClick={exportClientPackage}>{packageExporting ? 'Собираю пакет…' : 'Пакет клиента ZIP'}</button>
           <button className="btn primary" onClick={() => window.print()}>Печать / PDF</button>
         </div>
       </div>
@@ -255,8 +252,14 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         </div>
         <div className="client-package-control">
           <div className="client-package-head">
-            <div><b>Пакет документов для клиента</b><span>Сейчас используется компактный типовой шаблон договора/чека; когда пришлёте ваши документы — подставим фирменную форму.</span></div>
-            <button type="button" className="btn tiny primary" disabled={packageExporting} onClick={exportClientPackage}>{packageExporting ? 'Собираю…' : 'Скачать пакет'}</button>
+            <div><b>Пакет документов для клиента</b><span>Не HTML: отдельные файлы DOCX/PDF или общий ZIP. Типовой договор/чек позже заменим на ваши фирменные шаблоны.</span></div>
+            <div className="client-package-actions">
+              <button type="button" className="btn tiny ghost" disabled={packageExporting || !clientSketchVisible} onClick={exportSketchPdf}>Эскиз PDF</button>
+              <button type="button" className="btn tiny ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientOfferDocx(clientDocumentArgs), 'Не получилось выгрузить КП')}>Полное КП Word</button>
+              <button type="button" className="btn tiny ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientContractDocx(clientDocumentArgs), 'Не получилось выгрузить договор')}>Договор Word</button>
+              <button type="button" className="btn tiny ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientReceiptDocx(clientDocumentArgs), 'Не получилось выгрузить товарный чек')}>Товарный чек Word</button>
+              <button type="button" className="btn tiny primary" disabled={packageExporting} onClick={exportClientPackage}>{packageExporting ? 'Собираю…' : 'Пакет ZIP'}</button>
+            </div>
           </div>
           <div className="client-package-options">
             <label><input type="checkbox" checked={packageSettings.includeOffer} onChange={(event) => updatePackageSettings({ includeOffer: event.target.checked })} /> КП/сводка</label>

@@ -1,6 +1,5 @@
 import type { ClientDocumentPackageSettings, ClientOfferSettings, Project } from '../types';
 import type { ClientOfferDetail, ClientProjectSummary } from './clientOffer';
-import { clientSketchSummaryLines } from './clientOffer';
 import { fmtDate, fmtMoney, fmtNum } from './format';
 import { downloadFile } from './storage';
 
@@ -11,22 +10,26 @@ export interface ClientPackageModuleRow {
   total: number | null;
 }
 
-export interface ClientPackageSketchImage {
+export interface ClientPackageSketchFile {
   title: string;
-  imageDataUrl: string;
+  fileName: string;
+  blob: Blob;
 }
 
-export interface ClientPackageHtmlArgs {
+export interface ClientDocumentArgs {
   project: Project;
   offer: ClientOfferSettings;
   details: ClientOfferDetail[];
   modules: ClientPackageModuleRow[];
   total: number;
   summary: ClientProjectSummary;
-  sketches: ClientPackageSketchImage[];
 }
 
 export type NormalizedClientDocumentPackageSettings = Required<ClientDocumentPackageSettings>;
+
+type DocxBlock = { type: 'p'; text: string; bold?: boolean; size?: number; color?: string } | { type: 'table'; headers: string[]; rows: string[][] };
+type ZipInput = { name: string; data: string | Uint8Array | Blob };
+type PreparedZipInput = { nameBytes: Uint8Array; dataBytes: Uint8Array; crc: number; offset: number };
 
 export function normalizeClientDocumentPackage(settings?: ClientDocumentPackageSettings): NormalizedClientDocumentPackageSettings {
   return {
@@ -40,29 +43,23 @@ export function normalizeClientDocumentPackage(settings?: ClientDocumentPackageS
   };
 }
 
-function escapeHtml(value: unknown): string {
+const encoder = new TextEncoder();
+
+function xml(value: unknown): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function nl2br(value: unknown): string {
-  return escapeHtml(value).replace(/\n/g, '<br>');
+    .replace(/'/g, '&apos;');
 }
 
 function safeFilePart(value: string): string {
-  return (value || 'client-package')
+  return (value || 'document')
     .replace(/[\\/:*?"<>|]+/g, '-')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 90) || 'client-package';
-}
-
-function includeSettings(offer: ClientOfferSettings): NormalizedClientDocumentPackageSettings {
-  return normalizeClientDocumentPackage(offer.documentPackage);
+    .slice(0, 90) || 'document';
 }
 
 function sellerName(offer: ClientOfferSettings): string {
@@ -73,132 +70,124 @@ function contractNumber(project: Project, offer: ClientOfferSettings): string {
   return offer.contractNumber?.trim() || project.id.slice(0, 8).toUpperCase();
 }
 
-function packageStyles(compact: boolean): string {
-  return `
-    @page { size: A4; margin: 12mm; }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: #eef3f8; color: #172033; font-family: Inter, Arial, sans-serif; }
-    .pack { max-width: 980px; margin: 0 auto; padding: 22px; }
-    .sheet { background: #fff; border: 1px solid #d9e4ef; border-radius: 18px; padding: ${compact ? 18 : 24}px; margin: 0 0 14px; box-shadow: 0 12px 30px rgba(15, 47, 87, .08); page-break-inside: avoid; }
-    .hero { display: grid; grid-template-columns: 1fr 230px; gap: 18px; align-items: stretch; color: #fff; background: linear-gradient(135deg, #0f2f57, #164a7c 60%, #1f6feb); border: 0; }
-    h1, h2, h3 { margin: 0; }
-    h1 { font-size: 28px; line-height: 1.05; }
-    h2 { font-size: 18px; color: #0f2f57; margin-bottom: 10px; }
-    h3 { font-size: 13px; color: #12385f; margin-bottom: 6px; }
-    .muted { color: #64748b; }
-    .brand { font-size: 25px; font-weight: 900; letter-spacing: -.03em; }
-    .sub { opacity: .78; font-size: 12px; margin-top: 2px; }
-    .hero h1 { margin-top: 18px; }
-    .meta { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 12px; font-size: 12px; opacity: .9; }
-    .price { display: flex; flex-direction: column; justify-content: center; text-align: right; padding: 18px; border-radius: 14px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); }
-    .price span { font-size: 11px; opacity: .78; }
-    .price b { font-size: 25px; }
-    .facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
-    .facts div { border: 1px solid #dce7f2; border-radius: 12px; padding: 9px; background: #f8fbff; }
-    .facts b { display: block; color: #0f2f57; font-size: 17px; }
-    .facts span { color: #64748b; font-size: 10.5px; }
-    .terms { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-    .terms div, .sign-box { border: 1px solid #dfe8f2; border-radius: 10px; padding: 8px; background: #fbfdff; }
-    .terms b { display: block; color: #41566d; font-size: 11px; margin-bottom: 2px; }
-    .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
-    .chips span { padding: 4px 8px; border-radius: 999px; background: #edf6ff; color: #0f4f8f; font-size: 11px; font-weight: 800; }
-    .sketch-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 10px; }
-    .sketch { position: relative; border: 1px solid #d9e4ef; border-radius: 14px; overflow: hidden; background: #fff; page-break-inside: avoid; }
-    .sketch header { padding: 8px 10px; background: #f6faff; border-bottom: 1px solid #d9e4ef; font-size: 12px; font-weight: 900; color: #0f2f57; }
-    .sketch img { display: block; width: 100%; height: auto; }
-    .overlay { position: absolute; right: 10px; bottom: 10px; max-width: min(360px, 72%); padding: 9px 10px; border-radius: 12px; background: rgba(255,255,255,.94); border: 1px solid rgba(15,47,87,.22); box-shadow: 0 8px 24px rgba(15,47,87,.16); color: #0f2f57; font-size: 10.5px; line-height: 1.25; }
-    .overlay b { display: block; margin-bottom: 4px; font-size: 11px; }
-    .overlay span { display: block; }
-    table { width: 100%; border-collapse: collapse; font-size: ${compact ? 10.5 : 11.5}px; }
-    th, td { border: 1px solid #e1e8f0; padding: ${compact ? 5 : 7}px; vertical-align: top; }
-    th { background: #f3f7fb; color: #0f2f57; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
-    td.num, th.num { text-align: right; white-space: nowrap; }
-    .doc-text { color: #27364a; font-size: ${compact ? 11 : 12}px; line-height: 1.45; }
-    .doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px; }
-    .sign-line { margin-top: 28px; border-top: 1px solid #9aa9bb; padding-top: 5px; color: #64748b; font-size: 10px; }
-    .small-note { margin-top: 8px; color: #64748b; font-size: 10px; }
-    @media print { body { background: #fff; } .pack { padding: 0; max-width: none; } .sheet { box-shadow: none; border-radius: 0; } }
-    @media (max-width: 760px) { .hero, .facts, .terms, .doc-grid, .signatures { grid-template-columns: 1fr; } .price { text-align: left; } }
-  `;
+function detailQtyText(detail: ClientOfferDetail): string {
+  const unit = detail.unit || 'шт';
+  if (detail.priceBasis === 'm2' || detail.priceBasis === 'lm') {
+    const pieces = detail.qty > 0 ? `${fmtNum(detail.qty, 3)} шт` : '';
+    const measured = `${fmtNum(detail.qtyEffective, 4)} ${unit}`;
+    return pieces ? `${pieces} / ${measured}` : measured;
+  }
+  if (detail.priceBasis === 'sheet') return `${fmtNum(detail.qtyEffective, 3)} ${unit}`;
+  if (detail.kind === 'bodySurcharge') return `${fmtNum(detail.qty, 3)} доп.`;
+  return `${fmtNum(detail.qtyEffective, 3)} ${unit}`;
 }
 
-function offerSection(args: ClientPackageHtmlArgs): string {
-  const { project, offer, total, summary } = args;
-  const terms = [
-    ['Действительно до', offer.validUntil ? fmtDate(offer.validUntil) : 'не указано'],
-    ['Оплата', offer.paymentTerms || 'по согласованию'],
-    ['Монтаж', offer.installation || 'по согласованию'],
-    ['Доставка', offer.delivery || 'по согласованию'],
+function p(text: string, opts: { bold?: boolean; size?: number; color?: string } = {}): DocxBlock {
+  return { type: 'p', text, ...opts };
+}
+
+function table(headers: string[], rows: string[][]): DocxBlock {
+  return { type: 'table', headers, rows };
+}
+
+function paragraphXml(block: Extract<DocxBlock, { type: 'p' }>): string {
+  const lines = String(block.text ?? '').split('\n');
+  const size = block.size ? `<w:sz w:val="${Math.round(block.size * 2)}"/><w:szCs w:val="${Math.round(block.size * 2)}"/>` : '';
+  const bold = block.bold ? '<w:b/><w:bCs/>' : '';
+  const color = block.color ? `<w:color w:val="${xml(block.color).replace(/^#/, '')}"/>` : '';
+  const rPr = bold || size || color ? `<w:rPr>${bold}${size}${color}</w:rPr>` : '';
+  return `<w:p><w:r>${rPr}${lines.map((line, index) => `${index ? '<w:br/>' : ''}<w:t xml:space="preserve">${xml(line)}</w:t>`).join('')}</w:r></w:p>`;
+}
+
+function cellXml(value: string, header = false): string {
+  const fill = header ? '<w:shd w:fill="EAF2FF"/>' : '';
+  const bold = header ? '<w:b/><w:bCs/>' : '';
+  return `<w:tc><w:tcPr><w:tcW w:w="2400" w:type="dxa"/>${fill}</w:tcPr><w:p><w:r>${bold ? `<w:rPr>${bold}</w:rPr>` : ''}<w:t xml:space="preserve">${xml(value)}</w:t></w:r></w:p></w:tc>`;
+}
+
+function tableXml(block: Extract<DocxBlock, { type: 'table' }>): string {
+  const borders = '<w:tblBorders><w:top w:val="single" w:sz="4" w:color="D7E4EF"/><w:left w:val="single" w:sz="4" w:color="D7E4EF"/><w:bottom w:val="single" w:sz="4" w:color="D7E4EF"/><w:right w:val="single" w:sz="4" w:color="D7E4EF"/><w:insideH w:val="single" w:sz="4" w:color="D7E4EF"/><w:insideV w:val="single" w:sz="4" w:color="D7E4EF"/></w:tblBorders>';
+  const rows = [block.headers, ...block.rows];
+  return `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/>${borders}</w:tblPr>${rows.map((row, rowIndex) => `<w:tr>${row.map((value) => cellXml(value, rowIndex === 0)).join('')}</w:tr>`).join('')}</w:tbl>`;
+}
+
+function documentXml(blocks: DocxBlock[]): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+${blocks.map((block) => block.type === 'p' ? paragraphXml(block) : tableXml(block)).join('\n')}
+<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="850" w:right="850" w:bottom="850" w:left="850" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>
+</w:body></w:document>`;
+}
+
+function coreXml(title: string): string {
+  const now = new Date().toISOString();
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${xml(title)}</dc:title><dc:creator>РЕцепт</dc:creator><cp:lastModifiedBy>РЕцепт</cp:lastModifiedBy><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>`;
+}
+
+async function docxBlob(title: string, blocks: DocxBlock[]): Promise<Blob> {
+  return zipFiles([
+    { name: '[Content_Types].xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>' },
+    { name: '_rels/.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>' },
+    { name: 'docProps/core.xml', data: coreXml(title) },
+    { name: 'docProps/app.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>РЕцепт</Application></Properties>' },
+    { name: 'word/_rels/document.xml.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>' },
+    { name: 'word/document.xml', data: documentXml(blocks) },
+  ], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+}
+
+function offerBlocks(args: ClientDocumentArgs): DocxBlock[] {
+  const { project, offer, details, modules, total, summary } = args;
+  const blocks: DocxBlock[] = [
+    p('Коммерческое предложение', { bold: true, size: 22, color: '0F2F57' }),
+    p(`${project.name}\nКлиент: ${project.client || '—'} · Дата: ${fmtDate(project.date)} · № договора: ${contractNumber(project, offer)}`, { size: 11, color: '52667A' }),
+    p(`Итоговая стоимость: ${fmtMoney(total)}`, { bold: true, size: 16, color: '1F6FEB' }),
+    table(['Показатель', 'Значение'], [
+      ['Модулей', `${fmtNum(summary.moduleCount, 3)} шт`],
+      ['Фасады', summary.facadeAreaM2 > 0 ? `${fmtNum(summary.facadeAreaM2, 2)} м² / ${fmtNum(summary.facadeQty, 3)} шт` : `${fmtNum(summary.facadeQty, 3)} шт`],
+      ['Петли', `${fmtNum(summary.hingeQty, 3)} шт${summary.hingeTypes.length ? `: ${summary.hingeTypes.map((item) => `${item.name} — ${fmtNum(item.qty, 3)} шт`).join('; ')}` : ''}`],
+      ['Корпуса общ.', fmtMoney(summary.bodyTotal)],
+      ['Фасады общ.', fmtMoney(summary.facadeTotal)],
+      ['Фурнитура общ.', fmtMoney(summary.hardwareTotal)],
+    ]),
+    p('Условия', { bold: true, size: 14, color: '0F2F57' }),
+    table(['Пункт', 'Значение'], [
+      ['Действительно до', offer.validUntil ? fmtDate(offer.validUntil) : 'не указано'],
+      ['Оплата', offer.paymentTerms || 'по согласованию'],
+      ['Монтаж', offer.installation || 'по согласованию'],
+      ['Доставка', offer.delivery || 'по согласованию'],
+    ]),
   ];
-  return `
-    <section class="sheet hero">
-      <div>
-        <div class="brand">${escapeHtml(sellerName(offer))}</div>
-        <div class="sub">пакет документов для клиента · коммерческое предложение</div>
-        <h1>${escapeHtml(project.name)}</h1>
-        <div class="meta"><span>Клиент: <b>${escapeHtml(project.client || '—')}</b></span><span>Дата: ${escapeHtml(fmtDate(project.date))}</span><span>№ договора: ${escapeHtml(contractNumber(project, offer))}</span></div>
-      </div>
-      <div class="price"><span>Итоговая стоимость</span><b>${escapeHtml(fmtMoney(total))}</b><span>состав и условия ниже</span></div>
-    </section>
-    <section class="sheet">
-      <h2>Сводка проекта</h2>
-      <div class="facts">
-        <div><b>${escapeHtml(fmtNum(summary.moduleCount, 3))}</b><span>модулей</span></div>
-        <div><b>${escapeHtml(summary.facadeAreaM2 > 0 ? fmtNum(summary.facadeAreaM2, 2) : fmtNum(summary.facadeQty, 3))}</b><span>${summary.facadeAreaM2 > 0 ? 'м² фасадов' : 'фасадов/рамок'}</span></div>
-        <div><b>${escapeHtml(fmtNum(summary.hingeQty, 3))}</b><span>петель</span></div>
-        <div><b>${escapeHtml(fmtMoney(summary.bodyTotal))}</b><span>корпуса общ.</span></div>
-      </div>
-      <div class="terms">${terms.map(([label, value]) => `<div><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></div>`).join('')}</div>
-      ${offer.notes ? `<p class="doc-text"><b>Примечания:</b><br>${nl2br(offer.notes)}</p>` : ''}
-      <div class="chips">${clientSketchSummaryLines(summary).map((line) => `<span>${escapeHtml(line)}</span>`).join('')}</div>
-    </section>`;
+  if (modules.length) {
+    blocks.push(p('Модули', { bold: true, size: 14, color: '0F2F57' }));
+    blocks.push(table(['№', 'Модуль', 'Описание', 'Кол-во', 'Сумма'], modules.map((module, index) => [String(index + 1), module.title, module.sub || '', fmtNum(module.qty, 3), fmtMoney(module.total)])));
+  }
+  blocks.push(p('Состав по категориям', { bold: true, size: 14, color: '0F2F57' }));
+  blocks.push(table(['№', 'Категория', 'Позиция', 'Кол-во', 'Сумма'], details.map((detail, index) => [String(index + 1), detail.kindLabel, [detail.name, detail.details.slice(0, 4).join('; ')].filter(Boolean).join('\n'), detailQtyText(detail), fmtMoney(detail.clientSum)])));
+  if (offer.notes) blocks.push(p(`Примечания:\n${offer.notes}`, { size: 11 }));
+  return blocks;
 }
 
-function sketchSection(args: ClientPackageHtmlArgs, settings: NormalizedClientDocumentPackageSettings): string {
-  const summaryLines = clientSketchSummaryLines(args.summary);
-  if (args.sketches.length === 0) return '';
-  return `<section class="sheet"><h2>Эскиз PRO</h2><div class="sketch-grid">${args.sketches.map((sketch, index) => `
-    <figure class="sketch">
-      <header>${index + 1}. ${escapeHtml(sketch.title)}</header>
-      <img src="${escapeHtml(sketch.imageDataUrl)}" alt="${escapeHtml(sketch.title)}">
-      ${settings.sketchSummaryOverlay && summaryLines.length ? `<figcaption class="overlay"><b>Сводка проекта</b>${summaryLines.map((line) => `<span>${escapeHtml(line)}</span>`).join('')}</figcaption>` : ''}
-    </figure>`).join('')}</div></section>`;
-}
-
-function specificationSection(args: ClientPackageHtmlArgs, settings: NormalizedClientDocumentPackageSettings): string {
-  const detailRows = args.details.map((detail, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(detail.kindLabel)}</td><td>${escapeHtml(detail.name)}${detail.details.length && !settings.compact ? `<br><small>${escapeHtml(detail.details.slice(0, 4).join('; '))}</small>` : ''}</td><td>${escapeHtml(detail.priceBasis === 'm2' || detail.priceBasis === 'lm' ? `${fmtNum(detail.qty, 3)} шт / ${fmtNum(detail.qtyEffective, 3)} ${detail.unit}` : `${fmtNum(detail.qtyEffective, 3)} ${detail.unit}`)}</td><td class="num">${escapeHtml(fmtMoney(detail.clientSum))}</td></tr>`).join('');
-  const moduleRows = args.modules.map((module, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(module.title)}</td><td>${escapeHtml(module.sub || '')}</td><td class="num">${escapeHtml(fmtNum(module.qty, 3))}</td><td class="num">${escapeHtml(fmtMoney(module.total))}</td></tr>`).join('');
-  return `<section class="sheet"><h2>Компактная спецификация</h2>
-    ${args.modules.length ? `<h3>Модули</h3><table><thead><tr><th>№</th><th>Модуль</th><th>Описание</th><th class="num">Кол-во</th><th class="num">Сумма</th></tr></thead><tbody>${moduleRows}</tbody></table>` : ''}
-    <h3 style="margin-top:12px">Состав по категориям</h3><table><thead><tr><th>№</th><th>Категория</th><th>Позиция</th><th>Кол-во</th><th class="num">Сумма</th></tr></thead><tbody>${detailRows || '<tr><td colspan="5">Состав не заполнен</td></tr>'}</tbody></table>
-  </section>`;
-}
-
-function contractSection(args: ClientPackageHtmlArgs): string {
+function contractBlocks(args: ClientDocumentArgs): DocxBlock[] {
   const { project, offer, total } = args;
-  const city = offer.contractCity?.trim() || '__________';
-  const warranty = offer.warranty?.trim() || '12 месяцев, если иное не указано в приложениях';
-  const terms = offer.productionTerms?.trim() || 'срок изготовления и монтажа согласуется сторонами после утверждения размеров и материалов';
-  return `<section class="sheet"><h2>Договор на изготовление мебели — черновик</h2>
-    <p class="small-note">Типовая структура для предварительной выгрузки. После загрузки ваших документов заменим этот блок на фирменный шаблон.</p>
-    <div class="doc-grid doc-text">
-      <div><b>№ договора:</b> ${escapeHtml(contractNumber(project, offer))}<br><b>Город:</b> ${escapeHtml(city)}<br><b>Дата:</b> ${escapeHtml(fmtDate(project.date))}</div>
-      <div><b>Исполнитель:</b> ${escapeHtml(sellerName(offer))}<br>${nl2br(offer.sellerDetails || '')}<br><b>Заказчик:</b> ${escapeHtml(project.client || '—')} ${offer.clientContacts ? `<br>${nl2br(offer.clientContacts)}` : ''}</div>
-    </div>
-    <ol class="doc-text">
-      <li><b>Предмет договора.</b> Исполнитель обязуется изготовить и/или укомплектовать мебельный комплект по согласованному эскизу, спецификации и коммерческому предложению, а Заказчик обязуется принять и оплатить изделие.</li>
-      <li><b>Стоимость.</b> Предварительная стоимость комплекта составляет <b>${escapeHtml(fmtMoney(total))}</b>. Изменение размеров, материалов, фурнитуры и состава оформляется пересчётом или дополнительным соглашением.</li>
-      <li><b>Порядок оплаты.</b> ${escapeHtml(offer.paymentTerms || 'условия оплаты согласуются сторонами')}.</li>
-      <li><b>Сроки.</b> ${escapeHtml(terms)}.</li>
-      <li><b>Доставка и монтаж.</b> Доставка: ${escapeHtml(offer.delivery || 'по согласованию')}. Монтаж: ${escapeHtml(offer.installation || 'по согласованию')}.</li>
-      <li><b>Приёмка и гарантия.</b> Заказчик проверяет комплектность и внешний вид при передаче. Гарантия: ${escapeHtml(warranty)}.</li>
-    </ol>
-    <div class="signatures"><div class="sign-box"><b>Исполнитель</b><div class="sign-line">подпись / расшифровка</div></div><div class="sign-box"><b>Заказчик</b><div class="sign-line">подпись / расшифровка</div></div></div>
-  </section>`;
+  return [
+    p('Договор на изготовление мебели', { bold: true, size: 20, color: '0F2F57' }),
+    p(`№ ${contractNumber(project, offer)} · ${offer.contractCity?.trim() || '__________'} · ${fmtDate(project.date)}`, { size: 11, color: '52667A' }),
+    p(`Исполнитель: ${sellerName(offer)}\n${offer.sellerDetails || ''}\nЗаказчик: ${project.client || '—'}\n${offer.clientContacts || ''}`),
+    p('1. Предмет договора', { bold: true, size: 14, color: '0F2F57' }),
+    p('Исполнитель обязуется изготовить и/или укомплектовать мебельное изделие по согласованному эскизу, спецификации и коммерческому предложению, а Заказчик обязуется принять изделие и оплатить его.'),
+    p('2. Стоимость и порядок оплаты', { bold: true, size: 14, color: '0F2F57' }),
+    p(`Предварительная стоимость комплекта составляет ${fmtMoney(total)}. Условия оплаты: ${offer.paymentTerms || 'по согласованию'}. Изменение размеров, материалов, фурнитуры или состава оформляется пересчётом либо дополнительным соглашением.`),
+    p('3. Сроки, доставка и монтаж', { bold: true, size: 14, color: '0F2F57' }),
+    p(`Срок изготовления: ${offer.productionTerms || 'согласуется после утверждения размеров и материалов'}. Доставка: ${offer.delivery || 'по согласованию'}. Монтаж: ${offer.installation || 'по согласованию'}.`),
+    p('4. Приёмка и гарантия', { bold: true, size: 14, color: '0F2F57' }),
+    p(`Заказчик проверяет комплектность и внешний вид при передаче. Гарантия: ${offer.warranty || '12 месяцев, если иное не указано в приложениях'}.`),
+    p('Подписи сторон', { bold: true, size: 14, color: '0F2F57' }),
+    table(['Исполнитель', 'Заказчик'], [['__________________________', '__________________________']]),
+    p('Примечание: это типовой черновик. После загрузки ваших документов заменим его на фирменный шаблон.', { size: 10, color: '64748B' }),
+  ];
 }
 
-function receiptSection(args: ClientPackageHtmlArgs): string {
+function receiptBlocks(args: ClientDocumentArgs): DocxBlock[] {
   const { project, offer, total, summary } = args;
   const rows = [
     ['Комплект мебели по проекту', '1 комплект', fmtMoney(total)],
@@ -206,26 +195,120 @@ function receiptSection(args: ClientPackageHtmlArgs): string {
     summary.facadeTotal > 0 ? ['Фасады / рамки', summary.facadeAreaM2 > 0 ? `${fmtNum(summary.facadeAreaM2, 2)} м²` : `${fmtNum(summary.facadeQty, 3)} шт`, fmtMoney(summary.facadeTotal)] : null,
     summary.hardwareTotal > 0 ? ['Фурнитура', 'общ.', fmtMoney(summary.hardwareTotal)] : null,
   ].filter((row): row is string[] => Boolean(row));
-  return `<section class="sheet"><h2>Товарный чек</h2>
-    <div class="doc-grid doc-text"><div><b>Продавец:</b> ${escapeHtml(sellerName(offer))}<br>${nl2br(offer.sellerDetails || '')}</div><div><b>Покупатель:</b> ${escapeHtml(project.client || '—')}<br><b>Проект:</b> ${escapeHtml(project.name)}<br><b>Дата:</b> ${escapeHtml(fmtDate(project.date))}</div></div>
-    <table style="margin-top:10px"><thead><tr><th>Наименование</th><th>Кол-во</th><th class="num">Сумма</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${escapeHtml(row[0])}</td><td>${escapeHtml(row[1])}</td><td class="num">${escapeHtml(row[2])}</td></tr>`).join('')}<tr><th colspan="2">Итого</th><th class="num">${escapeHtml(fmtMoney(total))}</th></tr></tbody></table>
-    <div class="signatures"><div class="sign-box"><b>Продавец</b><div class="sign-line">подпись</div></div><div class="sign-box"><b>Покупатель</b><div class="sign-line">подпись</div></div></div>
-  </section>`;
+  return [
+    p('Товарный чек', { bold: true, size: 20, color: '0F2F57' }),
+    p(`Продавец: ${sellerName(offer)}\n${offer.sellerDetails || ''}\nПокупатель: ${project.client || '—'}\nПроект: ${project.name}\nДата: ${fmtDate(project.date)}`),
+    table(['Наименование', 'Кол-во', 'Сумма'], [...rows, ['Итого', '', fmtMoney(total)]]),
+    p('Продавец ____________________________      Покупатель ____________________________', { size: 11 }),
+  ];
 }
 
-export function buildClientDocumentPackageHtml(args: ClientPackageHtmlArgs): string {
-  const settings = includeSettings(args.offer);
-  const sections = [
-    settings.includeOffer ? offerSection(args) : '',
-    settings.includeSketch ? sketchSection(args, settings) : '',
-    settings.includeSpecification ? specificationSection(args, settings) : '',
-    settings.includeContract ? contractSection(args) : '',
-    settings.includeReceipt ? receiptSection(args) : '',
-  ].filter(Boolean).join('\n');
-  return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(args.project.name)} — пакет клиента</title><style>${packageStyles(settings.compact)}</style></head><body><main class="pack">${sections}</main></body></html>`;
+export async function buildClientOfferDocx(args: ClientDocumentArgs): Promise<Blob> {
+  return docxBlob(`${args.project.name} — полное КП`, offerBlocks(args));
 }
 
-export function downloadClientDocumentPackageHtml(args: ClientPackageHtmlArgs): void {
-  const html = buildClientDocumentPackageHtml(args);
-  downloadFile(`${safeFilePart(args.project.name)} — пакет клиента.html`, html, 'text/html;charset=utf-8');
+export async function buildClientContractDocx(args: ClientDocumentArgs): Promise<Blob> {
+  return docxBlob(`${args.project.name} — договор`, contractBlocks(args));
+}
+
+export async function buildClientReceiptDocx(args: ClientDocumentArgs): Promise<Blob> {
+  return docxBlob(`${args.project.name} — товарный чек`, receiptBlocks(args));
+}
+
+export async function downloadClientOfferDocx(args: ClientDocumentArgs): Promise<void> {
+  downloadFile(`${safeFilePart(args.project.name)} — полное КП.docx`, await buildClientOfferDocx(args));
+}
+
+export async function downloadClientContractDocx(args: ClientDocumentArgs): Promise<void> {
+  downloadFile(`${safeFilePart(args.project.name)} — договор.docx`, await buildClientContractDocx(args));
+}
+
+export async function downloadClientReceiptDocx(args: ClientDocumentArgs): Promise<void> {
+  downloadFile(`${safeFilePart(args.project.name)} — товарный чек.docx`, await buildClientReceiptDocx(args));
+}
+
+export async function downloadClientDocumentZip(args: ClientDocumentArgs, sketchFiles: ClientPackageSketchFile[] = []): Promise<void> {
+  const settings = normalizeClientDocumentPackage(args.offer.documentPackage);
+  const files: ZipInput[] = [];
+  if (settings.includeOffer || settings.includeSpecification) files.push({ name: `${safeFilePart(args.project.name)} — полное КП.docx`, data: await buildClientOfferDocx(args) });
+  if (settings.includeContract) files.push({ name: `${safeFilePart(args.project.name)} — договор.docx`, data: await buildClientContractDocx(args) });
+  if (settings.includeReceipt) files.push({ name: `${safeFilePart(args.project.name)} — товарный чек.docx`, data: await buildClientReceiptDocx(args) });
+  if (settings.includeSketch) files.push(...sketchFiles.map((file, index) => ({ name: file.fileName || `Эскиз ${index + 1} — ${safeFilePart(file.title)}.pdf`, data: file.blob })));
+  downloadFile(`${safeFilePart(args.project.name)} — пакет клиента.zip`, await zipFiles(files, 'application/zip'));
+}
+
+const CRC_TABLE = (() => {
+  const tableValues = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    tableValues[n] = c >>> 0;
+  }
+  return tableValues;
+})();
+
+function crc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (const byte of bytes) crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+async function dataBytes(data: string | Uint8Array | Blob): Promise<Uint8Array> {
+  if (typeof data === 'string') return encoder.encode(data);
+  if (data instanceof Uint8Array) return data;
+  return new Uint8Array(await data.arrayBuffer());
+}
+
+function dosDateTime(date = new Date()): { time: number; date: number } {
+  const year = Math.max(1980, date.getFullYear());
+  return {
+    time: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
+    date: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate(),
+  };
+}
+
+function u16(value: number): Uint8Array {
+  return new Uint8Array([value & 0xff, (value >>> 8) & 0xff]);
+}
+
+function u32(value: number): Uint8Array {
+  return new Uint8Array([value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff]);
+}
+
+function concat(parts: Uint8Array[]): Uint8Array {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) { out.set(part, offset); offset += part.length; }
+  return out;
+}
+
+async function zipFiles(files: ZipInput[], mime = 'application/zip'): Promise<Blob> {
+  const prepared: PreparedZipInput[] = [];
+  const localParts: Uint8Array[] = [];
+  let offset = 0;
+  const stamp = dosDateTime();
+  for (const file of files) {
+    const nameBytes = encoder.encode(file.name);
+    const bytes = await dataBytes(file.data);
+    const crc = crc32(bytes);
+    const localHeader = concat([
+      u32(0x04034b50), u16(20), u16(0x0800), u16(0), u16(stamp.time), u16(stamp.date), u32(crc), u32(bytes.length), u32(bytes.length), u16(nameBytes.length), u16(0), nameBytes,
+    ]);
+    prepared.push({ nameBytes, dataBytes: bytes, crc, offset });
+    localParts.push(localHeader, bytes);
+    offset += localHeader.length + bytes.length;
+  }
+  const centralStart = offset;
+  const centralParts: Uint8Array[] = [];
+  for (const file of prepared) {
+    centralParts.push(concat([
+      u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(0), u16(stamp.time), u16(stamp.date), u32(file.crc), u32(file.dataBytes.length), u32(file.dataBytes.length), u16(file.nameBytes.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(file.offset), file.nameBytes,
+    ]));
+  }
+  const central = concat(centralParts);
+  const end = concat([u32(0x06054b50), u16(0), u16(0), u16(prepared.length), u16(prepared.length), u32(central.length), u32(centralStart), u16(0)]);
+  const zipBytes = concat([...localParts, central, end]);
+  const buffer = zipBytes.buffer.slice(zipBytes.byteOffset, zipBytes.byteOffset + zipBytes.byteLength) as ArrayBuffer;
+  return new Blob([buffer], { type: mime });
 }
