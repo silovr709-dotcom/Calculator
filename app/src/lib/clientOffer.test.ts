@@ -71,6 +71,28 @@ describe('детализация КП клиента', () => {
     expect(details[1].qty).toBe(4);
   });
 
+  it('схлопывает одинаковую фурнитуру из разных модулей в одну строку на весь проект', () => {
+    const lines = [
+      line({ id: 'h1', itemId: 'hinge-boyard-110', category: 'Петли', group: 'Фурнитура', name: 'Петля Боярд 110 градусов с доводчиком', unit: 'шт', priceBasis: 'unit', qty: 20, note: 'Модуль: Низ 800 [mod_1] — 20 петель' }),
+      line({ id: 'h2', itemId: 'hinge-boyard-110', category: 'Петли', group: 'Фурнитура', name: 'Петля Боярд 110 градусов с доводчиком', unit: 'шт', priceBasis: 'unit', qty: 20, note: 'Модуль: Верх 800 [mod_2] — 20 петель' }),
+      line({ id: 'd1', itemId: 'drawer-boyard-tpo', category: 'Системы выдвижения', group: 'Фурнитура', name: 'ТПО Boyard с доводчиком', unit: 'компл', priceBasis: 'unit', qty: 10, note: 'Модуль: Ящики [mod_3] — 10 систем ящиков' }),
+    ];
+    const lineCalcs = new Map([
+      ['h1', calc('h1', 20, 3000)],
+      ['h2', calc('h2', 20, 3000)],
+      ['d1', calc('d1', 10, 8000)],
+    ]);
+
+    const details = buildClientOfferDetails(lines, lineCalcs);
+    const hinges = details.find((detail) => detail.kind === 'hinge');
+    const drawers = details.find((detail) => detail.kind === 'drawerSys');
+    expect(details).toHaveLength(2);
+    expect(hinges?.qty).toBe(40);
+    expect(hinges?.clientSum).toBe(6000);
+    expect(drawers?.qty).toBe(10);
+    expect(drawers?.clientSum).toBe(8000);
+  });
+
   it('готовит компактную сводку для плашки на клиентском эскизе', () => {
     const lines = [
       line({ id: 'body', itemId: 'body-a', category: 'Корпуса ЛДСП', group: 'Корпуса', name: 'ЛДСП корпус', unit: 'м²', priceBasis: 'm2', qty: 1 }),

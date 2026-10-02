@@ -129,6 +129,7 @@ export interface ProjectSettings {
 export type WizardStepId = 'data' | 'shape' | 'materials' | 'modules' | 'review' | 'total';
 
 export type ClientOfferPresentationMode = 'brief' | 'detailed' | 'technical';
+export type ClientOfferModuleDetailMode = 'summary' | 'compact' | 'full';
 
 export interface ClientDocumentPackageSettings {
   /** Включить титульное коммерческое предложение/сводку. */
@@ -166,6 +167,10 @@ export interface ClientOfferSettings {
   presentationMode?: ClientOfferPresentationMode;
   /** false — скрыть суммы внутри комплектации и оставить только итоги модулей/проекта. */
   showDetailPrices?: boolean;
+  /** Насколько подробно раскрывать состав каждого модуля в КП. */
+  moduleDetailMode?: ClientOfferModuleDetailMode;
+  /** true/undefined — петли, опоры, ящики и другую фурнитуру показывать общими строками по проекту. */
+  aggregateHardware?: boolean;
 }
 
 /** Снимок КП для истории согласований: не хранит весь проект, только контрольные цифры и контекст. */

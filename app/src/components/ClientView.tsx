@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ClientDocumentPackageSettings, ClientOfferPresentationMode, ClientOfferSettings, EskizExportViewSettings, EskizLayerKey, EskizProIntegration, Pricebook, Project } from '../types';
+import type { ClientDocumentPackageSettings, ClientOfferModuleDetailMode, ClientOfferPresentationMode, ClientOfferSettings, EskizExportViewSettings, EskizLayerKey, EskizProIntegration, Pricebook, Project } from '../types';
 import type { ClientOfferDetail, ClientOfferDetailKind } from '../lib/clientOffer';
 import { calcTotals } from '../lib/engine';
 import { calculateVariant } from '../lib/variants';
@@ -37,6 +37,19 @@ const CLIENT_ESKIZ_LAYERS: { key: EskizLayerKey; label: string }[] = [
   { key: 'equipment', label: 'Техника' },
   { key: 'links', label: 'Ссылки' },
 ];
+
+const AGGREGATED_HARDWARE_KINDS: ClientOfferDetailKind[] = ['hinge', 'drawerSys', 'lift', 'handle', 'legs'];
+const AGGREGATED_HARDWARE_SET = new Set<ClientOfferDetailKind>(AGGREGATED_HARDWARE_KINDS);
+
+function isAggregatedHardware(detail: ClientOfferDetail): boolean {
+  return AGGREGATED_HARDWARE_SET.has(detail.kind);
+}
+
+const MODULE_DETAIL_MODE_LABELS: Record<ClientOfferModuleDetailMode, string> = {
+  summary: 'только список модулей',
+  compact: 'компактно: материалы в модуле, фурнитура общими строками',
+  full: 'полная детализация внутри каждого модуля',
+};
 
 function detailQtyText(detail: ClientOfferDetail): string {
   const unit = detail.unit || 'шт';
@@ -119,6 +132,9 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const showDetailPrices = project.clientOffer?.showDetailPrices !== false;
   const isBrief = presentationMode === 'brief';
   const isTechnical = presentationMode === 'technical';
+  const moduleDetailMode: ClientOfferModuleDetailMode = project.clientOffer?.moduleDetailMode ?? (isTechnical ? 'full' : 'compact');
+  const aggregateHardware = project.clientOffer?.aggregateHardware !== false;
+  const extractHardwareFromModules = aggregateHardware && moduleDetailMode !== 'full';
   const linkedEskizIds = project.eskizPro?.linkedProjectIds ?? [];
   const eskizSnapshots = project.eskizPro?.snapshots ?? [];
   const eskizById = new Map(eskizSnapshots.map((snapshot) => [snapshot.id, snapshotProject(snapshot)]));
@@ -163,6 +179,8 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const updatePackageSettings = (patch: Partial<ClientDocumentPackageSettings>) => updateOffer({ documentPackage: { ...packageSettings, ...patch } });
   const extraDetails = buildClientOfferDetails(extraLines, lineCalcs);
   const allDetails = buildClientOfferDetails(activeCalculation.lines, lineCalcs);
+  const projectHardwareDetails = extractHardwareFromModules ? allDetails.filter(isAggregatedHardware) : [];
+  const visibleExtraDetails = extractHardwareFromModules ? extraDetails.filter((detail) => !isAggregatedHardware(detail)) : extraDetails;
   const moduleQty = groups.reduce((sum, group) => sum + group.qty, 0);
   const projectSummary = buildClientProjectSummary(allDetails, moduleQty);
   const sketchSummaryLines = clientSketchSummaryLines(projectSummary);
@@ -269,7 +287,15 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
               <option value="technical">Техническое приложение — максимум деталей</option>
             </select>
           </label>
+          <label>Состав модулей
+            <select value={moduleDetailMode} onChange={(event) => updateOffer({ moduleDetailMode: event.target.value as ClientOfferModuleDetailMode })}>
+              <option value="summary">Только карточки модулей</option>
+              <option value="compact">Компактно: материалы в модуле, фурнитура общими строками</option>
+              <option value="full">Полностью: все строки внутри каждого модуля</option>
+            </select>
+          </label>
           <label className="client-detail-price-toggle"><input type="checkbox" checked={showDetailPrices} onChange={(event) => updateOffer({ showDetailPrices: event.target.checked })} /> Показывать суммы в детализации</label>
+          <label className="client-detail-price-toggle"><input type="checkbox" checked={aggregateHardware} onChange={(event) => updateOffer({ aggregateHardware: event.target.checked })} /> Фурнитуру общими строками по проекту</label>
           <label className="span-2">Примечания для клиента<textarea rows={2} value={project.clientOffer?.notes ?? ''} onChange={(event) => updateOffer({ notes: event.target.value })} /></label>
         </div>
         <div className="client-package-control">
@@ -377,13 +403,15 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           <section className="cd-modules">
             <div className="cd-section-head">
               <h3>Состав мебели</h3>
-              <span>{isBrief ? 'краткая сводка по модулям' : isTechnical ? 'техническая детализация по каждому модулю' : 'компактная детализация по каждому модулю'}</span>
+              <span>{MODULE_DETAIL_MODE_LABELS[moduleDetailMode]}</span>
             </div>
             {groups.map((group, index) => {
               const ids = groupLineIds(group);
               const idSet = new Set(ids);
               const lines = activeCalculation.lines.filter((line) => idSet.has(line.id));
               const details = buildClientOfferDetails(lines, lineCalcs);
+              const visibleDetails = extractHardwareFromModules ? details.filter((detail) => !isAggregatedHardware(detail)) : details;
+              const extractedCount = details.length - visibleDetails.length;
               const total = groupSum(group);
               return (
                 <article className="cd-module-card" key={group.id}>
@@ -395,17 +423,30 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
                     </div>
                     <strong>{total != null ? fmtMoney(total) : '—'}</strong>
                   </div>
-                  {details.length > 0 ? (
+                  {moduleDetailMode === 'summary' ? (
+                    <div className="cd-module-brief cd-module-summary-only">
+                      <span>{group.sub || 'габариты не указаны'}</span>
+                      <span>{fmtNum(group.qty, 3)} шт</span>
+                      {total != null && <span>{fmtMoney(total)}</span>}
+                      {extractHardwareFromModules && extractedCount > 0 && <span>фурнитура вынесена в сводку</span>}
+                    </div>
+                  ) : visibleDetails.length > 0 ? (
                     isBrief ? (
                       <div className="cd-module-brief">
-                        {details.slice(0, 6).map((detail) => <span key={detail.id}>{detailBriefText(detail)}</span>)}
-                        {details.length > 6 && <span>ещё {details.length - 6} поз.</span>}
+                        {visibleDetails.slice(0, 5).map((detail) => <span key={detail.id}>{detailBriefText(detail)}</span>)}
+                        {visibleDetails.length > 5 && <span>ещё {visibleDetails.length - 5} поз.</span>}
+                        {extractHardwareFromModules && extractedCount > 0 && <span>фурнитура — в общей сводке</span>}
                       </div>
                     ) : (
-                      <div className="cd-component-list">
-                        {details.map((detail) => <DetailRow key={detail.id} detail={detail} showPrice={showDetailPrices} technical={isTechnical} />)}
-                      </div>
+                      <>
+                        <div className="cd-component-list">
+                          {visibleDetails.map((detail) => <DetailRow key={detail.id} detail={detail} showPrice={showDetailPrices} technical={isTechnical} />)}
+                        </div>
+                        {extractHardwareFromModules && extractedCount > 0 && <div className="cd-module-compact-note">Петли, опоры, ручки, подъёмники и системы ящиков вынесены ниже в общую фурнитуру проекта.</div>}
+                      </>
                     )
+                  ) : extractHardwareFromModules && extractedCount > 0 ? (
+                    <div className="cd-module-compact-note">Комплектация этого модуля вынесена в общую фурнитуру проекта.</div>
                   ) : (
                     <div className="cd-module-empty">Нет рассчитанных строк по модулю — проверьте комплектацию.</div>
                   )}
@@ -415,11 +456,20 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           </section>
         )}
 
-        {extraDetails.length > 0 && (
+        {projectHardwareDetails.length > 0 && (
+          <section className="cd-project-hardware">
+            <div className="cd-section-head"><h3>Фурнитура по проекту</h3><span>общими строками, без повторения в каждом модуле</span></div>
+            <div className="cd-component-list cd-component-list-extra cd-hardware-list">
+              {projectHardwareDetails.map((detail) => <DetailRow key={detail.id} detail={{ ...detail, details: detail.details.map((note) => stripModuleNote(note)) }} showPrice={showDetailPrices} technical={isTechnical} />)}
+            </div>
+          </section>
+        )}
+
+        {visibleExtraDetails.length > 0 && (
           <section className="cd-extra">
             <div className="cd-section-head"><h3>Дополнительно</h3><span>столешницы, цоколь, мойки, работы и прочие позиции</span></div>
             <div className="cd-component-list cd-component-list-extra">
-              {extraDetails.map((detail) => <DetailRow key={detail.id} detail={{ ...detail, details: detail.details.map((note) => stripModuleNote(note)) }} showPrice={showDetailPrices && !isBrief} technical={isTechnical} />)}
+              {visibleExtraDetails.map((detail) => <DetailRow key={detail.id} detail={{ ...detail, details: detail.details.map((note) => stripModuleNote(note)) }} showPrice={showDetailPrices && !isBrief} technical={isTechnical} />)}
             </div>
           </section>
         )}

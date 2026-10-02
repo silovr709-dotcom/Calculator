@@ -3922,3 +3922,35 @@ select option { background: #fff !important; color: #102037 !important; }
 @media (max-width: 700px) {
   .module-card-list { grid-template-columns: 1fr; }
 }
+
+/* ---------- Client offer compact composition controls ---------- */
+.client-detail-price-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid #d7e4ef;
+  border-radius: 12px;
+  background: #f8fbff;
+  color: #0f2f57;
+  font-weight: 850;
+}
+.client-detail-price-toggle input { width: auto; margin: 0; }
+.cd-project-hardware { margin-top: 12px; page-break-inside: avoid; }
+.cd-hardware-list .cd-component { background: #fbfffd; }
+.cd-hardware-list .cd-component-main b { font-size: 12.5px; }
+.cd-module-compact-note {
+  padding: 7px 10px;
+  border-top: 1px solid #edf1ef;
+  background: #f6faf8;
+  color: #52667a;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.cd-module-summary-only { border-top: 1px solid #edf1ef; }
+.client-doc-brief .cd-module-compact-note,
+.client-doc-detailed .cd-module-compact-note { font-size: 10.5px; }
+@media print {
+  .cd-module-compact-note { padding: 5px 8px; }
+}
