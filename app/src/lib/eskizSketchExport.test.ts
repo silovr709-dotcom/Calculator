@@ -51,6 +51,18 @@ describe('buildEskizSketchSvg', () => {
     expect(svg).toContain('2000 мм');
   });
 
+  it('рендерит петли отдельным слоем и скрывает их при отключении слоя', () => {
+    const withHinge: EskizProject = {
+      ...project,
+      objects: [...project.objects, { id: 'h1', type: 'hinge', x: 260, y: 190, label: 'П1', side: 'auto', color: '#1d4ed8', fontSize: 20 }],
+    };
+    const svg = buildEskizSketchSvg(withHinge);
+    expect(svg).toContain('class="hinge"');
+    expect(svg).toContain('П1');
+    const hidden = buildEskizSketchSvg(withHinge, { layerVisibility: { hinges: false } });
+    expect(hidden).not.toContain('П1');
+  });
+
   it('уважает скрытие отдельных слоёв редактора при SVG/PNG/PDF-рендеринге', () => {
     const svg = buildEskizSketchSvg(project, {
       communications: [communication],

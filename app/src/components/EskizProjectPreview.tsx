@@ -1,6 +1,6 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
 import type { EskizCommunicationDistance, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
-import type { EskizCalloutObject, EskizDimensionObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
+import type { EskizCalloutObject, EskizDimensionObject, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationColor, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale } from '../lib/eskizCommunications';
 
 export type EskizModulePreviewStatus = { level: 'new' | 'error' | 'warn' | 'ok'; label: string; summary?: string };
@@ -16,6 +16,7 @@ const STATUS_COLORS: Record<EskizModulePreviewStatus['level'], string> = {
 const DEFAULT_LAYER_VISIBILITY: EskizLayerVisibility = {
   dimensions: true,
   modules: true,
+  hinges: true,
   communications: true,
   callouts: true,
   comments: true,
@@ -26,6 +27,7 @@ const DEFAULT_LAYER_VISIBILITY: EskizLayerVisibility = {
 function objectLayerKey(object: EskizObject): EskizLayerKey | 'helpers' {
   if (object.type === 'dimension') return 'dimensions';
   if (object.type === 'module') return 'modules';
+  if (object.type === 'hinge') return 'hinges';
   if (object.type === 'callout') return 'callouts';
   if (object.type === 'comment') return 'comments';
   if (object.type === 'equipment') return 'equipment';
@@ -172,6 +174,24 @@ function ModulePreview({ object: o, projectId, active = false, linked = false, s
       {status && <g className="eskiz-preview-module-status" transform={`translate(${Math.max(5, width - badgeWidth - 6)} ${-10})`}><rect width={badgeWidth} height="19" rx="9.5" fill={statusColor} /><text x={badgeWidth / 2} y="10" dominantBaseline="middle" textAnchor="middle" fontSize="10" fontWeight="900" fill="#fff">{status.label}</text></g>}
       {status?.summary && <title>{status.summary}</title>}
       {lines.map((line, index) => <text key={index} x={width / 2} y={textY + index * (o.fontSize + 5)} dominantBaseline="hanging" textAnchor="middle" fontSize={o.fontSize} fontWeight={index === 0 ? 800 : 500} fill={o.color}>{line}</text>)}
+    </g>
+  );
+}
+
+function HingePreview({ object: o }: { object: EskizHingeObject }) {
+  const size = clamp(o.fontSize || 20, 12, 44);
+  const leaf = size * .74;
+  const label = (o.label?.trim() || 'П').slice(0, 3);
+  return (
+    <g className="eskiz-preview-object eskiz-preview-hinge" transform={`translate(${o.x} ${o.y})`}>
+      <circle r={size * .76} fill={o.color} opacity=".14" />
+      <circle r={size * .5} fill="#fff" stroke={o.color} strokeWidth="2.2" />
+      <path d={`M ${-leaf} ${-leaf * .54} C ${-leaf * .28} ${-leaf * .32}, ${-leaf * .28} ${leaf * .32}, ${-leaf} ${leaf * .54}`} fill="none" stroke={o.color} strokeWidth="2.1" strokeLinecap="round" />
+      <path d={`M ${leaf} ${-leaf * .54} C ${leaf * .28} ${-leaf * .32}, ${leaf * .28} ${leaf * .32}, ${leaf} ${leaf * .54}`} fill="none" stroke={o.color} strokeWidth="2.1" strokeLinecap="round" />
+      <circle cx={-leaf * .2} cy={0} r={Math.max(2.4, size * .14)} fill={o.color} />
+      <circle cx={leaf * .2} cy={0} r={Math.max(2.4, size * .14)} fill={o.color} />
+      <text y={size * 1.15} textAnchor="middle" fontSize={Math.max(9, size * .48)} fontWeight="900" fill={o.color} stroke="#fff" strokeWidth="3" paintOrder="stroke">{label}</text>
+      <title>{o.label || 'Петля'}</title>
     </g>
   );
 }
@@ -327,6 +347,7 @@ function ObjectPreview({ object, projectId, activeModuleKey, moduleBindings, mod
     const key = `${projectId}:${object.id}`;
     return <ModulePreview object={object} projectId={projectId} active={activeModuleKey === key} linked={Boolean(moduleBindings?.[key])} status={moduleStatuses?.[key]} markerMode={moduleMarkerMode} onModuleClick={onModuleClick} />;
   }
+  if (object.type === 'hinge') return <HingePreview object={object} />;
   if (object.type === 'callout') return <CalloutPreview object={object} />;
   if (object.type === 'comment' || object.type === 'link' || object.type === 'equipment') return <TextPreview object={object} />;
   return null;

@@ -353,7 +353,7 @@ export interface EskizCommunicationMarker {
   updatedAt?: string;
 }
 
-export type EskizLayerKey = 'dimensions' | 'modules' | 'communications' | 'callouts' | 'comments' | 'equipment' | 'links';
+export type EskizLayerKey = 'dimensions' | 'modules' | 'hinges' | 'communications' | 'callouts' | 'comments' | 'equipment' | 'links';
 export type EskizLayerVisibility = Record<EskizLayerKey, boolean>;
 
 export interface EskizExportViewSettings {
@@ -392,6 +392,8 @@ export interface FactoryBlankSketchSettings {
   enabled?: boolean;
   /** Какой snapshot Эскиз PRO вставлять в левую область бланка; null/undefined = активный или последний. */
   snapshotId?: string | null;
+  /** Несколько snapshot Эскиз PRO для выгрузки: в штатное поле идут коллажем, на лист Эскиз PRO — отдельными крупными картинками. */
+  snapshotIds?: string[];
   /** Режим маркеров именно для фабричного Excel: можно сделать компактно или совсем убрать. */
   moduleMarkerMode?: 'full' | 'compact' | 'hidden';
   /** false — не добавлять в картинку фабричного бланка розетки/воду/газ/вентиляцию. */

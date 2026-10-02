@@ -1,5 +1,5 @@
 import type { EskizCommunicationDistance, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
-import type { EskizCalloutObject, EskizDimensionObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from './eskizPro';
+import type { EskizCalloutObject, EskizDimensionObject, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from './eskizPro';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationColor, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale } from './eskizCommunications';
 
 export type EskizSketchModuleMarkerMode = 'full' | 'compact' | 'hidden';
@@ -7,6 +7,7 @@ export type EskizSketchModuleMarkerMode = 'full' | 'compact' | 'hidden';
 const DEFAULT_LAYER_VISIBILITY: EskizLayerVisibility = {
   dimensions: true,
   modules: true,
+  hinges: true,
   communications: true,
   callouts: true,
   comments: true,
@@ -187,6 +188,23 @@ function renderModule(o: EskizModuleObject, markerMode: EskizSketchModuleMarkerM
   </g>`;
 }
 
+function renderHinge(o: EskizHingeObject) {
+  const color = o.color || '#1d4ed8';
+  const size = clamp(o.fontSize || 20, 12, 44);
+  const leaf = size * .74;
+  const label = (o.label?.trim() || 'П').slice(0, 3);
+  return `<g class="hinge" transform="translate(${o.x} ${o.y})">
+    <circle r="${size * .76}" fill="${xml(color)}" opacity=".14" />
+    <circle r="${size * .5}" fill="#fff" stroke="${xml(color)}" stroke-width="2.2" />
+    <path d="M ${-leaf} ${-leaf * .54} C ${-leaf * .28} ${-leaf * .32}, ${-leaf * .28} ${leaf * .32}, ${-leaf} ${leaf * .54}" fill="none" stroke="${xml(color)}" stroke-width="2.1" stroke-linecap="round" />
+    <path d="M ${leaf} ${-leaf * .54} C ${leaf * .28} ${-leaf * .32}, ${leaf * .28} ${leaf * .32}, ${leaf} ${leaf * .54}" fill="none" stroke="${xml(color)}" stroke-width="2.1" stroke-linecap="round" />
+    <circle cx="${-leaf * .2}" cy="0" r="${Math.max(2.4, size * .14)}" fill="${xml(color)}" />
+    <circle cx="${leaf * .2}" cy="0" r="${Math.max(2.4, size * .14)}" fill="${xml(color)}" />
+    <text y="${size * 1.15}" text-anchor="middle" font-size="${Math.max(9, size * .48)}" font-weight="900" fill="${xml(color)}" stroke="#fff" stroke-width="3" paint-order="stroke">${xml(label)}</text>
+    <title>${xml(o.label || 'Петля')}</title>
+  </g>`;
+}
+
 function renderCallout(o: EskizCalloutObject) {
   const sourceLines = o.text.split('\n');
   const autoWidth = Math.max(120, ...sourceLines.map((text) => text.length * o.fontSize * .56)) + 24;
@@ -300,6 +318,7 @@ function renderCommunication(marker: EskizCommunicationMarker, width: number, he
 function objectLayerKey(object: EskizObject): EskizLayerKey | 'helpers' {
   if (object.type === 'dimension') return 'dimensions';
   if (object.type === 'module') return 'modules';
+  if (object.type === 'hinge') return 'hinges';
   if (object.type === 'callout') return 'callouts';
   if (object.type === 'comment') return 'comments';
   if (object.type === 'equipment') return 'equipment';
@@ -339,6 +358,7 @@ function renderObject(object: EskizObject, markerMode: EskizSketchModuleMarkerMo
   if (!objectVisibleInExport(object, options, layers)) return '';
   if (object.type === 'dimension') return renderDimension(object);
   if (object.type === 'module') return renderModule(object, markerMode);
+  if (object.type === 'hinge') return renderHinge(object);
   if (object.type === 'callout') return renderCallout(object);
   if (object.type === 'comment' || object.type === 'link' || object.type === 'equipment') return renderTextObject(object);
   return renderHelper(object, width, height);

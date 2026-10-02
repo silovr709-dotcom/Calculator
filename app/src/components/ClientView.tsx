@@ -27,6 +27,7 @@ const MODE_LABELS: Record<ClientOfferPresentationMode, string> = {
 const CLIENT_ESKIZ_LAYERS: { key: EskizLayerKey; label: string }[] = [
   { key: 'dimensions', label: 'Размеры' },
   { key: 'modules', label: 'Модули' },
+  { key: 'hinges', label: 'Петли' },
   { key: 'communications', label: 'Коммуникации' },
   { key: 'callouts', label: 'Сноски' },
   { key: 'comments', label: 'Комментарии' },

@@ -39,11 +39,12 @@ export type EskizDimensionObject = EskizBaseObject & {
 };
 
 export type EskizModuleObject = EskizBaseObject & { type: 'module'; number: string; description: string };
+export type EskizHingeObject = EskizBaseObject & { type: 'hinge'; label: string; side?: 'left' | 'right' | 'top' | 'bottom' | 'auto' };
 export type EskizTextObject = EskizBaseObject & { type: 'comment' | 'link' | 'equipment'; text: string; url?: string; equipmentType?: EskizEquipmentType };
 export type EskizCalloutObject = EskizBaseObject & { type: 'callout'; targetX: number; targetY: number; text: string; url?: string };
 export type EskizAnchorObject = EskizBaseObject & { type: 'anchor'; label: string };
 export type EskizGuideObject = EskizBaseObject & { type: 'guide'; orientation: 'horizontal' | 'vertical' };
-export type EskizObject = EskizDimensionObject | EskizModuleObject | EskizTextObject | EskizCalloutObject | EskizAnchorObject | EskizGuideObject;
+export type EskizObject = EskizDimensionObject | EskizModuleObject | EskizHingeObject | EskizTextObject | EskizCalloutObject | EskizAnchorObject | EskizGuideObject;
 
 export interface EskizProject {
   version: 1;

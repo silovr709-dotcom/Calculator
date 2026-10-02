@@ -5,7 +5,7 @@ import { checkDictRules, factoryDictSuggestionGroups, loadFactoryDicts, type Fac
 import { BACK_EDGE_NOTE, checkWorktopPlan, edgeKindLabel, suggestWorktopPlan, WORKTOP_EDGE_KINDS } from '../lib/worktopPlan';
 import { autoArrangeWorktopPieces, nextWorktopEdgeKind, renderWorktopPlanPng, snapWorktopPiecePosition, WORKTOP_EDGE_SHORT_LABELS, worktopDimensionPlacement, worktopEdgeLabelPlacement, worktopEdgeSymbol, worktopSketchMetrics, type WorktopEdgeSide, type WorktopSketchLayoutMode, type WorktopSketchPieceLayout } from '../lib/worktopSketch';
 import { lineMatchesChecklistKey } from '../lib/checklist';
-import { blankCellRefLabel, blankSketchRangeLabel, exportFactoryBlankXlsx, getBlankSheetMap, type FactoryTechPack } from '../lib/factoryBlankXls';
+import { blankCellRefLabel, blankSketchRangeLabel, exportFactoryBlankXlsx, getBlankSheetMap, type BlankSketchImage, type FactoryTechPack } from '../lib/factoryBlankXls';
 import { buildFactoryTechCommunicationRows, buildFactoryTechModuleRows, buildFactoryTechReadinessRows, factoryTechReadinessSummary } from '../lib/factoryTechPack';
 import { uid } from '../lib/storage';
 import { evaluateNumericExpression } from '../lib/numericExpression';
@@ -24,6 +24,65 @@ function fitEskizExportSize(project: EskizProject, box: { width: number; height:
     width: Math.max(1, Math.round(sourceWidth * scale)),
     height: Math.max(1, Math.round(sourceHeight * scale)),
   };
+}
+
+function loadCanvasImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Не удалось подготовить коллаж эскизов для Excel'));
+    image.src = src;
+  });
+}
+
+async function composeEskizContactSheet(items: { title: string; image: BlankSketchImage }[], box: { width: number; height: number }): Promise<BlankSketchImage | null> {
+  if (items.length === 0) return null;
+  if (items.length === 1) return items[0].image;
+  if (typeof document === 'undefined') throw new Error('Коллаж Эскиз PRO доступен только в браузере');
+  const canvas = document.createElement('canvas');
+  const width = Math.max(240, Math.round(box.width));
+  const height = Math.max(220, Math.round(box.height));
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Браузер не смог создать canvas для коллажа Эскиз PRO');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = '#d7e4ef';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, width - 2, height - 2);
+  const cols = items.length === 2 ? 1 : 2;
+  const rows = Math.ceil(items.length / cols);
+  const gap = 14;
+  const titleHeight = 24;
+  const tileWidth = (width - gap * (cols + 1)) / cols;
+  const tileHeight = (height - gap * (rows + 1)) / rows;
+  ctx.font = '700 13px Arial, sans-serif';
+  ctx.textBaseline = 'middle';
+  for (const [index, item] of items.entries()) {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const x = gap + col * (tileWidth + gap);
+    const y = gap + row * (tileHeight + gap);
+    ctx.fillStyle = '#f8fbff';
+    ctx.strokeStyle = '#c9d8ea';
+    ctx.lineWidth = 1;
+    ctx.fillRect(x, y, tileWidth, tileHeight);
+    ctx.strokeRect(x, y, tileWidth, tileHeight);
+    ctx.fillStyle = '#0f2f57';
+    const title = `${index + 1}. ${item.title}`;
+    ctx.fillText(title.length > 52 ? `${title.slice(0, 49)}…` : title, x + 8, y + titleHeight / 2);
+    const source = await loadCanvasImage(item.image.base64);
+    const innerWidth = Math.max(20, tileWidth - 12);
+    const innerHeight = Math.max(20, tileHeight - titleHeight - 12);
+    const scale = Math.min(innerWidth / source.width, innerHeight / source.height);
+    const drawWidth = source.width * scale;
+    const drawHeight = source.height * scale;
+    const drawX = x + 6 + (innerWidth - drawWidth) / 2;
+    const drawY = y + titleHeight + 6 + (innerHeight - drawHeight) / 2;
+    ctx.drawImage(source, drawX, drawY, drawWidth, drawHeight);
+  }
+  return { base64: canvas.toDataURL('image/png'), extension: 'png', width, height };
 }
 
 const WORKTOP_EDGE_SIDES: { id: WorktopEdgeSide; label: string }[] = [
@@ -587,6 +646,10 @@ export default function FactoryBlankView(props: {
       factoryBlankSketch: { ...(project.factoryBlankSketch ?? {}), ...patch },
     });
   };
+  const updateSelectedSketchIds = (ids: string[]) => {
+    const cleaned = ids.filter((id, index) => id && ids.indexOf(id) === index);
+    updateSketchSettings({ snapshotId: cleaned[0] ?? null, snapshotIds: cleaned });
+  };
   const scrollToField = (key: string) => {
     const el = document.getElementById(`blank-field-${key}`);
     if (!el) return;
@@ -603,18 +666,35 @@ export default function FactoryBlankView(props: {
   const defaultSketchId = project.eskizPro?.activeProjectId && eskizSnapshots.some((item) => item.project.id === project.eskizPro?.activeProjectId)
     ? project.eskizPro.activeProjectId
     : eskizSnapshots[0]?.project.id;
-  const selectedSketchId = sketchSettings.snapshotId && eskizSnapshots.some((item) => item.project.id === sketchSettings.snapshotId)
+  const availableSketchIds = new Set(eskizSnapshots.map((item) => item.project.id));
+  const hasExplicitSketchIds = Array.isArray(sketchSettings.snapshotIds);
+  const explicitSketchIds = (sketchSettings.snapshotIds ?? []).filter((id) => availableSketchIds.has(id));
+  const legacySketchId = sketchSettings.snapshotId && availableSketchIds.has(sketchSettings.snapshotId)
     ? sketchSettings.snapshotId
     : defaultSketchId;
-  const selectedSketch = eskizSnapshots.find((item) => item.project.id === selectedSketchId)?.project ?? null;
+  const selectedSketchIds = hasExplicitSketchIds
+    ? explicitSketchIds
+    : legacySketchId
+      ? [legacySketchId]
+      : [];
+  const selectedSketches = selectedSketchIds.flatMap((id) => {
+    const item = eskizSnapshots.find((snapshot) => snapshot.project.id === id);
+    return item ? [item.project] : [];
+  });
+  const selectedSketchId = selectedSketchIds[0] ?? '';
+  const selectedSketch = selectedSketches[0] ?? null;
   const sketchEnabled = sketchSettings.enabled ?? (eskizSnapshots.length > 0);
   const sketchMarkerMode: EskizSketchModuleMarkerMode = sketchSettings.moduleMarkerMode ?? project.eskizPro?.moduleMarkerMode ?? 'compact';
   const showSketchCommunications = sketchSettings.showCommunications ?? true;
   const showSketchCommunicationSizeBadges = project.eskizPro?.showCommunicationSizeBadges !== false && sketchSettings.showCommunicationSizeBadges !== false;
   const includeTechSheet = sketchSettings.includeTechSheet ?? true;
-  const canInsertSketch = Boolean(sheetMap?.sketch && selectedSketch && sketchEnabled);
+  const canInsertSketch = Boolean(sheetMap?.sketch && selectedSketches.length > 0 && sketchEnabled);
   const techModuleRows = buildFactoryTechModuleRows(project, pricebook, selectedSketch);
-  const techCommunicationRows = showSketchCommunications ? buildFactoryTechCommunicationRows(project, selectedSketch, showSketchCommunicationSizeBadges) : [];
+  const techCommunicationRows = showSketchCommunications
+    ? selectedSketches.length > 1
+      ? selectedSketches.flatMap((sketch) => buildFactoryTechCommunicationRows(project, sketch, showSketchCommunicationSizeBadges).map((row) => ({ ...row, name: `${sketch.title}: ${row.name}` })))
+      : buildFactoryTechCommunicationRows(project, selectedSketch, showSketchCommunicationSizeBadges)
+    : [];
   const techReadinessRows = buildFactoryTechReadinessRows({ project, pricebook, eskizProject: selectedSketch, blankIssues: issues, includeCommunications: showSketchCommunications });
   const techSummary = factoryTechReadinessSummary(techReadinessRows);
   const issueKeys = new Set(issues.map((i) => i.fieldKey));
@@ -631,34 +711,42 @@ export default function FactoryBlankView(props: {
     if (errors.length > 0 && !confirm(`В бланке ${errors.length} незаполненных обязательных пунктов. Всё равно выгрузить в Excel?`)) return;
     setExporting(true);
     try {
-      const sketchSize = canInsertSketch && selectedSketch && sheetMap?.sketch
-        ? fitEskizExportSize(selectedSketch, sheetMap.sketch.targetPx)
+      const renderOptions = {
+        ...(project.eskizPro?.exportView ?? {}),
+        frame: 'none' as const,
+        moduleMarkerMode: sketchMarkerMode,
+        communications: showSketchCommunications ? (project.eskizPro?.communications ?? []) : [],
+        showCommunicationSizeBadges: showSketchCommunicationSizeBadges,
+      };
+      const officialSketchRenders = canInsertSketch && sheetMap?.sketch
+        ? await Promise.all(selectedSketches.map(async (sketch) => {
+          const perSketchBox = selectedSketches.length > 1
+            ? { width: selectedSketches.length === 2 ? sheetMap.sketch!.targetPx.width - 28 : Math.floor((sheetMap.sketch!.targetPx.width - 42) / 2), height: Math.floor(sheetMap.sketch!.targetPx.height / Math.ceil(selectedSketches.length / (selectedSketches.length === 2 ? 1 : 2))) - 42 }
+            : sheetMap.sketch!.targetPx;
+          const size = fitEskizExportSize(sketch, perSketchBox);
+          return {
+            title: sketch.title,
+            image: await renderEskizSketchPng(sketch, { widthPx: size.width, heightPx: size.height, ...renderOptions }),
+          };
+        }))
+        : [];
+      const sketchImage = canInsertSketch && sheetMap?.sketch
+        ? await composeEskizContactSheet(officialSketchRenders, sheetMap.sketch.targetPx)
         : null;
-      const sketchImage = sketchSize && selectedSketch
-        ? await renderEskizSketchPng(selectedSketch, {
-          widthPx: sketchSize.width,
-          heightPx: sketchSize.height,
-          ...(project.eskizPro?.exportView ?? {}),
-          frame: 'none',
-          moduleMarkerMode: sketchMarkerMode,
-          communications: showSketchCommunications ? (project.eskizPro?.communications ?? []) : [],
-          showCommunicationSizeBadges: showSketchCommunicationSizeBadges,
-        })
-        : null;
-      const techSketchSize = includeTechSheet && selectedSketch
-        ? fitEskizExportSize(selectedSketch, { width: 1500, height: 680 })
-        : null;
-      const techSketchImage = techSketchSize && selectedSketch
-        ? await renderEskizSketchPng(selectedSketch, {
-          widthPx: techSketchSize.width,
-          heightPx: techSketchSize.height,
-          ...(project.eskizPro?.exportView ?? {}),
-          frame: 'none',
-          moduleMarkerMode: sketchMarkerMode,
-          communications: showSketchCommunications ? (project.eskizPro?.communications ?? []) : [],
-          showCommunicationSizeBadges: showSketchCommunicationSizeBadges,
-        })
-        : null;
+      const techSketchImages = includeTechSheet
+        ? await Promise.all(selectedSketches.map(async (sketch) => {
+          const techSketchSize = fitEskizExportSize(sketch, { width: 1500, height: 680 });
+          return {
+            title: sketch.title,
+            image: await renderEskizSketchPng(sketch, {
+              widthPx: techSketchSize.width,
+              heightPx: techSketchSize.height,
+              ...renderOptions,
+            }),
+          };
+        }))
+        : [];
+      const techSketchImage = techSketchImages[0]?.image ?? null;
       const worktopSketchImage = hasWorktopPlanSection && pieces.length > 0 && sheetMap?.worktop?.sketch
         ? await renderWorktopPlanPng(pieces, {
           widthPx: sheetMap.worktop.sketch.targetPx.width,
@@ -671,8 +759,9 @@ export default function FactoryBlankView(props: {
           projectName: project.name,
           client: project.client,
           generatedAt: new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(new Date()),
-          sketchTitle: selectedSketch?.title,
+          sketchTitle: selectedSketches.length > 1 ? selectedSketches.map((sketch, index) => `${index + 1}. ${sketch.title}`).join('\n') : selectedSketch?.title,
           sketchImage: techSketchImage,
+          sketchImages: techSketchImages,
           moduleRows: techModuleRows,
           communicationRows: techCommunicationRows,
           readinessRows: techReadinessRows,
@@ -745,7 +834,7 @@ export default function FactoryBlankView(props: {
         <div><b>{errors.length}</b><span>критичных ошибок</span></div>
         <div><b>{warns.length}</b><span>предупреждений</span></div>
         <div><b>{hasWorktopPlanSection ? pieces.length : '—'}</b><span>деталей столешницы на лист 2</span></div>
-        <div><b>{canInsertSketch ? 'да' : '—'}</b><span>Эскиз PRO в {sheetMap ? blankSketchRangeLabel(sheetMap) || 'нет поля' : 'нет шаблона'}</span></div>
+        <div><b>{canInsertSketch ? selectedSketches.length : '—'}</b><span>Эскиз PRO в {sheetMap ? blankSketchRangeLabel(sheetMap) || 'нет поля' : 'нет шаблона'}</span></div>
         <div><b>{includeTechSheet ? 'да' : '—'}</b><span>отдельный лист: {techModuleRows.length} модулей · {techCommunicationRows.length} коммуникаций</span></div>
       </div>
 
@@ -755,7 +844,7 @@ export default function FactoryBlankView(props: {
             <div className="section-head">
               <div>
                 <h3>Эскиз PRO в Excel-бланк фабрики</h3>
-                <p className="muted small">Картинка попадёт в левое поле официального шаблона: <b>{blankSketchRangeLabel(sheetMap)}</b>. Можно уменьшить или скрыть маркеры модулей, чтобы ничего не перекрывало размеры.</p>
+                <p className="muted small">Можно выбрать несколько snapshot Эскиз PRO. В левое поле официального шаблона <b>{blankSketchRangeLabel(sheetMap)}</b> попадёт один эскиз или компактный коллаж; на лист «Эскиз PRO» — каждый выбранный эскиз крупно.</p>
               </div>
               <label className="toggle small"><input type="checkbox" checked={sketchEnabled} onChange={(e) => updateSketchSettings({ enabled: e.target.checked })} /> вставлять в Excel</label>
             </div>
@@ -763,11 +852,28 @@ export default function FactoryBlankView(props: {
               <div className="empty small">В проекте пока нет snapshot Эскиз PRO. Откройте проект, добавьте/обновите эскиз — после этого он будет вставляться в бланк.</div>
             ) : (
               <div className="blank-sketch-controls">
-                <label>Эскиз
-                  <select value={selectedSketchId ?? ''} disabled={!sketchEnabled} onChange={(e) => updateSketchSettings({ snapshotId: e.target.value || null })}>
-                    {eskizSnapshots.map((item) => <option key={item.project.id} value={item.project.id}>{item.project.title} · {item.project.image.name}</option>)}
-                  </select>
-                </label>
+                <div className="blank-sketch-multi">
+                  <header>
+                    <span><b>Эскизы</b><small>выбрано: {selectedSketches.length}</small></span>
+                    <span className="blank-sketch-multi-actions">
+                      <button type="button" className="btn tiny ghost" disabled={!sketchEnabled || selectedSketches.length === eskizSnapshots.length} onClick={() => updateSelectedSketchIds(eskizSnapshots.map((item) => item.project.id))}>все</button>
+                      <button type="button" className="btn tiny ghost" disabled={!sketchEnabled || selectedSketches.length === 0} onClick={() => updateSelectedSketchIds([])}>очистить</button>
+                    </span>
+                  </header>
+                  <div className="blank-sketch-check-list">
+                    {eskizSnapshots.map((item) => {
+                      const checked = selectedSketchIds.includes(item.project.id);
+                      const primary = item.project.id === selectedSketchId;
+                      return <div key={item.project.id} className={`blank-sketch-check ${checked ? 'active' : ''} ${primary ? 'primary' : ''}`}>
+                        <label><input type="checkbox" checked={checked} disabled={!sketchEnabled} onChange={(event) => {
+                          const next = event.target.checked ? [...selectedSketchIds, item.project.id] : selectedSketchIds.filter((id) => id !== item.project.id);
+                          updateSelectedSketchIds(next);
+                        }} /><span><b>{item.project.title}</b><small>{item.project.image.name}{primary ? ' · основной в левом поле' : ''}</small></span></label>
+                        {checked && !primary && <button type="button" className="btn tiny ghost" disabled={!sketchEnabled} onClick={() => updateSelectedSketchIds([item.project.id, ...selectedSketchIds.filter((id) => id !== item.project.id)])}>сделать основным</button>}
+                      </div>;
+                    })}
+                  </div>
+                </div>
                 <label>Маркеры модулей
                   <select value={sketchMarkerMode} disabled={!sketchEnabled} onChange={(e) => updateSketchSettings({ moduleMarkerMode: e.target.value as EskizSketchModuleMarkerMode })}>
                     <option value="compact">Компактные точки</option>
@@ -787,18 +893,20 @@ export default function FactoryBlankView(props: {
               </div>
             )}
           </div>
-          {selectedSketch && sketchEnabled ? (
-            <div className="blank-sketch-preview">
-              <EskizProjectPreview
-                project={selectedSketch}
+          {selectedSketches.length > 0 && sketchEnabled ? (
+            <div className="blank-sketch-preview multi">
+              {selectedSketches.map((sketch) => <EskizProjectPreview
+                key={sketch.id}
+                project={sketch}
                 compact
                 moduleMarkerMode={sketchMarkerMode}
                 communicationMarkers={showSketchCommunications ? (project.eskizPro?.communications ?? []) : []}
                 showCommunicationSizeBadges={showSketchCommunicationSizeBadges}
-              />
+                viewSettings={project.eskizPro?.exportView}
+              />)}
             </div>
           ) : (
-            <div className="blank-sketch-placeholder">Эскиз не будет вставлен в Excel.</div>
+            <div className="blank-sketch-placeholder">Эскизы не будут вставлены в Excel.</div>
           )}
         </div>
       )}
@@ -809,9 +917,31 @@ export default function FactoryBlankView(props: {
             <b>Эскиз PRO найден, но у выбранного шаблона нет отдельного левого поля под картинку.</b>
             <span className="muted small">Для кухонного бланка Висма картинка вставляется в A14:I47. В этом шаблоне не накладываю её поверх официальных полей, зато могу добавить отдельный лист «Эскиз PRO» с крупным эскизом, модулями, коммуникациями и проверками.</span>
             <label className="toggle"><input type="checkbox" checked={includeTechSheet} onChange={(e) => updateSketchSettings({ includeTechSheet: e.target.checked })} /> добавить отдельный лист «Эскиз PRO + расшифровка»</label>
+            <div className="blank-sketch-multi compact">
+              <header>
+                <span><b>Эскизы на техлист</b><small>выбрано: {selectedSketches.length}</small></span>
+                <span className="blank-sketch-multi-actions">
+                  <button type="button" className="btn tiny ghost" disabled={selectedSketches.length === eskizSnapshots.length} onClick={() => updateSelectedSketchIds(eskizSnapshots.map((item) => item.project.id))}>все</button>
+                  <button type="button" className="btn tiny ghost" disabled={selectedSketches.length === 0} onClick={() => updateSelectedSketchIds([])}>очистить</button>
+                </span>
+              </header>
+              <div className="blank-sketch-check-list">
+                {eskizSnapshots.map((item) => {
+                  const checked = selectedSketchIds.includes(item.project.id);
+                  const primary = item.project.id === selectedSketchId;
+                  return <div key={item.project.id} className={`blank-sketch-check ${checked ? 'active' : ''} ${primary ? 'primary' : ''}`}>
+                    <label><input type="checkbox" checked={checked} onChange={(event) => {
+                      const next = event.target.checked ? [...selectedSketchIds, item.project.id] : selectedSketchIds.filter((id) => id !== item.project.id);
+                      updateSelectedSketchIds(next);
+                    }} /><span><b>{item.project.title}</b><small>{item.project.image.name}{primary ? ' · основной для расшифровки' : ''}</small></span></label>
+                    {checked && !primary && <button type="button" className="btn tiny ghost" onClick={() => updateSelectedSketchIds([item.project.id, ...selectedSketchIds.filter((id) => id !== item.project.id)])}>основной</button>}
+                  </div>;
+                })}
+              </div>
+            </div>
             {includeTechSheet && <div className={`blank-tech-summary ${techSummary.errors > 0 ? 'bad' : techSummary.warnings > 0 ? 'warn' : 'ok'}`}><b>{techSummary.errors > 0 ? 'Нужна проверка перед фабрикой' : techSummary.warnings > 0 ? 'Есть предупреждения' : 'Техлист готов'}</b><span>{techSummary.errors} ошибок · {techSummary.warnings} предупреждений · {techModuleRows.length} строк модулей · {techCommunicationRows.length} коммуникаций</span></div>}
           </div>
-          {selectedSketch && includeTechSheet && <div className="blank-sketch-preview"><EskizProjectPreview project={selectedSketch} compact moduleMarkerMode={sketchMarkerMode} communicationMarkers={showSketchCommunications ? (project.eskizPro?.communications ?? []) : []} showCommunicationSizeBadges={showSketchCommunicationSizeBadges} /></div>}
+          {selectedSketches.length > 0 && includeTechSheet && <div className="blank-sketch-preview multi">{selectedSketches.map((sketch) => <EskizProjectPreview key={sketch.id} project={sketch} compact moduleMarkerMode={sketchMarkerMode} communicationMarkers={showSketchCommunications ? (project.eskizPro?.communications ?? []) : []} showCommunicationSizeBadges={showSketchCommunicationSizeBadges} viewSettings={project.eskizPro?.exportView} />)}</div>}
         </div>
       )}
 

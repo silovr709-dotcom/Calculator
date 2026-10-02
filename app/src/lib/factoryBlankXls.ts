@@ -68,6 +68,8 @@ export interface FactoryTechPack {
   generatedAt: string;
   sketchTitle?: string;
   sketchImage?: BlankSketchImage | null;
+  /** Все выбранные snapshot Эскиз PRO для отдельного техлиста; первый дублируется в sketchImage для обратной совместимости. */
+  sketchImages?: { title: string; image: BlankSketchImage | null }[];
   moduleRows: FactoryTechModuleRow[];
   communicationRows: FactoryTechCommunicationRow[];
   readinessRows: FactoryTechReadinessRow[];
@@ -417,18 +419,21 @@ function addFactoryTechSheet(wb: ExcelJS.Workbook, techPack: FactoryTechPack) {
   addTitle(ws, techPack);
 
   let rowIndex = 4;
-  if (techPack.sketchImage) {
-    ws.mergeCells('A4:K4');
-    const imageTitle = ws.getCell('A4');
-    imageTitle.value = 'Крупный эскиз из Эскиз PRO';
+  const sketchImages = techPack.sketchImages
+    ? techPack.sketchImages.flatMap((item) => item.image ? [{ title: item.title, image: item.image }] : [])
+    : techPack.sketchImage ? [{ title: techPack.sketchTitle || 'Эскиз PRO', image: techPack.sketchImage }] : [];
+  for (const [index, item] of sketchImages.entries()) {
+    ws.mergeCells(rowIndex, 1, rowIndex, 11);
+    const imageTitle = ws.getCell(rowIndex, 1);
+    imageTitle.value = sketchImages.length > 1 ? `Крупный эскиз из Эскиз PRO — ${index + 1}. ${item.title}` : 'Крупный эскиз из Эскиз PRO';
     imageTitle.font = { bold: true, size: 12, color: { argb: 'FF24382F' } };
     imageTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF7FBF9' } };
-    const imageId = wb.addImage({ base64: techPack.sketchImage.base64, extension: techPack.sketchImage.extension });
-    const imageSize = imageSizeWithinBox(techPack.sketchImage, { width: 1500, height: 680 });
-    (ws as unknown as { addImage: (imageId: number, range: unknown) => void }).addImage(imageId, { tl: { col: 0, row: 4 }, ext: imageSize, editAs: 'oneCell' });
+    const imageId = wb.addImage({ base64: item.image.base64, extension: item.image.extension });
+    const imageSize = imageSizeWithinBox(item.image, { width: 1500, height: 680 });
+    (ws as unknown as { addImage: (imageId: number, range: unknown) => void }).addImage(imageId, { tl: { col: 0, row: rowIndex }, ext: imageSize, editAs: 'oneCell' });
     const imageRows = Math.max(8, Math.ceil((imageSize.height + 12) / 20));
-    for (let row = 5; row < 5 + imageRows; row += 1) ws.getRow(row).height = 15;
-    rowIndex = 5 + imageRows + 2;
+    for (let row = rowIndex + 1; row < rowIndex + 1 + imageRows; row += 1) ws.getRow(row).height = 15;
+    rowIndex = rowIndex + 1 + imageRows + 2;
   }
 
   const errors = techPack.readinessRows.filter((row) => row.level === 'error').length;
