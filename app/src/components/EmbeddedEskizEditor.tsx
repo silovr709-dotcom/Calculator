@@ -1200,6 +1200,9 @@ export default function EmbeddedEskizEditor(props: Props) {
   const canvasHeaderHeight = project.header.enabled ? 58 : 0;
   const scaledCanvasWidth = project.image.width * zoom;
   const scaledCanvasHeight = (project.image.height + canvasHeaderHeight) * zoom;
+  const eskizDimensionCount = project.objects.filter((object) => object.type === 'dimension').length;
+  const eskizModuleCount = project.objects.filter((object) => object.type === 'module').length;
+  const eskizCommunicationCount = props.communications.filter((marker) => marker.eskizId === project.id).length;
 
   return <div className={`embedded-eskiz-editor ${communicationMode ? 'communication-mode' : ''}`}>
     <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={onFileInput((file) => void openImage(file))} />
@@ -1241,6 +1244,13 @@ export default function EmbeddedEskizEditor(props: Props) {
       </div>
       <button className={sidebarOpen ? 'active side-toggle' : 'side-toggle'} onClick={() => setSidebarOpen((value) => !value)}>Свойства</button>
     </nav>
+    <div className="embedded-eskiz-workflow-strip no-print" aria-label="Маршрут Эскиз PRO">
+      <span className="ready"><b>Скрин</b><small>{project.image.width}×{project.image.height}</small></span>
+      <span className={eskizDimensionCount > 0 ? 'ready' : ''}><b>Размеры</b><small>{eskizDimensionCount || 'добавьте'}</small></span>
+      <span className={eskizModuleCount > 0 ? 'ready' : ''}><b>Модули</b><small>{eskizModuleCount || 'точки/плашки'}</small></span>
+      <span className={eskizCommunicationCount > 0 ? 'ready' : ''}><b>Коммуникации</b><small>{eskizCommunicationCount || 'по необходимости'}</small></span>
+      <span><b>Вид</b><small>{Math.round(zoom * 100)}% · слои справа</small></span>
+    </div>
     {communicationMode && <div className="embedded-eskiz-communication-banner">{props.communicationAddKind ? `Режим добавления: ${COMMUNICATION_KIND_META[props.communicationAddKind].label}. Тапните по основному эскизу Эскиз PRO.` : 'Рисуйте свободную линию расстояния: ведите курсор от выбранной коммуникации и кликните конечную точку.'}</div>}
     <div className="embedded-eskiz-workarea">
       <section

@@ -233,6 +233,28 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         </div>
       </div>
 
+      <section className="card client-document-hub no-print" aria-label="Документы для клиента">
+        <div className="client-document-hub-main">
+          <span className="eyebrow">Клиентский пакет</span>
+          <h3>Отдельные файлы для клиента: эскиз, КП, договор и чек</h3>
+          <p>Выгрузка идёт не HTML: Word/PDF можно сразу отправлять, править и складывать в общий ZIP.</p>
+        </div>
+        <div className="client-document-actions big">
+          <button type="button" className="btn ghost" disabled={packageExporting || !clientSketchVisible} onClick={exportSketchPdf}>Эскиз PDF</button>
+          <button type="button" className="btn ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientOfferDocx(clientDocumentArgs), 'Не получилось выгрузить КП')}>Полное КП Word</button>
+          <button type="button" className="btn ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientContractDocx(clientDocumentArgs), 'Не получилось выгрузить договор')}>Договор Word</button>
+          <button type="button" className="btn ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientReceiptDocx(clientDocumentArgs), 'Не получилось выгрузить товарный чек')}>Товарный чек Word</button>
+          <button type="button" className="btn primary" disabled={packageExporting} onClick={exportClientPackage}>{packageExporting ? 'Собираю…' : 'Пакет ZIP'}</button>
+        </div>
+        <div className="client-document-includes">
+          <span className={packageSettings.includeSketch && clientSketchVisible ? 'ready' : ''}>Эскиз</span>
+          <span className={packageSettings.includeOffer ? 'ready' : ''}>КП</span>
+          <span className={packageSettings.includeContract ? 'ready' : ''}>Договор</span>
+          <span className={packageSettings.includeReceipt ? 'ready' : ''}>Товарный чек</span>
+          <span className={packageSettings.sketchSummaryOverlay ? 'ready' : ''}>Сводка на эскизе</span>
+        </div>
+      </section>
+
       <section className="card client-offer-editor no-print">
         <div className="client-offer-editor-head"><div><h3>Условия предложения</h3><p className="muted small">Эти поля видны клиенту, но не влияют на расчёт себестоимости.</p></div><span className="muted small">Цена округляется по настройкам проекта</span></div>
         <div className="grid3">
@@ -252,14 +274,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         </div>
         <div className="client-package-control">
           <div className="client-package-head">
-            <div><b>Пакет документов для клиента</b><span>Не HTML: отдельные файлы DOCX/PDF или общий ZIP. Типовой договор/чек позже заменим на ваши фирменные шаблоны.</span></div>
-            <div className="client-package-actions">
-              <button type="button" className="btn tiny ghost" disabled={packageExporting || !clientSketchVisible} onClick={exportSketchPdf}>Эскиз PDF</button>
-              <button type="button" className="btn tiny ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientOfferDocx(clientDocumentArgs), 'Не получилось выгрузить КП')}>Полное КП Word</button>
-              <button type="button" className="btn tiny ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientContractDocx(clientDocumentArgs), 'Не получилось выгрузить договор')}>Договор Word</button>
-              <button type="button" className="btn tiny ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientReceiptDocx(clientDocumentArgs), 'Не получилось выгрузить товарный чек')}>Товарный чек Word</button>
-              <button type="button" className="btn tiny primary" disabled={packageExporting} onClick={exportClientPackage}>{packageExporting ? 'Собираю…' : 'Пакет ZIP'}</button>
-            </div>
+            <div><b>Что попадёт в ZIP и КП</b><span>Настройте состав пакета и временные реквизиты. Кнопки выгрузки вынесены выше в блок «Клиентский пакет».</span></div>
           </div>
           <div className="client-package-options">
             <label><input type="checkbox" checked={packageSettings.includeOffer} onChange={(event) => updatePackageSettings({ includeOffer: event.target.checked })} /> КП/сводка</label>

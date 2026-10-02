@@ -364,6 +364,12 @@ export default function QuickCalc(props: {
         <button className={tab === 'templates' ? 'active' : ''} onClick={() => setTab('templates')}>Шаблоны ({props.templates.length})</button>
       </div>
 
+      <section className="quick-route-panel no-print" aria-label="Маршрут быстрого расчёта">
+        <button type="button" className={tab === 'express' ? 'active' : ''} onClick={() => setTab('express')}><b>1</b><span>Размер и уровень<small>получить быстрый коридор цены</small></span></button>
+        <button type="button" className={tab === 'ctor' ? 'active' : ''} onClick={() => setTab('ctor')}><b>2</b><span>Детальный подбор<small>материалы, фурнитура, столешницы</small></span></button>
+        <button type="button" className={tab === 'templates' ? 'active' : ''} onClick={() => setTab('templates')}><b>3</b><span>Создать проект<small>из оценки или готового шаблона</small></span></button>
+      </section>
+
       {tab === 'express' && (
         <div className="editor-grid quick-express-grid">
           <div className="lines-col">
@@ -551,7 +557,7 @@ export default function QuickCalc(props: {
       )}
 
       {tab === 'ctor' && (
-        <div className="editor-grid">
+        <div className="editor-grid quick-detail-grid">
           <div className="lines-col">
             <section className="card">
               <h3>1. Корпуса</h3>

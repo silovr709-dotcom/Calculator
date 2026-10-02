@@ -3616,3 +3616,121 @@ select option { background: #fff !important; color: #102037 !important; }
   .project-readiness-steps, .project-stage-nav { grid-template-columns: 1fr; }
   .project-next-action { width: 100%; }
 }
+
+/* ---------- Ergonomic IA pass 2: document hubs and guided workspaces ---------- */
+.client-document-hub {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(360px, 1.6fr);
+  gap: 14px;
+  align-items: start;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #ffffff, #eef6ff) !important;
+  border-color: rgba(31,111,235,.18) !important;
+}
+.client-document-hub-main h3 { margin: 4px 0 6px; color: #0b3a75; font-size: 20px; }
+.client-document-hub-main p { margin: 0; color: #52667a; font-size: 12.5px; line-height: 1.45; }
+.client-document-actions.big { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
+.client-document-actions.big .btn { min-height: 42px; padding: 8px 9px; white-space: normal; line-height: 1.15; }
+.client-document-includes { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.client-document-includes span { padding: 5px 9px; border-radius: 999px; background: #f1f5f9; color: #64748b; font-size: 11px; font-weight: 900; }
+.client-document-includes span.ready { background: #e8f7ef; color: #18723e; }
+
+.blank-workflow-panel {
+  display: grid;
+  grid-template-columns: minmax(260px, .9fr) minmax(420px, 2fr);
+  gap: 14px;
+  align-items: stretch;
+  margin: -4px 0 14px;
+  padding: 14px;
+  border: 1px solid rgba(15,47,87,.14);
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(239,246,255,.86));
+  box-shadow: 0 14px 34px rgba(15,47,87,.08);
+}
+.blank-workflow-main h2 { margin: 4px 0 5px; color: #0b3a75; font-size: clamp(18px, 1.8vw, 24px); letter-spacing: -.03em; }
+.blank-workflow-main p { margin: 0; color: #52667a; font-size: 12.5px; }
+.blank-workflow-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
+.blank-workflow-steps button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 64px;
+  padding: 8px;
+  border: 1px solid #d7e4ef;
+  border-radius: 15px;
+  background: #fff;
+  color: #0f2f57;
+  text-align: left;
+  cursor: pointer;
+}
+.blank-workflow-steps button:disabled { opacity: .55; cursor: not-allowed; }
+.blank-workflow-steps button:not(:disabled):hover, .blank-workflow-steps button:not(:disabled):focus-visible { border-color: #1f6feb; background: #f4f9ff; outline: none; }
+.blank-workflow-steps button b { display: grid; place-items: center; width: 26px; height: 26px; flex: 0 0 26px; border-radius: 999px; background: #eaf2ff; color: #0b3a75; }
+.blank-workflow-steps button span { min-width: 0; font-size: 12px; font-weight: 950; }
+.blank-workflow-steps button small { display: block; margin-top: 2px; color: #64748b; font-size: 10px; font-weight: 750; line-height: 1.18; }
+
+.quick-route-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 8px;
+  border-radius: 18px;
+  border: 1px solid rgba(15,47,87,.14);
+  background: rgba(255,255,255,.84);
+  box-shadow: 0 10px 28px rgba(15,47,87,.06);
+}
+.quick-route-panel button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 58px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  color: #0f2f57;
+  text-align: left;
+  cursor: pointer;
+}
+.quick-route-panel button b { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 999px; background: #eaf2ff; color: #0b3a75; }
+.quick-route-panel button span { min-width: 0; font-weight: 950; }
+.quick-route-panel button small { display: block; margin-top: 2px; color: #64748b; font-size: 10.5px; font-weight: 750; }
+.quick-route-panel button:hover, .quick-route-panel button:focus-visible { background: #eef6ff; border-color: #cfe0f5; outline: none; }
+.quick-route-panel button.active { background: linear-gradient(135deg, #0b3a75, #164a7c); color: #fff; }
+.quick-route-panel button.active b { background: rgba(255,255,255,.18); color: #fff; }
+.quick-route-panel button.active small { color: rgba(255,255,255,.76); }
+.quick-express-grid .totals-col, .quick-detail-grid .totals-col { align-self: start; position: sticky; top: 14px; }
+.quick-express-grid .quick-total-card, .quick-detail-grid .totals-card { border-color: rgba(31,111,235,.22); box-shadow: 0 18px 38px rgba(15,47,87,.10); }
+
+.embedded-eskiz-workflow-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(148,163,184,.18);
+  border-bottom: 1px solid rgba(148,163,184,.16);
+  background: linear-gradient(135deg, rgba(15,23,42,.92), rgba(15,47,87,.88));
+}
+.embedded-eskiz-workflow-strip span {
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 12px;
+  background: rgba(255,255,255,.05);
+  color: rgba(226,242,255,.82);
+}
+.embedded-eskiz-workflow-strip span.ready { border-color: rgba(34,197,94,.38); background: rgba(34,197,94,.10); }
+.embedded-eskiz-workflow-strip b { display: block; color: #fff; font-size: 12px; }
+.embedded-eskiz-workflow-strip small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(226,242,255,.70); font-size: 10px; margin-top: 1px; }
+
+@media (max-width: 1180px) {
+  .client-document-hub, .blank-workflow-panel { grid-template-columns: 1fr; }
+  .client-document-actions.big, .blank-workflow-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .embedded-eskiz-workflow-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .client-document-actions.big, .blank-workflow-steps, .quick-route-panel { grid-template-columns: 1fr; }
+  .quick-express-grid .totals-col, .quick-detail-grid .totals-col { position: static; }
+}

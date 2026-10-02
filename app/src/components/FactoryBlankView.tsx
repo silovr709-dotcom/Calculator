@@ -806,6 +806,21 @@ export default function FactoryBlankView(props: {
         </div>
       </header>
 
+      <section className="blank-workflow-panel no-print" aria-label="Маршрут фабричного бланка">
+        <div className="blank-workflow-main">
+          <span className="eyebrow">Передача на фабрику</span>
+          <h2>{errors.length > 0 ? 'Перед выгрузкой нужно закрыть ошибки' : warns.length > 0 ? 'Бланк можно выгрузить после проверки предупреждений' : 'Бланк готов к выгрузке'}</h2>
+          <p>{spec.blankName} · {project.name}{project.client ? ` · ${project.client}` : ''}</p>
+        </div>
+        <div className="blank-workflow-steps">
+          <button type="button" onClick={() => document.querySelector('.blank-controls')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><b>1</b><span>Проект<small>{project.name}</small></span></button>
+          <button type="button" onClick={() => document.querySelector('.blank-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><b>2</b><span>Поля бланка<small>{progress.requiredEmpty > 0 ? `${progress.requiredEmpty} обяз. пусто` : 'обязательные заполнены'}</small></span></button>
+          <button type="button" onClick={() => document.querySelector('.blank-sketch-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><b>3</b><span>Эскиз PRO<small>{canInsertSketch ? `${selectedSketches.length} выбрано` : 'нет поля/эскиза'}</small></span></button>
+          <button type="button" onClick={() => document.querySelector('.blank-issues')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><b>4</b><span>Проверка<small>{errors.length} ошибок · {warns.length} предупрежд.</small></span></button>
+          <button type="button" disabled={!hasTemplate || exporting} onClick={downloadXlsx}><b>5</b><span>Выгрузка<small>{sheetMap ? sheetMap.template : 'нет шаблона'}</small></span></button>
+        </div>
+      </section>
+
       <div className="card blank-controls no-print">
         <label>Проект
           <select value={project.id} onChange={(e) => setProjectId(e.target.value)}>
