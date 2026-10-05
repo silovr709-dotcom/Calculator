@@ -138,9 +138,9 @@ export interface ClientDocumentPackageSettings {
   includeSketch?: boolean;
   /** Включить компактную спецификацию состава. */
   includeSpecification?: boolean;
-  /** Включить черновик договора по типовому шаблону. */
+  /** Включить фирменный договор из шаблона клиента. */
   includeContract?: boolean;
-  /** Включить фирменный бланк заказа для клиента. */
+  /** Включить товарный чек в Word по образцу клиента. */
   includeReceipt?: boolean;
   /** Компактный режим: меньше пояснений и плотнее таблицы. */
   compact?: boolean;

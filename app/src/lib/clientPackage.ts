@@ -1,3 +1,4 @@
+import { inflateSync } from 'fflate';
 import type { ClientDocumentPackageSettings, ClientOfferSettings, Project } from '../types';
 import type { ClientOfferDetail, ClientProjectSummary } from './clientOffer';
 import { fmtDate, fmtMoney, fmtNum } from './format';
@@ -62,8 +63,12 @@ type ZipTemplateEntry = {
 };
 
 function publicUrl(path: string): string {
-  const base = typeof import.meta !== 'undefined' ? import.meta.env.BASE_URL : '/';
+  const base = typeof import.meta !== 'undefined' ? (import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/' : '/';
   return `${base}${path}`;
+}
+
+function isBrowserRuntime(): boolean {
+  return typeof window !== 'undefined' && typeof document !== 'undefined';
 }
 
 async function fetchPublicBytes(path: string): Promise<Uint8Array> {
@@ -104,10 +109,8 @@ function parseZipLocalEntries(bytes: Uint8Array): ZipTemplateEntry[] {
 
 async function inflateZipEntry(entry: ZipTemplateEntry): Promise<Uint8Array> {
   if (entry.method === 0) return entry.compressedBytes;
-  if (entry.method !== 8 || typeof DecompressionStream !== 'function') throw new Error(`Unsupported DOCX compression method: ${entry.method}`);
-  const compressedBuffer = entry.compressedBytes.buffer.slice(entry.compressedBytes.byteOffset, entry.compressedBytes.byteOffset + entry.compressedBytes.byteLength) as ArrayBuffer;
-  const stream = new Blob([compressedBuffer]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+  if (entry.method === 8) return inflateSync(entry.compressedBytes);
+  throw new Error(`Unsupported DOCX compression method: ${entry.method}`);
 }
 
 function unxml(value: string): string {
@@ -289,7 +292,11 @@ function safeFilePart(value: string): string {
 }
 
 function sellerName(offer: ClientOfferSettings): string {
-  return offer.sellerName?.trim() || 'Исполнитель / мебельное ателье';
+  return offer.sellerName?.trim() || 'ИП Шилова Е.В.';
+}
+
+function sellerDetails(offer: ClientOfferSettings): string {
+  return offer.sellerDetails?.trim() || 'Телефон: +7 (910) 835-17-49';
 }
 
 function contractNumber(project: Project, offer: ClientOfferSettings): string {
@@ -444,23 +451,34 @@ function contractBlocks(args: ClientDocumentArgs): DocxBlock[] {
     p(`Заказчик проверяет комплектность и внешний вид при передаче. Гарантия: ${offer.warranty || '12 месяцев, если иное не указано в приложениях'}.`),
     p('Подписи сторон', { bold: true, size: 14, color: '0F2F57' }),
     table(['Исполнитель', 'Заказчик'], [['__________________________', '__________________________']]),
-    p('Примечание: это типовой черновик. После загрузки ваших документов заменим его на фирменный шаблон.', { size: 10, color: '64748B' }),
+    p('Форма подготовлена по данным проекта. Для рабочей выгрузки в браузере используется фирменный шаблон договора из templates/client.', { size: 10, color: '64748B' }),
   ];
 }
 
 function receiptBlocks(args: ClientDocumentArgs): DocxBlock[] {
   const { project, offer, total, summary } = args;
+  const prepayment = contractPrepaymentText(offer, total);
+  const remainder = contractRemainderText(offer, total, prepayment.amount);
+  const knownTotal = summary.bodyTotal + summary.facadeTotal + summary.hardwareTotal;
+  const extraTotal = Math.max(0, total - knownTotal);
   const rows = [
-    ['Комплект мебели по проекту', '1 комплект', fmtMoney(total)],
-    summary.bodyTotal > 0 ? ['Корпуса / каркасная часть', 'общ.', fmtMoney(summary.bodyTotal)] : null,
-    summary.facadeTotal > 0 ? ['Фасады / рамки', summary.facadeAreaM2 > 0 ? `${fmtNum(summary.facadeAreaM2, 2)} м²` : `${fmtNum(summary.facadeQty, 3)} шт`, fmtMoney(summary.facadeTotal)] : null,
-    summary.hardwareTotal > 0 ? ['Фурнитура', 'общ.', fmtMoney(summary.hardwareTotal)] : null,
+    summary.bodyTotal > 0 ? ['1', `Корпуса и каркас по проекту «${project.name}», согласно эскизу`, fmtMoney(summary.bodyTotal), '1', fmtMoney(summary.bodyTotal)] : null,
+    summary.facadeTotal > 0 ? ['2', `Фасады${summary.facadeAreaM2 > 0 ? ` — ${fmtNum(summary.facadeAreaM2, 2)} м²` : ''}, согласно эскизу`, fmtMoney(summary.facadeTotal), '1', fmtMoney(summary.facadeTotal)] : null,
+    summary.hardwareTotal > 0 ? ['3', 'Фурнитура и механизмы по проекту', fmtMoney(summary.hardwareTotal), '1', fmtMoney(summary.hardwareTotal)] : null,
+    extraTotal > 0 ? ['4', 'Столешницы, работы и дополнительные позиции', fmtMoney(extraTotal), '1', fmtMoney(extraTotal)] : null,
   ].filter((row): row is string[] => Boolean(row));
+  const productRows = rows.length ? rows : [['1', `Комплект мебели по проекту «${project.name}», согласно эскизу`, fmtMoney(total), '1', fmtMoney(total)]];
   return [
-    p('Товарный чек', { bold: true, size: 20, color: '0F2F57' }),
-    p(`Продавец: ${sellerName(offer)}\n${offer.sellerDetails || ''}\nПокупатель: ${project.client || '—'}\nПроект: ${project.name}\nДата: ${fmtDate(project.date)}`),
-    table(['Наименование', 'Кол-во', 'Сумма'], [...rows, ['Итого', '', fmtMoney(total)]]),
-    p('Продавец ____________________________      Покупатель ____________________________', { size: 11 }),
+    p(`Товарный чек № ${contractNumber(project, offer)}`, { bold: true, size: 20, color: '0F2F57' }),
+    p(`от ${formatContractDate(project)}`, { size: 11, color: '52667A' }),
+    p(`Продавец: ${sellerName(offer)}\n${sellerDetails(offer)}\nПокупатель: ${project.client || '_________________________________'}\nАдрес доставки: ${offer.clientAddress || offer.clientContacts || '_________________________________'}`),
+    table(['№', 'Наименование товара', 'Цена', 'Кол-во', 'Сумма'], [...productRows, ['', 'Итого', '', '', fmtMoney(total)]]),
+    table(['Оплата', 'Сумма'], [
+      ['Предоплата / задаток', `${prepayment.text} руб.`],
+      ['Доплата', `${remainder} руб.`],
+    ]),
+    p(`Телефон покупателя: ${offer.clientPhone || '____________________________________'}\nE-mail: ${offer.clientEmail || '____________________________________'}`, { size: 11 }),
+    p('Подпись Продавца ____________________          Подпись Покупателя ____________________', { size: 11 }),
   ];
 }
 
@@ -475,7 +493,8 @@ export async function buildClientSpecificationDocx(args: ClientDocumentArgs): Pr
 export async function buildClientContractDocx(args: ClientDocumentArgs): Promise<Blob> {
   try {
     return await buildClientContractFromTemplate(args);
-  } catch {
+  } catch (error) {
+    if (isBrowserRuntime()) throw new Error(`Фирменный шаблон договора не загрузился: ${error instanceof Error ? error.message : String(error)}`);
     return docxBlob(`${args.project.name} — договор`, contractBlocks(args));
   }
 }
@@ -520,7 +539,7 @@ export async function downloadClientDocumentZip(args: ClientDocumentArgs, sketch
   if (settings.includeOffer) files.push({ name: `${safeFilePart(args.project.name)} — полное КП.docx`, data: await buildClientOfferDocx(args) });
   if (settings.includeSpecification) files.push({ name: `${safeFilePart(args.project.name)} — спецификация.docx`, data: await buildClientSpecificationDocx(args) });
   if (settings.includeContract) files.push({ name: `${safeFilePart(args.project.name)} — договор.docx`, data: await buildClientContractDocx(args) });
-  if (settings.includeReceipt) files.push({ name: `${safeFilePart(args.project.name)} — бланк заказа.doc`, data: await buildClientOrderBlankDoc(args) });
+  if (settings.includeReceipt) files.push({ name: `${safeFilePart(args.project.name)} — товарный чек.docx`, data: await buildClientReceiptDocx(args) });
   if (settings.includeSketch) files.push(...sketchFiles.map((file, index) => ({ name: file.fileName || `Эскиз ${index + 1} — ${safeFilePart(file.title)}.pdf`, data: file.blob })));
   downloadFile(`${safeFilePart(args.project.name)} — пакет клиента.zip`, await zipFiles(files, 'application/zip'));
 }
