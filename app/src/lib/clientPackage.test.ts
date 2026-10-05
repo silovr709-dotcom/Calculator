@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ClientOfferDetail, ClientProjectSummary } from './clientOffer';
-import { buildClientContractDocx, buildClientOfferDocx, buildClientReceiptDocx } from './clientPackage';
+import { buildClientContractDocx, buildClientOfferDocx, buildClientReceiptDocx, buildClientSpecificationDocx } from './clientPackage';
 import { defaultSettings } from './storage';
 import type { Project } from '../types';
 
@@ -51,17 +51,19 @@ async function blobText(blob: Blob) {
 }
 
 describe('client document docx export', () => {
-  it('собирает Word-файлы КП, договора и товарного чека как docx zip', async () => {
+  it('собирает Word-файлы КП, спецификации, договора и товарного чека как docx zip', async () => {
     const args = { project, offer: { sellerName: 'Мебельное ателье' }, details, modules: [], total: 51200, summary };
     const offer = await buildClientOfferDocx(args);
     const contract = await buildClientContractDocx(args);
+    const specification = await buildClientSpecificationDocx(args);
     const receipt = await buildClientReceiptDocx(args);
-    for (const blob of [offer, contract, receipt]) {
+    for (const blob of [offer, specification, contract, receipt]) {
       const text = await blobText(blob);
       expect(text.startsWith('PK')).toBe(true);
       expect(text).toContain('word/document.xml');
     }
     expect(await blobText(offer)).toContain('Коммерческое предложение');
+    expect(await blobText(specification)).toContain('Спецификация клиентского КП');
     expect(await blobText(contract)).toContain('Договор на изготовление мебели');
     expect(await blobText(receipt)).toContain('Товарный чек');
   });

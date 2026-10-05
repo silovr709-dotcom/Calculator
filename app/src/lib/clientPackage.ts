@@ -369,11 +369,11 @@ function offerBlocks(args: ClientDocumentArgs): DocxBlock[] {
     p(`Итоговая стоимость: ${fmtMoney(total)}`, { bold: true, size: 16, color: '1F6FEB' }),
     table(['Показатель', 'Значение'], [
       ['Модулей', `${fmtNum(summary.moduleCount, 3)} шт`],
-      ['Фасады', summary.facadeAreaM2 > 0 ? `${fmtNum(summary.facadeAreaM2, 2)} м² / ${fmtNum(summary.facadeQty, 3)} шт` : `${fmtNum(summary.facadeQty, 3)} шт`],
+      ['Фасады, площадь/шт', summary.facadeAreaM2 > 0 ? `${fmtNum(summary.facadeAreaM2, 2)} м² / ${fmtNum(summary.facadeQty, 3)} шт` : `${fmtNum(summary.facadeQty, 3)} шт`],
       ['Петли', `${fmtNum(summary.hingeQty, 3)} шт${summary.hingeTypes.length ? `: ${summary.hingeTypes.map((item) => `${item.name} — ${fmtNum(item.qty, 3)} шт`).join('; ')}` : ''}`],
-      ['Корпуса общ.', fmtMoney(summary.bodyTotal)],
-      ['Фасады общ.', fmtMoney(summary.facadeTotal)],
-      ['Фурнитура общ.', fmtMoney(summary.hardwareTotal)],
+      ['Корпуса, сумма', fmtMoney(summary.bodyTotal)],
+      ['Фасады, сумма', fmtMoney(summary.facadeTotal)],
+      ['Фурнитура, сумма', fmtMoney(summary.hardwareTotal)],
     ]),
     p('Условия', { bold: true, size: 14, color: '0F2F57' }),
     table(['Пункт', 'Значение'], [
@@ -390,6 +390,41 @@ function offerBlocks(args: ClientDocumentArgs): DocxBlock[] {
   blocks.push(p('Состав по категориям', { bold: true, size: 14, color: '0F2F57' }));
   blocks.push(table(['№', 'Категория', 'Позиция', 'Кол-во', 'Сумма'], details.map((detail, index) => [String(index + 1), detail.kindLabel, [detail.name, detail.details.slice(0, 4).join('; ')].filter(Boolean).join('\n'), detailQtyText(detail), fmtMoney(detail.clientSum)])));
   if (offer.notes) blocks.push(p(`Примечания:\n${offer.notes}`, { size: 11 }));
+  return blocks;
+}
+
+function specificationBlocks(args: ClientDocumentArgs): DocxBlock[] {
+  const { project, details, modules, total, summary } = args;
+  const categoryRows = details.map((detail, index) => [
+    String(index + 1),
+    detail.kindLabel,
+    [detail.name, detail.details.slice(0, 6).join('; ')].filter(Boolean).join('\n'),
+    detailQtyText(detail),
+    fmtMoney(detail.clientSum),
+  ]);
+  const summaryRows = [
+    ['Модулей', `${fmtNum(summary.moduleCount, 3)} шт`],
+    ['Фасады, площадь/шт', summary.facadeAreaM2 > 0 ? `${fmtNum(summary.facadeAreaM2, 2)} м² / ${fmtNum(summary.facadeQty, 3)} шт` : `${fmtNum(summary.facadeQty, 3)} шт`],
+    ['Петли', `${fmtNum(summary.hingeQty, 3)} шт${summary.hingeTypes.length ? `: ${summary.hingeTypes.map((item) => `${item.name} — ${fmtNum(item.qty, 3)} шт`).join('; ')}` : ''}`],
+    ['Корпуса, сумма', fmtMoney(summary.bodyTotal)],
+    ['Фасады, сумма', fmtMoney(summary.facadeTotal)],
+    ['Фурнитура, сумма', fmtMoney(summary.hardwareTotal)],
+    ['Итого по КП', fmtMoney(total)],
+  ];
+  const blocks: DocxBlock[] = [
+    p('Спецификация клиентского КП', { bold: true, size: 20, color: '0F2F57' }),
+    p(`${project.name}\nКлиент: ${project.client || '—'} · Дата: ${fmtDate(project.date)}`, { size: 11, color: '52667A' }),
+    p('Компактный перечень состава без внутренних закупочных цен. Фурнитура сгруппирована общими строками, чтобы не повторять её в каждом модуле.', { size: 11 }),
+    table(['Показатель', 'Значение'], summaryRows),
+  ];
+  if (modules.length) {
+    blocks.push(p('Модули', { bold: true, size: 14, color: '0F2F57' }));
+    blocks.push(table(['№', 'Модуль', 'Описание', 'Кол-во', 'Сумма'], modules.map((module, index) => [String(index + 1), module.title, module.sub || '', fmtNum(module.qty, 3), fmtMoney(module.total)])));
+  }
+  if (categoryRows.length) {
+    blocks.push(p('Состав по категориям', { bold: true, size: 14, color: '0F2F57' }));
+    blocks.push(table(['№', 'Категория', 'Позиция', 'Кол-во', 'Сумма'], categoryRows));
+  }
   return blocks;
 }
 
@@ -433,6 +468,10 @@ export async function buildClientOfferDocx(args: ClientDocumentArgs): Promise<Bl
   return docxBlob(`${args.project.name} — полное КП`, offerBlocks(args));
 }
 
+export async function buildClientSpecificationDocx(args: ClientDocumentArgs): Promise<Blob> {
+  return docxBlob(`${args.project.name} — спецификация`, specificationBlocks(args));
+}
+
 export async function buildClientContractDocx(args: ClientDocumentArgs): Promise<Blob> {
   try {
     return await buildClientContractFromTemplate(args);
@@ -459,6 +498,10 @@ export async function downloadClientOfferDocx(args: ClientDocumentArgs): Promise
   downloadFile(`${safeFilePart(args.project.name)} — полное КП.docx`, await buildClientOfferDocx(args));
 }
 
+export async function downloadClientSpecificationDocx(args: ClientDocumentArgs): Promise<void> {
+  downloadFile(`${safeFilePart(args.project.name)} — спецификация.docx`, await buildClientSpecificationDocx(args));
+}
+
 export async function downloadClientContractDocx(args: ClientDocumentArgs): Promise<void> {
   downloadFile(`${safeFilePart(args.project.name)} — договор.docx`, await buildClientContractDocx(args));
 }
@@ -474,7 +517,8 @@ export async function downloadClientOrderBlankDoc(args: ClientDocumentArgs): Pro
 export async function downloadClientDocumentZip(args: ClientDocumentArgs, sketchFiles: ClientPackageSketchFile[] = []): Promise<void> {
   const settings = normalizeClientDocumentPackage(args.offer.documentPackage);
   const files: ZipInput[] = [];
-  if (settings.includeOffer || settings.includeSpecification) files.push({ name: `${safeFilePart(args.project.name)} — полное КП.docx`, data: await buildClientOfferDocx(args) });
+  if (settings.includeOffer) files.push({ name: `${safeFilePart(args.project.name)} — полное КП.docx`, data: await buildClientOfferDocx(args) });
+  if (settings.includeSpecification) files.push({ name: `${safeFilePart(args.project.name)} — спецификация.docx`, data: await buildClientSpecificationDocx(args) });
   if (settings.includeContract) files.push({ name: `${safeFilePart(args.project.name)} — договор.docx`, data: await buildClientContractDocx(args) });
   if (settings.includeReceipt) files.push({ name: `${safeFilePart(args.project.name)} — бланк заказа.doc`, data: await buildClientOrderBlankDoc(args) });
   if (settings.includeSketch) files.push(...sketchFiles.map((file, index) => ({ name: file.fileName || `Эскиз ${index + 1} — ${safeFilePart(file.title)}.pdf`, data: file.blob })));

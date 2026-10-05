@@ -8,7 +8,7 @@ import { fmtMoney, fmtDate, fmtNum } from '../lib/format';
 import { exportClientXlsx } from '../lib/exporters';
 import { snapshotProject } from '../lib/eskizPro';
 import { downloadEskizSketchPdf, renderEskizSketchPdf } from '../lib/eskizSketchExport';
-import { downloadClientContractDocx, downloadClientDocumentZip, downloadClientOfferDocx, downloadClientOrderBlankDoc, normalizeClientDocumentPackage, type ClientDocumentArgs } from '../lib/clientPackage';
+import { downloadClientContractDocx, downloadClientDocumentZip, downloadClientOfferDocx, downloadClientOrderBlankDoc, downloadClientSpecificationDocx, normalizeClientDocumentPackage, type ClientDocumentArgs } from '../lib/clientPackage';
 import EskizProjectPreview from './EskizProjectPreview';
 
 /** Строка модуля в клиентской версии — без закупочных цен и внутренних данных. */
@@ -90,6 +90,49 @@ function uniqueHighlights(details: ClientOfferDetail[], kinds: ClientOfferDetail
     if (out.length >= limit) break;
   }
   return out;
+}
+
+const COMPOSITION_SECTIONS: { id: string; title: string; kinds: ClientOfferDetailKind[] }[] = [
+  { id: 'body', title: 'Корпуса и каркас', kinds: ['body', 'bodySurcharge', 'shelf'] },
+  { id: 'facades', title: 'Фасады и рамки', kinds: ['facade', 'frame'] },
+  { id: 'hardware', title: 'Фурнитура и механизмы', kinds: ['hinge', 'drawerSys', 'lift', 'handle', 'legs'] },
+  { id: 'tops', title: 'Столешницы и панели', kinds: ['worktop', 'wallPanel'] },
+  { id: 'extra', title: 'Дополнительно', kinds: ['sink', 'electric', 'other'] },
+];
+
+function summarizeCompositionQty(details: ClientOfferDetail[]): string {
+  const area = details.reduce((sum, detail) => {
+    const unit = detail.unit.toLocaleLowerCase('ru-RU');
+    return detail.priceBasis === 'm2' || unit.includes('м²') || unit.includes('м2') ? sum + detail.qtyEffective : sum;
+  }, 0);
+  const length = details.reduce((sum, detail) => {
+    const unit = detail.unit.toLocaleLowerCase('ru-RU');
+    return detail.priceBasis === 'lm' || unit.includes('п.м') || unit.includes('пог') ? sum + detail.qtyEffective : sum;
+  }, 0);
+  const pieces = details.reduce((sum, detail) => sum + detail.qty, 0);
+  const parts = [
+    `${details.length} поз.`,
+    area > 0 ? `${fmtNum(area, 2)} м²` : '',
+    length > 0 ? `${fmtNum(length, 2)} п.м` : '',
+    pieces > 0 ? `${fmtNum(pieces, 3)} шт/компл.` : '',
+  ].filter(Boolean);
+  return parts.slice(0, 3).join(' · ');
+}
+
+function buildCompositionSections(details: ClientOfferDetail[]) {
+  return COMPOSITION_SECTIONS.map((section) => {
+    const allowed = new Set(section.kinds);
+    const items = details.filter((detail) => allowed.has(detail.kind));
+    const total = items.reduce((sum, detail) => sum + (detail.clientSum ?? 0), 0);
+    const hasPrice = items.some((detail) => detail.clientSum != null);
+    return {
+      ...section,
+      items,
+      total: hasPrice ? total : null,
+      qtyText: summarizeCompositionQty(items),
+      preview: items.slice(0, 3).map((detail) => `${detail.kindLabel}: ${detail.name}`),
+    };
+  }).filter((section) => section.items.length > 0);
 }
 
 function DetailRow({ detail, showPrice, technical }: { detail: ClientOfferDetail; showPrice: boolean; technical: boolean }) {
@@ -189,16 +232,37 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const drawerQty = sumKind(allDetails, ['drawerSys']);
   const liftQty = sumKind(allDetails, ['lift']);
   const includedChips = [
-    groups.length > 0 ? `Мебельные модули — ${fmtNum(moduleQty, 3)} шт` : '',
-    facadeQty > 0 ? `Фасады — ${fmtNum(facadeQty, 3)} шт` : '',
-    hingeQty > 0 ? `Петли — ${fmtNum(hingeQty, 3)} шт` : '',
-    drawerQty > 0 ? `Системы ящиков — ${fmtNum(drawerQty, 3)} компл.` : '',
-    liftQty > 0 ? `Подъёмники — ${fmtNum(liftQty, 3)} шт` : '',
+    groups.length > 0 || hasKind(allDetails, ['body', 'facade', 'frame']) ? 'Корпуса и фасады' : '',
+    hingeQty > 0 || drawerQty > 0 || liftQty > 0 ? 'Фурнитура и механизмы' : '',
     hasKind(allDetails, ['worktop']) ? 'Столешница' : '',
     hasKind(allDetails, ['wallPanel']) ? 'Стеновая панель' : '',
     hasKind(allDetails, ['sink']) ? 'Мойка / смеситель' : '',
+    hasKind(allDetails, ['electric']) ? 'Электрика / свет' : '',
+    clientSketchVisible ? 'Эскиз PRO' : '',
   ].filter(Boolean);
-  const materialHighlights = uniqueHighlights(allDetails, ['body', 'facade', 'frame', 'worktop', 'wallPanel', 'handle'], isTechnical ? 10 : 6);
+  const materialHighlights = uniqueHighlights(allDetails, ['body', 'facade', 'frame', 'worktop', 'wallPanel'], isTechnical ? 10 : 6);
+  const compositionSections = buildCompositionSections(allDetails);
+  const offerTerms = [
+    project.clientOffer?.validUntil ? { label: 'Действительно до', value: fmtDate(project.clientOffer.validUntil) } : null,
+    { label: 'Оплата', value: project.clientOffer?.paymentTerms || 'по согласованию' },
+    project.clientOffer?.productionTerms ? { label: 'Срок изготовления', value: project.clientOffer.productionTerms } : null,
+    project.clientOffer?.warranty ? { label: 'Гарантия', value: project.clientOffer.warranty } : null,
+    project.clientOffer?.installation ? { label: 'Монтаж', value: project.clientOffer.installation } : null,
+    project.clientOffer?.delivery ? { label: 'Доставка', value: project.clientOffer.delivery } : null,
+  ].filter((item): item is { label: string; value: string } => Boolean(item));
+  const packageDocumentNames = [
+    packageSettings.includeSketch && clientSketchVisible ? 'Эскиз PDF' : '',
+    packageSettings.includeOffer ? 'Полное КП Word' : '',
+    packageSettings.includeSpecification ? 'Спецификация Word' : '',
+    packageSettings.includeContract ? 'Договор Word' : '',
+    packageSettings.includeReceipt ? 'Бланк заказа DOC' : '',
+  ].filter(Boolean);
+  const offerReadinessItems = [
+    { label: 'Клиент', ready: Boolean(project.client?.trim()), value: project.client?.trim() || 'не указан' },
+    { label: 'Условия', ready: Boolean(project.clientOffer?.paymentTerms || project.clientOffer?.validUntil), value: project.clientOffer?.paymentTerms || 'оплата/срок не заполнены' },
+    { label: 'Сроки', ready: Boolean(project.clientOffer?.productionTerms || project.clientOffer?.delivery || project.clientOffer?.installation), value: project.clientOffer?.productionTerms || project.clientOffer?.delivery || 'добавьте срок/доставку' },
+    { label: 'Эскиз', ready: clientSketchVisible, value: clientSketchVisible ? `${linkedEskizProjects.length} PDF` : 'не прикреплён' },
+  ];
   const clientDocumentArgs: ClientDocumentArgs = {
     project: { ...project, lines: activeCalculation.lines, settings: selectedVariant?.settings ?? project.settings },
     offer: project.clientOffer ?? {},
@@ -245,8 +309,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
       <div className="client-toolbar no-print">
         <div className="muted small">Клиент видит только этот документ: без себестоимости, закупочных цен и внутренних данных.{selectedVariant && <> Активен вариант: <b>{selectedVariant.name}</b>.</>}</div>
         <div className="client-toolbar-actions">
-          <button className="btn ghost" onClick={() => exportClientXlsx({ ...project, lines: activeCalculation.lines, settings: selectedVariant?.settings ?? project.settings })}>Excel для клиента</button>
-          <button className="btn ghost" disabled={packageExporting} onClick={exportClientPackage}>{packageExporting ? 'Собираю пакет…' : 'Пакет клиента ZIP'}</button>
+          <button className="btn ghost" onClick={() => exportClientXlsx({ ...project, lines: activeCalculation.lines, settings: selectedVariant?.settings ?? project.settings })}>Excel, если нужен</button>
           <button className="btn primary" onClick={() => window.print()}>Печать / PDF</button>
         </div>
       </div>
@@ -255,13 +318,17 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         <aside className="client-offer-controls no-print">
       <section className="card client-document-hub no-print" aria-label="Документы для клиента">
         <div className="client-document-hub-main">
-          <span className="eyebrow">Клиентский пакет</span>
-          <h3>Отдельные файлы для клиента: эскиз, КП, фирменный договор и бланк заказа</h3>
-          <p>Выгрузка идёт не HTML: КП и договор собираются в Word/PDF, бланк заказа добавляется в фирменном формате.</p>
+          <span className="eyebrow">КП для клиента</span>
+          <h3>Один аккуратный пакет: эскиз, КП, спецификация, договор и бланк заказа</h3>
+          <p>Без HTML и черновиков в самом КП: документы выгружаются отдельными файлами, а предпросмотр остаётся компактным коммерческим предложением.</p>
+          <div className="client-document-readiness" aria-label="Готовность клиентского КП">
+            {offerReadinessItems.map((item) => <span key={item.label} className={item.ready ? 'ready' : 'warn'}><b>{item.label}</b><small>{item.value}</small></span>)}
+          </div>
         </div>
         <div className="client-document-actions big">
           <button type="button" className="btn ghost" disabled={packageExporting || !clientSketchVisible} onClick={exportSketchPdf}>Эскиз PDF</button>
-          <button type="button" className="btn ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientOfferDocx(clientDocumentArgs), 'Не получилось выгрузить КП')}>Полное КП Word</button>
+          <button type="button" className="btn ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientOfferDocx(clientDocumentArgs), 'Не получилось выгрузить КП')}>КП Word</button>
+          <button type="button" className="btn ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientSpecificationDocx(clientDocumentArgs), 'Не получилось выгрузить спецификацию')}>Спецификация Word</button>
           <button type="button" className="btn ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientContractDocx(clientDocumentArgs), 'Не получилось выгрузить договор')}>Договор Word</button>
           <button type="button" className="btn ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientOrderBlankDoc(clientDocumentArgs), 'Не получилось выгрузить бланк заказа')}>Бланк заказа DOC</button>
           <button type="button" className="btn primary" disabled={packageExporting} onClick={exportClientPackage}>{packageExporting ? 'Собираю…' : 'Пакет ZIP'}</button>
@@ -269,6 +336,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         <div className="client-document-includes">
           <span className={packageSettings.includeSketch && clientSketchVisible ? 'ready' : ''}>Эскиз</span>
           <span className={packageSettings.includeOffer ? 'ready' : ''}>КП</span>
+          <span className={packageSettings.includeSpecification ? 'ready' : ''}>Спецификация</span>
           <span className={packageSettings.includeContract ? 'ready' : ''}>Договор</span>
           <span className={packageSettings.includeReceipt ? 'ready' : ''}>Бланк заказа</span>
           <span className={packageSettings.sketchSummaryOverlay ? 'ready' : ''}>Сводка на эскизе</span>
@@ -317,12 +385,12 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           </details>
 
           <details className="client-control-section">
-            <summary><span>2. Состав ZIP и документов</span><small>{packageSettings.includeOffer ? 'КП' : ''}{packageSettings.includeSketch ? ' · эскиз' : ''}{packageSettings.includeContract ? ' · договор' : ''}{packageSettings.includeReceipt ? ' · бланк' : ''}</small></summary>
+            <summary><span>2. Состав ZIP и документов</span><small>{packageSettings.includeOffer ? 'КП' : ''}{packageSettings.includeSpecification ? ' · спецификация' : ''}{packageSettings.includeSketch ? ' · эскиз' : ''}{packageSettings.includeContract ? ' · договор' : ''}{packageSettings.includeReceipt ? ' · бланк' : ''}</small></summary>
             <div className="client-control-body">
               <div className="client-package-options compact">
                 <label><input type="checkbox" checked={packageSettings.includeOffer} onChange={(event) => updatePackageSettings({ includeOffer: event.target.checked })} /> КП/сводка</label>
                 <label><input type="checkbox" checked={packageSettings.includeSketch} onChange={(event) => updatePackageSettings({ includeSketch: event.target.checked })} /> Эскиз</label>
-                <label><input type="checkbox" checked={packageSettings.includeSpecification} onChange={(event) => updatePackageSettings({ includeSpecification: event.target.checked })} /> Спецификация</label>
+                <label><input type="checkbox" checked={packageSettings.includeSpecification} onChange={(event) => updatePackageSettings({ includeSpecification: event.target.checked })} /> Спецификация Word</label>
                 <label><input type="checkbox" checked={packageSettings.includeContract} onChange={(event) => updatePackageSettings({ includeContract: event.target.checked })} /> Договор</label>
                 <label><input type="checkbox" checked={packageSettings.includeReceipt} onChange={(event) => updatePackageSettings({ includeReceipt: event.target.checked })} /> Бланк заказа</label>
                 <label><input type="checkbox" checked={packageSettings.sketchSummaryOverlay} onChange={(event) => updatePackageSettings({ sketchSummaryOverlay: event.target.checked })} /> Сводка на эскизе</label>
@@ -390,18 +458,19 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           </div>
         </header>
 
-        {project.clientOffer && <div className="cd-terms"><div><b>Действительно до</b><span>{project.clientOffer.validUntil ? fmtDate(project.clientOffer.validUntil) : 'не указано'}</span></div><div><b>Оплата</b><span>{project.clientOffer.paymentTerms || 'не указано'}</span></div><div><b>Монтаж</b><span>{project.clientOffer.installation || 'не указано'}</span></div><div><b>Доставка</b><span>{project.clientOffer.delivery || 'не указано'}</span></div></div>}
+        {offerTerms.length > 0 && <div className="cd-terms">{offerTerms.map((term) => <div key={term.label}><b>{term.label}</b><span>{term.value}</span></div>)}</div>}
 
-        <section className="cd-summary">
-          <div className="cd-summary-price">
-            <span>Итоговая стоимость</span>
-            <b>{fmtMoney(totals.client)}</b>
-            <em>{MODE_LABELS[presentationMode]}</em>
+        <section className="cd-summary cd-summary-modern">
+          <div className="cd-summary-copy">
+            <h3>Кратко по проекту</h3>
+            <p>Основные цифры без себестоимости и внутренних закупочных данных. Подробный состав ниже сгруппирован так, чтобы не повторять фурнитуру внутри каждого модуля.</p>
           </div>
           <div className="cd-summary-facts">
             <div><b>{fmtNum(moduleQty, 3)}</b><span>модулей</span></div>
             <div><b>{projectSummary.facadeAreaM2 > 0 ? fmtNum(projectSummary.facadeAreaM2, 2) : fmtNum(facadeQty, 3)}</b><span>{projectSummary.facadeAreaM2 > 0 ? 'м² фасадов' : 'фасадов / рамок'}</span></div>
             <div><b>{fmtNum(hingeQty, 3)}</b><span>петель</span></div>
+            <div><b>{fmtNum(drawerQty, 3)}</b><span>систем ящиков</span></div>
+            <div><b>{fmtNum(liftQty, 3)}</b><span>подъёмников</span></div>
             <div><b>{fmtMoney(projectSummary.bodyTotal)}</b><span>корпуса общ.</span></div>
           </div>
           {includedChips.length > 0 && <div className="cd-included"><b>В предложение входит</b><div>{includedChips.map((chip) => <span key={chip}>{chip}</span>)}</div></div>}
@@ -414,6 +483,18 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           <div><b>3</b><span>Производство комплекта</span></div>
           <div><b>4</b><span>Доставка и монтаж</span></div>
         </section>
+
+        {compositionSections.length > 0 && (
+          <section className="cd-composition">
+            <div className="cd-section-head"><h3>Смета по разделам</h3><span>коротко по категориям, без повторов внутри модулей</span></div>
+            <div className="cd-composition-grid">
+              {compositionSections.map((section) => <article className="cd-composition-card" key={section.id}>
+                <div className="cd-composition-card-head"><div><b>{section.title}</b><span>{section.qtyText}</span></div><strong>{fmtMoney(section.total)}</strong></div>
+                {section.preview.length > 0 && <ul>{section.preview.map((item) => <li key={item}>{item}</li>)}</ul>}
+              </article>)}
+            </div>
+          </section>
+        )}
 
         {(project.photos ?? []).some((photo) => photo.showToClient) && <div className="cd-photos">{(project.photos ?? []).filter((photo) => photo.showToClient).map((photo) => <figure key={photo.id}><img src={photo.dataUrl} alt={photo.name} /><figcaption>{photo.name}</figcaption></figure>)}</div>}
 
@@ -514,11 +595,10 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         {project.clientOffer?.notes && <div className="cd-comment"><b>Примечания:</b><br />{project.clientOffer.notes}</div>}
         {project.comment && <div className="cd-comment">{project.comment}</div>}
 
-        {(packageSettings.includeContract || packageSettings.includeReceipt) && (
-          <section className="cd-package-docs">
-            <div className="cd-section-head"><h3>Пакет документов</h3><span>черновые типовые формы — позже заменим на ваши шаблоны</span></div>
-            {packageSettings.includeContract && <article className="cd-legal-card"><h4>Договор на изготовление мебели</h4><p><b>Исполнитель:</b> {project.clientOffer?.sellerName || 'Исполнитель / мебельное ателье'} · <b>Заказчик:</b> {project.client || '—'} · <b>№:</b> {project.clientOffer?.contractNumber || project.id.slice(0, 8).toUpperCase()}</p><p>Предмет: изготовление и/или комплектация мебельного изделия по согласованному эскизу, спецификации и коммерческому предложению. Стоимость: <b>{fmtMoney(totals.client)}</b>. Оплата: {project.clientOffer?.paymentTerms || 'по согласованию'}. Срок: {project.clientOffer?.productionTerms || 'после утверждения размеров и материалов'}. Гарантия: {project.clientOffer?.warranty || '12 месяцев, если иное не указано'}.</p><div className="cd-sign-row"><span>Исполнитель __________________</span><span>Заказчик __________________</span></div></article>}
-            {packageSettings.includeReceipt && <article className="cd-legal-card"><h4>Бланк заказа</h4><p>В ZIP будет добавлен ваш фирменный файл «Бланк заказа» в исходном формате DOC. Основные суммы для заполнения: итог <b>{fmtMoney(totals.client)}</b>, корпуса {fmtMoney(projectSummary.bodyTotal)}, фасады {projectSummary.facadeAreaM2 > 0 ? `${fmtNum(projectSummary.facadeAreaM2, 2)} м² · ${fmtMoney(projectSummary.facadeTotal)}` : fmtMoney(projectSummary.facadeTotal)}, фурнитура {fmtMoney(projectSummary.hardwareTotal)}.</p><div className="cd-sign-row"><span>Продавец __________________</span><span>Покупатель __________________</span></div></article>}
+        {packageDocumentNames.length > 0 && (
+          <section className="cd-package-docs cd-package-note">
+            <div className="cd-section-head"><h3>Файлы клиентского пакета</h3><span>выгружаются отдельно, не раздувают печатное КП</span></div>
+            <div className="cd-package-file-list">{packageDocumentNames.map((name) => <span key={name}>{name}</span>)}</div>
           </section>
         )}
       </div>
