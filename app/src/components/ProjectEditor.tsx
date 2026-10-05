@@ -223,6 +223,17 @@ export default function ProjectEditor(props: {
         : activeStage === 'client'
           ? [{ tab: 'client', label: 'КП и документы', hint: 'эскиз, КП, договор, чек, ZIP' }]
           : [{ tab: 'order', label: 'Центр заказа', hint: 'статус, закупка, фабрика' }];
+  const activeStageMeta = PROJECT_STAGE_LABELS[activeStage];
+  const activeSubTab = subTabs.find((item) => item.tab === tab) ?? subTabs[0];
+  const activeStageIndex = PROJECT_STAGE_ORDER.indexOf(activeStage);
+  const previousStage = activeStageIndex > 0 ? PROJECT_STAGE_ORDER[activeStageIndex - 1] : null;
+  const nextStage = activeStageIndex < PROJECT_STAGE_ORDER.length - 1 ? PROJECT_STAGE_ORDER[activeStageIndex + 1] : null;
+  const projectPulseItems = [
+    { label: 'Клиент', value: project.client || 'не указан' },
+    { label: 'Состав', value: moduleCount ? `${moduleCount} мод.` : project.lines.length ? `${project.lines.length} доп.` : 'пусто' },
+    { label: 'КП', value: fmtMoney(totals.client) },
+    { label: 'Проверка', value: unresolvedCriticals ? `${unresolvedCriticals} ошибок` : unresolvedWarnings ? `${unresolvedWarnings} пред.` : 'OK' },
+  ];
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -367,20 +378,52 @@ export default function ProjectEditor(props: {
           onSelectModule={(id) => { setFocusModuleId(id); setEditorMode('advanced'); setTab('modules'); }}
           onOpenAdvanced={() => { setEditorMode('advanced'); props.onChange({ ...project, wizardMode: 'advanced' }); }}
         />
-      ) : (<>
-      <div className="project-stage-nav no-print" aria-label="Этапы проекта">
-        {PROJECT_STAGE_ORDER.map((stage) => {
-          const meta = PROJECT_STAGE_LABELS[stage];
-          return <button key={stage} type="button" className={activeStage === stage ? 'active' : ''} onClick={() => openStage(stage)}>
-            <i>{meta.step}</i><span>{meta.label}<small>{meta.hint}</small></span>
-          </button>;
-        })}
-      </div>
-      <div className="project-subtabs no-print" aria-label="Разделы текущего этапа">
-        {subTabs.map((item) => <button key={item.tab} type="button" className={tab === item.tab ? 'active' : ''} onClick={() => openProjectTab(item.tab)}>
-          <span>{item.label}{item.badge ? ` (${item.badge})` : ''}</span>{item.hint && <small>{item.hint}</small>}
-        </button>)}
-      </div>
+      ) : (
+      <div className="project-workspace-frame">
+        <aside className="project-flow-rail no-print" aria-label="Навигация проекта">
+          <div className="project-flow-title">
+            <span className="eyebrow">Проект</span>
+            <b>{activeStageMeta.label}</b>
+            <small>{activeSubTab?.label}</small>
+          </div>
+          <nav className="project-stage-nav compact" aria-label="Этапы проекта">
+            {PROJECT_STAGE_ORDER.map((stage) => {
+              const meta = PROJECT_STAGE_LABELS[stage];
+              const item = readinessItems.find((entry) => entry.key === stage);
+              return <button key={stage} type="button" className={`${activeStage === stage ? 'active' : ''} ${item?.status ?? ''}`} onClick={() => openStage(stage)}>
+                <i>{meta.step}</i><span>{meta.label}<small>{item?.value ?? meta.hint}</small></span>
+              </button>;
+            })}
+          </nav>
+          <div className="project-flow-subtabs" aria-label="Разделы этапа">
+            {subTabs.map((item) => <button key={item.tab} type="button" className={tab === item.tab ? 'active' : ''} onClick={() => openProjectTab(item.tab)}>
+              <span>{item.label}{item.badge ? <b>{item.badge}</b> : null}</span>{item.hint && <small>{item.hint}</small>}
+            </button>)}
+          </div>
+          <div className="project-flow-actions">
+            <button type="button" className="btn primary small" onClick={() => openProjectTab(nextAction.tab)}>{nextAction.label}</button>
+            <div>
+              {previousStage && <button type="button" className="btn tiny ghost" onClick={() => openStage(previousStage)}>← {PROJECT_STAGE_LABELS[previousStage].label}</button>}
+              {nextStage && <button type="button" className="btn tiny ghost" onClick={() => openStage(nextStage)}>{PROJECT_STAGE_LABELS[nextStage].label} →</button>}
+            </div>
+          </div>
+        </aside>
+        <section className="project-work-area">
+          <div className="project-mobile-switcher no-print">
+            <label>Этап<select value={activeStage} onChange={(event) => openStage(event.target.value as ProjectStage)}>{PROJECT_STAGE_ORDER.map((stage) => <option key={stage} value={stage}>{PROJECT_STAGE_LABELS[stage].step}. {PROJECT_STAGE_LABELS[stage].label}</option>)}</select></label>
+            <label>Раздел<select value={tab} onChange={(event) => openProjectTab(event.target.value as ProjectTab)}>{subTabs.map((item) => <option key={item.tab} value={item.tab}>{item.label}{item.badge ? ` (${item.badge})` : ''}</option>)}</select></label>
+            <button type="button" className="btn primary small" onClick={() => openProjectTab(nextAction.tab)}>{nextAction.label}</button>
+          </div>
+          <div className="project-section-head no-print">
+            <div>
+              <span className="eyebrow">{activeStageMeta.step}. {activeStageMeta.label}</span>
+              <h2>{activeSubTab?.label ?? activeStageMeta.label}</h2>
+              <p>{activeSubTab?.hint ?? activeStageMeta.hint}</p>
+            </div>
+            <div className="project-pulse-strip">
+              {projectPulseItems.map((item) => <span key={item.label}><b>{item.value}</b><small>{item.label}</small></span>)}
+            </div>
+          </div>
 
       {tab === 'photos' && <PhotosPanel project={project} onChange={props.onChange} />}
 
@@ -497,7 +540,8 @@ export default function ProjectEditor(props: {
         </div>
       )}
 
-      </>)}
+        </section>
+      </div>)}
 
       {showPicker && (
         <CatalogPicker pricebook={pricebook} onAdd={addItem} onClose={() => setShowPicker(false)} />
