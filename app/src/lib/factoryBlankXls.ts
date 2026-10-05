@@ -33,6 +33,18 @@ export interface BlankSketchImage {
   height?: number;
 }
 
+export interface BlankSketchEntry {
+  title: string;
+  image: BlankSketchImage | null;
+}
+
+export interface BlankSketchPlacement {
+  title: string;
+  image: BlankSketchImage;
+  tl: { col: number; row: number };
+  ext: { width: number; height: number };
+}
+
 export interface FactoryTechModuleRow {
   marker: string;
   status: string;
@@ -69,7 +81,7 @@ export interface FactoryTechPack {
   sketchTitle?: string;
   sketchImage?: BlankSketchImage | null;
   /** Все выбранные snapshot Эскиз PRO для отдельного техлиста; первый дублируется в sketchImage для обратной совместимости. */
-  sketchImages?: { title: string; image: BlankSketchImage | null }[];
+  sketchImages?: BlankSketchEntry[];
   moduleRows: FactoryTechModuleRow[];
   communicationRows: FactoryTechCommunicationRow[];
   readinessRows: FactoryTechReadinessRow[];
@@ -384,6 +396,41 @@ function imageSizeWithinBox(image: BlankSketchImage, box: { width: number; heigh
   };
 }
 
+/**
+ * Раскладывает несколько эскизов в штатном поле официального бланка отдельными Excel-картинками.
+ * Не склеиваем их в один canvas: технолог сможет выделить каждый эскиз, увеличить и переставить вручную.
+ */
+export function buildSketchImagePlacements(slot: BlankSketchSlot, entries: BlankSketchEntry[]): BlankSketchPlacement[] {
+  const images = entries.flatMap((entry) => entry.image ? [{ title: entry.title, image: entry.image }] : []);
+  if (images.length === 0) return [];
+  const colSpan = Math.max(1, slot.br.col - slot.tl.col);
+  const rowSpan = Math.max(1, slot.br.row - slot.tl.row);
+  const cols = images.length === 1 ? 1 : 2;
+  const rows = Math.ceil(images.length / cols);
+  const gap = images.length === 1 ? 0 : 14;
+  const tileWidth = Math.max(40, (slot.targetPx.width - gap * (cols - 1)) / cols);
+  const tileHeight = Math.max(40, (slot.targetPx.height - gap * (rows - 1)) / rows);
+
+  return images.map((entry, index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const tileX = col * (tileWidth + gap);
+    const tileY = row * (tileHeight + gap);
+    const size = imageSizeWithinBox(entry.image, { width: tileWidth, height: tileHeight });
+    const x = tileX + Math.max(0, (tileWidth - size.width) / 2);
+    const y = tileY + Math.max(0, (tileHeight - size.height) / 2);
+    return {
+      title: entry.title,
+      image: entry.image,
+      tl: {
+        col: slot.tl.col + (x / slot.targetPx.width) * colSpan,
+        row: slot.tl.row + (y / slot.targetPx.height) * rowSpan,
+      },
+      ext: size,
+    };
+  });
+}
+
 function addTable(ws: ExcelJS.Worksheet, startRow: number, headers: string[], rows: string[][]): number {
   const header = ws.getRow(startRow);
   header.values = ['', ...headers];
@@ -464,6 +511,7 @@ export async function buildFactoryBlankWorkbook(
   sketchImage?: BlankSketchImage | null,
   techPack?: FactoryTechPack | null,
   worktopSketchImage?: BlankSketchImage | null,
+  sketchImages?: BlankSketchEntry[] | null,
 ): Promise<ArrayBuffer> {
   const ExcelJS = (await import('exceljs')).default;
   const url = `${baseUrl}templates/${map.template}`;
@@ -493,14 +541,17 @@ export async function buildFactoryBlankWorkbook(
     }
   }
 
-  // 3) Эскиз PRO кладём картинкой в штатное левое поле бланка.
-  // Текст/клетки под ним не трогаем: официальная сетка и подписи остаются как в шаблоне.
-  if (sketchImage && map.sketch) {
-    const imageId = wb.addImage({ base64: sketchImage.base64, extension: sketchImage.extension });
-    const imageSize = imageSizeWithinBox(sketchImage, map.sketch.targetPx);
-    // В рантайме ExcelJS принимает обычные координаты { col, row } и размер { width, height } в px.
-    // Используем ext вместо br, чтобы Excel не растягивал широкий эскиз под высокий штатный блок A14:I47.
-    (ws as unknown as { addImage: (imageId: number, range: unknown) => void }).addImage(imageId, { tl: map.sketch.tl, ext: imageSize, editAs: 'oneCell' });
+  // 3) Эскиз PRO кладём в штатное левое поле бланка отдельными картинками.
+  // Не склеиваем несколько snapshot в один коллаж: в Excel каждую картинку можно выделить,
+  // увеличить и переставить по месту вручную.
+  if (map.sketch) {
+    const officialSketches: BlankSketchEntry[] = sketchImages?.length
+      ? sketchImages
+      : sketchImage ? [{ title: 'Эскиз PRO', image: sketchImage }] : [];
+    for (const placement of buildSketchImagePlacements(map.sketch, officialSketches)) {
+      const imageId = wb.addImage({ base64: placement.image.base64, extension: placement.image.extension });
+      (ws as unknown as { addImage: (imageId: number, range: unknown) => void }).addImage(imageId, { tl: placement.tl, ext: placement.ext, editAs: 'oneCell' });
+    }
   }
 
   // 4) Визуальная схема столешницы — в штатное поле листа 2, рядом с фабричной легендой V/Х/ПФ.
@@ -538,6 +589,8 @@ export async function exportFactoryBlankXlsx(args: {
   draft: BlankDraftField[];
   pieces: WorktopPiece[];
   sketchImage?: BlankSketchImage | null;
+  /** Несколько выбранных Эскиз PRO для официального листа: вставляются отдельными картинками, не коллажем. */
+  sketchImages?: BlankSketchEntry[] | null;
   worktopSketchImage?: BlankSketchImage | null;
   techPack?: FactoryTechPack | null;
 }): Promise<void> {
@@ -547,6 +600,6 @@ export async function exportFactoryBlankXlsx(args: {
     ...buildBlankCellWrites(map, args.draft),
     ...buildWorktopWrites(map, args.pieces, worktopSummary(args.draft)),
   ];
-  const data = await buildFactoryBlankWorkbook(args.baseUrl, map, writes, args.sketchImage ?? null, args.techPack ?? null, args.worktopSketchImage ?? null);
+  const data = await buildFactoryBlankWorkbook(args.baseUrl, map, writes, args.sketchImage ?? null, args.techPack ?? null, args.worktopSketchImage ?? null, args.sketchImages ?? null);
   downloadWorkbook(data, blankFileName(args.project, args.spec));
 }

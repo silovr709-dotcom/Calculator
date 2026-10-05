@@ -5,7 +5,7 @@ import { checkDictRules, factoryDictSuggestionGroups, loadFactoryDicts, type Fac
 import { BACK_EDGE_NOTE, checkWorktopPlan, edgeKindLabel, suggestWorktopPlan, WORKTOP_EDGE_KINDS } from '../lib/worktopPlan';
 import { autoArrangeWorktopPieces, nextWorktopEdgeKind, renderWorktopPlanPng, snapWorktopPiecePosition, WORKTOP_EDGE_SHORT_LABELS, worktopDimensionPlacement, worktopEdgeLabelPlacement, worktopEdgeSymbol, worktopSketchMetrics, type WorktopEdgeSide, type WorktopSketchLayoutMode, type WorktopSketchPieceLayout } from '../lib/worktopSketch';
 import { lineMatchesChecklistKey } from '../lib/checklist';
-import { blankCellRefLabel, blankSketchRangeLabel, exportFactoryBlankXlsx, getBlankSheetMap, type BlankSketchImage, type FactoryTechPack } from '../lib/factoryBlankXls';
+import { blankCellRefLabel, blankSketchRangeLabel, exportFactoryBlankXlsx, getBlankSheetMap, type FactoryTechPack } from '../lib/factoryBlankXls';
 import { buildFactoryTechCommunicationRows, buildFactoryTechModuleRows, buildFactoryTechReadinessRows, factoryTechReadinessSummary } from '../lib/factoryTechPack';
 import { uid } from '../lib/storage';
 import { evaluateNumericExpression } from '../lib/numericExpression';
@@ -24,65 +24,6 @@ function fitEskizExportSize(project: EskizProject, box: { width: number; height:
     width: Math.max(1, Math.round(sourceWidth * scale)),
     height: Math.max(1, Math.round(sourceHeight * scale)),
   };
-}
-
-function loadCanvasImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error('Не удалось подготовить коллаж эскизов для Excel'));
-    image.src = src;
-  });
-}
-
-async function composeEskizContactSheet(items: { title: string; image: BlankSketchImage }[], box: { width: number; height: number }): Promise<BlankSketchImage | null> {
-  if (items.length === 0) return null;
-  if (items.length === 1) return items[0].image;
-  if (typeof document === 'undefined') throw new Error('Коллаж Эскиз PRO доступен только в браузере');
-  const canvas = document.createElement('canvas');
-  const width = Math.max(240, Math.round(box.width));
-  const height = Math.max(220, Math.round(box.height));
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Браузер не смог создать canvas для коллажа Эскиз PRO');
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, width, height);
-  ctx.strokeStyle = '#d7e4ef';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(1, 1, width - 2, height - 2);
-  const cols = items.length === 2 ? 1 : 2;
-  const rows = Math.ceil(items.length / cols);
-  const gap = 14;
-  const titleHeight = 24;
-  const tileWidth = (width - gap * (cols + 1)) / cols;
-  const tileHeight = (height - gap * (rows + 1)) / rows;
-  ctx.font = '700 13px Arial, sans-serif';
-  ctx.textBaseline = 'middle';
-  for (const [index, item] of items.entries()) {
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    const x = gap + col * (tileWidth + gap);
-    const y = gap + row * (tileHeight + gap);
-    ctx.fillStyle = '#f8fbff';
-    ctx.strokeStyle = '#c9d8ea';
-    ctx.lineWidth = 1;
-    ctx.fillRect(x, y, tileWidth, tileHeight);
-    ctx.strokeRect(x, y, tileWidth, tileHeight);
-    ctx.fillStyle = '#0f2f57';
-    const title = `${index + 1}. ${item.title}`;
-    ctx.fillText(title.length > 52 ? `${title.slice(0, 49)}…` : title, x + 8, y + titleHeight / 2);
-    const source = await loadCanvasImage(item.image.base64);
-    const innerWidth = Math.max(20, tileWidth - 12);
-    const innerHeight = Math.max(20, tileHeight - titleHeight - 12);
-    const scale = Math.min(innerWidth / source.width, innerHeight / source.height);
-    const drawWidth = source.width * scale;
-    const drawHeight = source.height * scale;
-    const drawX = x + 6 + (innerWidth - drawWidth) / 2;
-    const drawY = y + titleHeight + 6 + (innerHeight - drawHeight) / 2;
-    ctx.drawImage(source, drawX, drawY, drawWidth, drawHeight);
-  }
-  return { base64: canvas.toDataURL('image/png'), extension: 'png', width, height };
 }
 
 const WORKTOP_EDGE_SIDES: { id: WorktopEdgeSide; label: string }[] = [
@@ -730,9 +671,7 @@ export default function FactoryBlankView(props: {
           };
         }))
         : [];
-      const sketchImage = canInsertSketch && sheetMap?.sketch
-        ? await composeEskizContactSheet(officialSketchRenders, sheetMap.sketch.targetPx)
-        : null;
+      const sketchImage = officialSketchRenders[0]?.image ?? null;
       const techSketchImages = includeTechSheet
         ? await Promise.all(selectedSketches.map(async (sketch) => {
           const techSketchSize = fitEskizExportSize(sketch, { width: 1500, height: 680 });
@@ -771,6 +710,7 @@ export default function FactoryBlankView(props: {
         baseUrl: import.meta.env.BASE_URL,
         project, spec, draft, pieces,
         sketchImage,
+        sketchImages: officialSketchRenders,
         worktopSketchImage,
         techPack,
       });
@@ -863,7 +803,7 @@ export default function FactoryBlankView(props: {
             <div className="section-head">
               <div>
                 <h3>Эскиз PRO в Excel-бланк фабрики</h3>
-                <p className="muted small">Можно выбрать несколько snapshot Эскиз PRO. В левое поле официального шаблона <b>{blankSketchRangeLabel(sheetMap)}</b> попадёт один эскиз или компактный коллаж; на лист «Эскиз PRO» — каждый выбранный эскиз крупно.</p>
+                <p className="muted small">Можно выбрать несколько snapshot Эскиз PRO. В левое поле официального шаблона <b>{blankSketchRangeLabel(sheetMap)}</b> каждый выбранный эскиз попадёт отдельной картинкой — в Excel их можно выделить, увеличить и расставить вручную. На лист «Эскиз PRO» каждый выбранный эскиз также выводится крупно.</p>
               </div>
               <label className="toggle small"><input type="checkbox" checked={sketchEnabled} onChange={(e) => updateSketchSettings({ enabled: e.target.checked })} /> вставлять в Excel</label>
             </div>

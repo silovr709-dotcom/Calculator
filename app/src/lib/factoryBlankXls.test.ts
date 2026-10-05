@@ -11,6 +11,7 @@ import {
   blankFileName,
   blankSketchRangeLabel,
   buildBlankCellWrites,
+  buildSketchImagePlacements,
   buildWorktopWrites,
   CORPUS_SHEET_MAP,
   getBlankSheetMap,
@@ -198,6 +199,25 @@ describe('сборка значений для шаблона', () => {
     expect(worktopSummary(draftOf(VISMA_KITCHEN_BLANK, { worktopType: '38мм СОЮЗ', worktopColor: '38мм СОЮЗ' })))
       .toBe('38мм СОЮЗ');
     expect(worktopSummary(draftOf(VISMA_KITCHEN_BLANK, {}))).toBe('');
+  });
+
+  it('раскладывает несколько эскизов отдельными картинками внутри штатного поля бланка', () => {
+    const image = { base64: 'data:image/png;base64,AA==', extension: 'png' as const, width: 800, height: 500 };
+    const placements = buildSketchImagePlacements(KITCHEN_SHEET_MAP.sketch!, [
+      { title: '1', image },
+      { title: '2', image },
+      { title: '3', image },
+    ]);
+    expect(placements).toHaveLength(3);
+    expect(new Set(placements.map((placement) => `${placement.tl.col}:${placement.tl.row}`)).size).toBe(3);
+    for (const placement of placements) {
+      expect(placement.tl.col).toBeGreaterThanOrEqual(KITCHEN_SHEET_MAP.sketch!.tl.col);
+      expect(placement.tl.row).toBeGreaterThanOrEqual(KITCHEN_SHEET_MAP.sketch!.tl.row);
+      expect(placement.tl.col).toBeLessThan(KITCHEN_SHEET_MAP.sketch!.br.col);
+      expect(placement.tl.row).toBeLessThan(KITCHEN_SHEET_MAP.sketch!.br.row);
+      expect(placement.ext.width).toBeGreaterThan(0);
+      expect(placement.ext.height).toBeGreaterThan(0);
+    }
   });
 
   it('подсказывает адреса ячеек и очищает весь блок листа 2 перед записью', () => {
