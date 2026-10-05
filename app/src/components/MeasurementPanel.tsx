@@ -1,7 +1,8 @@
 import { useRef, useState, type MouseEvent } from 'react';
 import type { MeasurementCommunication, MeasurementData, MeasurementOpening, MeasurementPhotoAnnotation, MeasurementWall, Project, ProjectPhoto } from '../types';
-import { calibratedPhotoLengthMm, emptyMeasurement } from '../lib/measurement';
+import { calibratedPhotoLengthMm, emptyMeasurement, hasPlanWallGeometry } from '../lib/measurement';
 import { uid } from '../lib/storage';
+import RoomPlanEditor from './RoomPlanEditor';
 
 function readDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result as string); reader.onerror = reject; reader.readAsDataURL(file); });
@@ -42,7 +43,16 @@ export default function MeasurementPanel(props: { project: Project; onChange: (p
     ...data.communications.map((item) => ({ id: `communication:${item.id}`, label: `Точка: ${item.name}`, valueMm: item.offsetMm })),
   ];
   const update = (patch: Partial<MeasurementData>) => props.onChange({ ...project, measurement: { ...data, ...patch, updatedAt: new Date().toISOString() } });
-  const updateWall = (id: string, patch: Partial<MeasurementWall>) => update({ walls: data.walls.map((wall) => wall.id === id ? { ...wall, ...patch } : wall) });
+  const updateWall = (id: string, patch: Partial<MeasurementWall>) => update({ walls: data.walls.map((wall) => {
+    if (wall.id !== id) return wall;
+    if (patch.lengthMm != null && hasPlanWallGeometry(wall)) {
+      const dx = (wall.x2Mm ?? 0) - (wall.x1Mm ?? 0);
+      const dy = (wall.y2Mm ?? 0) - (wall.y1Mm ?? 0);
+      const current = Math.hypot(dx, dy) || 1;
+      return { ...wall, ...patch, x2Mm: Math.round((wall.x1Mm ?? 0) + (dx / current) * patch.lengthMm), y2Mm: Math.round((wall.y1Mm ?? 0) + (dy / current) * patch.lengthMm) };
+    }
+    return { ...wall, ...patch };
+  }) });
   const updateOpening = (id: string, patch: Partial<MeasurementOpening>) => update({ openings: data.openings.map((opening) => opening.id === id ? { ...opening, ...patch } : opening) });
   const updateCommunication = (id: string, patch: Partial<MeasurementCommunication>) => update({ communications: data.communications.map((item) => item.id === id ? { ...item, ...patch } : item) });
   const addPhoto = async (files: FileList | null) => {
@@ -102,6 +112,8 @@ export default function MeasurementPanel(props: { project: Project; onChange: (p
     <div className="measurement-page">
       <div className="measurement-intro"><div><span className="eyebrow">МОБИЛЬНЫЙ РЕЖИМ ЗАМЕРА</span><h2>Снимите помещение до расчёта</h2><p>Заполняйте на телефоне прямо у клиента. Эти данные сохраняются внутри проекта и не меняют расчёт автоматически.</p></div><div className="measurement-stamp">{data.updatedAt ? `обновлено ${new Date(data.updatedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}` : ''}</div></div>
       <section className="card"><div className="section-head"><div><h3>Помещение</h3><p className="muted small">Данные замера сохраняются внутри проекта и не меняют эскиз или расчёт автоматически.</p></div></div><div className="grid3"><label>Высота помещения, мм<input type="number" min={0} value={data.roomHeightMm ?? ''} placeholder="не измерено" onChange={(event) => update({ roomHeightMm: event.target.value ? Number(event.target.value) : null })} /></label><div className="measurement-hint"><b>Форма кухни:</b> {project.sketch?.shape === 'l' ? 'Г-образная' : project.sketch?.shape === 'u' ? 'П-образная' : 'прямая'}<span>Длины можно уточнить здесь и использовать в планировщике.</span></div></div></section>
+
+      <RoomPlanEditor project={project} data={data} update={update} />
 
       <section className="card"><div className="section-head"><h3>Стены</h3><button className="btn tiny ghost" onClick={() => update({ walls: [...data.walls, { id: uid('wall'), name: `Стена ${data.walls.length + 1}`, lengthMm: null }] })}>+ Стена</button></div><div className="measurement-walls">{data.walls.map((wall) => <div className="measurement-wall" key={wall.id}><input className="measurement-wall-name" value={wall.name} onChange={(event) => updateWall(wall.id, { name: event.target.value })} /><input type="number" min={0} placeholder="Длина, мм" value={wall.lengthMm ?? ''} onChange={(event) => updateWall(wall.id, { lengthMm: event.target.value ? Number(event.target.value) : null })} /><input placeholder="Заметка" value={wall.note ?? ''} onChange={(event) => updateWall(wall.id, { note: event.target.value })} /><button className="btn tiny danger" onClick={() => update({ walls: removeFrom(data.walls, wall.id) })}>✕</button></div>)}</div></section>
 

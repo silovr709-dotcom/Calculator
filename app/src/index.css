@@ -4538,3 +4538,67 @@ select option { background: #fff !important; color: #102037 !important; }
   .link { width: auto; min-height: 34px; }
   .module-order-buttons { display: inline-flex; }
 }
+
+/* ---- план помещения сверху в замере ---- */
+.measurement-plan-card { overflow:hidden; }
+.measurement-plan-head { align-items:flex-start; }
+.measurement-plan-presets,
+.measurement-plan-tools,
+.measurement-plan-quick-add { display:flex; flex-wrap:wrap; gap:6px; }
+.measurement-plan-workbench { display:grid; grid-template-columns:minmax(0, 1fr) 330px; grid-template-areas:'tools tools' 'stage inspector'; gap:12px; align-items:start; }
+.measurement-plan-tools { grid-area:tools; padding:8px; border:1px solid #dbe6eb; border-radius:10px; background:#f8fbfd; }
+.measurement-plan-stage-wrap { grid-area:stage; min-width:0; padding:10px; border:1px solid #d8e5ea; border-radius:12px; background:linear-gradient(180deg,#f8fbff,#eef5f9); overflow:auto; }
+.measurement-plan-stage { display:block; width:100%; min-width:620px; height:min(62vh, 620px); min-height:430px; border:1px solid #c8d9e2; border-radius:10px; background:#fff; touch-action:none; cursor:crosshair; }
+.measurement-plan-bg { fill:#ffffff; }
+.plan-grid { stroke:#e4edf2; stroke-width:1; vector-effect:non-scaling-stroke; }
+.plan-grid.major { stroke:#cadbe5; stroke-width:1.4; }
+.measurement-plan-wall line { stroke:#0a2a55; stroke-linecap:round; }
+.measurement-plan-wall circle { fill:#fff; stroke:#0a2a55; stroke-width:20; vector-effect:non-scaling-stroke; }
+.measurement-plan-wall.selected line { stroke:#123f7c; filter:drop-shadow(0 0 8px rgba(18,63,124,.24)); }
+.measurement-plan-wall.selected circle { fill:#eaf2ff; stroke:#123f7c; }
+.measurement-plan-stage text { fill:#08244d; stroke:#fff; stroke-width:5px; paint-order:stroke; font-weight:800; letter-spacing:.01em; pointer-events:none; user-select:none; }
+.measurement-plan-opening .opening-cut { stroke:#fff; stroke-width:190; stroke-linecap:butt; }
+.measurement-plan-opening .opening-mark { stroke:#0e6ba8; stroke-width:70; stroke-linecap:round; }
+.measurement-plan-opening.window .opening-mark { stroke:#1579bf; }
+.measurement-plan-opening.door .opening-mark { stroke:#b27710; }
+.measurement-plan-opening.other .opening-mark { stroke:#2f855a; }
+.measurement-plan-opening .door-swing { fill:none; stroke:#b27710; stroke-width:24; stroke-dasharray:70 45; vector-effect:non-scaling-stroke; }
+.measurement-plan-communication line { stroke:#64748b; stroke-width:24; vector-effect:non-scaling-stroke; }
+.measurement-plan-communication circle { fill:#fff; stroke:#0a2a55; stroke-width:26; vector-effect:non-scaling-stroke; }
+.measurement-plan-communication.water circle { fill:#dff3ff; stroke:#0e6ba8; }
+.measurement-plan-communication.electricity circle { fill:#fff8db; stroke:#bf7a00; }
+.measurement-plan-communication.gas circle { fill:#fff0dc; stroke:#c25d13; }
+.measurement-plan-communication.ventilation circle { fill:#eef2ff; stroke:#4f46e5; }
+.measurement-plan-draft circle { fill:#f5b833; stroke:#0a2a55; stroke-width:22; vector-effect:non-scaling-stroke; }
+.measurement-plan-inspector { grid-area:inspector; display:flex; flex-direction:column; gap:10px; min-width:0; }
+.measurement-plan-status,
+.measurement-plan-selected,
+.measurement-plan-stats { padding:10px; border:1px solid #dbe6eb; border-radius:10px; background:#fff; }
+.measurement-plan-status { display:flex; flex-direction:column; gap:3px; color:#0a2a55; }
+.measurement-plan-status span { color:var(--muted); font-size:12px; }
+.measurement-plan-stats { display:grid; gap:6px; color:#435569; font-size:12px; }
+.measurement-plan-stats span { display:flex; justify-content:space-between; gap:8px; padding-bottom:5px; border-bottom:1px dashed #e3ebef; }
+.measurement-plan-stats span:last-child { border-bottom:0; padding-bottom:0; }
+.measurement-plan-selected h4 { margin:0 0 8px; color:#0a2a55; }
+.measurement-plan-selected label { display:flex; flex-direction:column; gap:3px; margin-bottom:7px; font-size:11px; color:var(--muted); }
+.measurement-plan-selected input { min-width:0; }
+.measurement-plan-selected .compact-grid { gap:6px; margin-bottom:7px; }
+.measurement-plan-linked-list { display:grid; gap:6px; margin-top:10px; }
+.measurement-plan-linked-list > div { display:grid; grid-template-columns:minmax(86px, 1fr) 76px 76px; gap:6px; align-items:center; padding:6px; border:1px solid #e2ebef; border-radius:7px; background:#f8fbfd; }
+.measurement-plan-linked-list b { color:#0a2a55; font-size:11px; }
+.measurement-plan-linked-list input { padding:5px 6px; font-size:12px; }
+@media (max-width:980px) {
+  .measurement-plan-workbench { grid-template-columns:1fr; grid-template-areas:'tools' 'stage' 'inspector'; }
+  .measurement-plan-stage { min-width:560px; height:500px; }
+  .measurement-plan-inspector { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .measurement-plan-selected { grid-column:1 / -1; }
+}
+@media (max-width:680px) {
+  .measurement-plan-presets .btn,
+  .measurement-plan-tools .btn { flex:1 1 calc(50% - 6px); min-height:38px; }
+  .measurement-plan-stage-wrap { padding:6px; margin-inline:-4px; }
+  .measurement-plan-stage { min-width:520px; height:380px; min-height:360px; }
+  .measurement-plan-inspector { grid-template-columns:1fr; }
+  .measurement-plan-linked-list > div { grid-template-columns:1fr 1fr; }
+  .measurement-plan-linked-list > div b { grid-column:1 / -1; }
+}

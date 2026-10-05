@@ -221,6 +221,13 @@ export interface MeasurementWall {
   name: string;
   lengthMm: number | null;
   note?: string;
+  /** Координаты стены на плане помещения сверху, в миллиметрах. Отсутствуют у старых проектов. */
+  x1Mm?: number | null;
+  y1Mm?: number | null;
+  x2Mm?: number | null;
+  y2Mm?: number | null;
+  /** Толщина стены на плане, мм. Только для отображения. */
+  thicknessMm?: number | null;
 }
 
 export interface MeasurementOpening {
@@ -232,6 +239,8 @@ export interface MeasurementOpening {
   widthMm: number | null;
   heightMm: number | null;
   sillHeightMm?: number | null;
+  /** Направление открывания двери на плане. Для окон/проёмов обычно не используется. */
+  swing?: 'left-in' | 'right-in' | 'left-out' | 'right-out' | 'none';
   note?: string;
 }
 
