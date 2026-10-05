@@ -5965,3 +5965,99 @@ select option { background: #fff !important; color: #102037 !important; }
     grid-template-columns: 1fr;
   }
 }
+
+/* Client document hub cleanup: one primary package action, secondary files in one menu */
+.client-document-actions.unified {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  align-content: start;
+  justify-content: flex-end;
+}
+.client-document-actions.unified .btn {
+  min-height: 42px;
+}
+.client-document-actions.unified .btn.primary {
+  flex: 1 1 190px;
+}
+.client-document-actions.unified .dropdown {
+  flex: 0 1 190px;
+}
+.client-document-actions.unified .dropdown > .btn {
+  width: 100%;
+}
+.client-document-actions.unified .dropdown-menu button:disabled {
+  opacity: .48;
+  cursor: not-allowed;
+}
+@media (max-width: 720px) {
+  .client-document-actions.unified,
+  .client-document-actions.unified .dropdown,
+  .client-document-actions.unified .btn {
+    width: 100%;
+  }
+  .client-document-actions.unified {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Order center cleanup: one status selector and one package action row */
+.order-status-picker {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0;
+  padding: 10px;
+  border: 1px solid #dbe7f4;
+  border-radius: 15px;
+  background: #f8fbff;
+}
+.order-status-picker label {
+  display: grid;
+  gap: 5px;
+  color: #52667a;
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.order-status-picker select {
+  width: 100%;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+}
+.order-status-picker p {
+  margin: 0;
+}
+.order-package-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.order-package-actions .btn {
+  min-height: 38px;
+}
+.order-package-actions .btn.primary {
+  flex: 1 1 200px;
+}
+.order-package-actions .dropdown {
+  flex: 0 1 180px;
+}
+.order-package-actions .dropdown > .btn {
+  width: 100%;
+}
+@media (max-width: 620px) {
+  .order-package-actions,
+  .order-package-actions .btn,
+  .order-package-actions .dropdown,
+  .order-package-actions .dropdown > .btn {
+    width: 100%;
+  }
+  .order-package-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}

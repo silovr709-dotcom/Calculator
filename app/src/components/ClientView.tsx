@@ -306,32 +306,31 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
 
   return (
     <div className="client-view">
-      <div className="client-toolbar no-print">
-        <div className="muted small">Клиент видит только этот документ: без себестоимости, закупочных цен и внутренних данных.{selectedVariant && <> Активен вариант: <b>{selectedVariant.name}</b>.</>}</div>
-        <div className="client-toolbar-actions">
-          <button className="btn ghost" onClick={() => exportClientXlsx({ ...project, lines: activeCalculation.lines, settings: selectedVariant?.settings ?? project.settings })}>Excel, если нужен</button>
-          <button className="btn primary" onClick={() => window.print()}>Печать / PDF</button>
-        </div>
-      </div>
-
       <div className="client-offer-workbench">
         <aside className="client-offer-controls no-print">
       <section className="card client-document-hub no-print" aria-label="Документы для клиента">
         <div className="client-document-hub-main">
           <span className="eyebrow">КП для клиента</span>
           <h3>Один аккуратный пакет: эскиз, КП, спецификация, фирменный договор и товарный чек</h3>
-          <p>Без HTML и черновиков в самом КП: договор заполняется из фирменного шаблона DOCX, товарный чек формируется в Word по вашему образцу, всё выгружается отдельными файлами.</p>
+          <p>Клиент видит только документы без себестоимости, закупочных цен и внутренних данных.{selectedVariant && <> Активен вариант: <b>{selectedVariant.name}</b>.</>} Договор заполняется из фирменного шаблона DOCX, товарный чек формируется в Word, всё выгружается из одного центра.</p>
           <div className="client-document-readiness" aria-label="Готовность клиентского КП">
             {offerReadinessItems.map((item) => <span key={item.label} className={item.ready ? 'ready' : 'warn'}><b>{item.label}</b><small>{item.value}</small></span>)}
           </div>
         </div>
-        <div className="client-document-actions big">
-          <button type="button" className="btn ghost" disabled={packageExporting || !clientSketchVisible} onClick={exportSketchPdf}>Эскиз PDF</button>
-          <button type="button" className="btn ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientOfferDocx(clientDocumentArgs), 'Не получилось выгрузить КП')}>КП Word</button>
-          <button type="button" className="btn ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientSpecificationDocx(clientDocumentArgs), 'Не получилось выгрузить спецификацию')}>Спецификация Word</button>
-          <button type="button" className="btn ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientContractDocx(clientDocumentArgs), 'Не получилось выгрузить договор')}>Договор Word</button>
-          <button type="button" className="btn ghost" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientReceiptDocx(clientDocumentArgs), 'Не получилось выгрузить товарный чек')}>Товарный чек Word</button>
-          <button type="button" className="btn primary" disabled={packageExporting} onClick={exportClientPackage}>{packageExporting ? 'Собираю…' : 'Пакет ZIP'}</button>
+        <div className="client-document-actions unified">
+          <button type="button" className="btn primary" disabled={packageExporting} onClick={exportClientPackage}>{packageExporting ? 'Собираю…' : 'Пакет клиенту ZIP'}</button>
+          <button type="button" className="btn ghost" onClick={() => window.print()}>Печать / PDF</button>
+          <div className="dropdown">
+            <button type="button" className="btn ghost">Отдельные файлы ▾</button>
+            <div className="dropdown-menu">
+              <button type="button" disabled={packageExporting || !clientSketchVisible} onClick={exportSketchPdf}>Эскиз PDF</button>
+              <button type="button" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientOfferDocx(clientDocumentArgs), 'Не получилось выгрузить КП')}>КП Word</button>
+              <button type="button" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientSpecificationDocx(clientDocumentArgs), 'Не получилось выгрузить спецификацию')}>Спецификация Word</button>
+              <button type="button" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientContractDocx(clientDocumentArgs), 'Не получилось выгрузить договор')}>Договор Word</button>
+              <button type="button" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientReceiptDocx(clientDocumentArgs), 'Не получилось выгрузить товарный чек')}>Товарный чек Word</button>
+              <button type="button" onClick={() => exportClientXlsx({ ...project, lines: activeCalculation.lines, settings: selectedVariant?.settings ?? project.settings })}>Excel, если нужен</button>
+            </div>
+          </div>
         </div>
         <div className="client-document-includes">
           <span className={packageSettings.includeSketch && clientSketchVisible ? 'ready' : ''}>Эскиз</span>

@@ -240,8 +240,13 @@ export default function OrderCenterPanel(props: {
         <aside className="order-side-panel">
       <section className="card order-workflow no-print">
         <div className="section-head"><div><h3>Статус заказа PRO</h3><p className="muted small">Мини-CRM для менеджера: этап, следующий контакт и что нужно сделать дальше.</p></div><span className="order-status-pill">{workflowStatus.label}<small>{workflowStatus.hint}</small></span></div>
-        <div className="order-status-strip">
-          {ORDER_STATUSES.map((status) => <button key={status.value} className={workflow.status === status.value ? 'active' : ''} onClick={() => setWorkflowStatus(status.value)} title={status.hint}>{status.label}</button>)}
+        <div className="order-status-picker">
+          <label>Текущий этап заказа
+            <select value={workflow.status} onChange={(event) => setWorkflowStatus(event.target.value as OrderWorkflowStatus)}>
+              {ORDER_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label} — {status.hint}</option>)}
+            </select>
+          </label>
+          <p className="muted small">Для ежедневной работы используйте быстрые кнопки ниже, полный этап выбирается из одного списка.</p>
         </div>
         <div className="order-workflow-fields">
           <label>Следующее действие<input value={workflow.nextAction ?? ''} onChange={(event) => updateWorkflow({ nextAction: event.target.value })} placeholder="Например: отправить обновлённое КП" /></label>
@@ -263,13 +268,18 @@ export default function OrderCenterPanel(props: {
           <input value={snapshotNote} onChange={(event) => setSnapshotNote(event.target.value)} placeholder="Комментарий к версии: что изменили / что отправлено клиенту" />
         </div>
         {latestSnapshot && <div className="snapshot-delta small muted">Текущая цена к последней версии «{latestSnapshot.name}»: <b className={calculated.totals.client - latestSnapshot.clientTotal >= 0 ? 'up' : 'down'}>{calculated.totals.client - latestSnapshot.clientTotal >= 0 ? '+' : ''}{fmtMoney(calculated.totals.client - latestSnapshot.clientTotal)}</b></div>}
-        <div className="actions">
+        <div className="order-package-actions">
           <button className="btn primary" onClick={createSnapshot}>＋ Сохранить версию КП</button>
-          <button className="btn ghost" onClick={props.onOpenClient}>Открыть КП</button>
-          {props.onOpenSketch && <button className="btn ghost" onClick={props.onOpenSketch}>Эскиз</button>}
-          {props.onOpenCheck && <button className="btn ghost" onClick={props.onOpenCheck}>Проверка</button>}
-          {props.onOpenFactoryBlank && <button className="btn ghost" onClick={props.onOpenFactoryBlank}>Бланк на фабрику</button>}
           <button className="btn ghost" onClick={() => void copyPackage()}>{copied ? '✓ Скопировано' : 'Скопировать пакет'}</button>
+          <div className="dropdown">
+            <button className="btn ghost">Открыть раздел ▾</button>
+            <div className="dropdown-menu">
+              <button onClick={props.onOpenClient}>КП и документы</button>
+              {props.onOpenSketch && <button onClick={props.onOpenSketch}>Эскиз</button>}
+              {props.onOpenCheck && <button onClick={props.onOpenCheck}>Проверка</button>}
+              {props.onOpenFactoryBlank && <button onClick={props.onOpenFactoryBlank}>Бланк на фабрику</button>}
+            </div>
+          </div>
         </div>
       </section>
 
