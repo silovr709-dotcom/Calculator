@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { ClientOfferSnapshot, OrderWorkflowStatus, Pricebook, Project, ProjectLine, SummaryGroup } from '../types';
 import { SUMMARY_GROUPS } from '../types';
+import { ORDER_WORKFLOW_STATUSES, dateInputValue, projectStatusForWorkflow, workflowForProject } from '../lib/crm';
 import { calcTotals } from '../lib/engine';
 import { fmtDate, fmtMoney, fmtNum } from '../lib/format';
 import { moduleToLines } from '../lib/modules';
@@ -53,19 +54,7 @@ function buildProcurement(lines: ProjectLine[], lineCalcs: ReturnType<typeof cal
   return Array.from(map.values()).sort((a, b) => SUMMARY_GROUPS.indexOf(a.group) - SUMMARY_GROUPS.indexOf(b.group) || a.name.localeCompare(b.name, 'ru'));
 }
 
-const ORDER_STATUSES: Array<{ value: OrderWorkflowStatus; label: string; hint: string }> = [
-  { value: 'draft', label: 'Черновик', hint: 'собираем исходные данные' },
-  { value: 'calculating', label: 'На просчёте', hint: 'комплектуем и считаем' },
-  { value: 'offerSent', label: 'КП отправлено', hint: 'ждём реакцию клиента' },
-  { value: 'clientThinking', label: 'Клиент думает', hint: 'следующий контакт обязателен' },
-  { value: 'approved', label: 'Согласовано', hint: 'можно отдавать технологу' },
-  { value: 'techCheck', label: 'На проверке технолога', hint: 'проверка перед фабрикой' },
-  { value: 'factorySent', label: 'Передано на фабрику', hint: 'пакет отправлен' },
-  { value: 'production', label: 'В производстве', hint: 'контроль сроков' },
-  { value: 'ready', label: 'Готово', hint: 'готово к выдаче' },
-  { value: 'delivered', label: 'Выдано', hint: 'заказ закрыт' },
-  { value: 'rejected', label: 'Отказ', hint: 'зафиксировать причину' },
-];
+const ORDER_STATUSES = ORDER_WORKFLOW_STATUSES;
 
 const issueFilterOptions = [
   { value: 'all', label: 'Все' },
@@ -79,11 +68,6 @@ function issueActionLabel(issue: ValidationIssue) {
   if (issue.entity === 'module') return 'Открыть модуль';
   if (issue.entity === 'line') return 'Открыть строку';
   return '';
-}
-
-function dateInputValue(value?: string) {
-  if (!value) return '';
-  return value.slice(0, 10);
 }
 
 export default function OrderCenterPanel(props: {
@@ -146,7 +130,7 @@ export default function OrderCenterPanel(props: {
   const minVariantClient = variantRows.length ? Math.min(...variantRows.map((row) => row.calculation.totals.client)) : null;
   const snapshots = project.clientOfferSnapshots ?? [];
   const latestSnapshot = snapshots[0];
-  const workflow = project.orderWorkflow ?? { status: (project.status === 'sent' ? 'offerSent' : project.status === 'approved' ? 'approved' : 'draft') as OrderWorkflowStatus };
+  const workflow = workflowForProject(project);
   const workflowStatus = ORDER_STATUSES.find((item) => item.value === workflow.status) ?? ORDER_STATUSES[0];
 
   const canSendClient = validation.errors.length === 0;
@@ -158,7 +142,7 @@ export default function OrderCenterPanel(props: {
   };
 
   const setWorkflowStatus = (status: OrderWorkflowStatus, nextAction?: string) => {
-    const projectStatus = status === 'offerSent' || status === 'clientThinking' ? 'sent' : status === 'approved' || status === 'techCheck' || status === 'factorySent' || status === 'production' || status === 'ready' || status === 'delivered' ? 'approved' : status === 'rejected' ? 'archived' : project.status;
+    const projectStatus = projectStatusForWorkflow(status, project.status);
     props.onChange({ ...project, status: projectStatus, orderWorkflow: { ...workflow, status, nextAction: nextAction ?? workflow.nextAction, updatedAt: new Date().toISOString() } });
   };
 

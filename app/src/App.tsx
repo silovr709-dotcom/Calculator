@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Pricebook, Project, ProjectSettings, Template, KbArticle } from './types';
+import type { OrderWorkflow, Pricebook, Project, ProjectSettings, Template, KbArticle } from './types';
 import {
   loadGlobalSettings, saveGlobalSettings,
   loadProjects, saveProjects, loadTemplates, saveTemplates,
@@ -11,7 +11,9 @@ import {
 import type { SyncConfig, SyncStatus } from './lib/sync';
 import { ProjectHistory } from './lib/history';
 import { todayISO } from './lib/format';
+import { projectStatusForWorkflow, workflowForProject } from './lib/crm';
 import Dashboard from './components/Dashboard';
+import CrmView from './components/CrmView';
 import ProjectEditor from './components/ProjectEditor';
 import SettingsPanel from './components/SettingsPanel';
 import PricebookView from './components/PricebookView';
@@ -23,6 +25,7 @@ import NumberFieldCalculator from './components/NumberFieldCalculator';
 
 type View =
   | { kind: 'dashboard' }
+  | { kind: 'crm' }
   | { kind: 'project'; id: string }
   | { kind: 'quick' }
   | { kind: 'factory'; id?: string }
@@ -242,6 +245,18 @@ const persistTemplates = useCallback((next: Template[]) => {
     persistProjects(projects.map((x) => (x.id === p.id ? { ...p, updatedAt: new Date().toISOString() } : x)));
   }, [projects, persistProjects, projectHistory]);
 
+  const updateProjectWorkflow = useCallback((id: string, patch: Partial<OrderWorkflow>) => {
+    const project = projects.find((item) => item.id === id);
+    if (!project) return;
+    const workflow = workflowForProject(project);
+    const nextStatus = patch.status ? projectStatusForWorkflow(patch.status, project.status) : project.status;
+    updateProject({
+      ...project,
+      status: nextStatus,
+      orderWorkflow: { ...workflow, ...patch, updatedAt: new Date().toISOString() },
+    });
+  }, [projects, updateProject]);
+
   const undoProject = useCallback((id: string) => {
     const previous = projectHistory.undo(id);
     if (!previous) return;
@@ -306,6 +321,9 @@ const persistTemplates = useCallback((next: Template[]) => {
             <button className={view.kind === 'dashboard' ? 'active' : ''} onClick={() => setView({ kind: 'dashboard' })}>
               <span className="nav-icon nav-projects" aria-hidden="true" />Проекты<span className="nav-count">{projects.length}</span>
             </button>
+            <button className={view.kind === 'crm' ? 'active' : ''} onClick={() => setView({ kind: 'crm' })}>
+              <span className="nav-icon nav-crm" aria-hidden="true" />CRM<span className="nav-count">{projects.length}</span>
+            </button>
             <button className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>
               <span className="nav-icon nav-quick" aria-hidden="true" />Быстрый расчёт
             </button>
@@ -358,8 +376,17 @@ const persistTemplates = useCallback((next: Template[]) => {
             }}
             onImport={importProject}
             onQuick={() => setView({ kind: 'quick' })}
+            onOpenCrm={() => setView({ kind: 'crm' })}
             onOpenSync={() => setView({ kind: 'sync' })}
             pricebookLabel={`${activePricebook.meta.name} · импорт ${activePricebook.meta.importedAt.slice(0, 10)}`}
+          />
+        )}
+        {view.kind === 'crm' && (
+          <CrmView
+            projects={projects}
+            pricebooks={pricebooks}
+            onOpen={(id) => setView({ kind: 'project', id })}
+            onWorkflowChange={updateProjectWorkflow}
           />
         )}
         {view.kind === 'sync' && (
@@ -444,6 +471,11 @@ const persistTemplates = useCallback((next: Template[]) => {
           <span className="nav-icon nav-projects" aria-hidden="true" />
           <b>Проекты</b>
           <small>{projects.length}</small>
+        </button>
+        <button type="button" className={view.kind === 'crm' ? 'active' : ''} onClick={() => setView({ kind: 'crm' })}>
+          <span className="nav-icon nav-crm" aria-hidden="true" />
+          <b>CRM</b>
+          <small>клиенты</small>
         </button>
         <button type="button" className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>
           <span className="nav-icon nav-quick" aria-hidden="true" />

@@ -6,6 +6,7 @@ import { fmtMoney, fmtDate, todayISO } from '../lib/format';
 import { downloadFile, makeBackup, restoreBackup } from '../lib/storage';
 import { projectFinance } from '../lib/finance';
 import { filterDashboardProjects, projectReadiness, sortDashboardProjects, type DashboardReadinessFilter, type DashboardSort, type DashboardStatusFilter } from '../lib/dashboard';
+import { isClosedWorkflowStatus, nextContactTone, workflowForProject, workflowStatusMeta } from '../lib/crm';
 
 export default function Dashboard(props: {
   projects: Project[];
@@ -18,6 +19,7 @@ export default function Dashboard(props: {
   onStatusChange: (id: string, status: Project['status']) => void;
   onImport: (f: File) => void;
   onQuick: () => void;
+  onOpenCrm?: () => void;
   onOpenSync?: () => void;
 }) {
   const [showNew, setShowNew] = useState(false);
@@ -58,6 +60,24 @@ export default function Dashboard(props: {
       unpricedProjects: finances.filter((f) => f.unpricedCount > 0).length,
     };
   }, [filteredProjects, props.pricebooks]);
+
+  const crmSummary = useMemo(() => {
+    const rows = props.projects.map((project) => {
+      const workflow = workflowForProject(project);
+      return { project, workflow, tone: nextContactTone(workflow.nextContactAt) };
+    });
+    const active = rows.filter((row) => !isClosedWorkflowStatus(row.workflow.status));
+    const due = active.filter((row) => row.tone === 'overdue' || row.tone === 'today');
+    const noNext = active.filter((row) => !row.workflow.nextAction?.trim() || row.tone === 'none');
+    const stuck = active.filter((row) => row.workflow.status === 'offerSent' || row.workflow.status === 'clientThinking');
+    return {
+      active: active.length,
+      due: due.length,
+      noNext: noNext.length,
+      stuck: stuck.length,
+      focus: [...due, ...noNext.filter((row) => !due.some((item) => item.project.id === row.project.id))].slice(0, 4),
+    };
+  }, [props.projects]);
 
   // Горячие клавиши списка проектов: «/» — фокус на поиск, «N» — новый расчёт.
   useEffect(() => {
@@ -111,6 +131,7 @@ export default function Dashboard(props: {
           <input ref={backupRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) doRestore(f); e.target.value = ''; }} />
           <input ref={fileRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) props.onImport(f); e.target.value = ''; }} />
           {props.onOpenSync && <button className="btn ghost" title="Синхронизация с телефоном и другими устройствами" onClick={props.onOpenSync}>📱 Синхронизация</button>}
+          {props.onOpenCrm && <button className="btn ghost" onClick={props.onOpenCrm}>CRM клиентов</button>}
           <button className="btn ghost" onClick={props.onQuick}>Быстрый расчёт</button>
           <button className="btn primary" onClick={() => setShowNew(true)}>+ Новый расчёт</button>
         </div>
@@ -148,6 +169,30 @@ export default function Dashboard(props: {
         </div>
       ) : (
         <>
+          <section className="dashboard-crm-card card">
+            <div className="dashboard-crm-copy">
+              <span className="eyebrow">CRM в работе</span>
+              <h2>{crmSummary.due > 0 ? `Есть контакты на сегодня: ${crmSummary.due}` : 'Клиентская работа под контролем'}</h2>
+              <p>Быстрый обзор клиентских задач прямо на главном экране. Полная воронка, база клиентов и редактирование следующих шагов — в отдельном разделе CRM.</p>
+              <div className="dashboard-crm-metrics">
+                <button type="button" onClick={props.onOpenCrm}><b>{crmSummary.active}</b><span>активных заказов</span></button>
+                <button type="button" onClick={props.onOpenCrm}><b>{crmSummary.due}</b><span>контакт сегодня</span></button>
+                <button type="button" onClick={props.onOpenCrm}><b>{crmSummary.noNext}</b><span>без шага/даты</span></button>
+                <button type="button" onClick={props.onOpenCrm}><b>{crmSummary.stuck}</b><span>КП ждёт решения</span></button>
+              </div>
+            </div>
+            <div className="dashboard-crm-focus">
+              <b>Фокус менеджера</b>
+              {crmSummary.focus.length === 0 ? <span className="muted small">Нет срочных CRM-задач. Добавляйте дату контакта в карточках заказов или в CRM.</span> : crmSummary.focus.map(({ project, workflow, tone }) => (
+                <button type="button" key={project.id} onClick={() => props.onOpen(project.id)} className={`tone-${tone}`}>
+                  <span>{project.client || 'Без клиента'}</span>
+                  <small>{workflowStatusMeta(workflow.status).label} · {workflow.nextAction || 'нет следующего шага'}</small>
+                </button>
+              ))}
+              {props.onOpenCrm && <button type="button" className="btn tiny primary" onClick={props.onOpenCrm}>Открыть CRM</button>}
+            </div>
+          </section>
+
           <div className="dashboard-filters card">
             <label className="dashboard-search">Поиск проекта или клиента
               <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Название, клиент, комментарий…" />
