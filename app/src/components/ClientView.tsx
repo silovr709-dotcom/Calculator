@@ -275,75 +275,101 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         </div>
       </section>
 
-      <section className="card client-offer-editor no-print">
-        <div className="client-offer-editor-head"><div><h3>Условия предложения</h3><p className="muted small">Эти поля видны клиенту, но не влияют на расчёт себестоимости.</p></div><span className="muted small">Цена округляется по настройкам проекта</span></div>
-        <div className="grid3">
-          <label>Предложение действительно до<input type="date" value={project.clientOffer?.validUntil ?? ''} onChange={(event) => updateOffer({ validUntil: event.target.value || undefined })} /></label>
-          <label>Условия оплаты<input value={project.clientOffer?.paymentTerms ?? ''} placeholder="например, 50% аванс" onChange={(event) => updateOffer({ paymentTerms: event.target.value })} /></label>
-          <label>Монтаж<input value={project.clientOffer?.installation ?? ''} placeholder="например, включён" onChange={(event) => updateOffer({ installation: event.target.value })} /></label>
-          <label>Доставка<input value={project.clientOffer?.delivery ?? ''} placeholder="например, по адресу клиента" onChange={(event) => updateOffer({ delivery: event.target.value })} /></label>
-          <label>Вид КП
-            <select value={presentationMode} onChange={(event) => updateOffer({ presentationMode: event.target.value as ClientOfferPresentationMode })}>
-              <option value="brief">Кратко — для отправки клиенту</option>
-              <option value="detailed">Подробно — состав по модулям</option>
-              <option value="technical">Техническое приложение — максимум деталей</option>
-            </select>
-          </label>
-          <label>Состав модулей
-            <select value={moduleDetailMode} onChange={(event) => updateOffer({ moduleDetailMode: event.target.value as ClientOfferModuleDetailMode })}>
-              <option value="summary">Только карточки модулей</option>
-              <option value="compact">Компактно: материалы в модуле, фурнитура общими строками</option>
-              <option value="full">Полностью: все строки внутри каждого модуля</option>
-            </select>
-          </label>
-          <label className="client-detail-price-toggle"><input type="checkbox" checked={showDetailPrices} onChange={(event) => updateOffer({ showDetailPrices: event.target.checked })} /> Показывать суммы в детализации</label>
-          <label className="client-detail-price-toggle"><input type="checkbox" checked={aggregateHardware} onChange={(event) => updateOffer({ aggregateHardware: event.target.checked })} /> Фурнитуру общими строками по проекту</label>
-          <label className="span-2">Примечания для клиента<textarea rows={2} value={project.clientOffer?.notes ?? ''} onChange={(event) => updateOffer({ notes: event.target.value })} /></label>
-        </div>
-        <div className="client-package-control">
-          <div className="client-package-head">
-            <div><b>Что попадёт в ZIP и КП</b><span>Настройте состав пакета и временные реквизиты. Кнопки выгрузки вынесены выше в блок «Клиентский пакет».</span></div>
-          </div>
-          <div className="client-package-options">
-            <label><input type="checkbox" checked={packageSettings.includeOffer} onChange={(event) => updatePackageSettings({ includeOffer: event.target.checked })} /> КП/сводка</label>
-            <label><input type="checkbox" checked={packageSettings.includeSketch} onChange={(event) => updatePackageSettings({ includeSketch: event.target.checked })} /> Эскиз</label>
-            <label><input type="checkbox" checked={packageSettings.includeSpecification} onChange={(event) => updatePackageSettings({ includeSpecification: event.target.checked })} /> Спецификация</label>
-            <label><input type="checkbox" checked={packageSettings.includeContract} onChange={(event) => updatePackageSettings({ includeContract: event.target.checked })} /> Договор</label>
-            <label><input type="checkbox" checked={packageSettings.includeReceipt} onChange={(event) => updatePackageSettings({ includeReceipt: event.target.checked })} /> Бланк заказа</label>
-            <label><input type="checkbox" checked={packageSettings.sketchSummaryOverlay} onChange={(event) => updatePackageSettings({ sketchSummaryOverlay: event.target.checked })} /> Сводка на эскизе</label>
-            <label><input type="checkbox" checked={packageSettings.compact} onChange={(event) => updatePackageSettings({ compact: event.target.checked })} /> Компактно</label>
-          </div>
-          <div className="client-package-fields">
-            <label>Исполнитель<input value={project.clientOffer?.sellerName ?? ''} placeholder="Название / ИП / ООО" onChange={(event) => updateOffer({ sellerName: event.target.value })} /></label>
-            <label>№ договора<input value={project.clientOffer?.contractNumber ?? ''} placeholder="авто из проекта" onChange={(event) => updateOffer({ contractNumber: event.target.value })} /></label>
-            <label>Предоплата / задаток<input value={project.clientOffer?.contractPrepayment ?? ''} placeholder="например, 50% или 120 000" onChange={(event) => updateOffer({ contractPrepayment: event.target.value })} /></label>
-            <label>Доплата<input value={project.clientOffer?.contractRemainder ?? ''} placeholder="авто: итог − предоплата" onChange={(event) => updateOffer({ contractRemainder: event.target.value })} /></label>
-            <label>Срок изготовления<input value={project.clientOffer?.productionTerms ?? ''} placeholder="например, 45 рабочих дней" onChange={(event) => updateOffer({ productionTerms: event.target.value })} /></label>
-            <label>Гарантия<input value={project.clientOffer?.warranty ?? ''} placeholder="например, 12 месяцев" onChange={(event) => updateOffer({ warranty: event.target.value })} /></label>
-            <label className="span-2">Реквизиты исполнителя<textarea rows={2} value={project.clientOffer?.sellerDetails ?? ''} placeholder="ИНН, адрес, телефон — появятся в договоре и бланке" onChange={(event) => updateOffer({ sellerDetails: event.target.value })} /></label>
-            <label>Паспорт клиента<input value={project.clientOffer?.clientPassport ?? ''} placeholder="серия, номер, кем и когда выдан" onChange={(event) => updateOffer({ clientPassport: event.target.value })} /></label>
-            <label>Адрес клиента<input value={project.clientOffer?.clientAddress ?? ''} placeholder="адрес регистрации / доставки" onChange={(event) => updateOffer({ clientAddress: event.target.value })} /></label>
-            <label>Телефон клиента<input value={project.clientOffer?.clientPhone ?? ''} placeholder="+7…" onChange={(event) => updateOffer({ clientPhone: event.target.value })} /></label>
-            <label>E-mail клиента<input value={project.clientOffer?.clientEmail ?? ''} placeholder="email@example.ru" onChange={(event) => updateOffer({ clientEmail: event.target.value })} /></label>
-            <label className="span-2">Контакты клиента / комментарий<textarea rows={2} value={project.clientOffer?.clientContacts ?? ''} placeholder="дополнительные контакты, адрес доставки, примечания" onChange={(event) => updateOffer({ clientContacts: event.target.value })} /></label>
-          </div>
-        </div>
-        <div className="client-eskiz-control">
+      <section className="card client-offer-editor client-offer-drawer no-print">
+        <div className="client-offer-editor-head">
           <div>
-            <b>Эскиз PRO в КП</b>
-            <span>{allLinkedEskizProjects.length > 0 ? `Привязано: ${allLinkedEskizProjects.length}. ${newestEskiz ? `Последний snapshot: ${fmtDate(newestEskiz.updatedAt)}` : ''}` : 'Эскиз ещё не привязан — добавьте его на вкладке «Эскиз PRO» или импортируйте .eskiz.'}</span>
+            <h3>Настройки КП</h3>
+            <p className="muted small">Компактные блоки: откройте только то, что нужно сейчас.</p>
           </div>
-          <label className="chk-row"><input type="checkbox" disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} checked={project.eskizPro?.showInClient !== false && allLinkedEskizProjects.length > 0} onChange={(event) => updateEskizPro({ showInClient: event.target.checked })} /> Вставить в КП</label>
-          <label>Показывать<select disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} value={eskizClientMode} onChange={(event) => updateEskizPro({ clientMode: event.target.value as EskizProIntegration['clientMode'] })}><option value="active">Только главный эскиз</option><option value="all">Все связанные эскизы</option></select></label>
-          <label>Маркеры модулей<select disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} value={project.eskizPro?.moduleMarkerMode ?? 'full'} onChange={(event) => updateEskizPro({ moduleMarkerMode: event.target.value as EskizProIntegration['moduleMarkerMode'] })}><option value="full">Полные</option><option value="compact">Точками</option><option value="hidden">Скрыть</option></select></label>
-          <label className="chk-row"><input type="checkbox" disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} checked={eskizViewSettings.showImage !== false} onChange={(event) => updateEskizView({ showImage: event.target.checked })} /> Фон/скрин</label>
-          <label className="chk-row"><input type="checkbox" disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} checked={eskizViewSettings.showAnnotations !== false} onChange={(event) => updateEskizView({ showAnnotations: event.target.checked })} /> Пометки</label>
-          <label className="chk-row"><input type="checkbox" disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} checked={showCommunicationSizeBadges} onChange={(event) => updateEskizPro({ showCommunicationSizeBadges: event.target.checked })} /> Размеры коммуникаций</label>
-          <div className="client-eskiz-layer-controls">
-            {CLIENT_ESKIZ_LAYERS.map((layer) => <button key={layer.key} type="button" disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange || eskizViewSettings.showAnnotations === false} className={eskizLayerVisibility[layer.key] === false ? '' : 'active'} onClick={() => updateEskizView({ layerVisibility: { [layer.key]: !(eskizLayerVisibility[layer.key] !== false) } })}>{layer.label}</button>)}
-          </div>
+          <span className="client-offer-mode-pill">{MODE_LABELS[presentationMode]}</span>
+        </div>
+        <div className="client-offer-quick-state">
+          <span><b>{fmtMoney(totals.client)}</b><small>итог КП</small></span>
+          <span><b>{fmtNum(moduleQty, 3)}</b><small>модулей</small></span>
+          <span><b>{clientSketchVisible ? linkedEskizProjects.length : '—'}</b><small>эскизов</small></span>
+        </div>
+        <div className="client-control-stack">
+          <details className="client-control-section" open>
+            <summary><span>1. Вид, условия и детализация</span><small>{MODE_LABELS[presentationMode]} · {MODULE_DETAIL_MODE_LABELS[moduleDetailMode]}</small></summary>
+            <div className="client-control-body client-control-grid">
+              <label>Предложение действительно до<input type="date" value={project.clientOffer?.validUntil ?? ''} onChange={(event) => updateOffer({ validUntil: event.target.value || undefined })} /></label>
+              <label>Условия оплаты<input value={project.clientOffer?.paymentTerms ?? ''} placeholder="например, 50% аванс" onChange={(event) => updateOffer({ paymentTerms: event.target.value })} /></label>
+              <label>Монтаж<input value={project.clientOffer?.installation ?? ''} placeholder="например, включён" onChange={(event) => updateOffer({ installation: event.target.value })} /></label>
+              <label>Доставка<input value={project.clientOffer?.delivery ?? ''} placeholder="например, по адресу клиента" onChange={(event) => updateOffer({ delivery: event.target.value })} /></label>
+              <label>Вид КП
+                <select value={presentationMode} onChange={(event) => updateOffer({ presentationMode: event.target.value as ClientOfferPresentationMode })}>
+                  <option value="brief">Кратко — для отправки клиенту</option>
+                  <option value="detailed">Подробно — состав по модулям</option>
+                  <option value="technical">Техническое приложение — максимум деталей</option>
+                </select>
+              </label>
+              <label>Состав модулей
+                <select value={moduleDetailMode} onChange={(event) => updateOffer({ moduleDetailMode: event.target.value as ClientOfferModuleDetailMode })}>
+                  <option value="summary">Только карточки модулей</option>
+                  <option value="compact">Компактно: материалы в модуле, фурнитура общими строками</option>
+                  <option value="full">Полностью: все строки внутри каждого модуля</option>
+                </select>
+              </label>
+              <label className="client-detail-price-toggle"><input type="checkbox" checked={showDetailPrices} onChange={(event) => updateOffer({ showDetailPrices: event.target.checked })} /> Показывать суммы в детализации</label>
+              <label className="client-detail-price-toggle"><input type="checkbox" checked={aggregateHardware} onChange={(event) => updateOffer({ aggregateHardware: event.target.checked })} /> Фурнитуру общими строками по проекту</label>
+              <label className="span-2">Примечания для клиента<textarea rows={2} value={project.clientOffer?.notes ?? ''} onChange={(event) => updateOffer({ notes: event.target.value })} /></label>
+            </div>
+          </details>
+
+          <details className="client-control-section">
+            <summary><span>2. Состав ZIP и документов</span><small>{packageSettings.includeOffer ? 'КП' : ''}{packageSettings.includeSketch ? ' · эскиз' : ''}{packageSettings.includeContract ? ' · договор' : ''}{packageSettings.includeReceipt ? ' · бланк' : ''}</small></summary>
+            <div className="client-control-body">
+              <div className="client-package-options compact">
+                <label><input type="checkbox" checked={packageSettings.includeOffer} onChange={(event) => updatePackageSettings({ includeOffer: event.target.checked })} /> КП/сводка</label>
+                <label><input type="checkbox" checked={packageSettings.includeSketch} onChange={(event) => updatePackageSettings({ includeSketch: event.target.checked })} /> Эскиз</label>
+                <label><input type="checkbox" checked={packageSettings.includeSpecification} onChange={(event) => updatePackageSettings({ includeSpecification: event.target.checked })} /> Спецификация</label>
+                <label><input type="checkbox" checked={packageSettings.includeContract} onChange={(event) => updatePackageSettings({ includeContract: event.target.checked })} /> Договор</label>
+                <label><input type="checkbox" checked={packageSettings.includeReceipt} onChange={(event) => updatePackageSettings({ includeReceipt: event.target.checked })} /> Бланк заказа</label>
+                <label><input type="checkbox" checked={packageSettings.sketchSummaryOverlay} onChange={(event) => updatePackageSettings({ sketchSummaryOverlay: event.target.checked })} /> Сводка на эскизе</label>
+                <label><input type="checkbox" checked={packageSettings.compact} onChange={(event) => updatePackageSettings({ compact: event.target.checked })} /> Компактно</label>
+              </div>
+            </div>
+          </details>
+
+          <details className="client-control-section">
+            <summary><span>3. Реквизиты договора и клиента</span><small>{project.clientOffer?.sellerName || project.client || 'заполнить перед договором'}</small></summary>
+            <div className="client-control-body client-package-fields compact">
+              <label>Исполнитель<input value={project.clientOffer?.sellerName ?? ''} placeholder="Название / ИП / ООО" onChange={(event) => updateOffer({ sellerName: event.target.value })} /></label>
+              <label>№ договора<input value={project.clientOffer?.contractNumber ?? ''} placeholder="авто из проекта" onChange={(event) => updateOffer({ contractNumber: event.target.value })} /></label>
+              <label>Предоплата / задаток<input value={project.clientOffer?.contractPrepayment ?? ''} placeholder="например, 50% или 120 000" onChange={(event) => updateOffer({ contractPrepayment: event.target.value })} /></label>
+              <label>Доплата<input value={project.clientOffer?.contractRemainder ?? ''} placeholder="авто: итог − предоплата" onChange={(event) => updateOffer({ contractRemainder: event.target.value })} /></label>
+              <label>Срок изготовления<input value={project.clientOffer?.productionTerms ?? ''} placeholder="например, 45 рабочих дней" onChange={(event) => updateOffer({ productionTerms: event.target.value })} /></label>
+              <label>Гарантия<input value={project.clientOffer?.warranty ?? ''} placeholder="например, 12 месяцев" onChange={(event) => updateOffer({ warranty: event.target.value })} /></label>
+              <label className="span-2">Реквизиты исполнителя<textarea rows={2} value={project.clientOffer?.sellerDetails ?? ''} placeholder="ИНН, адрес, телефон — появятся в договоре и бланке" onChange={(event) => updateOffer({ sellerDetails: event.target.value })} /></label>
+              <label>Паспорт клиента<input value={project.clientOffer?.clientPassport ?? ''} placeholder="серия, номер, кем и когда выдан" onChange={(event) => updateOffer({ clientPassport: event.target.value })} /></label>
+              <label>Адрес клиента<input value={project.clientOffer?.clientAddress ?? ''} placeholder="адрес регистрации / доставки" onChange={(event) => updateOffer({ clientAddress: event.target.value })} /></label>
+              <label>Телефон клиента<input value={project.clientOffer?.clientPhone ?? ''} placeholder="+7…" onChange={(event) => updateOffer({ clientPhone: event.target.value })} /></label>
+              <label>E-mail клиента<input value={project.clientOffer?.clientEmail ?? ''} placeholder="email@example.ru" onChange={(event) => updateOffer({ clientEmail: event.target.value })} /></label>
+              <label className="span-2">Контакты клиента / комментарий<textarea rows={2} value={project.clientOffer?.clientContacts ?? ''} placeholder="дополнительные контакты, адрес доставки, примечания" onChange={(event) => updateOffer({ clientContacts: event.target.value })} /></label>
+            </div>
+          </details>
+
+          <details className="client-control-section">
+            <summary><span>4. Эскиз PRO в КП</span><small>{allLinkedEskizProjects.length > 0 ? `${allLinkedEskizProjects.length} эскиз(а), режим: ${eskizClientMode === 'all' ? 'все' : 'главный'}` : 'нет привязанных эскизов'}</small></summary>
+            <div className="client-control-body client-eskiz-control compact">
+              <div>
+                <b>Эскиз PRO в КП</b>
+                <span>{allLinkedEskizProjects.length > 0 ? `Привязано: ${allLinkedEskizProjects.length}. ${newestEskiz ? `Последний snapshot: ${fmtDate(newestEskiz.updatedAt)}` : ''}` : 'Эскиз ещё не привязан — добавьте его на вкладке «Эскиз PRO» или импортируйте .eskiz.'}</span>
+              </div>
+              <label className="chk-row"><input type="checkbox" disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} checked={project.eskizPro?.showInClient !== false && allLinkedEskizProjects.length > 0} onChange={(event) => updateEskizPro({ showInClient: event.target.checked })} /> Вставить в КП</label>
+              <label>Показывать<select disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} value={eskizClientMode} onChange={(event) => updateEskizPro({ clientMode: event.target.value as EskizProIntegration['clientMode'] })}><option value="active">Только главный эскиз</option><option value="all">Все связанные эскизы</option></select></label>
+              <label>Маркеры модулей<select disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} value={project.eskizPro?.moduleMarkerMode ?? 'full'} onChange={(event) => updateEskizPro({ moduleMarkerMode: event.target.value as EskizProIntegration['moduleMarkerMode'] })}><option value="full">Полные</option><option value="compact">Точками</option><option value="hidden">Скрыть</option></select></label>
+              <label className="chk-row"><input type="checkbox" disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} checked={eskizViewSettings.showImage !== false} onChange={(event) => updateEskizView({ showImage: event.target.checked })} /> Фон/скрин</label>
+              <label className="chk-row"><input type="checkbox" disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} checked={eskizViewSettings.showAnnotations !== false} onChange={(event) => updateEskizView({ showAnnotations: event.target.checked })} /> Пометки</label>
+              <label className="chk-row"><input type="checkbox" disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange} checked={showCommunicationSizeBadges} onChange={(event) => updateEskizPro({ showCommunicationSizeBadges: event.target.checked })} /> Размеры коммуникаций</label>
+              <div className="client-eskiz-layer-controls">
+                {CLIENT_ESKIZ_LAYERS.map((layer) => <button key={layer.key} type="button" disabled={allLinkedEskizProjects.length === 0 || !onEskizProChange || eskizViewSettings.showAnnotations === false} className={eskizLayerVisibility[layer.key] === false ? '' : 'active'} onClick={() => updateEskizView({ layerVisibility: { [layer.key]: !(eskizLayerVisibility[layer.key] !== false) } })}>{layer.label}</button>)}
+              </div>
+            </div>
+          </details>
         </div>
       </section>
+
         </aside>
         <main className="client-offer-preview">
 

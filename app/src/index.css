@@ -5078,3 +5078,235 @@ select option { background: #fff !important; color: #102037 !important; }
     width: 100%;
   }
 }
+
+/* ---------- Client offer settings: compact drawer instead of oversized left window ---------- */
+.client-offer-controls {
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  padding-right: 6px;
+  scrollbar-gutter: stable;
+}
+.client-offer-controls .client-document-hub {
+  padding: 11px;
+  border-radius: 16px;
+  gap: 9px;
+}
+.client-offer-controls .client-document-hub-main h3 {
+  margin: 2px 0 4px;
+  font-size: 16px;
+  line-height: 1.1;
+}
+.client-offer-controls .client-document-hub-main p {
+  font-size: 11px;
+  line-height: 1.32;
+}
+.client-offer-controls .client-document-actions.big {
+  gap: 6px;
+}
+.client-offer-controls .client-document-actions.big .btn {
+  min-height: 34px;
+  padding: 6px 8px;
+  font-size: 11.5px;
+}
+.client-offer-controls .client-document-includes {
+  gap: 5px;
+}
+.client-offer-controls .client-document-includes span {
+  padding: 4px 7px;
+  font-size: 10px;
+}
+.client-offer-drawer {
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  padding: 11px;
+  border-left-width: 0;
+  border-top: 4px solid #0b3a75;
+  border-radius: 16px;
+}
+.client-offer-drawer .client-offer-editor-head {
+  align-items: flex-start;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(9,42,85,.12);
+}
+.client-offer-drawer .client-offer-editor-head h3 {
+  margin: 0 0 2px;
+  font-size: 17px;
+}
+.client-offer-mode-pill {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #eaf2ff;
+  color: #0b3a75;
+  font-size: 10px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+.client-offer-quick-state {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 9px 0;
+}
+.client-offer-quick-state span {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid rgba(9,42,85,.12);
+  border-radius: 12px;
+  background: #fff;
+}
+.client-offer-quick-state b,
+.client-offer-quick-state small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.client-offer-quick-state b { color: #0b2342; font-size: 12px; }
+.client-offer-quick-state small { margin-top: 1px; color: #64748b; font-size: 9.5px; font-weight: 850; text-transform: uppercase; letter-spacing: .035em; }
+.client-control-stack {
+  display: grid;
+  gap: 7px;
+}
+.client-control-section {
+  border: 1px solid rgba(9,42,85,.14);
+  border-radius: 14px;
+  background: #ffffff;
+  overflow: hidden;
+}
+.client-control-section summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 9px 10px;
+  color: #0b3a75;
+  cursor: pointer;
+  list-style: none;
+}
+.client-control-section summary::-webkit-details-marker { display: none; }
+.client-control-section summary::after {
+  content: '▾';
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #eaf2ff;
+  color: #0b3a75;
+  font-size: 12px;
+  transition: transform .16s ease;
+}
+.client-control-section[open] summary::after { transform: rotate(180deg); }
+.client-control-section summary span,
+.client-control-section summary small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.client-control-section summary span { font-weight: 950; }
+.client-control-section summary small { grid-column: 1; color: #64748b; font-size: 10.5px; font-weight: 800; }
+.client-control-section[open] summary {
+  background: linear-gradient(135deg, #f8fbff, #eef6ff);
+  border-bottom: 1px solid rgba(9,42,85,.10);
+}
+.client-control-body {
+  padding: 10px;
+}
+.client-control-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.client-control-grid label,
+.client-package-fields.compact label,
+.client-eskiz-control.compact label {
+  font-size: 11px;
+}
+.client-control-grid input,
+.client-control-grid select,
+.client-control-grid textarea,
+.client-package-fields.compact input,
+.client-package-fields.compact select,
+.client-package-fields.compact textarea,
+.client-eskiz-control.compact input,
+.client-eskiz-control.compact select,
+.client-eskiz-control.compact textarea {
+  min-height: 34px;
+  font-size: 12px;
+}
+.client-detail-price-toggle {
+  min-height: 36px;
+  padding: 7px 9px;
+  border-radius: 11px;
+}
+.client-detail-price-toggle input { flex: 0 0 auto; }
+.client-package-options.compact {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin: 0;
+}
+.client-package-options.compact label {
+  justify-content: flex-start;
+  border-radius: 12px;
+  min-height: 34px;
+}
+.client-package-fields.compact {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 10px;
+}
+.client-package-fields.compact .span-2,
+.client-control-grid .span-2 { grid-column: 1 / -1; }
+.client-eskiz-control.compact {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.client-eskiz-control.compact > div:first-child {
+  padding: 8px;
+  border: 1px solid rgba(9,42,85,.12);
+  border-radius: 12px;
+  background: #f8fbff;
+}
+.client-eskiz-layer-controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+.client-eskiz-layer-controls button {
+  min-height: 32px;
+  padding: 5px 6px;
+  font-size: 10px;
+}
+@media (min-width: 1440px) {
+  .client-offer-workbench { grid-template-columns: minmax(380px, .72fr) minmax(0, 1.9fr); }
+}
+@media (max-width: 1280px) {
+  .client-offer-controls {
+    grid-template-rows: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+  .client-offer-drawer { overflow: visible; }
+  .client-control-grid,
+  .client-package-fields.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .client-package-options.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .client-offer-quick-state,
+  .client-control-grid,
+  .client-package-fields.compact,
+  .client-package-options.compact,
+  .client-eskiz-layer-controls { grid-template-columns: 1fr; }
+  .client-control-section summary { grid-template-columns: minmax(0, 1fr) auto; }
+}
