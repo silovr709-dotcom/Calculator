@@ -148,6 +148,13 @@ export default function KnowledgeView(props: {
           </button>
         ))}
       </div>
+      <div className="kb-mobile-switcher no-print">
+        <label>Раздел базы знаний
+          <select value={tab} onChange={(event) => setTab(event.target.value as Tab)}>
+            {TABS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </select>
+        </label>
+      </div>
 
       {tab === 'overview' && <OverviewTab articles={props.articles} docs={docs} dicts={dicts} pricebooks={props.pricebooks} onOpenTab={setTab} onQuickSearch={openGlobalSearch} onSeed={() => props.onChange(seedKbArticles())} />}
       {tab === 'search' && <AllSearchTab key={globalSearchQuery} articles={props.articles} docs={docs} dicts={dicts} pricebooks={props.pricebooks} initialQuery={globalSearchQuery} onOpenTab={setTab} />}

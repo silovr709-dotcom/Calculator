@@ -187,7 +187,7 @@ export default function Dashboard(props: {
             <div className="fin-item"><span>Маржинальность</span><b>{portfolio.marginPct === null ? '—' : `${portfolio.marginPct.toFixed(1)} %`}</b></div>
             {portfolio.unpricedProjects > 0 && <div className="fin-item warn" title="В этих проектах есть позиции без цены — проверьте расчёт">⚠ без цен: {portfolio.unpricedProjects}</div>}
           </div>
-          {filteredProjects.length === 0 ? <div className="empty">По выбранным фильтрам проекты не найдены.</div> : <table className="table">
+          {filteredProjects.length === 0 ? <div className="empty">По выбранным фильтрам проекты не найдены.</div> : <table className="table dashboard-table">
             <thead>
               <tr><th>Название</th><th>Клиент</th><th>Дата</th><th>Позиций</th><th>Себестоимость</th><th>Цена клиента</th><th>Готовность</th><th>Статус</th><th /></tr>
             </thead>
@@ -200,14 +200,14 @@ export default function Dashboard(props: {
                 const readiness = projectReadiness(p, pb ?? null);
                 return (
                   <tr key={p.id} className="row-click" onClick={() => props.onOpen(p.id)}>
-                    <td><b>{p.name}</b>{p.comment && <div className="muted small">{p.comment}</div>}</td>
-                    <td>{p.client || '—'}</td>
-                    <td>{fmtDate(p.date)}</td>
-                    <td>{(p.modules?.length ?? 0) > 0 ? `${p.modules!.length} мод. + ${p.lines.length}` : p.lines.length}</td>
-                    <td>{fmtMoney(totals.cost)}</td>
-                    <td><b>{fmtMoney(totals.client)}</b></td>
-                    <td><span className={`readiness-pill ${readiness.tone}`} title={readiness.detail}>{readiness.label}</span></td>
-                    <td onClick={(event) => event.stopPropagation()}>
+                    <td data-label="Проект"><b>{p.name}</b>{p.comment && <div className="muted small">{p.comment}</div>}</td>
+                    <td data-label="Клиент">{p.client || '—'}</td>
+                    <td data-label="Дата">{fmtDate(p.date)}</td>
+                    <td data-label="Состав">{(p.modules?.length ?? 0) > 0 ? `${p.modules!.length} мод. + ${p.lines.length}` : p.lines.length}</td>
+                    <td data-label="Себестоимость">{fmtMoney(totals.cost)}</td>
+                    <td data-label="Цена клиента"><b>{fmtMoney(totals.client)}</b></td>
+                    <td data-label="Готовность"><span className={`readiness-pill ${readiness.tone}`} title={readiness.detail}>{readiness.label}</span></td>
+                    <td data-label="Статус" onClick={(event) => event.stopPropagation()}>
                       <select className={`status-inline s-${p.status}`} value={p.status} aria-label={`Статус проекта «${p.name}»`} onChange={(event) => props.onStatusChange(p.id, event.target.value as Project['status'])}>
                         <option value="draft">Черновик</option>
                         <option value="sent">Отправлен</option>
@@ -215,7 +215,7 @@ export default function Dashboard(props: {
                         <option value="archived">Архив</option>
                       </select>
                     </td>
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td data-label="Действия" onClick={(e) => e.stopPropagation()}>
                       <button className="btn tiny ghost" title="Дублировать" onClick={() => props.onDuplicate(p.id)}>⧉</button>
                       <button className="btn tiny danger" title="Удалить" onClick={() => props.onDelete(p.id)}>✕</button>
                     </td>

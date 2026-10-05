@@ -562,13 +562,13 @@ function GroupRows(props: {
 }) {
   return (
     <>
-      <tr className="group-row"><td colSpan={6}>{props.group}</td><td className="num"><b>{fmtMoney(props.groupTotal.cost)}</b></td><td /></tr>
+      <tr className="group-row"><td colSpan={6}>{props.group}</td><td className="num" data-label="Итого"><b>{fmtMoney(props.groupTotal.cost)}</b></td><td /></tr>
       {props.lines.map((l) => {
         const c = props.lineCalcs.get(l.id);
         return (
           <tr id={`project-line-${l.id}`} key={l.id} className={`${c?.warning ? 'has-warn' : ''} ${props.focusLineId === l.id ? 'focus-line' : ''}`}>
-            <td className="muted small">{l.category}</td>
-            <td>
+            <td className="muted small" data-label="Категория">{l.category}</td>
+            <td data-label="Позиция">
               <div>{l.name}</div>
               {l.priceKind === 'percent' && (
                 <select
@@ -598,8 +598,8 @@ function GroupRows(props: {
                 onChange={(e) => props.updLine(l.id, { note: e.target.value })}
               />
             </td>
-            <td className="muted small">{l.article ?? '—'}</td>
-            <td className="num">
+            <td className="muted small" data-label="Арт.">{l.article ?? '—'}</td>
+            <td className="num" data-label="Кол-во">
               <input
                 className="qty"
                 type="number"
@@ -609,10 +609,10 @@ function GroupRows(props: {
                 onChange={(e) => props.updLine(l.id, { qty: Number(e.target.value) || 0 })}
               />
             </td>
-            <td className="small">{l.unit ?? '—'}</td>
-            <td className="num">{l.priceKind === 'percent' ? `+${l.price}%` : fmtMoney(l.price)}</td>
-            <td className="num"><b>{c?.sum != null ? fmtMoney(c.sum) : '—'}</b></td>
-            <td><button className="btn tiny danger" title="Удалить строку" onClick={() => props.delLine(l.id)}>✕</button></td>
+            <td className="small" data-label="Ед.">{l.unit ?? '—'}</td>
+            <td className="num" data-label="Цена">{l.priceKind === 'percent' ? `+${l.price}%` : fmtMoney(l.price)}</td>
+            <td className="num" data-label="Сумма"><b>{c?.sum != null ? fmtMoney(c.sum) : '—'}</b></td>
+            <td data-label="Действия"><button className="btn tiny danger" title="Удалить строку" onClick={() => props.delLine(l.id)}>✕</button></td>
           </tr>
         );
       })}

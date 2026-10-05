@@ -363,12 +363,6 @@ export default function QuickCalc(props: {
           <div className="muted">Экспресс-оценка даёт коридор цены из реальных позиций прайса. Для точного КП всё равно нужен модульный расчёт.</div>
         </div>
       </header>
-      <div className="tabs">
-        <button className={tab === 'express' ? 'active' : ''} onClick={() => setTab('express')}>Экспресс-оценка</button>
-        <button className={tab === 'ctor' ? 'active' : ''} onClick={() => setTab('ctor')}>Детальный подбор</button>
-        <button className={tab === 'templates' ? 'active' : ''} onClick={() => setTab('templates')}>Шаблоны ({props.templates.length})</button>
-      </div>
-
       <section className="quick-route-panel no-print" aria-label="Маршрут быстрого расчёта">
         <button type="button" className={tab === 'express' ? 'active' : ''} onClick={() => setTab('express')}><b>1</b><span>Размер и уровень<small>получить быстрый коридор цены</small></span></button>
         <button type="button" className={tab === 'ctor' ? 'active' : ''} onClick={() => setTab('ctor')}><b>2</b><span>Детальный подбор<small>материалы, фурнитура, столешницы</small></span></button>

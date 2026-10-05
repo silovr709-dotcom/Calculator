@@ -343,7 +343,7 @@ const persistTemplates = useCallback((next: Template[]) => {
           {savedFlash && <div className="saved-flash">Сохранено ✓</div>}
         </div>
       </aside>
-      <main className="main">
+      <main className="main" id="main-workspace">
         {view.kind === 'dashboard' && (
           <Dashboard
             pricebooks={pricebooks}
@@ -439,6 +439,43 @@ const persistTemplates = useCallback((next: Template[]) => {
           />
         )}
       </main>
+      <nav className="mobile-app-dock no-print" aria-label="Быстрый переход по приложению">
+        <button type="button" className={view.kind === 'dashboard' || view.kind === 'project' ? 'active' : ''} onClick={() => setView({ kind: 'dashboard' })}>
+          <span className="nav-icon nav-projects" aria-hidden="true" />
+          <b>Проекты</b>
+          <small>{projects.length}</small>
+        </button>
+        <button type="button" className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>
+          <span className="nav-icon nav-quick" aria-hidden="true" />
+          <b>Быстрый</b>
+          <small>оценка</small>
+        </button>
+        <button type="button" className={view.kind === 'factory' ? 'active' : ''} onClick={() => setView({ kind: 'factory', id: current?.id })}>
+          <span className="nav-icon nav-factory" aria-hidden="true" />
+          <b>Фабрика</b>
+          <small>бланк</small>
+        </button>
+        <button type="button" className={view.kind === 'kb' ? 'active' : ''} onClick={() => setView({ kind: 'kb' })}>
+          <span className="nav-icon nav-kb" aria-hidden="true" />
+          <b>База</b>
+          <small>{kbArticles.length}</small>
+        </button>
+        <button type="button" className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => setView({ kind: 'pricebook' })}>
+          <span className="nav-icon nav-price" aria-hidden="true" />
+          <b>Прайс</b>
+          <small>{activePricebook.meta.itemCount}</small>
+        </button>
+        <button type="button" className={view.kind === 'sync' ? 'active' : ''} onClick={() => setView({ kind: 'sync' })}>
+          <span className="nav-icon nav-sync" aria-hidden="true" />
+          <b>Синхр.</b>
+          <small>{syncStatus === 'syncing' ? '...' : syncConfig.enabled ? syncStatus : 'off'}</small>
+        </button>
+        <button type="button" className={view.kind === 'settings' ? 'active' : ''} onClick={() => setView({ kind: 'settings' })}>
+          <span className="nav-icon nav-settings" aria-hidden="true" />
+          <b>Настр.</b>
+          <small>по умолч.</small>
+        </button>
+      </nav>
       <NumberFieldCalculator />
     </div>
   );
