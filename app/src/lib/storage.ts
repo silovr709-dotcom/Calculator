@@ -1,11 +1,12 @@
 // Локальное хранилище: проекты, настройки, шаблоны, загруженные версии прайса.
 // Всё хранится отдельно от исходного прайса; наценки не влияют на цены Висмы.
-import type { Project, ProjectSettings, Template, Pricebook, KbArticle } from '../types';
+import type { ClientProfile, Project, ProjectSettings, Template, Pricebook, KbArticle } from '../types';
 
 const K_PROJECTS = 'recept.projects.v1';
 const K_SETTINGS = 'recept.settings.v1';
 const K_TEMPLATES = 'recept.templates.v1';
 const K_KNOWLEDGE = 'recept-kb-articles';
+const K_CLIENTS = 'recept.clients.v1';
 const K_PRICEBOOKS = 'recept.pricebooks.v1'; // загруженные (кроме встроенного)
 
 function read<T>(key: string, fallback: T): T {
@@ -51,6 +52,9 @@ export const saveGlobalSettings = (s: ProjectSettings) => write(K_SETTINGS, s);
 export const loadProjects = (): Project[] => read<Project[]>(K_PROJECTS, []);
 export const saveProjects = (p: Project[]) => write(K_PROJECTS, p);
 
+export const loadClientProfiles = (): ClientProfile[] => read<ClientProfile[]>(K_CLIENTS, []);
+export const saveClientProfiles = (p: ClientProfile[]) => write(K_CLIENTS, p);
+
 export const loadTemplates = (): Template[] => read<Template[]>(K_TEMPLATES, []);
 export const saveTemplates = (t: Template[]) => write(K_TEMPLATES, t);
 
@@ -81,6 +85,7 @@ export interface Backup {
   version: 1;
   exportedAt: string;
   projects: Project[];
+  clients?: ClientProfile[];
   settings: ProjectSettings;
   templates: Template[];
   pricebooks: Pricebook[]; // загруженные версии прайса (встроенный не нужен)
@@ -93,6 +98,7 @@ export function makeBackup(): Backup {
     version: 1,
     exportedAt: new Date().toISOString(),
     projects: loadProjects(),
+    clients: loadClientProfiles(),
     settings: loadGlobalSettings(),
     templates: loadTemplates(),
     pricebooks: loadStoredPricebooks(),
@@ -108,10 +114,11 @@ export function restoreBackup(raw: string): string {
     throw new Error('Это не файл резервной копии РЕцепта (ожидается kind=recept-backup).');
   }
   const okP = saveProjects(b.projects);
+  const okC = saveClientProfiles(b.clients ?? []);
   const okS = saveGlobalSettings(b.settings ?? defaultSettings());
   const okT = saveTemplates(b.templates ?? []);
   const okB = saveStoredPricebooks(b.pricebooks ?? []);
   const okK = saveKbArticles(b.kbArticles ?? []);
-  if (!okP || !okS || !okT || !okB || !okK) throw new Error('Не хватило места в хранилище браузера — данные восстановлены не полностью.');
-  return `Восстановлено: проектов ${b.projects.length}, шаблонов ${(b.templates ?? []).length}, версий прайса ${(b.pricebooks ?? []).length} (копия от ${b.exportedAt.slice(0, 10)})`;
+  if (!okP || !okC || !okS || !okT || !okB || !okK) throw new Error('Не хватило места в хранилище браузера — данные восстановлены не полностью.');
+  return `Восстановлено: проектов ${b.projects.length}, клиентов ${(b.clients ?? []).length}, шаблонов ${(b.templates ?? []).length}, версий прайса ${(b.pricebooks ?? []).length} (копия от ${b.exportedAt.slice(0, 10)})`;
 }

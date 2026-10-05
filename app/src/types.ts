@@ -216,6 +216,61 @@ export interface OrderWorkflow {
   updatedAt?: string;
 }
 
+export type ClientTag = 'hot' | 'discount' | 'repeat' | 'install' | 'problem' | 'designer' | string;
+
+export type ClientHistoryKind = 'note' | 'status' | 'contact' | 'document' | 'payment' | 'project';
+
+export interface ClientHistoryEntry {
+  id: string;
+  createdAt: string;
+  kind: ClientHistoryKind;
+  title: string;
+  text?: string;
+  projectId?: string;
+}
+
+export type ClientPaymentStatus = 'none' | 'prepaid' | 'paid' | 'debt';
+
+export interface ClientProjectPayment {
+  status?: ClientPaymentStatus;
+  prepayment?: number | null;
+  paidTotal?: number | null;
+  paymentDate?: string;
+  comment?: string;
+}
+
+export type ClientDocumentState = 'none' | 'created' | 'sent' | 'approved';
+
+export interface ClientProjectDocuments {
+  offer?: ClientDocumentState;
+  contract?: ClientDocumentState;
+  receipt?: ClientDocumentState;
+  package?: ClientDocumentState;
+  factoryBlank?: ClientDocumentState;
+  sketch?: ClientDocumentState;
+  updatedAt?: string;
+  comment?: string;
+}
+
+export interface ClientProfile {
+  id: string;
+  name: string;
+  phones: string[];
+  emails: string[];
+  objectAddress?: string;
+  deliveryAddress?: string;
+  passport?: string;
+  contractDetails?: string;
+  managerComment?: string;
+  source?: string;
+  tags: ClientTag[];
+  paymentsByProject?: Record<string, ClientProjectPayment>;
+  documentsByProject?: Record<string, ClientProjectDocuments>;
+  history: ClientHistoryEntry[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MeasurementWall {
   id: string;
   name: string;
@@ -472,6 +527,8 @@ export interface Project {
   id: string;
   name: string;
   client: string;
+  /** Связь с единой CRM-базой клиентов. Старые проекты связываются автоматически по телефону/имени. */
+  clientId?: string;
   date: string;       // ISO date
   comment: string;
   status: 'draft' | 'sent' | 'approved' | 'archived';

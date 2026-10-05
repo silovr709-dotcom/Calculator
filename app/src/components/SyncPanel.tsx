@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Project, ProjectSettings, Template } from '../types';
+import type { ClientProfile, Project, ProjectSettings, Template } from '../types';
 import QRCode from 'qrcode';
 import {
   defaultSyncConfig,
@@ -15,9 +15,10 @@ import { fmtDate } from '../lib/format';
 
 export default function SyncPanel(props: {
   projects: Project[];
+  clients?: ClientProfile[];
   templates: Template[];
   settings: ProjectSettings;
-  onSyncUpdated: (data: { projects: Project[]; templates: Template[]; settings: ProjectSettings }) => void;
+  onSyncUpdated: (data: { projects: Project[]; clients?: ClientProfile[]; templates: Template[]; settings: ProjectSettings }) => void;
   syncStatus: SyncStatus;
   onSetSyncStatus: (st: SyncStatus) => void;
 }) {

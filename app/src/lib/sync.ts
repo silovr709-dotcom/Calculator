@@ -1,6 +1,6 @@
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
-import type { Project, ProjectSettings, Template } from '../types';
-import { loadProjects, loadTemplates, loadGlobalSettings, saveProjects, saveTemplates, saveGlobalSettings, defaultSettings } from './storage';
+import type { ClientProfile, Project, ProjectSettings, Template } from '../types';
+import { loadClientProfiles, loadProjects, loadTemplates, loadGlobalSettings, saveClientProfiles, saveProjects, saveTemplates, saveGlobalSettings, defaultSettings } from './storage';
 
 export const K_SYNC_CONFIG = 'recept.sync.config.v1';
 
@@ -20,6 +20,7 @@ export interface SyncPayload {
   updatedAt: string;
   roomCode: string;
   projects: Project[];
+  clients?: ClientProfile[];
   templates: Template[];
   settings: ProjectSettings;
 }
@@ -346,11 +347,12 @@ export async function loadJsonStorageProjectShare(storageUrl: string): Promise<P
 
 /** Умное слияние локальных и удалённых данных по дате изменения (Smart Merge) */
 export function mergeSyncData(
-  local: { projects: Project[]; templates: Template[]; settings: ProjectSettings },
+  local: { projects: Project[]; clients?: ClientProfile[]; templates: Template[]; settings: ProjectSettings },
   remote: SyncPayload,
 ): {
   mergedProjects: Project[];
   mergedTemplates: Template[];
+  mergedClients: ClientProfile[];
   mergedSettings: ProjectSettings;
   hasLocalChangesToPush: boolean;
   hasRemoteChangesToApply: boolean;
@@ -410,12 +412,42 @@ export function mergeSyncData(
     hasLocalChangesToPush = true;
   }
 
-  // 3. Настройки
+  // 3. Слияние клиентов по ID и updatedAt
+  const clientMap = new Map<string, ClientProfile>();
+  const remoteClients = remote.clients ?? [];
+  const remoteClientMap = new Map<string, ClientProfile>(remoteClients.map((client) => [client.id, client]));
+  for (const localClient of local.clients ?? []) {
+    const remoteClient = remoteClientMap.get(localClient.id);
+    if (!remoteClient) {
+      clientMap.set(localClient.id, localClient);
+      hasLocalChangesToPush = true;
+    } else {
+      const localTime = new Date(localClient.updatedAt || localClient.createdAt || 0).getTime();
+      const remoteTime = new Date(remoteClient.updatedAt || remoteClient.createdAt || 0).getTime();
+      if (localTime >= remoteTime) {
+        clientMap.set(localClient.id, localClient);
+        if (localTime > remoteTime) hasLocalChangesToPush = true;
+      } else {
+        clientMap.set(localClient.id, remoteClient);
+        hasRemoteChangesToApply = true;
+      }
+    }
+  }
+  for (const remoteClient of remoteClients) {
+    if (!clientMap.has(remoteClient.id)) {
+      clientMap.set(remoteClient.id, remoteClient);
+      hasRemoteChangesToApply = true;
+    }
+  }
+  const mergedClients = Array.from(clientMap.values()).sort((a, b) => (b.updatedAt || b.createdAt).localeCompare(a.updatedAt || a.createdAt));
+
+  // 4. Настройки
   const mergedSettings = { ...(local.settings || defaultSettings()), ...(remote.settings || {}) };
 
   return {
     mergedProjects,
     mergedTemplates,
+    mergedClients,
     mergedSettings,
     hasLocalChangesToPush,
     hasRemoteChangesToApply,
@@ -433,7 +465,7 @@ export function getEndpointUrl(cfg: SyncConfig): string {
 /** Отправка данных в облако */
 export async function pushToCloud(
   cfg: SyncConfig,
-  data: { projects: Project[]; templates: Template[]; settings: ProjectSettings },
+  data: { projects: Project[]; clients?: ClientProfile[]; templates: Template[]; settings: ProjectSettings },
 ): Promise<{ ok: boolean; error?: string }> {
   if (!cfg.enabled || !cfg.secretKey) {
     return { ok: false, error: 'Синхронизация не настроена' };
@@ -444,6 +476,7 @@ export async function pushToCloud(
     updatedAt: new Date().toISOString(),
     roomCode: cfg.roomCode,
     projects: data.projects,
+    clients: data.clients ?? loadClientProfiles(),
     templates: data.templates,
     settings: data.settings,
   };
@@ -540,7 +573,7 @@ export async function performFullSync(cfg: SyncConfig): Promise<{
   ok: boolean;
   status: SyncStatus;
   message: string;
-  merged?: { projects: Project[]; templates: Template[]; settings: ProjectSettings };
+  merged?: { projects: Project[]; clients?: ClientProfile[]; templates: Template[]; settings: ProjectSettings };
 }> {
   if (!cfg.enabled || !cfg.secretKey) {
     return { ok: false, status: 'idle', message: 'Синхронизация отключена' };
@@ -548,6 +581,7 @@ export async function performFullSync(cfg: SyncConfig): Promise<{
 
   const local = {
     projects: loadProjects(),
+    clients: loadClientProfiles(),
     templates: loadTemplates(),
     settings: loadGlobalSettings(),
   };
@@ -575,7 +609,7 @@ export async function performFullSync(cfg: SyncConfig): Promise<{
   }
 
   // 2. Слияние
-  const { mergedProjects, mergedTemplates, mergedSettings, hasLocalChangesToPush, hasRemoteChangesToApply } = mergeSyncData(
+  const { mergedProjects, mergedTemplates, mergedClients, mergedSettings, hasLocalChangesToPush, hasRemoteChangesToApply } = mergeSyncData(
     local,
     pullRes.data,
   );
@@ -584,12 +618,14 @@ export async function performFullSync(cfg: SyncConfig): Promise<{
   if (hasLocalChangesToPush || !pullRes.data) {
     const pushRes = await pushToCloud(cfg, {
       projects: mergedProjects,
+      clients: mergedClients,
       templates: mergedTemplates,
       settings: mergedSettings,
     });
     if (!pushRes.ok) {
       // Сохраняем локально, но помечаем статус
       saveProjects(mergedProjects);
+      saveClientProfiles(mergedClients);
       saveTemplates(mergedTemplates);
       saveGlobalSettings(mergedSettings);
       return { ok: false, status: 'offline', message: `Локально обновлено, но не отправлено: ${pushRes.error}` };
@@ -599,6 +635,7 @@ export async function performFullSync(cfg: SyncConfig): Promise<{
   // 4. Сохраняем объединённый результат в localStorage
   if (hasRemoteChangesToApply || hasLocalChangesToPush) {
     saveProjects(mergedProjects);
+    saveClientProfiles(mergedClients);
     saveTemplates(mergedTemplates);
     saveGlobalSettings(mergedSettings);
   }
@@ -609,9 +646,10 @@ export async function performFullSync(cfg: SyncConfig): Promise<{
   return {
     ok: true,
     status: 'synced',
-    message: `Синхронизировано: проектов ${mergedProjects.length}`,
+    message: `Синхронизировано: проектов ${mergedProjects.length}, клиентов ${mergedClients.length}`,
     merged: {
       projects: mergedProjects,
+      clients: mergedClients,
       templates: mergedTemplates,
       settings: mergedSettings,
     },

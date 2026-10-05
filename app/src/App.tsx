@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { OrderWorkflow, Pricebook, Project, ProjectSettings, Template, KbArticle } from './types';
+import type { ClientProfile, OrderWorkflow, Pricebook, Project, ProjectSettings, Template, KbArticle } from './types';
 import {
   loadGlobalSettings, saveGlobalSettings,
   loadProjects, saveProjects, loadTemplates, saveTemplates,
+  loadClientProfiles, saveClientProfiles,
   loadStoredPricebooks, saveStoredPricebooks, uid, loadKbArticles, saveKbArticles } from './lib/storage';
 import {
   loadSyncConfig, saveSyncConfig, performFullSync, parseIncomingHash,
@@ -12,6 +13,7 @@ import type { SyncConfig, SyncStatus } from './lib/sync';
 import { ProjectHistory } from './lib/history';
 import { todayISO } from './lib/format';
 import { projectStatusForWorkflow, workflowForProject } from './lib/crm';
+import { appendClientHistory, applyClientProfileToProject, applyClientProfilesToProjects, createClientProfileFromProject, ensureClientProfiles, findClientForProject, mergeClientProfiles, mergeClientPatch } from './lib/clientProfiles';
 import Dashboard from './components/Dashboard';
 import CrmView from './components/CrmView';
 import ProjectEditor from './components/ProjectEditor';
@@ -39,6 +41,7 @@ export default function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [stored, setStored] = useState<Pricebook[]>(() => loadStoredPricebooks());
   const [projects, setProjects] = useState<Project[]>(() => loadProjects());
+  const [clients, setClients] = useState<ClientProfile[]>(() => loadClientProfiles());
   const [templates, setTemplates] = useState<Template[]>(() => loadTemplates());
   const [globalSettings, setGlobalSettings] = useState<ProjectSettings>(() => loadGlobalSettings());
   const [activePricebookId, setActivePricebookId] = useState<string>(() => localStorage.getItem('recept.activePb') ?? 'visma-2026');
@@ -76,6 +79,7 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
         setSyncStatus(res.status);
         if (res.merged) {
           setProjects(res.merged.projects);
+          setClients(res.merged.clients ?? []);
           setTemplates(res.merged.templates);
           setGlobalSettings(res.merged.settings);
           alert('📱 Устройство успешно подключено к синхронизации! Проекты загружены.');
@@ -141,6 +145,7 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
       setSyncStatus(res.status);
       if (res.merged) {
         setProjects(res.merged.projects);
+        setClients(res.merged.clients ?? []);
         setTemplates(res.merged.templates);
         setGlobalSettings(res.merged.settings);
       }
@@ -165,6 +170,18 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
     [builtin, stored],
   );
   const activePricebook = pricebooks.find((p) => p.meta.id === activePricebookId) ?? pricebooks[0] ?? null;
+  const projectsForUi = useMemo(() => applyClientProfilesToProjects(projects, clients), [projects, clients]);
+
+  useEffect(() => {
+    const normalized = ensureClientProfiles(projects, clients, () => uid('cli'));
+    if (!normalized.changed) return;
+    saveProjects(normalized.projects);
+    saveClientProfiles(normalized.clients);
+    window.setTimeout(() => {
+      setProjects(normalized.projects);
+      setClients(normalized.clients);
+    }, 0);
+  }, [projects, clients]);
 
   const persistProjects = useCallback((next: Project[]) => {
     setProjects(next);
@@ -174,7 +191,21 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
       setTimeout(() => setSavedFlash(false), 1200);
       const cfg = loadSyncConfig();
       if (cfg.enabled) {
-        pushToCloud(cfg, { projects: next, templates: loadTemplates(), settings: loadGlobalSettings() })
+        pushToCloud(cfg, { projects: next, clients: loadClientProfiles(), templates: loadTemplates(), settings: loadGlobalSettings() })
+          .then((r) => setSyncStatus(r.ok ? 'synced' : 'offline'));
+      }
+    }
+  }, []);
+
+  const persistClients = useCallback((next: ClientProfile[]) => {
+    setClients(next);
+    if (!saveClientProfiles(next)) alert('Не удалось сохранить базу клиентов: закончилось место локального хранилища.');
+    else {
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 1200);
+      const cfg = loadSyncConfig();
+      if (cfg.enabled) {
+        pushToCloud(cfg, { projects: loadProjects(), clients: next, templates: loadTemplates(), settings: loadGlobalSettings() })
           .then((r) => setSyncStatus(r.ok ? 'synced' : 'offline'));
       }
     }
@@ -189,7 +220,7 @@ const persistTemplates = useCallback((next: Template[]) => {
     saveTemplates(next);
     const cfg = loadSyncConfig();
     if (cfg.enabled) {
-      pushToCloud(cfg, { projects: loadProjects(), templates: next, settings: loadGlobalSettings() })
+      pushToCloud(cfg, { projects: loadProjects(), clients: loadClientProfiles(), templates: next, settings: loadGlobalSettings() })
         .then((r) => setSyncStatus(r.ok ? 'synced' : 'offline'));
     }
   }, []);
@@ -199,7 +230,7 @@ const persistTemplates = useCallback((next: Template[]) => {
     saveGlobalSettings(s);
     const cfg = loadSyncConfig();
     if (cfg.enabled) {
-      pushToCloud(cfg, { projects: loadProjects(), templates: loadTemplates(), settings: s })
+      pushToCloud(cfg, { projects: loadProjects(), clients: loadClientProfiles(), templates: loadTemplates(), settings: s })
         .then((r) => setSyncStatus(r.ok ? 'synced' : 'offline'));
     }
   }, []);
@@ -216,10 +247,19 @@ const persistTemplates = useCallback((next: Template[]) => {
 
   const createProject = useCallback((data: { name: string; client: string; date: string; comment: string }, lines: Project['lines'] = [], modules?: Project['modules'], moduleDefaults?: Project['moduleDefaults']) => {
     if (!activePricebook) return;
+    const tempProjectForClient = { client: data.client, clientOffer: {}, id: 'new', name: data.name || 'Без названия', comment: data.comment } as Project;
+    let client = findClientForProject(tempProjectForClient, clients);
+    let nextClients = clients;
+    if (!client && data.client.trim()) {
+      client = createClientProfileFromProject(tempProjectForClient, uid('cli'));
+      nextClients = [client, ...clients];
+      persistClients(nextClients);
+    }
     const p: Project = {
       id: uid('prj'),
       name: data.name || 'Без названия',
-      client: data.client,
+      client: client?.name ?? data.client,
+      clientId: client?.id,
       date: data.date || todayISO(),
       comment: data.comment,
       status: 'draft',
@@ -237,13 +277,31 @@ const persistTemplates = useCallback((next: Template[]) => {
     persistProjects([p, ...projects]);
     setView({ kind: 'project', id: p.id });
 
-  }, [activePricebook, globalSettings, projects, persistProjects]);
+  }, [activePricebook, clients, globalSettings, projects, persistClients, persistProjects]);
 
   const updateProject = useCallback((p: Project) => {
     const current = projects.find((x) => x.id === p.id);
     if (current) projectHistory.push(current);
-    persistProjects(projects.map((x) => (x.id === p.id ? { ...p, updatedAt: new Date().toISOString() } : x)));
-  }, [projects, persistProjects, projectHistory]);
+    let projectToSave = p;
+    if (p.clientId) {
+      const linkedClient = clients.find((client) => client.id === p.clientId);
+      if (linkedClient) {
+        const phones = [p.clientOffer?.clientPhone, ...(linkedClient.phones ?? [])].filter(Boolean) as string[];
+        const emails = [p.clientOffer?.clientEmail, ...(linkedClient.emails ?? [])].filter(Boolean) as string[];
+        const patched = mergeClientPatch(linkedClient, {
+          name: p.client?.trim() || linkedClient.name,
+          phones,
+          emails,
+          objectAddress: p.clientOffer?.clientAddress || linkedClient.objectAddress,
+          passport: p.clientOffer?.clientPassport || linkedClient.passport,
+          managerComment: p.orderWorkflow?.managerComment || linkedClient.managerComment,
+        });
+        persistClients(clients.map((client) => (client.id === patched.id ? patched : client)));
+        projectToSave = applyClientProfileToProject(p, patched);
+      }
+    }
+    persistProjects(projects.map((x) => (x.id === p.id ? { ...projectToSave, updatedAt: new Date().toISOString() } : x)));
+  }, [clients, persistClients, projects, persistProjects, projectHistory]);
 
   const updateProjectWorkflow = useCallback((id: string, patch: Partial<OrderWorkflow>) => {
     const project = projects.find((item) => item.id === id);
@@ -255,7 +313,15 @@ const persistTemplates = useCallback((next: Template[]) => {
       status: nextStatus,
       orderWorkflow: { ...workflow, ...patch, updatedAt: new Date().toISOString() },
     });
-  }, [projects, updateProject]);
+    if (project.clientId) {
+      const client = clients.find((item) => item.id === project.clientId);
+      if (client && patch.status && patch.status !== workflow.status) {
+        persistClients(clients.map((item) => item.id === client.id
+          ? appendClientHistory(client, { kind: 'status', title: `Статус заказа: ${patch.status}`, projectId: project.id }, uid('hist'))
+          : item));
+      }
+    }
+  }, [clients, persistClients, projects, updateProject]);
 
   const undoProject = useCallback((id: string) => {
     const previous = projectHistory.undo(id);
@@ -305,7 +371,8 @@ const persistTemplates = useCallback((next: Template[]) => {
     return <div className="app-fatal">Загрузка базы прайса…</div>;
   }
 
-  const current = view.kind === 'project' ? projects.find((p) => p.id === view.id) : undefined;
+  const currentRaw = view.kind === 'project' ? projects.find((p) => p.id === view.id) : undefined;
+  const current = currentRaw ? applyClientProfileToProject(currentRaw, findClientForProject(currentRaw, clients)) : undefined;
 
   return (
     <div className="app">
@@ -365,7 +432,7 @@ const persistTemplates = useCallback((next: Template[]) => {
         {view.kind === 'dashboard' && (
           <Dashboard
             pricebooks={pricebooks}
-            projects={projects}
+            projects={projectsForUi}
             onOpen={(id) => setView({ kind: 'project', id })}
             onCreate={createProject}
             onDuplicate={duplicateProject}
@@ -383,21 +450,37 @@ const persistTemplates = useCallback((next: Template[]) => {
         )}
         {view.kind === 'crm' && (
           <CrmView
-            projects={projects}
+            projects={projectsForUi}
+            clients={clients}
             pricebooks={pricebooks}
             onOpen={(id) => setView({ kind: 'project', id })}
             onWorkflowChange={updateProjectWorkflow}
+            onClientChange={(client) => persistClients(clients.map((item) => (item.id === client.id ? client : item)))}
+            onClientHistory={(clientId, entry) => {
+              const client = clients.find((item) => item.id === clientId);
+              if (client) persistClients(clients.map((item) => item.id === clientId ? appendClientHistory(client, entry, uid('hist')) : item));
+            }}
+            onMergeClients={(targetId, sourceId) => {
+              const target = clients.find((item) => item.id === targetId);
+              const source = clients.find((item) => item.id === sourceId);
+              if (!target || !source || target.id === source.id) return;
+              const merged = mergeClientProfiles(target, source);
+              persistClients([merged, ...clients.filter((item) => item.id !== targetId && item.id !== sourceId)]);
+              persistProjects(projects.map((project) => project.clientId === sourceId ? { ...project, clientId: targetId, client: merged.name } : project));
+            }}
           />
         )}
         {view.kind === 'sync' && (
           <SyncPanel
-            projects={projects}
+            projects={projectsForUi}
+            clients={clients}
             templates={templates}
             settings={globalSettings}
             syncStatus={syncStatus}
             onSetSyncStatus={setSyncStatus}
             onSyncUpdated={(data) => {
               setProjects(data.projects);
+              setClients(data.clients ?? []);
               setTemplates(data.templates);
               setGlobalSettings(data.settings);
               setSyncConfig(loadSyncConfig());
@@ -437,7 +520,7 @@ const persistTemplates = useCallback((next: Template[]) => {
         )}
         {view.kind === 'factory' && (
           <FactoryBlankView
-            projects={projects}
+            projects={projectsForUi}
             pricebooks={pricebooks}
             initialProjectId={view.kind === 'factory' ? view.id : undefined}
             onOpenProject={(id) => setView({ kind: 'project', id })}
