@@ -26,7 +26,8 @@ export interface SyncPayload {
 
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'offline' | 'error';
 
-export const DEFAULT_CLOUD_API = 'https://kvdb.io/Ank3iN1oH5eX2sP9bKq1tW'; // изолированный KV-бакет калькулятора РЕцепт
+export const DEFAULT_CLOUD_API = 'https://kvdb.io/Ank3iN1oH5eX2sP9bKq1tW'; // старый KV-бакет для совместимости
+export const JSON_STORAGE_PROJECT_SHARE_API = 'https://api.jsonstorage.net/v1/json';
 
 export function defaultSyncConfig(): SyncConfig {
   return {
@@ -75,7 +76,7 @@ export function makeSyncShareUrl(roomCode: string, secretKey: string, baseUrl?: 
 /** Парсинг входящего хэша URL (при сканировании QR-кода на телефоне) */
 export interface ProjectSharePayload { version: 1; type: 'project-share'; token: string; createdAt: string; project: Project }
 
-export function parseIncomingHash(hash: string): { type: 'sync'; roomCode: string; secretKey: string } | { type: 'import'; project: Project } | { type: 'importz'; data: string } | { type: 'share'; token: string } | null {
+export function parseIncomingHash(hash: string): { type: 'sync'; roomCode: string; secretKey: string } | { type: 'import'; project: Project } | { type: 'importz'; data: string } | { type: 'share'; token: string } | { type: 'shareurl'; url: string } | null {
   if (!hash) return null;
   const clean = hash.startsWith('#') ? hash.slice(1) : hash;
   
@@ -90,6 +91,12 @@ export function parseIncomingHash(hash: string): { type: 'sync'; roomCode: strin
   if (clean.startsWith('share=')) {
     const token = decodeURIComponent(clean.slice('share='.length)).trim();
     if (/^prj_[a-z0-9_-]{12,}$/i.test(token)) return { type: 'share', token };
+    return null;
+  }
+
+  if (clean.startsWith('shareurl=')) {
+    const url = decodeURIComponent(clean.slice('shareurl='.length)).trim();
+    if (isJsonStorageProjectShareUrl(url)) return { type: 'shareurl', url };
     return null;
   }
 
@@ -234,6 +241,19 @@ export function makeCloudProjectShareUrl(token: string, baseUrl?: string): strin
   return `${cleanAppBase(baseUrl)}#share=${encodeURIComponent(token)}`;
 }
 
+export function isJsonStorageProjectShareUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' && parsed.hostname === 'api.jsonstorage.net' && parsed.pathname.startsWith('/v1/json/');
+  } catch {
+    return false;
+  }
+}
+
+export function makeJsonStorageProjectShareUrl(storageUrl: string, baseUrl?: string): string {
+  return `${cleanAppBase(baseUrl)}#shareurl=${encodeURIComponent(storageUrl)}`;
+}
+
 function stripInlineBinaryForShare(value: unknown): unknown {
   if (typeof value === 'string') {
     return value.startsWith('data:image/') || value.startsWith('data:application/') ? '' : value;
@@ -253,6 +273,35 @@ export function projectShareEndpoint(token: string): string {
   return `${DEFAULT_CLOUD_API}/${encodeURIComponent(`share_${token}`)}`;
 }
 
+function assertProjectSharePayload(json: unknown): ProjectSharePayload {
+  const payload = json as ProjectSharePayload;
+  if (!payload || payload.version !== 1 || payload.type !== 'project-share' || !payload.project || !Array.isArray(payload.project.lines)) {
+    throw new Error('QR-ссылка проекта повреждена или устарела');
+  }
+  return payload;
+}
+
+async function publishProjectShareToKvdb(token: string, body: string): Promise<void> {
+  const headers = { 'Content-Type': 'application/json' };
+  const endpoint = projectShareEndpoint(token);
+  let res = await fetch(endpoint, { method: 'POST', headers, body });
+  if (!res.ok) res = await fetch(endpoint, { method: 'PUT', headers, body });
+  if (!res.ok) throw new Error(`KVdb HTTP ${res.status}`);
+}
+
+async function publishProjectShareToJsonStorage(body: string): Promise<string> {
+  const res = await fetch(JSON_STORAGE_PROJECT_SHARE_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body,
+  });
+  if (!res.ok) throw new Error(`JSONStorage HTTP ${res.status}`);
+  const json = (await res.json()) as { uri?: string; url?: string };
+  const storageUrl = (json.uri || json.url || '').replace(/\s+/g, '');
+  if (!isJsonStorageProjectShareUrl(storageUrl)) throw new Error('JSONStorage вернул некорректную ссылку');
+  return storageUrl;
+}
+
 export async function publishProjectShare(project: Project, baseUrl?: string): Promise<{ token: string; url: string; bytes: number }> {
   const token = makeProjectShareToken(project.id);
   const payload: ProjectSharePayload = {
@@ -263,22 +312,36 @@ export async function publishProjectShare(project: Project, baseUrl?: string): P
     project: compactProjectForShare(project),
   };
   const body = JSON.stringify(payload);
-  const headers = { 'Content-Type': 'application/json' };
-  const endpoint = projectShareEndpoint(token);
-  let res = await fetch(endpoint, { method: 'POST', headers, body });
-  if (!res.ok) res = await fetch(endpoint, { method: 'PUT', headers, body });
-  if (!res.ok) throw new Error(`Не удалось опубликовать проект для QR (HTTP ${res.status})`);
-  return { token, url: makeCloudProjectShareUrl(token, baseUrl), bytes: body.length };
+  const errors: string[] = [];
+
+  try {
+    await publishProjectShareToKvdb(token, body);
+    return { token, url: makeCloudProjectShareUrl(token, baseUrl), bytes: body.length };
+  } catch (error) {
+    errors.push((error as Error).message || 'KVdb недоступен');
+  }
+
+  try {
+    const storageUrl = await publishProjectShareToJsonStorage(body);
+    return { token, url: makeJsonStorageProjectShareUrl(storageUrl, baseUrl), bytes: body.length };
+  } catch (error) {
+    errors.push((error as Error).message || 'JSONStorage недоступен');
+  }
+
+  throw new Error(`Не удалось опубликовать проект для QR: ${errors.join('; ')}`);
 }
 
 export async function loadProjectShare(token: string): Promise<Project> {
   const res = await fetch(projectShareEndpoint(token), { method: 'GET', headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error(`Не удалось загрузить проект по QR (HTTP ${res.status})`);
-  const json = (await res.json()) as ProjectSharePayload;
-  if (!json || json.version !== 1 || json.type !== 'project-share' || !json.project || !Array.isArray(json.project.lines)) {
-    throw new Error('QR-ссылка проекта повреждена или устарела');
-  }
-  return json.project;
+  return assertProjectSharePayload(await res.json()).project;
+}
+
+export async function loadJsonStorageProjectShare(storageUrl: string): Promise<Project> {
+  if (!isJsonStorageProjectShareUrl(storageUrl)) throw new Error('QR-ссылка проекта указывает на неизвестное хранилище');
+  const res = await fetch(storageUrl, { method: 'GET', headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new Error(`Не удалось загрузить проект по QR (HTTP ${res.status})`);
+  return assertProjectSharePayload(await res.json()).project;
 }
 
 /** Умное слияние локальных и удалённых данных по дате изменения (Smart Merge) */

@@ -6,6 +6,7 @@ import {
   makeProjectShareUrl,
   makeCompressedProjectShareUrl,
   makeCloudProjectShareUrl,
+  makeJsonStorageProjectShareUrl,
   makeProjectShareToken,
   compactProjectForShare,
   loadCompressedProjectShare,
@@ -41,7 +42,13 @@ describe('генерация и парсинг URL синхронизации', 
     expect(parseIncomingHash(`#share=${encodeURIComponent(token)}`)).toEqual({ type: 'share', token });
   });
 
-
+  it('короткая резервная JSONStorage-ссылка проекта для QR парсится как безопасный URL', () => {
+    const storageUrl = 'https://api.jsonstorage.net/v1/json/user-123/item-456';
+    const url = makeJsonStorageProjectShareUrl(storageUrl, 'https://example.com/app/');
+    expect(url.length).toBeLessThan(160);
+    expect(parseIncomingHash(url.split('#')[1])).toEqual({ type: 'shareurl', url: storageUrl });
+    expect(parseIncomingHash('#shareurl=https%3A%2F%2Fevil.example%2Fdata')).toBeNull();
+  });
 
   it('сжатая self-contained ссылка проекта для QR парсится без облака', async () => {
     const dummyProject: Project = {
