@@ -1,3 +1,4 @@
+import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
 import type { Project, ProjectSettings, Template } from '../types';
 import { loadProjects, loadTemplates, loadGlobalSettings, saveProjects, saveTemplates, saveGlobalSettings, defaultSettings } from './storage';
 
@@ -74,7 +75,7 @@ export function makeSyncShareUrl(roomCode: string, secretKey: string, baseUrl?: 
 /** Парсинг входящего хэша URL (при сканировании QR-кода на телефоне) */
 export interface ProjectSharePayload { version: 1; type: 'project-share'; token: string; createdAt: string; project: Project }
 
-export function parseIncomingHash(hash: string): { type: 'sync'; roomCode: string; secretKey: string } | { type: 'import'; project: Project } | { type: 'share'; token: string } | null {
+export function parseIncomingHash(hash: string): { type: 'sync'; roomCode: string; secretKey: string } | { type: 'import'; project: Project } | { type: 'importz'; data: string } | { type: 'share'; token: string } | null {
   if (!hash) return null;
   const clean = hash.startsWith('#') ? hash.slice(1) : hash;
   
@@ -89,6 +90,12 @@ export function parseIncomingHash(hash: string): { type: 'sync'; roomCode: strin
   if (clean.startsWith('share=')) {
     const token = decodeURIComponent(clean.slice('share='.length)).trim();
     if (/^prj_[a-z0-9_-]{12,}$/i.test(token)) return { type: 'share', token };
+    return null;
+  }
+
+  if (clean.startsWith('importz=')) {
+    const data = decodeURIComponent(clean.slice('importz='.length)).trim();
+    if (/^[A-Za-z0-9+\-$]{16,}$/.test(data)) return { type: 'importz', data };
     return null;
   }
 
@@ -118,6 +125,103 @@ export function makeProjectShareUrl(project: Project, baseUrl?: string): string 
   const clone = compactProjectForShare(project);
   const json = JSON.stringify(clone);
   return `${cleanBase}#import=${encodeURIComponent(json)}`;
+}
+
+function compressProjectJson(text: string): string {
+  return compressToEncodedURIComponent(text);
+}
+
+function decompressProjectJson(data: string): string {
+  const json = decompressFromEncodedURIComponent(data);
+  if (!json) throw new Error('Сжатая QR-ссылка проекта повреждена или неполная');
+  return json;
+}
+
+function assertProjectShape(value: unknown): Project {
+  const project = value as Project;
+  if (!project || typeof project.name !== 'string' || !Array.isArray(project.lines)) {
+    throw new Error('QR-ссылка проекта повреждена или содержит неизвестный формат');
+  }
+  return project;
+}
+
+/** Сжатая self-contained ссылка проекта: не зависит от облака и обычно заметно короче старого JSON-хэша. */
+export async function makeCompressedProjectShareUrl(project: Project, baseUrl?: string): Promise<{ url: string; bytes: number; compressedChars: number }> {
+  const cleanBase = cleanAppBase(baseUrl);
+  const json = JSON.stringify(compactProjectForShare(project));
+  const packed = compressProjectJson(json);
+  return { url: `${cleanBase}#importz=${packed}`, bytes: json.length, compressedChars: packed.length };
+}
+
+export async function loadCompressedProjectShare(data: string): Promise<Project> {
+  const json = decompressProjectJson(data.trim());
+  return assertProjectShape(JSON.parse(json));
+}
+
+const QR_SAFE_INLINE_URL_LENGTH = 2200;
+const QR_MAX_INLINE_URL_LENGTH = 2950;
+
+export type ProjectQrShareMode = 'compressed' | 'cloud' | 'legacy';
+
+export interface ProjectQrShare {
+  mode: ProjectQrShareMode;
+  url: string;
+  bytes: number;
+  urlLength: number;
+  note: string;
+}
+
+/**
+ * Готовит рабочую ссылку для QR-передачи проекта.
+ * Сначала пробуем полностью автономный сжатый QR. Если проект слишком большой,
+ * используем короткую облачную ссылку; при недоступном облаке оставляем плотный
+ * сжатый QR, если он ещё помещается в лимит QR-кода.
+ */
+export async function makeProjectQrShare(project: Project, baseUrl?: string): Promise<ProjectQrShare> {
+  const compressed = await makeCompressedProjectShareUrl(project, baseUrl);
+  if (compressed.url.length <= QR_SAFE_INLINE_URL_LENGTH) {
+    return {
+      mode: 'compressed',
+      url: compressed.url,
+      bytes: compressed.bytes,
+      urlLength: compressed.url.length,
+      note: `QR содержит сам проект в сжатом виде: ${compressed.url.length} символов. Облако не требуется.`,
+    };
+  }
+
+  try {
+    const cloud = await publishProjectShare(project, baseUrl);
+    return {
+      mode: 'cloud',
+      url: cloud.url,
+      bytes: cloud.bytes,
+      urlLength: cloud.url.length,
+      note: `QR содержит короткую облачную ссылку: ${cloud.url.length} символов, проект ${Math.round(cloud.bytes / 1024)} КБ.`,
+    };
+  } catch (cloudError) {
+    if (compressed.url.length <= QR_MAX_INLINE_URL_LENGTH) {
+      return {
+        mode: 'compressed',
+        url: compressed.url,
+        bytes: compressed.bytes,
+        urlLength: compressed.url.length,
+        note: `Облако недоступно, поэтому QR содержит сжатый проект напрямую: ${compressed.url.length} символов.`,
+      };
+    }
+
+    const legacy = makeProjectShareUrl(project, baseUrl);
+    if (legacy.length <= QR_SAFE_INLINE_URL_LENGTH) {
+      return {
+        mode: 'legacy',
+        url: legacy,
+        bytes: legacy.length,
+        urlLength: legacy.length,
+        note: `QR подготовлен в старом формате: ${legacy.length} символов.`,
+      };
+    }
+
+    throw new Error(`Не удалось подготовить QR проекта: облачная публикация недоступна (${(cloudError as Error).message}), а проект слишком большой для прямого QR (${compressed.url.length} символов). Удалите тяжёлые вложения или включите синхронизацию.`);
+  }
 }
 
 export function makeProjectShareToken(projectId = 'project'): string {

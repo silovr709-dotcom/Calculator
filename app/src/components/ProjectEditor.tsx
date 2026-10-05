@@ -19,7 +19,7 @@ import KitchenChecklistPanel from './KitchenChecklistPanel';
 import OrderCenterPanel from './OrderCenterPanel';
 import { exportInternalXlsx, exportClientXlsx, exportInternalCsv, exportProjectJson } from '../lib/exporters';
 import QRCode from 'qrcode';
-import { makeProjectShareUrl } from '../lib/sync';
+import { makeProjectQrShare } from '../lib/sync';
 
 type ProjectTab = 'modules' | 'sketch' | 'order' | 'lines' | 'photos' | 'settings' | 'client' | 'check' | 'variants' | 'measurement';
 type ProjectStage = 'composition' | 'eskiz' | 'check' | 'client' | 'order';
@@ -75,14 +75,41 @@ export default function ProjectEditor(props: {
   const [editMeta, setEditMeta] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrUrl, setQrUrl] = useState('');
+  const [qrShareUrl, setQrShareUrl] = useState('');
+  const [qrStatus, setQrStatus] = useState('');
+  const [qrError, setQrError] = useState('');
 
   useEffect(() => {
-    if (showQrModal) {
-      const url = makeProjectShareUrl(project);
-      QRCode.toDataURL(url, { width: 260, margin: 2, color: { dark: '#10231f', light: '#ffffff' } })
-        .then((u) => setQrUrl(u))
-        .catch(() => {});
-    }
+    let alive = true;
+    if (!showQrModal) return () => { alive = false; };
+
+    const generate = async () => {
+      setQrUrl('');
+      setQrShareUrl('');
+      setQrError('');
+      setQrStatus('Готовим QR-ссылку проекта…');
+      try {
+        const share = await makeProjectQrShare(project);
+        if (!alive) return;
+        const url = await QRCode.toDataURL(share.url, {
+          width: 320,
+          margin: 4,
+          errorCorrectionLevel: share.urlLength > 1800 ? 'L' : 'M',
+          color: { dark: '#092a55', light: '#ffffff' },
+        });
+        if (!alive) return;
+        setQrUrl(url);
+        setQrShareUrl(share.url);
+        setQrStatus(share.note);
+      } catch (error) {
+        if (!alive) return;
+        setQrError((error as Error).message || 'Не удалось создать QR-код проекта');
+        setQrStatus('');
+      }
+    };
+
+    generate();
+    return () => { alive = false; };
   }, [showQrModal, project]);
 
   // Горячие клавиши: Ctrl+Z — отмена последнего изменения проекта.
@@ -288,12 +315,21 @@ export default function ProjectEditor(props: {
             <div className="muted small" style={{ marginBottom: 16 }}>
               Наведите камеру смартфона на QR-код — проект «<b>{project.name}</b>» мгновенно откроется в калькуляторе на телефоне.
             </div>
+            {qrStatus && <div className="muted small" style={{ marginBottom: 10 }}>{qrStatus}</div>}
+            {qrError && <div className="warn-box" style={{ marginBottom: 10, textAlign: 'left' }}>{qrError}</div>}
             {qrUrl ? (
               <div className="qr-container">
-                <img src={qrUrl} alt="QR-код проекта" className="qr-image" style={{ width: 240, height: 240 }} />
+                <img src={qrUrl} alt="QR-код проекта" className="qr-image" style={{ width: 300, height: 300 }} />
+                <div className="qr-hint">Откройте камеру телефона, наведите на весь белый квадрат и перейдите по ссылке. Проект импортируется автоматически.</div>
+                {qrShareUrl && (
+                  <div className="sync-url-box" style={{ marginTop: 10 }}>
+                    <input readOnly value={qrShareUrl} className="sync-url-input" />
+                    <button className="btn small ghost" type="button" onClick={() => navigator.clipboard.writeText(qrShareUrl)}>Копировать</button>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="pad muted">Генерация QR-кода…</div>
+              <div className="pad muted">{qrError ? 'QR-код не создан.' : 'Генерация QR-кода…'}</div>
             )}
             <div className="modal-actions" style={{ justifyContent: 'center', marginTop: 18 }}>
               <button className="btn primary" onClick={() => setShowQrModal(false)}>Закрыть</button>

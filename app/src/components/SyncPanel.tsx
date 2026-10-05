@@ -5,9 +5,8 @@ import {
   defaultSyncConfig,
   generateSyncRoom,
   loadSyncConfig,
-  makeProjectShareUrl,
+  makeProjectQrShare,
   makeSyncShareUrl,
-  publishProjectShare,
   performFullSync,
   saveSyncConfig,
 } from '../lib/sync';
@@ -46,8 +45,8 @@ export default function SyncPanel(props: {
   }, [config.enabled, config.roomCode, config.secretKey]);
 
   // Обновление QR-кода отдельного выбранного проекта.
-  // В QR кладём короткую ссылку #share=token, а сам проект временно публикуем в KV.
-  // Так код остаётся крупным и хорошо сканируется даже для проектов с большим расчётом/эскизом.
+  // В QR кладём сжатый проект напрямую или короткую #share-ссылку для крупных проектов.
+  // Так передача остаётся рабочей даже при недоступном облаке для небольших и средних проектов.
   useEffect(() => {
     let alive = true;
     const p = props.projects.find((x) => x.id === activeProjectForQr);
@@ -68,39 +67,24 @@ export default function SyncPanel(props: {
       setProjectQrDataUrl('');
       setProjectShareUrl('');
       setProjectQrError('');
-      setProjectQrStatus('Готовим короткую QR-ссылку проекта…');
+      setProjectQrStatus('Готовим QR-ссылку проекта…');
       try {
-        const share = await publishProjectShare(p);
+        const share = await makeProjectQrShare(p);
         if (!alive) return;
         const qr = await QRCode.toDataURL(share.url, {
-          width: 300,
+          width: 320,
           margin: 4,
-          errorCorrectionLevel: 'M',
+          errorCorrectionLevel: share.urlLength > 1800 ? 'L' : 'M',
           color: { dark: '#092a55', light: '#ffffff' },
         });
         if (!alive) return;
         setProjectShareUrl(share.url);
         setProjectQrDataUrl(qr);
-        setProjectQrStatus(`QR готов: короткая ссылка ${share.url.length} символов, проект ${Math.round(share.bytes / 1024)} КБ.`);
+        setProjectQrStatus(share.note);
       } catch (error) {
         if (!alive) return;
-        try {
-          const fallbackUrl = makeProjectShareUrl(p);
-          if (fallbackUrl.length > 1600) throw new Error('проект слишком большой для офлайн-QR');
-          const qr = await QRCode.toDataURL(fallbackUrl, {
-            width: 300,
-            margin: 4,
-            errorCorrectionLevel: 'M',
-            color: { dark: '#092a55', light: '#ffffff' },
-          });
-          if (!alive) return;
-          setProjectShareUrl(fallbackUrl);
-          setProjectQrDataUrl(qr);
-          setProjectQrStatus(`QR готов в компактном режиме: ${fallbackUrl.length} символов.`);
-        } catch (fallbackError) {
-          setProjectQrError(`${(error as Error).message}. ${(fallbackError as Error).message}. Попробуйте интернет-соединение или облачную синхронизацию.`);
-          setProjectQrStatus('');
-        }
+        setProjectQrError(`${(error as Error).message}. Попробуйте интернет-соединение, удалите тяжёлые вложения или включите облачную синхронизацию.`);
+        setProjectQrStatus('');
       }
     };
     generate();
@@ -286,7 +270,7 @@ export default function SyncPanel(props: {
         <section className="card">
           <h3>📱 Передача проекта по QR-коду на телефон</h3>
           <div className="muted small" style={{ marginBottom: 14 }}>
-            Позволяет открыть конкретную кухню на телефоне коллеги или клиента. Для больших проектов QR использует короткую ссылку, поэтому нормально сканируется камерой телефона.
+            Позволяет открыть конкретную кухню на телефоне коллеги или клиента. QR теперь использует сжатую ссылку проекта или короткую облачную ссылку для крупных проектов, поэтому код нормально сканируется камерой телефона.
           </div>
 
           {props.projects.length === 0 ? (
@@ -314,7 +298,7 @@ export default function SyncPanel(props: {
                 <div className="qr-container" style={{ marginTop: 16 }}>
                   <img src={projectQrDataUrl} alt="QR-код проекта" className="qr-image" width={300} height={300} />
                   <div className="qr-hint">
-                    <b>Проверено для сканирования:</b> QR содержит короткую ссылку. Откройте камеру телефона, наведите на весь белый квадрат и перейдите по ссылке.
+                    <b>Проверено для сканирования:</b> откройте камеру телефона, наведите на весь белый квадрат и перейдите по ссылке — проект импортируется автоматически.
                   </div>
                   {projectShareUrl && (
                     <div className="sync-url-box" style={{ marginTop: 10 }}>

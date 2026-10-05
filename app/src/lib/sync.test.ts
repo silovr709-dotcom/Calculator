@@ -4,9 +4,11 @@ import {
   generateSyncRoom,
   makeSyncShareUrl,
   makeProjectShareUrl,
+  makeCompressedProjectShareUrl,
   makeCloudProjectShareUrl,
   makeProjectShareToken,
   compactProjectForShare,
+  loadCompressedProjectShare,
   parseIncomingHash,
   mergeSyncData,
 } from './sync';
@@ -40,6 +42,50 @@ describe('генерация и парсинг URL синхронизации', 
   });
 
 
+
+  it('сжатая self-contained ссылка проекта для QR парсится без облака', async () => {
+    const dummyProject: Project = {
+      id: 'prj_compressed_1',
+      name: 'Сжатая кухня QR',
+      client: 'Иван',
+      comment: 'Проект передаётся напрямую через hash importz',
+      date: '2026-09-28',
+      status: 'draft',
+      pricebookId: 'visma-2026',
+      pricebookName: 'ВИСМА 2026',
+      lines: Array.from({ length: 12 }, (_, index) => ({
+        id: `line_${index}`,
+        itemId: `item_${index}`,
+        pricebookId: 'visma-2026',
+        category: 'Фурнитура',
+        group: 'Фурнитура' as const,
+        name: `Петля с доводчиком Boyard 110 повтор ${index}`,
+        article: null,
+        unit: 'шт',
+        priceKind: 'fixed' as const,
+        price: 120,
+        priceBasis: 'unit' as const,
+        priceGroup: null,
+        qty: 2,
+        params: {},
+      })),
+      modules: [],
+      settings: defaultSettings(),
+      createdAt: '2026-09-28T10:00:00Z',
+      updatedAt: '2026-09-28T10:00:00Z',
+    };
+
+    const compressed = await makeCompressedProjectShareUrl(dummyProject, 'https://example.com/app/');
+    expect(compressed.url).toContain('#importz=');
+    expect(compressed.url.length).toBeLessThan(makeProjectShareUrl(dummyProject, 'https://example.com/app/').length);
+    const parsed = parseIncomingHash(compressed.url.split('#')[1]);
+    expect(parsed).toEqual({ type: 'importz', data: expect.any(String) });
+    if (parsed?.type === 'importz') {
+      const restored = await loadCompressedProjectShare(parsed.data);
+      expect(restored.name).toBe('Сжатая кухня QR');
+      expect(restored.lines).toHaveLength(12);
+    }
+  });
 
   it('compactProjectForShare убирает вложенные dataUrl, чтобы QR-публикация оставалась лёгкой', () => {
     const dummyProject: Project = {
