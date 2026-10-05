@@ -43,6 +43,12 @@ export interface QuickEstimateMetrics {
   floorModules: number;
   lowerPlannedLengthMm: number;
   upperPlannedLengthMm: number;
+  /** Площадь фасадов нижнего ряда: заданная пользователем длина × стандартная высота фасада 716 мм. */
+  lowerFacadeAreaM2: number;
+  /** Площадь фасадов верхнего ряда: заданная пользователем длина × выбранная высота верха минус технический зазор 4 мм. */
+  upperFacadeAreaM2: number;
+  /** Площадь фасадов пеналов по подобранному корпусу/высоте. */
+  tallFacadeAreaM2: number;
   facadeAreaM2: number;
   facadeCount: number;
   doorFronts: number;
@@ -76,6 +82,12 @@ const round3 = (value: number) => Math.round(value * 1000) / 1000;
 const positive = (value: number) => Number.isFinite(value) && value > 0 ? value : 0;
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 const norm = (value: string) => value.toLowerCase().replace(/ё/g, 'е');
+const LOWER_FACADE_HEIGHT_MM = 716;
+const FACADE_HEIGHT_CLEARANCE_MM = 4;
+
+function facadeRunAreaM2(lengthMm: number, facadeHeightMm: number): number {
+  return (positive(lengthMm) / 1000) * (Math.max(0, facadeHeightMm) / 1000);
+}
 
 function fixedItems(pricebook: Pricebook, pred: (item: PriceItem) => boolean): PriceItem[] {
   return pricebook.items.filter((item) => item.priceKind === 'fixed' && item.price != null && item.price > 0 && pred(item));
@@ -559,11 +571,24 @@ export function buildQuickEstimate(input: QuickEstimateInput, pricebook: Pricebo
   const tallWidth = tallItem ? widthOf(tallItem) ?? 600 : 600;
   const tallPlan: BodyPlanEntry[] = Array.from({ length: tallCount }, () => ({ widthMm: tallWidth, item: tallItem, kind: 'tall' }));
 
-  const bodyStats = [...lowerPlan, ...upperPlan, ...tallPlan].map(bodyFrontStats);
+  const lowerStats = lowerPlan.map(bodyFrontStats);
+  const upperStats = upperPlan.map(bodyFrontStats);
+  const tallStats = tallPlan.map(bodyFrontStats);
+  const bodyStats = [...lowerStats, ...upperStats, ...tallStats];
   const doorFronts = bodyStats.reduce((sum, item) => sum + item.doors, 0);
   const drawerFrontsFromBodies = bodyStats.reduce((sum, item) => sum + item.drawers, 0);
   const drawerFronts = Math.max(drawerCount, drawerFrontsFromBodies);
-  const facadeAreaM2 = round3(bodyStats.reduce((sum, item) => sum + item.areaM2, 0));
+
+  // В экспресс-оценке пользователь задаёт именно общую длину нижнего/верхнего ряда.
+  // Поэтому площадь фасадов должна считаться от введённых габаритов, а не от округления
+  // рядов стандартными корпусами: иначе квадратура «плавает» на зазорах и подборе ширин.
+  const lowerFacadeAreaRaw = facadeRunAreaM2(lowerLength, LOWER_FACADE_HEIGHT_MM);
+  const upperFacadeAreaRaw = facadeRunAreaM2(upperLength, upperHeight - FACADE_HEIGHT_CLEARANCE_MM);
+  const tallFacadeAreaRaw = tallStats.reduce((sum, item) => sum + item.areaM2, 0);
+  const lowerFacadeAreaM2 = round3(lowerFacadeAreaRaw);
+  const upperFacadeAreaM2 = round3(upperFacadeAreaRaw);
+  const tallFacadeAreaM2 = round3(tallFacadeAreaRaw);
+  const facadeAreaM2 = round3(lowerFacadeAreaRaw + upperFacadeAreaRaw + tallFacadeAreaRaw);
   const facadeCount = doorFronts + drawerFronts;
   const hingeCount = doorFronts * 2;
   const handleCount = input.includeHandles ? facadeCount : 0;
@@ -580,6 +605,9 @@ export function buildQuickEstimate(input: QuickEstimateInput, pricebook: Pricebo
       floorModules,
       lowerPlannedLengthMm: lowerPlannedLength,
       upperPlannedLengthMm: upperPlannedLength,
+      lowerFacadeAreaM2,
+      upperFacadeAreaM2,
+      tallFacadeAreaM2,
       facadeAreaM2,
       facadeCount,
       doorFronts,
@@ -639,7 +667,7 @@ export function buildQuickEstimate(input: QuickEstimateInput, pricebook: Pricebo
     'смеситель среднего уровня из прайса');
 
   result.assumptions.push(`Корпуса разложены по реальным ширинам прайса: низ ${lowerModules} шт на ${lowerPlannedLength || 0} мм, верх ${upperModules} шт на ${upperPlannedLength || 0} мм, пеналы ${tallCount} шт.`);
-  if (facadeAreaM2 > 0) result.assumptions.push(`Фасады считаются по площади подобранных корпусов: ${facadeAreaM2} м², створок/фронтов ${facadeCount}.`);
+  if (facadeAreaM2 > 0) result.assumptions.push(`Фасады считаются от введённых габаритов рядов: низ ${lowerFacadeAreaM2} м² + верх ${upperFacadeAreaM2} м²${tallFacadeAreaM2 > 0 ? ` + пеналы ${tallFacadeAreaM2} м²` : ''} = ${facadeAreaM2} м², фронтов ${facadeCount}.`);
   if (hingeCount > 0) result.assumptions.push(`Петли считаются только на распашные фасады: ${doorFronts} × 2 = ${hingeCount} шт.`);
   if (drawerCount > 0) result.assumptions.push(`Ящики/направляющие: ${drawerCount} комплект(а), корпусные ящики учтены в подборе нижних модулей.`);
   if (input.worktopTier !== 'none' && worktopLength > 0) result.assumptions.push(`Столешница подобрана хлыстами из длины ${worktopLength} мм.`);

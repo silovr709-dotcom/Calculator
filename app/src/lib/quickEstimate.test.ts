@@ -51,6 +51,18 @@ describe('экспресс-оценка кухни', () => {
     expect(totals.unpricedCount).toBe(0);
   });
 
+  it('считает квадратуру фасадов от введённых длин рядов и выбранной высоты верха', () => {
+    const estimate = buildQuickEstimate({ ...baseInput, lowerLengthMm: 2400, upperLengthMm: 2400, upperHeightMm: 920, tallCount: 0 }, pb);
+    const facadeLine = estimate.lines.find((line) => line.category.startsWith('Фасады'));
+
+    expect(estimate.metrics.lowerFacadeAreaM2).toBe(1.718);
+    expect(estimate.metrics.upperFacadeAreaM2).toBe(2.198);
+    expect(estimate.metrics.tallFacadeAreaM2).toBe(0);
+    expect(estimate.metrics.facadeAreaM2).toBe(3.917);
+    expect(facadeLine?.params.areaM2).toBe(3.917);
+    expect(estimate.assumptions.some((text) => text.includes('низ 1.718 м² + верх 2.198 м²'))).toBe(true);
+  });
+
   it('даёт коридор цены вокруг рассчитанной суммы', () => {
     const range = quickEstimateRange(100_000, 0.15);
     expect(range).toEqual({ low: 85_000, high: 115_000 });

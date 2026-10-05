@@ -412,7 +412,7 @@ export default function QuickCalc(props: {
               <div className="quick-metrics">
                 <span><b>{expressEstimate.metrics.lowerModules}</b> нижних мод.<small>{expressEstimate.metrics.lowerPlannedLengthMm || 0} мм корпусами</small></span>
                 <span><b>{expressEstimate.metrics.upperModules}</b> верхних мод.<small>{expressEstimate.metrics.upperPlannedLengthMm || 0} мм корпусами</small></span>
-                <span><b>{fmtNum(expressEstimate.metrics.facadeAreaM2)}</b> м² фасадов<small>{expressEstimate.metrics.facadeCount} фронтов</small></span>
+                <span><b>{fmtNum(expressEstimate.metrics.facadeAreaM2)}</b> м² фасадов<small>низ {fmtNum(expressEstimate.metrics.lowerFacadeAreaM2)} · верх {fmtNum(expressEstimate.metrics.upperFacadeAreaM2)}{expressEstimate.metrics.tallFacadeAreaM2 > 0 ? ` · пеналы ${fmtNum(expressEstimate.metrics.tallFacadeAreaM2)}` : ''}</small></span>
                 <span><b>{expressEstimate.metrics.hingeCount}</b> петель<small>{expressEstimate.metrics.doorFronts} распашных фасадов</small></span>
               </div>
             </section>
