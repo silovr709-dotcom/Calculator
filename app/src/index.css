@@ -4602,3 +4602,48 @@ select option { background: #fff !important; color: #102037 !important; }
   .measurement-plan-linked-list > div { grid-template-columns:1fr 1fr; }
   .measurement-plan-linked-list > div b { grid-column:1 / -1; }
 }
+
+/* ---- UX модернизация плана замера ---- */
+.measurement-plan-presets label { display:flex; align-items:center; gap:5px; min-height:34px; padding:4px 7px; border:1px solid #dbe6eb; border-radius:8px; background:#fff; color:var(--muted); font-size:11px; }
+.measurement-plan-presets label input { width:88px; padding:4px 6px; font-size:12px; }
+.measurement-plan-live-hint { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; padding:9px 10px; border:1px solid #dbe6eb; border-radius:10px; background:#fff; color:#0a2a55; }
+.measurement-plan-live-hint span { color:var(--muted); font-size:12px; }
+.measurement-plan-stage.tool-select { cursor:grab; }
+.measurement-plan-stage.tool-select.is-dragging { cursor:grabbing; }
+.measurement-plan-wall { cursor:grab; }
+.measurement-plan-wall:active { cursor:grabbing; }
+.measurement-plan-wall .wall-handle { cursor:move; }
+.measurement-plan-opening,
+.measurement-plan-communication { cursor:grab; }
+.measurement-plan-opening.selected .opening-mark { stroke-width:96; filter:drop-shadow(0 0 8px rgba(18,63,124,.28)); }
+.measurement-plan-communication.selected circle { stroke:#123f7c; stroke-width:34; filter:drop-shadow(0 0 8px rgba(18,63,124,.28)); }
+.measurement-plan-readiness { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+.measurement-plan-readiness span { display:flex; flex-direction:column; gap:2px; padding:8px; border:1px solid #dbe6eb; border-radius:9px; background:#fff; }
+.measurement-plan-readiness span.ok { border-color:#cfe8d7; background:#f2fbf5; }
+.measurement-plan-readiness span.todo { border-color:#eadfca; background:#fffaf0; }
+.measurement-plan-readiness b { color:#0a2a55; font-size:11px; }
+.measurement-plan-readiness em { color:var(--muted); font-style:normal; font-size:11px; }
+.measurement-plan-advanced { margin:8px 0; padding:8px; border:1px dashed #cbdce5; border-radius:8px; background:#f8fbfd; }
+.measurement-plan-advanced summary { cursor:pointer; color:#0a2a55; font-weight:700; font-size:12px; }
+.measurement-plan-linked-list > .linked-title { display:block; padding:0 2px 2px; color:#0a2a55; font-size:12px; }
+.measurement-plan-linked-list > button { width:100%; display:flex; flex-direction:column; align-items:flex-start; gap:2px; padding:7px 8px; border:1px solid #e2ebef; border-radius:8px; background:#fff; color:#0a2a55; text-align:left; cursor:pointer; }
+.measurement-plan-linked-list > button:hover,
+.measurement-plan-linked-list > button.active { border-color:#123f7c; background:#edf4ff; }
+.measurement-plan-linked-list > button span { font-weight:700; font-size:12px; }
+.measurement-plan-linked-list > button em { color:var(--muted); font-style:normal; font-size:11px; }
+.measurement-plan-selected select { min-width:0; }
+@media (max-width:680px) {
+  .measurement-plan-presets label { flex:1 1 calc(50% - 6px); justify-content:space-between; }
+  .measurement-plan-presets label input { flex:1; width:auto; }
+  .measurement-plan-live-hint { align-items:flex-start; flex-direction:column; }
+  .measurement-plan-readiness { grid-template-columns:1fr; }
+}
+
+.photo-dimension-source input { min-width:130px; padding:4px 6px; font-size:11px; }
+.photo-annotation-list.editable > div { display:grid; grid-template-columns:90px minmax(140px,1fr) 110px auto; align-items:center; }
+.photo-annotation-list.editable input { min-width:0; padding:5px 6px; font-size:12px; }
+.photo-annotation-list.editable span { display:flex; flex-direction:column; gap:1px; color:#0a2a55; }
+@media (max-width:680px) {
+  .photo-annotation-list.editable > div { grid-template-columns:1fr 1fr; }
+  .photo-annotation-list.editable span { grid-column:1 / -1; }
+}
