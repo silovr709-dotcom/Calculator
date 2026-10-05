@@ -119,7 +119,19 @@ export default function Dashboard(props: {
           <h1>Проекты</h1>
           <div className="muted">Активный прайс: {props.pricebookLabel}</div>
         </div>
-        <div className="actions">
+      </header>
+
+      <section className="dashboard-command-center card no-print" aria-label="Единый центр действий">
+        <div className="dashboard-command-copy">
+          <span className="eyebrow">Действия</span>
+          <h2>Проекты, CRM и обмен — рядом</h2>
+          <p>Основные операции вынесены в одну панель: создать расчёт, открыть CRM, сделать быстрый расчёт, импортировать или сохранить данные.</p>
+        </div>
+        <div className="dashboard-command-actions">
+          <button className="btn primary" onClick={() => setShowNew(true)}>+ Новый расчёт</button>
+          {props.onOpenCrm && <button className="btn ghost" onClick={props.onOpenCrm}>CRM клиентов</button>}
+          <button className="btn ghost" onClick={props.onQuick}>Быстрый расчёт</button>
+          {props.onOpenSync && <button className="btn ghost" title="Синхронизация с телефоном и другими устройствами" onClick={props.onOpenSync}>Синхронизация</button>}
           <div className="dropdown">
             <button className="btn ghost">Данные ▾</button>
             <div className="dropdown-menu">
@@ -128,14 +140,10 @@ export default function Dashboard(props: {
               <button onClick={() => fileRef.current?.click()}>Импорт одного проекта…</button>
             </div>
           </div>
-          <input ref={backupRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) doRestore(f); e.target.value = ''; }} />
-          <input ref={fileRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) props.onImport(f); e.target.value = ''; }} />
-          {props.onOpenSync && <button className="btn ghost" title="Синхронизация с телефоном и другими устройствами" onClick={props.onOpenSync}>📱 Синхронизация</button>}
-          {props.onOpenCrm && <button className="btn ghost" onClick={props.onOpenCrm}>CRM клиентов</button>}
-          <button className="btn ghost" onClick={props.onQuick}>Быстрый расчёт</button>
-          <button className="btn primary" onClick={() => setShowNew(true)}>+ Новый расчёт</button>
         </div>
-      </header>
+        <input ref={backupRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) doRestore(f); e.target.value = ''; }} />
+        <input ref={fileRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) props.onImport(f); e.target.value = ''; }} />
+      </section>
 
       {showNew && (
         <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowNew(false); }}>

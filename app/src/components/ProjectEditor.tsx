@@ -260,48 +260,13 @@ export default function ProjectEditor(props: {
 
   return (
     <div className="page project">
-      <header className="page-head">
+      <header className="page-head project-page-head">
         <div>
           <button className="btn ghost small" onClick={props.onBack}>← Проекты</button>
           <h1>{project.name}</h1>
           <div className="muted">
             {project.client && <>Клиент: <b>{project.client}</b> · </>}
             {fmtDate(project.date)} · Прайс: {project.pricebookName}
-            <button className="btn tiny ghost" onClick={() => setEditMeta(true)}>изменить</button>
-          </div>
-        </div>
-        <div className="actions project-head-actions">
-          <select
-            value={project.status}
-            onChange={(e) => props.onChange({ ...project, status: e.target.value as Project['status'] })}
-            className="status-select"
-          >
-            <option value="draft">Черновик</option>
-            <option value="sent">Отправлен</option>
-            <option value="approved">Согласован</option>
-            <option value="archived">Архив</option>
-          </select>
-          <button className="btn ghost" disabled={!props.canUndo} title="Отменить последнее изменение проекта (Ctrl+Z)" onClick={props.onUndo}>↶ Отменить</button>
-          <div className="dropdown">
-            <button className="btn ghost">Документы / экспорт ▾</button>
-            <div className="dropdown-menu">
-              <button onClick={() => exportInternalXlsx(outProject)}>Excel — внутренний расчёт</button>
-              <button onClick={() => exportClientXlsx(outProject)}>Excel — коммерческое предложение</button>
-              <button onClick={() => exportInternalCsv(outProject)}>CSV — внутренний расчёт</button>
-              <button onClick={() => exportProjectJson(project)}>Файл проекта (.json)</button>
-              <button onClick={() => setShowQrModal(true)}>Открыть на телефоне (QR-код)</button>
-            </div>
-          </div>
-          {props.onOpenFactoryBlank && (
-            <button className="btn ghost" title="Калькулятор → данные проекта → бланк → проверка → документ" onClick={props.onOpenFactoryBlank}>Бланк на фабрику</button>
-          )}
-          <div className="dropdown">
-            <button className="btn ghost">Ещё ▾</button>
-            <div className="dropdown-menu">
-              <button onClick={props.onDuplicate}>Дублировать проект</button>
-              <button onClick={() => { const n = prompt('Название шаблона:', project.name); if (n) props.onSaveTemplate(n); }}>Сохранить как шаблон</button>
-              <button className="danger-menu-item" onClick={props.onDelete}>Удалить проект</button>
-            </div>
           </div>
         </div>
       </header>
@@ -349,6 +314,54 @@ export default function ProjectEditor(props: {
         </div>
       )}
 
+      <section className="project-command-center no-print" aria-label="Единый центр действий проекта">
+        <div className="project-command-main">
+          <span className="eyebrow">Действия проекта</span>
+          <h2>Всё важное — в одной панели</h2>
+          <p>Основной следующий шаг, клиентские документы, CRM, фабрика, обмен и сервисные операции собраны здесь, а не разбросаны по шапке.</p>
+        </div>
+        <div className="project-command-actions">
+          <button type="button" className="btn primary" onClick={() => openProjectTab(nextAction.tab)}>{nextAction.label}</button>
+          <button type="button" className="btn ghost" onClick={() => openProjectTab('client')}>КП / договор / чек</button>
+          <button type="button" className="btn ghost" onClick={() => openProjectTab('order')}>CRM и заказ</button>
+          {props.onOpenFactoryBlank && <button type="button" className="btn ghost" title="Калькулятор → данные проекта → бланк → проверка → документ" onClick={props.onOpenFactoryBlank}>Бланк на фабрику</button>}
+        </div>
+        <div className="project-command-tools">
+          <label className="project-status-control">Статус
+            <select
+              value={project.status}
+              onChange={(e) => props.onChange({ ...project, status: e.target.value as Project['status'] })}
+              className="status-select"
+            >
+              <option value="draft">Черновик</option>
+              <option value="sent">Отправлен</option>
+              <option value="approved">Согласован</option>
+              <option value="archived">Архив</option>
+            </select>
+          </label>
+          <button className="btn ghost" disabled={!props.canUndo} title="Отменить последнее изменение проекта (Ctrl+Z)" onClick={props.onUndo}>↶ Отменить</button>
+          <div className="dropdown">
+            <button className="btn ghost">Экспорт и обмен ▾</button>
+            <div className="dropdown-menu">
+              <button onClick={() => exportInternalXlsx(outProject)}>Excel — внутренний расчёт</button>
+              <button onClick={() => exportClientXlsx(outProject)}>Excel — коммерческое предложение</button>
+              <button onClick={() => exportInternalCsv(outProject)}>CSV — внутренний расчёт</button>
+              <button onClick={() => exportProjectJson(project)}>Файл проекта (.json)</button>
+              <button onClick={() => setShowQrModal(true)}>Открыть на телефоне (QR-код)</button>
+            </div>
+          </div>
+          <div className="dropdown">
+            <button className="btn ghost">Проект ▾</button>
+            <div className="dropdown-menu">
+              <button onClick={() => setEditMeta(true)}>Изменить данные проекта</button>
+              <button onClick={props.onDuplicate}>Дублировать проект</button>
+              <button onClick={() => { const n = prompt('Название шаблона:', project.name); if (n) props.onSaveTemplate(n); }}>Сохранить как шаблон</button>
+              <button className="danger-menu-item" onClick={props.onDelete}>Удалить проект</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="project-readiness-panel no-print" aria-label="Готовность проекта">
         <div className="project-readiness-main">
           <span className="eyebrow">Маршрут проекта</span>
@@ -363,7 +376,6 @@ export default function ProjectEditor(props: {
             </button>
           ))}
         </div>
-        <button type="button" className="btn primary project-next-action" onClick={() => openProjectTab(nextAction.tab)}>{nextAction.label}</button>
       </section>
 
       <div className="editor-mode-bar no-print">
@@ -401,7 +413,6 @@ export default function ProjectEditor(props: {
             </button>)}
           </div>
           <div className="project-flow-actions">
-            <button type="button" className="btn primary small" onClick={() => openProjectTab(nextAction.tab)}>{nextAction.label}</button>
             <div>
               {previousStage && <button type="button" className="btn tiny ghost" onClick={() => openStage(previousStage)}>← {PROJECT_STAGE_LABELS[previousStage].label}</button>}
               {nextStage && <button type="button" className="btn tiny ghost" onClick={() => openStage(nextStage)}>{PROJECT_STAGE_LABELS[nextStage].label} →</button>}
@@ -412,7 +423,6 @@ export default function ProjectEditor(props: {
           <div className="project-mobile-switcher no-print">
             <label>Этап<select value={activeStage} onChange={(event) => openStage(event.target.value as ProjectStage)}>{PROJECT_STAGE_ORDER.map((stage) => <option key={stage} value={stage}>{PROJECT_STAGE_LABELS[stage].step}. {PROJECT_STAGE_LABELS[stage].label}</option>)}</select></label>
             <label>Раздел<select value={tab} onChange={(event) => openProjectTab(event.target.value as ProjectTab)}>{subTabs.map((item) => <option key={item.tab} value={item.tab}>{item.label}{item.badge ? ` (${item.badge})` : ''}</option>)}</select></label>
-            <button type="button" className="btn primary small" onClick={() => openProjectTab(nextAction.tab)}>{nextAction.label}</button>
           </div>
           <div className="project-section-head no-print">
             <div>

@@ -5831,3 +5831,137 @@ select option { background: #fff !important; color: #102037 !important; }
   .dashboard-crm-metrics { grid-template-columns: 1fr; }
   .crm-row-footer .btn { flex: 1 1 44%; }
 }
+
+/* Unified command centers: buttons are grouped in one predictable place */
+.dashboard-command-center,
+.project-command-center {
+  display: grid;
+  gap: 14px;
+  margin: -4px 0 16px;
+  padding: 14px;
+  border: 1px solid rgba(15, 47, 87, .14);
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(255,255,255,.97), rgba(239,246,255,.88));
+  box-shadow: 0 16px 38px rgba(15, 47, 87, .08);
+  color: #0f172a;
+}
+.dashboard-command-center {
+  grid-template-columns: minmax(260px, 1fr) minmax(420px, 1.45fr);
+  align-items: center;
+}
+.project-command-center {
+  grid-template-columns: minmax(260px, .95fr) minmax(360px, 1.15fr) minmax(360px, 1.25fr);
+  align-items: stretch;
+}
+.dashboard-command-copy,
+.project-command-main {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.dashboard-command-copy h2,
+.project-command-main h2 {
+  margin: 0;
+  color: #0b3a75;
+  font-size: clamp(18px, 1.8vw, 25px);
+  line-height: 1.08;
+  letter-spacing: -.035em;
+}
+.dashboard-command-copy p,
+.project-command-main p {
+  margin: 0;
+  color: #52667a !important;
+  font-size: 12.5px;
+  line-height: 1.42;
+}
+.dashboard-command-actions,
+.project-command-actions,
+.project-command-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.dashboard-command-actions { justify-content: flex-end; }
+.project-command-actions {
+  align-content: center;
+  padding: 10px;
+  border: 1px solid #dbe7f4;
+  border-radius: 17px;
+  background: rgba(255,255,255,.78);
+}
+.project-command-tools {
+  align-content: center;
+  padding: 10px;
+  border: 1px solid #e1e8f0;
+  border-radius: 17px;
+  background: #f8fbff;
+}
+.project-command-actions .btn,
+.project-command-tools .btn,
+.dashboard-command-actions .btn {
+  min-height: 40px;
+}
+.project-command-actions .btn.primary {
+  flex: 1 1 190px;
+}
+.project-status-control {
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+  color: #52667a;
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.project-status-control .status-select {
+  width: 100%;
+  margin: 0;
+}
+.project-command-tools .dropdown-menu .danger-menu-item,
+.dropdown-menu .danger-menu-item {
+  color: #b42318 !important;
+  font-weight: 900;
+}
+.project-command-tools .dropdown-menu .danger-menu-item:hover,
+.dropdown-menu .danger-menu-item:hover {
+  background: #b42318 !important;
+  color: #fff !important;
+}
+.project-readiness-panel {
+  grid-template-columns: minmax(220px, .9fr) minmax(360px, 1.8fr);
+}
+.project-flow-actions {
+  padding-top: 8px;
+}
+.project-flow-actions > div:empty {
+  display: none;
+}
+
+@media (max-width: 1280px) {
+  .project-command-center { grid-template-columns: 1fr; }
+  .project-command-actions,
+  .project-command-tools { align-content: start; }
+}
+@media (max-width: 960px) {
+  .dashboard-command-center { grid-template-columns: 1fr; }
+  .dashboard-command-actions { justify-content: flex-start; }
+  .project-readiness-panel { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .dashboard-command-actions .btn,
+  .project-command-actions .btn,
+  .project-command-tools .btn,
+  .project-command-tools .dropdown,
+  .project-command-tools .dropdown > .btn,
+  .project-status-control {
+    width: 100%;
+  }
+  .project-command-actions,
+  .project-command-tools,
+  .dashboard-command-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
