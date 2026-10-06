@@ -320,11 +320,19 @@ export default function ProjectEditor(props: {
           <h2>Всё важное — в одной панели</h2>
           <p>Основной следующий шаг, клиентские документы, CRM, фабрика, обмен и сервисные операции собраны здесь, а не разбросаны по шапке.</p>
         </div>
-        <div className="project-command-actions">
+        <div className="project-command-actions system-action-strip">
           <button type="button" className="btn primary" onClick={() => openProjectTab(nextAction.tab)}>{nextAction.label}</button>
-          <button type="button" className="btn ghost" onClick={() => openProjectTab('client')}>КП / договор / чек</button>
-          <button type="button" className="btn ghost" onClick={() => openProjectTab('order')}>CRM и заказ</button>
-          {props.onOpenFactoryBlank && <button type="button" className="btn ghost" title="Калькулятор → данные проекта → бланк → проверка → документ" onClick={props.onOpenFactoryBlank}>Бланк на фабрику</button>}
+          <div className="dropdown action-dropdown wide">
+            <button type="button" className="btn ghost">Разделы проекта ▾</button>
+            <div className="dropdown-menu">
+              <button type="button" onClick={() => openStage('composition')}>1. Состав и цена</button>
+              <button type="button" onClick={() => openStage('eskiz')}>2. Эскиз, замер и фото</button>
+              <button type="button" onClick={() => openStage('check')}>3. Проверка проекта</button>
+              <button type="button" onClick={() => openStage('client')}>4. КП / договор / чек</button>
+              <button type="button" onClick={() => openStage('order')}>5. CRM и заказ</button>
+              {props.onOpenFactoryBlank && <button type="button" title="Калькулятор → данные проекта → бланк → проверка → документ" onClick={props.onOpenFactoryBlank}>Бланк на фабрику</button>}
+            </div>
+          </div>
         </div>
         <div className="project-command-tools">
           <label className="project-status-control">Статус

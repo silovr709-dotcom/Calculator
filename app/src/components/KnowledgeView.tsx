@@ -194,10 +194,17 @@ function OverviewTab(props: {
           <h2>Ищем не по памяти, а по единому источнику: PDF, прайс, справочники и свои статьи</h2>
           <p>Начинайте с «Всё сразу», если не знаете, где лежит ответ. Для точной работы используйте отдельные разделы: прайс, фрезеровки, разбивки, фурнитуру и документы.</p>
         </div>
-        <div className="kb-hero-actions">
+        <div className="kb-hero-actions system-action-strip">
           <button className="btn primary" onClick={() => props.onQuickSearch()}>🔎 Искать везде</button>
-          <button className="btn ghost" onClick={() => props.onOpenTab('cheatsheets')}>⚡ Шпаргалки</button>
-          {props.articles.length === 0 && <button className="btn ghost" onClick={props.onSeed}>Загрузить стартовые статьи</button>}
+          <div className="dropdown action-dropdown wide">
+            <button className="btn ghost" type="button">Разделы и база ▾</button>
+            <div className="dropdown-menu">
+              <button type="button" onClick={() => props.onOpenTab('cheatsheets')}>⚡ Шпаргалки</button>
+              <button type="button" onClick={() => props.onOpenTab('docs')}>Документы и статьи</button>
+              <button type="button" onClick={() => props.onOpenTab('pricebook')}>Прайс</button>
+              {props.articles.length === 0 && <button type="button" onClick={props.onSeed}>Загрузить стартовые статьи</button>}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -382,11 +389,16 @@ function DocsTab(props: { articles: KbArticle[]; onChange: (a: KbArticle[]) => v
         <div className="dashboard-filter-count muted small">
           {props.docs ? `${props.docs.docs.length} документа фабрики · ${totalSections} разделов` : 'Документы загружаются…'}
         </div>
-        <div className="actions">
-          {props.articles.length === 0 && (
-            <button className="btn ghost" onClick={() => props.onChange(seedKbArticles())}>Загрузить стартовые статьи</button>
-          )}
+        <div className="actions system-action-strip">
           <button className="btn primary" onClick={openNew}>+ Статья</button>
+          {props.articles.length === 0 && (
+            <div className="dropdown action-dropdown wide">
+              <button className="btn ghost" type="button">База ▾</button>
+              <div className="dropdown-menu">
+                <button type="button" onClick={() => props.onChange(seedKbArticles())}>Загрузить стартовые статьи</button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -456,9 +468,14 @@ function DocsTab(props: { articles: KbArticle[]; onChange: (a: KbArticle[]) => v
               <div className="card kb-card" key={a.id}>
                 <div className="kb-head">
                   <h3>{a.title}</h3>
-                  <div className="actions">
+                  <div className="actions compact-actions">
                     <button className="btn tiny ghost" onClick={() => { setEditing({ ...a }); setIsNew(false); }}>Изменить</button>
-                    <button className="btn tiny danger" onClick={() => { if (confirm(`Удалить статью «${a.title}»?`)) props.onChange(removeKbArticle(props.articles, a.id)); }}>✕</button>
+                    <div className="dropdown row-action-menu">
+                      <button className="btn tiny ghost" type="button">Ещё ▾</button>
+                      <div className="dropdown-menu">
+                        <button type="button" className="danger-menu-item" onClick={() => { if (confirm(`Удалить статью «${a.title}»?`)) props.onChange(removeKbArticle(props.articles, a.id)); }}>Удалить статью</button>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className="kb-meta">

@@ -730,9 +730,7 @@ export default function FactoryBlankView(props: {
             Фабрика → тип бланка → правила → шаблон. Поля и обязательность — из бланков и инструкций {spec.factoryName}.
           </div>
         </div>
-        <div className="actions">
-          <button className="btn ghost" onClick={() => props.onOpenProject(project.id)}>← К проекту</button>
-          <button className="btn ghost small" onClick={() => window.print()} title={`${spec.blankName}: печать или сохранение в PDF браузером`}>🖨 Печать / PDF</button>
+        <div className="actions system-action-strip">
           <button
             className="btn primary"
             disabled={!hasTemplate || exporting}
@@ -743,6 +741,13 @@ export default function FactoryBlankView(props: {
           >
             {exporting ? 'Собираю файл…' : '⭳ Excel — бланк заказа'}
           </button>
+          <div className="dropdown action-dropdown wide">
+            <button className="btn ghost" type="button">Навигация и печать ▾</button>
+            <div className="dropdown-menu">
+              <button type="button" onClick={() => props.onOpenProject(project.id)}>← Вернуться к проекту</button>
+              <button type="button" onClick={() => window.print()} title={`${spec.blankName}: печать или сохранение в PDF браузером`}>🖨 Печать / PDF</button>
+            </div>
+          </div>
         </div>
       </header>
 

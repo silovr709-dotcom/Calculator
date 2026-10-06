@@ -295,30 +295,36 @@ export default function ModulesPanel(props: {
             </div>
           )}
         </div>
-        <button className="btn ghost" onClick={() => setShowPlanner((value) => !value)}>▦ Разложить по стене</button>
-        <button className="btn ghost" disabled={selectedIds.length === 0} onClick={() => setShowBulkEdit((value) => !value)}>✎ Массовое редактирование ({selectedIds.length})</button>
-        {(pendingDimensionModuleCount + pendingFacadeModuleCount + pendingHingeModuleCount) > 0 && (
-          <button
-            className="btn ghost"
-            title="Надбавки за нестандартные габариты + фасады и петли по техничке — для всех позиций сразу"
-            onClick={() => {
-              const next = mods.map((module) => {
-                const body = resolveSlot(module, 'body', defaults, pricebook).item;
-                if (!body) return module;
-                let m = applyDimensionSurcharges(module, body, pricebook);
-                m = applyTechnicalFacadeSpec(m, body, m.facadeSpecStatus === 'outdated' || isTechnicalFacadeSpecOutdated(m, body));
-                if (m.hingeSpecStatus !== 'manual') {
-                  const inference = inferHingeSpec(m, body);
-                  if (inference) m = { ...m, hinges: inference.hinges, hingeSpecStatus: 'applied' as const };
-                }
-                return m;
-              });
-              setMods(next);
-              showToast('Рекомендации применены ко всем позициям');
-            }}
-          >✨ Применить все рекомендации ({pendingDimensionModuleCount + pendingFacadeModuleCount + pendingHingeModuleCount})</button>
-        )}
-        <button className="btn ghost" disabled={selectedIds.length === 0} title="Скопировать высоту, глубину, опоры и материалы позиции, стоящей НАД первой выбранной" onClick={applyFillFromAbove}>⤓ Заполнить с верхней (Ctrl+D)</button>
+        <div className="dropdown action-dropdown wide module-tools-menu">
+          <button className="btn ghost" type="button">Инструменты ▾</button>
+          <div className="dropdown-menu">
+            <button type="button" onClick={() => setShowPlanner((value) => !value)}>{showPlanner ? 'Скрыть раскладку по стене' : '▦ Разложить по стене'}</button>
+            <button type="button" disabled={selectedIds.length === 0} onClick={() => setShowBulkEdit((value) => !value)}>✎ Массовое редактирование ({selectedIds.length})</button>
+            {(pendingDimensionModuleCount + pendingFacadeModuleCount + pendingHingeModuleCount) > 0 ? (
+              <button
+                type="button"
+                title="Надбавки за нестандартные габариты + фасады и петли по техничке — для всех позиций сразу"
+                onClick={() => {
+                  const next = mods.map((module) => {
+                    const body = resolveSlot(module, 'body', defaults, pricebook).item;
+                    if (!body) return module;
+                    let m = applyDimensionSurcharges(module, body, pricebook);
+                    m = applyTechnicalFacadeSpec(m, body, m.facadeSpecStatus === 'outdated' || isTechnicalFacadeSpecOutdated(m, body));
+                    if (m.hingeSpecStatus !== 'manual') {
+                      const inference = inferHingeSpec(m, body);
+                      if (inference) m = { ...m, hinges: inference.hinges, hingeSpecStatus: 'applied' as const };
+                    }
+                    return m;
+                  });
+                  setMods(next);
+                  showToast('Рекомендации применены ко всем позициям');
+                }}
+              >✨ Применить все рекомендации ({pendingDimensionModuleCount + pendingFacadeModuleCount + pendingHingeModuleCount})</button>
+            ) : <button type="button" disabled>Рекомендаций сейчас нет</button>}
+            <button type="button" disabled={selectedIds.length === 0} title="Скопировать высоту, глубину, опоры и материалы позиции, стоящей НАД первой выбранной" onClick={applyFillFromAbove}>⤓ Заполнить с верхней (Ctrl+D)</button>
+          </div>
+        </div>
+        {selectedIds.length > 0 && <span className="module-toolbar-state">Выбрано: {selectedIds.length}</span>}
         {allProblems.some((p) => p.critical) && <span className="warn">⛔ есть позиции с неполными данными — см. проверку внизу</span>}
       </div>
 

@@ -222,13 +222,16 @@ export default function SyncPanel(props: {
                   {config.lastSyncedAt && <div className="muted small">Посл. синхронизация: {fmtDate(config.lastSyncedAt)}</div>}
                   {statusMsg && <div className="small" style={{ marginTop: 4, color: 'var(--accent)' }}>{statusMsg}</div>}
                 </div>
-                <div className="actions">
+                <div className="actions system-action-strip">
                   <button className="btn primary small" onClick={handleManualSync} disabled={syncing}>
                     {syncing ? 'Обновление…' : '↻ Синхронизировать сейчас'}
                   </button>
-                  <button className="btn danger small" onClick={handleDisconnect}>
-                    Отключить
-                  </button>
+                  <div className="dropdown action-dropdown wide">
+                    <button className="btn ghost small" type="button">Настройки ▾</button>
+                    <div className="dropdown-menu">
+                      <button type="button" className="danger-menu-item" onClick={handleDisconnect}>Отключить синхронизацию</button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

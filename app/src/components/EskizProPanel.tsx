@@ -887,13 +887,18 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
           <h3>Встроенный инструмент для скрина проекта, размеров, модулей и коммуникаций</h3>
           <p className="muted small">Код Эскиз PRO перенесён внутрь калькулятора: загрузите скрин, нанесите размеры/подписи, поставьте объект «Модуль» и добавляйте коммуникации на том же основном полотне без iframe и отдельного маленького превью.</p>
         </div>
-        <div className="actions">
-          <button className="btn ghost" onClick={() => fileRef.current?.click()}>Импорт старого .eskiz</button>
-          <button className="btn ghost" disabled={!activePreviewProject} onClick={exportActiveEskizFile}>Экспорт файла Эскиз</button>
-          <button className="btn ghost" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('png')}>Экспорт PNG</button>
-          <button className="btn ghost" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('pdf')}>Экспорт PDF</button>
-          <button className="btn ghost" onClick={() => setFullScreenSketch(true)}>Открыть Эскиз PRO на весь экран</button>
+        <div className="actions eskiz-primary-actions system-action-strip">
           <button className="btn primary" disabled={!activePreviewProject} onClick={syncModulesToCalculation}>Модули → просчёт</button>
+          <button className="btn ghost" onClick={() => setFullScreenSketch(true)}>На весь экран</button>
+          <div className="dropdown action-dropdown wide">
+            <button className="btn ghost" type="button">Файлы и экспорт ▾</button>
+            <div className="dropdown-menu">
+              <button type="button" onClick={() => fileRef.current?.click()}>Импорт старого .eskiz</button>
+              <button type="button" disabled={!activePreviewProject} onClick={exportActiveEskizFile}>Экспорт файла Эскиз</button>
+              <button type="button" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('png')}>Экспорт PNG</button>
+              <button type="button" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('pdf')}>Экспорт PDF</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -968,21 +973,21 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
               <div><b>{activeId ? 'Да' : 'Нет'}</b><span>главный эскиз</span></div>
               <div><b>Да</b><span>встроен</span></div>
             </div>
-            <div className="actions eskiz-pro-import-actions">
-              <button className="btn ghost" onClick={() => fileRef.current?.click()}>Импорт .eskiz</button>
-              <button className="btn ghost" disabled={!activePreviewProject} onClick={exportActiveEskizFile}>Экспорт .eskiz</button>
-              <button className="btn ghost" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('png')}>{exportingSketch === 'png' ? 'PNG…' : 'PNG-картинка'}</button>
-              <button className="btn ghost" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('pdf')}>{exportingSketch === 'pdf' ? 'PDF…' : 'PDF'}</button>
-            </div>
+            <div className="eskiz-pro-file-note">Импорт, рабочий файл и быстрый экспорт собраны в верхнем меню «Файлы и экспорт», чтобы не дублировать кнопки в разных местах.</div>
             {message && <div className="eskiz-pro-message muted small">{message}</div>}
           </section>
 
           <section className="card no-print eskiz-pro-export-card">
             <div className="section-head"><div><h3>Экспорт Эскиз PRO</h3><p className="muted small">Быстрые выгрузки текущего главного эскиза: рабочий .eskiz, картинка PNG и PDF A4. Скрытые плашки габаритов коммуникаций остаются скрытыми.</p></div></div>
-            <div className="eskiz-pro-export-actions">
-              <button className="btn ghost block" disabled={!activePreviewProject} onClick={exportActiveEskizFile}>Скачать .eskiz</button>
+            <div className="eskiz-pro-export-actions unified-export-actions">
               <button className="btn primary block" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('png')}>{exportingSketch === 'png' ? 'Готовлю PNG…' : 'Скачать картинку PNG'}</button>
-              <button className="btn primary block" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('pdf')}>{exportingSketch === 'pdf' ? 'Готовлю PDF…' : 'Скачать PDF'}</button>
+              <div className="dropdown action-dropdown wide">
+                <button className="btn ghost block" type="button">Другой формат ▾</button>
+                <div className="dropdown-menu">
+                  <button type="button" disabled={!activePreviewProject} onClick={exportActiveEskizFile}>Скачать .eskiz</button>
+                  <button type="button" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('pdf')}>{exportingSketch === 'pdf' ? 'Готовлю PDF…' : 'Скачать PDF'}</button>
+                </div>
+              </div>
             </div>
             <div className="eskiz-pro-export-hints"><span>Модули: {moduleMarkerMode === 'hidden' ? 'скрыты' : moduleMarkerMode === 'compact' ? 'компактно' : 'полностью'}</span><span>Коммуникаций: {activePreviewProject ? communications.filter((marker) => marker.eskizId === activePreviewProject.id).length : 0}</span><span>{showCommunicationSizeBadges ? 'Плашки размеров включены' : 'Плашки размеров скрыты'}</span></div>
           </section>
@@ -1014,11 +1019,16 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
                   return (
                     <article className={activeId === id ? 'active' : ''} key={id}>
                       <div><b>{snapshot?.title ?? id}</b><span>{snapshot ? `snapshot ${formatDate(snapshot.updatedAt)}` : 'snapshot отсутствует'}</span></div>
-                      <div className="actions">
+                      <div className="actions compact-actions">
                         <button className="btn tiny ghost" onClick={() => updateEskizPro({ activeProjectId: id })}>Главный</button>
-                        {previewProject && <button className="btn tiny ghost" disabled={exportingSketch !== null} onClick={() => void exportEskizAs('png', previewProject)}>PNG</button>}
-                        {previewProject && <button className="btn tiny ghost" disabled={exportingSketch !== null} onClick={() => void exportEskizAs('pdf', previewProject)}>PDF</button>}
-                        <button className="btn tiny danger" onClick={() => detach(id)}>Убрать</button>
+                        <div className="dropdown row-action-menu">
+                          <button className="btn tiny ghost" type="button">Ещё ▾</button>
+                          <div className="dropdown-menu">
+                            {previewProject && <button type="button" disabled={exportingSketch !== null} onClick={() => void exportEskizAs('png', previewProject)}>Экспорт PNG</button>}
+                            {previewProject && <button type="button" disabled={exportingSketch !== null} onClick={() => void exportEskizAs('pdf', previewProject)}>Экспорт PDF</button>}
+                            <button type="button" className="danger-menu-item" onClick={() => detach(id)}>Убрать из КП</button>
+                          </div>
+                        </div>
                       </div>
                       {previewProject && <EskizProjectPreview project={previewProject} compact activeModuleKey={activeMarkerKey} moduleBindings={moduleBindings} moduleStatuses={moduleStatuses} moduleMarkerMode={moduleMarkerMode} communicationMarkers={communications} showCommunicationSizeBadges={showCommunicationSizeBadges} activeCommunicationId={activeCommunicationId} onModuleClick={handlePreviewModuleClick} onCommunicationClick={handleCommunicationClick} />}
                     </article>

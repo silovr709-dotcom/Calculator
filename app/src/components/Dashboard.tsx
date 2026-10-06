@@ -127,17 +127,22 @@ export default function Dashboard(props: {
           <h2>Проекты, CRM и обмен — рядом</h2>
           <p>Основные операции вынесены в одну панель: создать расчёт, открыть CRM, сделать быстрый расчёт, импортировать или сохранить данные.</p>
         </div>
-        <div className="dashboard-command-actions">
+        <div className="dashboard-command-actions system-action-strip">
           <button className="btn primary" onClick={() => setShowNew(true)}>+ Новый расчёт</button>
-          {props.onOpenCrm && <button className="btn ghost" onClick={props.onOpenCrm}>CRM клиентов</button>}
-          <button className="btn ghost" onClick={props.onQuick}>Быстрый расчёт</button>
-          {props.onOpenSync && <button className="btn ghost" title="Синхронизация с телефоном и другими устройствами" onClick={props.onOpenSync}>Синхронизация</button>}
-          <div className="dropdown">
-            <button className="btn ghost">Данные ▾</button>
+          <div className="dropdown action-dropdown wide">
+            <button className="btn ghost" type="button">Перейти ▾</button>
             <div className="dropdown-menu">
-              <button onClick={doBackup}>⭳ Резервная копия всего (файл .json)</button>
-              <button onClick={() => backupRef.current?.click()}>⭱ Восстановить из копии…</button>
-              <button onClick={() => fileRef.current?.click()}>Импорт одного проекта…</button>
+              {props.onOpenCrm && <button type="button" onClick={props.onOpenCrm}>CRM клиентов</button>}
+              <button type="button" onClick={props.onQuick}>Быстрый расчёт</button>
+              {props.onOpenSync && <button type="button" title="Синхронизация с телефоном и другими устройствами" onClick={props.onOpenSync}>Синхронизация и телефон</button>}
+            </div>
+          </div>
+          <div className="dropdown action-dropdown wide">
+            <button className="btn ghost" type="button">Данные ▾</button>
+            <div className="dropdown-menu">
+              <button type="button" onClick={doBackup}>⭳ Резервная копия всего (файл .json)</button>
+              <button type="button" onClick={() => backupRef.current?.click()}>⭱ Восстановить из копии…</button>
+              <button type="button" onClick={() => fileRef.current?.click()}>Импорт одного проекта…</button>
             </div>
           </div>
         </div>
