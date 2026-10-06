@@ -6762,3 +6762,152 @@ select option { background: #fff !important; color: #102037 !important; }
   }
   .project-workspace-frame.modules-workspace-frame .project-context-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; }
 }
+
+/* ---------- Module editor as popup dialog ---------- */
+.module-editor-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(12px, 2.4vw, 30px);
+  background: rgba(5, 18, 38, .56);
+  backdrop-filter: blur(10px);
+  animation: fadeIn .14s ease-out;
+}
+.module-editor-panel.module-editor-modal {
+  position: relative;
+  width: min(1280px, calc(100vw - 28px));
+  max-height: min(900px, calc(100vh - 28px));
+  overflow: auto;
+  padding: 0 22px 22px;
+  border: 1px solid rgba(125, 181, 255, .30);
+  border-top: 0;
+  border-radius: 26px;
+  background: linear-gradient(180deg, #ffffff, #f7fbff);
+  box-shadow: 0 34px 110px rgba(3, 18, 42, .34);
+}
+.module-editor-panel.module-editor-modal .module-editor-hero {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0 -22px 18px;
+  padding: 22px 70px 22px 22px;
+  border-radius: 26px 26px 18px 18px;
+}
+.module-editor-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid rgba(255,255,255,.26);
+  border-radius: 999px;
+  background: rgba(255,255,255,.14);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 950;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.20);
+}
+.module-editor-close:hover,
+.module-editor-close:focus-visible {
+  outline: none;
+  background: rgba(255,255,255,.24);
+  border-color: rgba(255,255,255,.46);
+}
+.module-editor-panel.module-editor-modal > h4 {
+  margin: 22px 0 10px;
+  padding-top: 14px;
+  border-top: 1px solid #e2edf7;
+  color: #0b3a75;
+  font-size: 15px;
+  letter-spacing: -.02em;
+}
+.module-editor-panel.module-editor-modal .module-editor-main-fields {
+  grid-template-columns: minmax(260px, 1.25fr) minmax(180px, .8fr) minmax(120px, .45fr) minmax(230px, 1fr);
+  gap: 13px;
+  align-items: end;
+}
+.module-editor-panel.module-editor-modal .grid3,
+.module-editor-panel.module-editor-modal .grid4 { gap: 13px; }
+.module-editor-panel.module-editor-modal .grid3 { grid-template-columns: repeat(3, minmax(190px, 1fr)); }
+.module-editor-panel.module-editor-modal .grid4 { grid-template-columns: repeat(4, minmax(160px, 1fr)); }
+.module-editor-panel.module-editor-modal label {
+  padding: 10px;
+  border: 1px solid #dbe7f3;
+  border-radius: 14px;
+  background: rgba(255,255,255,.76);
+  color: #52667a;
+}
+.module-editor-panel.module-editor-modal label input,
+.module-editor-panel.module-editor-modal label select,
+.module-editor-panel.module-editor-modal label textarea {
+  min-height: 42px;
+  margin-top: 2px;
+  border-radius: 11px;
+  font-size: 14px;
+}
+.module-editor-panel.module-editor-modal .module-formula-card,
+.module-editor-panel.module-editor-modal .facade-tech-card,
+.module-editor-panel.module-editor-modal .hinge-tech-card,
+.module-editor-panel.module-editor-modal .extra-facade-card,
+.module-editor-panel.module-editor-modal .surcharge-tech-card {
+  margin: 16px 0;
+  padding: 14px;
+  border-radius: 18px;
+  border-color: #dbe7f3;
+  background: #fbfdff;
+}
+.module-editor-panel.module-editor-modal .slot-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.module-editor-panel.module-editor-modal .slot-row {
+  grid-template-columns: minmax(120px, .55fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 8px 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: #fff;
+}
+.module-editor-panel.module-editor-modal .slot-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.module-editor-panel.module-editor-modal .slot-value { line-height: 1.35; }
+@media (max-width: 1180px) {
+  .module-editor-panel.module-editor-modal .module-editor-hero { grid-template-columns: 1fr; }
+  .module-editor-panel.module-editor-modal .module-editor-main-fields,
+  .module-editor-panel.module-editor-modal .grid3,
+  .module-editor-panel.module-editor-modal .grid4,
+  .module-editor-panel.module-editor-modal .slot-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .module-editor-modal-backdrop { align-items: stretch; padding: 0; }
+  .module-editor-panel.module-editor-modal {
+    width: 100vw;
+    max-height: 100dvh;
+    height: 100dvh;
+    padding: 0 12px 14px;
+    border-radius: 0;
+  }
+  .module-editor-panel.module-editor-modal .module-editor-hero {
+    margin: 0 -12px 14px;
+    padding: 16px 14px 56px;
+    border-radius: 0 0 18px 18px;
+  }
+  .module-editor-close { top: auto; right: 14px; bottom: 14px; }
+  .module-editor-panel.module-editor-modal .module-editor-hero-stats,
+  .module-editor-panel.module-editor-modal .module-editor-main-fields,
+  .module-editor-panel.module-editor-modal .grid3,
+  .module-editor-panel.module-editor-modal .grid4,
+  .module-editor-panel.module-editor-modal .slot-list { grid-template-columns: 1fr; }
+}
+/* Catalog/material pickers opened from the module popup must appear above it. */
+.modal-back { z-index: 360; }

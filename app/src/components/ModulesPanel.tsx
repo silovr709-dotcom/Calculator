@@ -59,6 +59,14 @@ export default function ModulesPanel(props: {
     const timer = setTimeout(() => setToast(null), 7000);
     return () => clearTimeout(timer);
   }, [toast]);
+  useEffect(() => {
+    if (!selId || pick || pickSurcharge) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelId(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selId, pick, pickSurcharge]);
   const showToast = (text: string, undo: (() => void) | null = null) => setToast({ text, undo });
 
   const shape = normalizeLayoutShape(project.sketch?.shape);
@@ -332,7 +340,7 @@ export default function ModulesPanel(props: {
         <div className="module-workbench-main">
           <span className="eyebrow">Состав кухни</span>
           <h3>{mods.length > 0 ? 'Список модулей → выбранная позиция → проверка' : 'Добавьте первый модуль кухни'}</h3>
-          <p>Слева остаётся быстрый список и табличный ввод, справа сразу открывается редактор выбранного модуля: не нужно листать под всей таблицей.</p>
+          <p>Оставляем быстрый список и табличный ввод. Клик по модулю открывает большое всплывающее окно редактирования — без тесной правой панели.</p>
         </div>
         <div className="module-workbench-steps">
           <span className={mods.length > 0 ? 'ready' : ''}><b>{mods.length || '—'}</b><small>модулей</small></span>
@@ -346,14 +354,14 @@ export default function ModulesPanel(props: {
             <span>{sel.widthMm || '—'}×{sel.heightMm || '—'}×{sel.depthMm || '—'} мм · {sel.qty} шт</span>
             <span>{selectedBody ? selectedBody.name.slice(0, 48) : 'корпус не выбран'}</span>
             <strong>{selectedModuleCalculation ? fmtMoney(selectedModuleCalculation.totals.cost) : '—'}</strong>
-          </> : <><b>Нет выбранной позиции</b><span>Кликните по строке модуля — ниже откроется полный редактор.</span></>}
+          </> : <><b>Нет выбранной позиции</b><span>Кликните по карточке или строке — откроется окно редактирования.</span></>}
         </aside>
       </section>
 
       {showPlanner && <WallPlanner project={project} onChange={props.onChange} onClose={() => setShowPlanner(false)} />}
       {showBulkEdit && <BulkEditPanel modules={mods} selectedIds={selectedIds} pricebook={pricebook} onApply={(next) => props.onChange({ ...project, modules: next })} onClose={() => setShowBulkEdit(false)} />}
 
-      {/* Рабочая область: список модулей + редактор выбранной позиции */}
+      {/* Рабочая область: список модулей + всплывающий редактор выбранной позиции */}
       {mods.length === 0 ? (
         <div className="empty">Позиций пока нет. Нажмите «+ Добавить позицию», выберите тип (нижний шкаф, пенал…), затем задайте размеры и комплектацию.</div>
       ) : (
@@ -362,7 +370,7 @@ export default function ModulesPanel(props: {
             <div className="module-list-head">
               <div>
                 <span className="eyebrow">Модули проекта</span>
-                <h3>Выберите позицию — редактор открыт справа</h3>
+                <h3>Кликните позицию — откроется окно редактора</h3>
               </div>
               <span className="module-list-count">{mods.length} поз.</span>
             </div>
@@ -401,7 +409,7 @@ export default function ModulesPanel(props: {
                   <tr
                     key={m.id}
                     className={`${selId === m.id ? 'sel-row' : ''} ${c.level !== 'ok' ? 'has-warn' : ''} ${isDropTarget ? (dropTarget.after ? 'drop-after' : 'drop-before') : ''}`}
-                    onClick={() => setSelId(m.id === selId ? null : m.id)}
+                    onClick={() => setSelId(m.id)}
                     onDragOver={(e) => {
                       if (!dragId || dragId === m.id) return;
                       e.preventDefault();
@@ -474,12 +482,13 @@ export default function ModulesPanel(props: {
 
             </details>
           </section>
-          {sel ? (
-            <section className="card mod-editor module-editor-panel">
+          {sel && (
+            <div className="module-editor-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelId(null); }}>
+              <section className="card mod-editor module-editor-panel module-editor-modal" role="dialog" aria-modal="true" aria-labelledby="module-editor-title">
           <div className="module-editor-hero">
             <div>
               <span className="eyebrow">Редактор модуля</span>
-              <h3>{sel.name} {statusDot(checks.get(sel.id)!.level)}</h3>
+              <h3 id="module-editor-title">{sel.name} {statusDot(checks.get(sel.id)!.level)}</h3>
               <p>{sel.type} · {sel.widthMm || '—'}×{sel.heightMm || '—'}×{sel.depthMm || '—'} мм · {sel.qty} шт</p>
             </div>
             <div className="module-editor-hero-stats">
@@ -487,6 +496,7 @@ export default function ModulesPanel(props: {
               <span><b>{selectedBody ? 'выбран' : 'нет'}</b><small>корпус</small></span>
               <span><b>{checks.get(sel.id)!.level === 'ok' ? 'OK' : checks.get(sel.id)!.level === 'error' ? 'ошибка' : 'проверить'}</b><small>статус</small></span>
             </div>
+            <button className="module-editor-close" type="button" onClick={() => setSelId(null)}>Закрыть ✕</button>
           </div>
           <div className="grid4 module-editor-main-fields">
             <label>Название<input value={sel.name} onChange={(e) => updMod(sel.id, { name: e.target.value })} /></label>
@@ -754,12 +764,7 @@ export default function ModulesPanel(props: {
             </div>
           )}
         </section>
-          ) : (
-            <section className="card module-editor-empty">
-              <span className="eyebrow">Редактор позиции</span>
-              <h3>Выберите модуль слева</h3>
-              <p className="muted">Редактор больше не прячется под длинным списком модулей: карточка выбранной позиции открывается в правой колонке и остаётся рядом с таблицей.</p>
-            </section>
+            </div>
           )}
         </div>
       )}
