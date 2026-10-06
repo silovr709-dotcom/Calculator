@@ -33,6 +33,8 @@ export interface EskizSketchPngOptions extends EskizSketchSvgOptions {
    * none — ровно сам эскиз без внутренних полей; удобно для вставки в ячейки Excel без «паспарту».
    */
   frame?: 'card' | 'none';
+  /** false — не печатать под эскизом блок «Техника и ссылки». */
+  linkLegend?: boolean;
 }
 
 export interface EskizSketchJpegOptions extends EskizSketchPngOptions {
@@ -520,28 +522,51 @@ export interface EskizSketchPlacement {
   y: number;
   drawWidth: number;
   drawHeight: number;
+  /** Верх блока «Техника и ссылки» под эскизом; 0 — легенды нет. */
+  legendTop: number;
+  legendRows: number;
+  legendMargin: number;
 }
 
-export function eskizSketchPlacement(sourceWidth: number, sourceHeight: number, options: EskizSketchPngOptions): EskizSketchPlacement {
+export const ESKIZ_LEGEND_ROW_HEIGHT = 19;
+export const ESKIZ_LEGEND_TITLE_HEIGHT = 20;
+export const ESKIZ_LEGEND_MAX_ROWS = 8;
+
+export function eskizSketchPlacement(sourceWidth: number, sourceHeight: number, options: EskizSketchPngOptions, legendRows = 0): EskizSketchPlacement {
   const displayWidth = Math.max(240, Math.round(options.widthPx));
   const displayHeight = Math.max(220, Math.round(options.heightPx));
-  if (options.frame === 'none') return { displayWidth, displayHeight, x: 0, y: 0, drawWidth: displayWidth, drawHeight: displayHeight };
+  const margin = 14;
+  if (options.frame === 'none') {
+    return { displayWidth, displayHeight, x: 0, y: 0, drawWidth: displayWidth, drawHeight: displayHeight, legendTop: 0, legendRows: 0, legendMargin: margin };
+  }
   const hasHeader = Boolean(options.title || options.subtitle);
   const headerHeight = hasHeader ? 54 : 12;
-  const margin = 14;
+  const rows = Math.min(Math.max(0, legendRows), ESKIZ_LEGEND_MAX_ROWS);
+  const legendHeight = rows > 0 ? ESKIZ_LEGEND_TITLE_HEIGHT + rows * ESKIZ_LEGEND_ROW_HEIGHT + 10 : 0;
   const availableWidth = displayWidth - margin * 2;
-  const availableHeight = displayHeight - headerHeight - margin * 1.5;
+  const availableHeight = displayHeight - headerHeight - margin * 1.5 - legendHeight;
   const scale = Math.min(availableWidth / Math.max(1, sourceWidth), availableHeight / Math.max(1, sourceHeight));
   const drawWidth = Math.max(1, sourceWidth) * scale;
   const drawHeight = Math.max(1, sourceHeight) * scale;
+  const y = headerHeight + Math.max(6, (availableHeight - drawHeight) / 2);
   return {
     displayWidth,
     displayHeight,
     x: (displayWidth - drawWidth) / 2,
-    y: headerHeight + Math.max(6, (availableHeight - drawHeight) / 2),
+    y,
     drawWidth,
     drawHeight,
+    legendTop: rows > 0 ? y + drawHeight + 10 : 0,
+    legendRows: rows,
+    legendMargin: margin,
   };
+}
+
+/** Подпись строки легенды: название техники и адрес. */
+export function eskizLegendRowText(link: EskizSketchLinkBox): string {
+  const label = link.label.replace(/\s+/gu, ' ').trim();
+  const url = link.url.replace(/^https?:\/\//iu, '');
+  return `${label} — ${url}`;
 }
 
 async function renderEskizSketchCanvas(project: EskizProject, options: EskizSketchPngOptions): Promise<{ canvas: HTMLCanvasElement; width: number; height: number }> {
@@ -577,7 +602,8 @@ async function renderEskizSketchCanvas(project: EskizProject, options: EskizSket
     ctx.fillText(options.subtitle || project.image.name, 16, 42);
   }
 
-  const placement = eskizSketchPlacement(source.width, source.height, { ...options, widthPx: displayWidth, heightPx: displayHeight });
+  const legendLinks = options.linkLegend === false ? [] : collectEskizSketchLinks(project, options).slice(0, ESKIZ_LEGEND_MAX_ROWS);
+  const placement = eskizSketchPlacement(source.width, source.height, { ...options, widthPx: displayWidth, heightPx: displayHeight }, legendLinks.length);
   const { x, y, drawWidth, drawHeight } = placement;
   ctx.fillStyle = '#eef2ef';
   ctx.fillRect(x - 1, y - 1, drawWidth + 2, drawHeight + 2);
@@ -585,7 +611,30 @@ async function renderEskizSketchCanvas(project: EskizProject, options: EskizSket
   ctx.strokeStyle = '#1f2f29';
   ctx.lineWidth = 1;
   ctx.strokeRect(x, y, drawWidth, drawHeight);
+
+  if (placement.legendRows > 0) {
+    const left = placement.legendMargin;
+    ctx.fillStyle = '#1d3f72';
+    ctx.font = '700 12px Arial, sans-serif';
+    ctx.fillText('Техника и ссылки (кликабельны в PDF):', left, placement.legendTop + 13);
+    ctx.font = '12px Arial, sans-serif';
+    legendLinks.forEach((link, index) => {
+      const rowY = placement.legendTop + ESKIZ_LEGEND_TITLE_HEIGHT + index * ESKIZ_LEGEND_ROW_HEIGHT;
+      const text = `↗ ${eskizLegendRowText(link)}`;
+      ctx.fillStyle = '#1d4ed8';
+      ctx.fillText(text, left + 2, rowY + 13);
+      const textWidth = Math.min(ctx.measureText(text).width, displayWidth - left * 2);
+      ctx.strokeStyle = '#1d4ed8';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(left + 2, rowY + 15.5);
+      ctx.lineTo(left + 2 + textWidth, rowY + 15.5);
+      ctx.stroke();
+    });
+  }
+
   ctx.strokeStyle = '#d8e5df';
+  ctx.lineWidth = 1;
   ctx.strokeRect(.5, .5, displayWidth - 1, displayHeight - 1);
 
   return { canvas, width: displayWidth, height: displayHeight };
@@ -702,26 +751,37 @@ export function eskizSketchPdfLinks(
 ): PdfLinkAnnotation[] {
   const sourceWidth = Math.max(1, project.image.width);
   const sourceHeight = Math.max(1, project.image.height);
-  const placement = eskizSketchPlacement(sourceWidth, sourceHeight, options);
+  const links = collectEskizSketchLinks(project, options);
+  const legendLinks = options.linkLegend === false ? [] : links.slice(0, ESKIZ_LEGEND_MAX_ROWS);
+  const placement = eskizSketchPlacement(sourceWidth, sourceHeight, options, legendLinks.length);
   const scaleX = placement.drawWidth / sourceWidth;
   const scaleY = placement.drawHeight / sourceHeight;
   const ptPerPxX = pageWidthPt / placement.displayWidth;
   const ptPerPxY = pageHeightPt / placement.displayHeight;
-  return collectEskizSketchLinks(project, options).map((box) => {
-    const left = (placement.x + box.x * scaleX) * ptPerPxX;
-    const right = (placement.x + (box.x + box.width) * scaleX) * ptPerPxX;
-    const top = (placement.y + box.y * scaleY) * ptPerPxY;
-    const bottom = (placement.y + (box.y + box.height) * scaleY) * ptPerPxY;
+  const toRect = (leftPx: number, topPx: number, rightPx: number, bottomPx: number): [number, number, number, number] => [
+    clamp(leftPx * ptPerPxX, 0, pageWidthPt),
+    clamp(pageHeightPt - bottomPx * ptPerPxY, 0, pageHeightPt),
+    clamp(rightPx * ptPerPxX, 0, pageWidthPt),
+    clamp(pageHeightPt - topPx * ptPerPxY, 0, pageHeightPt),
+  ];
+  const plateAnnotations = links.map((box) => ({
+    url: box.url,
+    rect: toRect(
+      placement.x + box.x * scaleX,
+      placement.y + box.y * scaleY,
+      placement.x + (box.x + box.width) * scaleX,
+      placement.y + (box.y + box.height) * scaleY,
+    ),
+  }));
+  const legendAnnotations = legendLinks.map((box, index) => {
+    const rowTop = placement.legendTop + ESKIZ_LEGEND_TITLE_HEIGHT + index * ESKIZ_LEGEND_ROW_HEIGHT;
+    const textWidth = Math.min((eskizLegendRowText(box).length + 2) * 6.1, placement.displayWidth - placement.legendMargin * 2);
     return {
       url: box.url,
-      rect: [
-        clamp(left, 0, pageWidthPt),
-        clamp(pageHeightPt - bottom, 0, pageHeightPt),
-        clamp(right, 0, pageWidthPt),
-        clamp(pageHeightPt - top, 0, pageHeightPt),
-      ] as [number, number, number, number],
+      rect: toRect(placement.legendMargin, rowTop, placement.legendMargin + textWidth, rowTop + ESKIZ_LEGEND_ROW_HEIGHT),
     };
   });
+  return [...plateAnnotations, ...legendAnnotations];
 }
 
 export async function renderEskizSketchPdf(project: EskizProject, options: EskizSketchPdfOptions = {}): Promise<EskizSketchPdf> {

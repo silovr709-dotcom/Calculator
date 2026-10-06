@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EskizProject } from './eskizPro';
-import { buildEskizSketchSvg, buildSingleImagePdf, collectEskizSketchLinks, eskizSketchFileName, eskizSketchPdfLinks, normalizeEskizLinkUrl } from './eskizSketchExport';
+import { buildEskizSketchSvg, buildSingleImagePdf, collectEskizSketchLinks, eskizLegendRowText, eskizSketchFileName, eskizSketchPdfLinks, eskizSketchPlacement, normalizeEskizLinkUrl } from './eskizSketchExport';
 import type { EskizCommunicationMarker } from '../types';
 
 const project: EskizProject = {
@@ -185,7 +185,8 @@ describe('кликабельные ссылки на технику в выгр�
 
   it('переводит ссылки в координаты страницы PDF', () => {
     const annotations = eskizSketchPdfLinks(withLinks, { widthPx: 1786, heightPx: 2526, title: 'Кухня Иванов' }, 595.28, 841.89);
-    expect(annotations).toHaveLength(2);
+    // по две аннотации на ссылку: плашка на эскизе и строка в списке под ним
+    expect(annotations).toHaveLength(4);
     annotations.forEach((annotation) => {
       const [x1, y1, x2, y2] = annotation.rect;
       expect(x2).toBeGreaterThan(x1);
@@ -207,5 +208,63 @@ describe('кликабельные ссылки на технику в выгр�
     expect(text).toContain('/URI (https://shop.ru/oven-900)');
     expect(text).toContain('xref\n0 7');
     expect(text).toContain('/Size 7');
+  });
+});
+
+
+describe('список «Техника и ссылки» под эскизом', () => {
+  const withLinks: EskizProject = {
+    ...project,
+    objects: [
+      { id: 'eq1', type: 'equipment', x: 200, y: 100, text: 'Духовой шкаф', equipmentType: 'Духовой шкаф', url: 'https://shop.ru/oven-900', color: '#1d3f72', fontSize: 12 },
+      { id: 'lk1', type: 'link', x: 400, y: 300, text: 'Мойка', url: 'https://shop.ru/sink', color: '#1d3f72', fontSize: 12 },
+    ],
+  };
+
+  it('делает подпись строки без схемы адреса', () => {
+    expect(eskizLegendRowText({ objectId: 'eq1', url: 'https://shop.ru/oven-900', label: 'Духовой шкаф', x: 0, y: 0, width: 10, height: 10 }))
+      .toBe('Духовой шкаф — shop.ru/oven-900');
+  });
+
+  it('резервирует место под список и уменьшает эскиз', () => {
+    const options = { widthPx: 1786, heightPx: 2526, title: 'Кухня Иванов' };
+    const without = eskizSketchPlacement(800, 500, options, 0);
+    const withLegend = eskizSketchPlacement(800, 500, options, 2);
+    expect(withLegend.legendRows).toBe(2);
+    expect(withLegend.legendTop).toBeGreaterThan(withLegend.y + withLegend.drawHeight - 1);
+    expect(withLegend.drawHeight).toBeLessThanOrEqual(without.drawHeight);
+    expect(eskizSketchPlacement(800, 500, { ...options, frame: 'none' }, 2).legendRows).toBe(0);
+  });
+
+  it('добавляет в PDF и плашки, и строки списка', () => {
+    const annotations = eskizSketchPdfLinks(withLinks, { widthPx: 1786, heightPx: 2526, title: 'Кухня Иванов' }, 595.28, 841.89);
+    expect(annotations).toHaveLength(4);
+    expect(annotations.filter((item) => item.url === 'https://shop.ru/oven-900')).toHaveLength(2);
+    annotations.forEach((annotation) => {
+      const [x1, y1, x2, y2] = annotation.rect;
+      expect(x2).toBeGreaterThan(x1);
+      expect(y2).toBeGreaterThan(y1);
+    });
+  });
+
+  it('не рисует список, когда он отключён', () => {
+    const annotations = eskizSketchPdfLinks(withLinks, { widthPx: 1786, heightPx: 2526, title: 'Кухня Иванов', linkLegend: false }, 595.28, 841.89);
+    expect(annotations).toHaveLength(2);
+  });
+
+  it('собирает валидный xref: смещения указывают на объекты', async () => {
+    const blob = buildSingleImagePdf(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), 10, 10, 595.28, 841.89, [
+      { url: 'https://shop.ru/oven', rect: [10, 20, 120, 60] },
+      { url: 'https://shop.ru/sink', rect: [130, 20, 240, 60] },
+    ]);
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const text = Array.from(bytes).map((byte) => String.fromCharCode(byte)).join('');
+    const startxref = Number(text.slice(text.lastIndexOf('startxref') + 9).trim().split('\n')[0]);
+    expect(text.slice(startxref, startxref + 4)).toBe('xref');
+    const entries = text.slice(startxref).split('\n').slice(2).filter((line) => line.endsWith('n ')).map((line) => Number(line.slice(0, 10)));
+    expect(entries).toHaveLength(7);
+    entries.forEach((offset, index) => {
+      expect(text.slice(offset, offset + 8)).toContain(`${index + 1} 0 obj`);
+    });
   });
 });

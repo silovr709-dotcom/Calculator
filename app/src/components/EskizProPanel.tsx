@@ -1118,19 +1118,30 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
           <section className="card no-print eskiz-pro-export-card">
             <div className="section-head"><div><h3>Экспорт Эскиз PRO</h3><p className="muted small">Быстрые выгрузки текущего главного эскиза: рабочий .eskiz, картинка PNG и PDF A4. Скрытые плашки габаритов коммуникаций остаются скрытыми.</p></div></div>
             <div className="eskiz-pro-export-actions unified-export-actions">
-              <button className="btn primary block" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('png')}>{exportingSketch === 'png' ? 'Готовлю PNG…' : 'Скачать картинку PNG'}</button>
-              <div className="dropdown action-dropdown wide">
-                <button className="btn ghost block" type="button">Другой формат ▾</button>
-                <div className="dropdown-menu">
-                  <button type="button" disabled={!activePreviewProject} onClick={exportActiveEskizFile}>Скачать .eskiz</button>
-                  <button type="button" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('pdf')}>{exportingSketch === 'pdf' ? 'Готовлю PDF…' : 'Скачать PDF'}</button>
+              {activeSketchLinks.length > 0 ? <>
+                <button className="btn primary block" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('pdf')}>{exportingSketch === 'pdf' ? 'Готовлю PDF…' : 'Скачать PDF — ссылки кликабельны'}</button>
+                <div className="dropdown action-dropdown wide">
+                  <button className="btn ghost block" type="button">Другой формат ▾</button>
+                  <div className="dropdown-menu">
+                    <button type="button" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('png')}>{exportingSketch === 'png' ? 'Готовлю PNG…' : 'Картинка PNG (без кликов)'}</button>
+                    <button type="button" disabled={!activePreviewProject} onClick={exportActiveEskizFile}>Скачать .eskiz</button>
+                  </div>
                 </div>
-              </div>
+              </> : <>
+                <button className="btn primary block" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('png')}>{exportingSketch === 'png' ? 'Готовлю PNG…' : 'Скачать картинку PNG'}</button>
+                <div className="dropdown action-dropdown wide">
+                  <button className="btn ghost block" type="button">Другой формат ▾</button>
+                  <div className="dropdown-menu">
+                    <button type="button" disabled={!activePreviewProject} onClick={exportActiveEskizFile}>Скачать .eskiz</button>
+                    <button type="button" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('pdf')}>{exportingSketch === 'pdf' ? 'Готовлю PDF…' : 'Скачать PDF'}</button>
+                  </div>
+                </div>
+              </>}
             </div>
             <div className="eskiz-pro-export-hints"><span>Модули: {moduleMarkerMode === 'hidden' ? 'скрыты' : moduleMarkerMode === 'compact' ? 'компактно' : 'полностью'}</span><span>Коммуникаций: {activePreviewProject ? communications.filter((marker) => marker.eskizId === activePreviewProject.id).length : 0}</span><span>{showCommunicationSizeBadges ? 'Плашки размеров включены' : 'Плашки размеров скрыты'}</span>{activeSketchLinks.length > 0 && <span>Ссылок на технику: {activeSketchLinks.length} · кликабельны в PDF</span>}</div>
             {activeSketchLinks.length > 0 && <div className="eskiz-pro-link-hint">
               <b>Ссылки на технику</b>
-              <small>В PDF они кликабельны: {activeSketchLinks.map((link) => link.label).slice(0, 4).join(', ')}{activeSketchLinks.length > 4 ? ` и ещё ${activeSketchLinks.length - 4}` : ''}. PNG — обычная картинка, в ней ссылок нет.</small>
+              <small>{activeSketchLinks.map((link) => link.label).slice(0, 4).join(', ')}{activeSketchLinks.length > 4 ? ` и ещё ${activeSketchLinks.length - 4}` : ''}. В PDF кликается и сама плашка на эскизе, и строка в списке «Техника и ссылки» под ним. PNG — обычная картинка: адреса в списке видно, но нажать нельзя.</small>
             </div>}
           </section>
 
