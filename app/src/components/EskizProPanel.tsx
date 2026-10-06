@@ -2,16 +2,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizExportViewSettings, EskizProIntegration, ExtraFacadePart, FacadePart, KitchenModule, Pricebook, PriceItem, Project, SlotKey } from '../types';
 import {
   collectEskizModuleMarkers,
+  createEskizProjectFromImage,
   downloadEskizFile,
+  eskizImageReplaceScale,
+  imageFileFromTransfer,
   parseEskizModuleMarker,
   readEskizFileBundle,
+  readEskizImageFile,
+  replaceEskizProjectImage,
+  scaleEskizCommunication,
   snapshotProject,
   syncEskizModulesToCalculation,
   upsertEskizSnapshot,
+  type EskizImageReplaceMode,
   type EskizModuleMarker,
   type EskizModuleObject,
   type EskizProject,
 } from '../lib/eskizPro';
+import EskizPhotoDialog from './EskizPhotoDialog';
 import { MODULE_PRESETS, MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moduleStandsOnFloor, moduleToLines, newModule, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
 import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalFacadeSpecOutdated, isTechnicalHingeSpecOutdated } from '../lib/facades';
 import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surcharges';
@@ -512,7 +520,13 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const [fullScreenSketch, setFullScreenSketch] = useState(false);
   const [bulkMarkerKeys, setBulkMarkerKeys] = useState<string[]>([]);
   const [exportingSketch, setExportingSketch] = useState<'png' | 'pdf' | null>(null);
+  const [photoIntent, setPhotoIntent] = useState<{ kind: 'add' } | { kind: 'replace'; id: string } | null>(null);
+  const [photoCandidate, setPhotoCandidate] = useState<{ id: string; image: EskizProject['image'] } | null>(null);
+  const [photoMode, setPhotoMode] = useState<EskizImageReplaceMode>('scale');
+  const [photoDragOver, setPhotoDragOver] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
   const editorCardRef = useRef<HTMLDivElement | null>(null);
   const linkedProjects = useMemo(() => linkedIds
     .map((id) => snapshotProject(snapshots.find((item) => item.id === id)))
@@ -531,6 +545,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const activeMarker = moduleMarkers.find((marker) => marker.key === activeMarkerKey) ?? null;
   const activeModuleId = activeMarker ? moduleBindings[activeMarker.key] : null;
   const activeModule = activeModuleId ? project.modules?.find((module) => module.id === activeModuleId) ?? null : null;
+  const photoCandidateProject = photoCandidate ? linkedProjects.find((item) => item.id === photoCandidate.id) ?? null : null;
 
   useEffect(() => {
     if (!fullScreenSketch) return;
@@ -582,6 +597,58 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     if (importedCommunications) setMessage(`Файл «${embeddedProject.title}» импортирован: коммуникаций ${normalizedCommunications.length}.`);
     else if (!alreadyLinked) setMessage(`Эскиз «${embeddedProject.title}» создан внутри калькулятора и привязан к проекту.`);
   }, [clientMode, communications, linkedIds, showInClient, snapshots, updateEskizPro]);
+
+  /** Добавляет в проект ещё один эскиз из фото и сразу делает его главным. */
+  const addSketchFromImage = useCallback((image: EskizProject['image']) => {
+    const next = createEskizProjectFromImage(image, project.name, project.client);
+    saveEmbeddedProject(next);
+    setMessage(`Добавлен эскиз «${next.title}». Он стал главным — наносите размеры и модули.`);
+  }, [project.client, project.name, saveEmbeddedProject]);
+
+  /** Меняет фото конкретного эскиза, сохраняя его разметку и коммуникации. */
+  const applySketchPhoto = useCallback((id: string, image: EskizProject['image'], mode: EskizImageReplaceMode) => {
+    const current = snapshotProject(snapshots.find((item) => item.id === id));
+    if (!current) {
+      setMessage('Эскиз не найден — возможно, он был удалён.');
+      return;
+    }
+    const scale = eskizImageReplaceScale(current.image, image, mode);
+    const nextProject = replaceEskizProjectImage(current, image, mode);
+    const rescale = scale.x !== 1 || scale.y !== 1;
+    updateEskizPro({
+      snapshots: upsertEskizSnapshot(snapshots, nextProject),
+      activeProjectId: id,
+      ...(rescale ? { communications: communications.map((marker) => marker.eskizId === id ? scaleEskizCommunication(marker, scale) : marker) } : {}),
+    });
+    setPhotoCandidate(null);
+    setMessage(`Фото эскиза «${nextProject.title}» заменено. Разметка сохранена: ${nextProject.objects.length} объект(ов), коммуникаций ${communications.filter((marker) => marker.eskizId === id).length}.`);
+  }, [communications, snapshots, updateEskizPro]);
+
+  const handlePhotoFile = useCallback(async (file: File | Blob | null, intent: { kind: 'add' } | { kind: 'replace'; id: string }) => {
+    if (!file) return;
+    setMessage('');
+    try {
+      const image = await readEskizImageFile(file);
+      if (intent.kind === 'add') addSketchFromImage(image);
+      else {
+        setPhotoMode('scale');
+        setPhotoCandidate({ id: intent.id, image });
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Не удалось загрузить фото');
+    }
+  }, [addSketchFromImage]);
+
+  const openPhotoPicker = (intent: { kind: 'add' } | { kind: 'replace'; id: string }) => {
+    setPhotoIntent(intent);
+    photoInputRef.current?.click();
+  };
+
+  const renameSketch = (id: string, title: string) => {
+    const current = snapshotProject(snapshots.find((item) => item.id === id));
+    if (!current) return;
+    updateEskizPro({ snapshots: upsertEskizSnapshot(snapshots, { ...current, title, updatedAt: new Date().toISOString() }) });
+  };
 
   const detach = (id: string) => {
     const nextIds = linkedIds.filter((item) => item !== id);
@@ -902,6 +969,76 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
         </div>
       </div>
 
+      <section
+        className={`card no-print eskiz-sketch-strip-card ${photoDragOver ? 'drop-active' : ''}`}
+        onDragOver={(event) => { if (!Array.from(event.dataTransfer?.types ?? []).includes('Files')) return; event.preventDefault(); setPhotoDragOver(true); }}
+        onDragLeave={(event) => { if (event.currentTarget.contains(event.relatedTarget as Node | null)) return; setPhotoDragOver(false); }}
+        onDrop={(event) => {
+          if (!Array.from(event.dataTransfer?.types ?? []).includes('Files')) return;
+          event.preventDefault();
+          setPhotoDragOver(false);
+          const dropped = imageFileFromTransfer(event.dataTransfer);
+          if (dropped) void handlePhotoFile(dropped, { kind: 'add' });
+          else void importFile(event.dataTransfer.files?.[0] ?? null);
+        }}
+      >
+        <div className="section-head">
+          <div>
+            <h3>Эскизы проекта</h3>
+            <p className="muted small">Клик по карточке открывает эскиз в редакторе. «Заменить фото» меняет только подложку — размеры, сноски, модули и коммуникации остаются на местах.</p>
+          </div>
+          <div className="actions">
+            <button className="btn primary" type="button" onClick={() => openPhotoPicker({ kind: 'add' })}>+ Эскиз из фото</button>
+            <button className="btn ghost" type="button" onClick={() => fileRef.current?.click()}>Импорт .eskiz</button>
+          </div>
+        </div>
+        {linkedProjects.length === 0 ? (
+          <div className="empty small">Пока нет ни одного эскиза. Нажмите «+ Эскиз из фото», перетащите картинку сюда или вставьте снимок по Ctrl+V прямо в редакторе.</div>
+        ) : (
+          <div className="eskiz-sketch-strip">
+            {linkedProjects.map((item) => {
+              const dimensionCount = item.objects.filter((object) => object.type === 'dimension').length;
+              const moduleCount = item.objects.filter((object) => object.type === 'module').length;
+              const communicationCount = communications.filter((marker) => marker.eskizId === item.id).length;
+              return <article key={item.id} className={item.id === activeId ? 'active' : ''}>
+                <button type="button" className="eskiz-sketch-open" title="Открыть этот эскиз в редакторе" onClick={() => updateEskizPro({ activeProjectId: item.id })}>
+                  <img src={item.image.dataUrl} alt={item.title} />
+                  {item.id === activeId && <span className="eskiz-sketch-flag">в редакторе</span>}
+                </button>
+                <div className="eskiz-sketch-title">
+                  {renamingId === item.id ? (
+                    <input
+                      autoFocus
+                      defaultValue={item.title}
+                      onBlur={(event) => { renameSketch(item.id, event.target.value.trim() || item.title); setRenamingId(null); }}
+                      onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') setRenamingId(null); }}
+                    />
+                  ) : <b onDoubleClick={() => setRenamingId(item.id)}>{item.title}</b>}
+                  <small>{item.image.width}×{item.image.height} · размеров {dimensionCount} · модулей {moduleCount} · коммуникаций {communicationCount}</small>
+                </div>
+                <div className="eskiz-sketch-actions">
+                  <button className="btn tiny" type="button" onClick={() => openPhotoPicker({ kind: 'replace', id: item.id })}>Заменить фото</button>
+                  <button className="btn tiny ghost" type="button" onClick={() => setRenamingId(item.id)}>Имя</button>
+                  <button className="btn tiny ghost danger" type="button" onClick={() => detach(item.id)}>Удалить</button>
+                </div>
+              </article>;
+            })}
+            <button type="button" className="eskiz-sketch-add" onClick={() => openPhotoPicker({ kind: 'add' })}>
+              <b>+</b>
+              <span>Добавить эскиз из фото</span>
+              <small>или перетащите картинку сюда</small>
+            </button>
+          </div>
+        )}
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          hidden
+          onChange={(event) => { const file = event.target.files?.[0] ?? null; event.target.value = ''; void handlePhotoFile(file, photoIntent ?? { kind: 'add' }); }}
+        />
+      </section>
+
       <div className="eskiz-pro-grid">
         <div ref={editorCardRef} className="card eskiz-pro-frame-card no-print">
           <div className="section-head eskiz-pro-editor-head">
@@ -909,7 +1046,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             <div className="actions"><button className="btn ghost" onClick={() => setFullScreenSketch((value) => !value)}>{fullScreenSketch ? 'Выйти из полного экрана' : 'На весь экран'}</button></div>
           </div>
           <EmbeddedEskizEditor
-            key={activePreviewProject?.id ?? 'empty-eskiz'}
+            key={activePreviewProject ? `${activePreviewProject.id}:${activePreviewProject.image.name}:${activePreviewProject.image.width}x${activePreviewProject.image.height}:${activePreviewProject.image.dataUrl.length}` : 'empty-eskiz'}
             project={activePreviewProject}
             calculatorProjectName={project.name}
             calculatorProjectClient={project.client}
@@ -1039,6 +1176,17 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
           </section>
         </aside>
       </div>
+
+      {photoCandidate && photoCandidateProject && <EskizPhotoDialog
+        image={photoCandidate.image}
+        project={photoCandidateProject}
+        communicationCount={communications.filter((marker) => marker.eskizId === photoCandidate.id).length}
+        mode={photoMode}
+        onMode={setPhotoMode}
+        onCancel={() => setPhotoCandidate(null)}
+        onReplace={() => applySketchPhoto(photoCandidate.id, photoCandidate.image, photoMode)}
+        onCreateNew={() => { addSketchFromImage(photoCandidate.image); setPhotoCandidate(null); }}
+      />}
 
       {linkedProjects.length > 0 && (
         <section className="card eskiz-pro-project-preview">

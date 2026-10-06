@@ -7122,3 +7122,94 @@ select option { background: #fff !important; color: #102037 !important; }
   .embedded-eskiz-photo-foot { flex-direction: column; align-items: stretch; }
   .embedded-eskiz-photo-foot .btn { width: 100%; }
 }
+
+/* Эскиз PRO: список эскизов проекта с добавлением и заменой фото */
+.eskiz-sketch-strip-card.drop-active {
+  outline: 3px dashed #1d3f72;
+  outline-offset: -8px;
+  background: #f4f8ff;
+}
+.eskiz-sketch-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.eskiz-sketch-strip article {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #dbe7f3;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 6px 16px rgba(22, 42, 72, .06);
+}
+.eskiz-sketch-strip article.active {
+  border-color: #1d3f72;
+  box-shadow: 0 0 0 2px rgba(29, 63, 114, .18), 0 10px 22px rgba(22, 42, 72, .12);
+}
+.eskiz-sketch-open {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid #e3ecf6;
+  border-radius: 10px;
+  background: #f6f9fd;
+  cursor: pointer;
+  overflow: hidden;
+}
+.eskiz-sketch-open img {
+  display: block;
+  width: 100%;
+  height: 118px;
+  object-fit: contain;
+  background: #fff;
+}
+.eskiz-sketch-open:hover { border-color: #1d3f72; }
+.eskiz-sketch-flag {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #1d3f72;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .02em;
+}
+.eskiz-sketch-title { display: grid; gap: 3px; }
+.eskiz-sketch-title b { font-size: 13px; color: #16243a; cursor: text; }
+.eskiz-sketch-title small { color: #64748b; font-size: 11px; }
+.eskiz-sketch-title input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #1d3f72;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+.eskiz-sketch-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.eskiz-sketch-actions .btn.danger { color: #b4232a; }
+.eskiz-sketch-add {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 2px;
+  min-height: 190px;
+  padding: 12px;
+  border: 2px dashed #c4d6ec;
+  border-radius: 14px;
+  background: #f8fbff;
+  color: #35506f;
+  cursor: pointer;
+}
+.eskiz-sketch-add:hover { border-color: #1d3f72; background: #eef4ff; }
+.eskiz-sketch-add b { font-size: 26px; line-height: 1; color: #1d3f72; }
+.eskiz-sketch-add span { font-size: 12.5px; font-weight: 850; }
+.eskiz-sketch-add small { font-size: 11px; color: #64748b; }
+@media (max-width: 760px) {
+  .eskiz-sketch-strip { grid-template-columns: 1fr; }
+  .eskiz-sketch-add { min-height: 120px; }
+}

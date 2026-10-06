@@ -101,6 +101,66 @@ interface ParsedEskizModule {
   note: string;
 }
 
+export const SUPPORTED_ESKIZ_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+function eskizUid(prefix = 'eskiz') {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return `${prefix}-${crypto.randomUUID()}`;
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Читает картинку из файла или буфера обмена в формат изображения Эскиз PRO. */
+export function readEskizImageFile(file: File | Blob, fallbackName = 'Снимок из буфера.png'): Promise<EskizProject['image']> {
+  return new Promise((resolve, reject) => {
+    if (!SUPPORTED_ESKIZ_IMAGE_TYPES.includes(file.type)) {
+      reject(new Error('Поддерживаются JPG, PNG и WEBP'));
+      return;
+    }
+    const name = (file as File).name || fallbackName;
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('Файл не является корректным изображением'));
+      image.onload = () => resolve({ dataUrl: String(reader.result), width: image.naturalWidth, height: image.naturalHeight, name });
+      image.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Новый эскиз на основе загруженного изображения. */
+export function createEskizProjectFromImage(image: EskizProject['image'], projectName: string, clientName?: string, title?: string): EskizProject {
+  const now = new Date().toISOString();
+  const today = new Intl.DateTimeFormat('ru-RU').format(new Date());
+  return {
+    version: 1,
+    id: eskizUid('eskiz'),
+    title: title || (projectName ? `Эскиз ${projectName}` : `Эскиз ${today}`),
+    createdAt: now,
+    updatedAt: now,
+    image,
+    imageDisplay: { opacity: 1, brightness: 1, contrast: 1, saturation: 1, grayscale: false },
+    objects: [],
+    header: { enabled: true, project: clientName || projectName || '', room: 'Кухня', date: today, variant: '01' },
+    integration: {},
+  };
+}
+
+/** Картинка из перетаскивания или буфера обмена. */
+export function imageFileFromTransfer(data: DataTransfer | null): File | null {
+  if (!data) return null;
+  const fromFiles = Array.from(data.files ?? []).find((file) => SUPPORTED_ESKIZ_IMAGE_TYPES.includes(file.type));
+  if (fromFiles) return fromFiles;
+  const item = Array.from(data.items ?? []).find((entry) => entry.kind === 'file' && SUPPORTED_ESKIZ_IMAGE_TYPES.includes(entry.type));
+  return item?.getAsFile() ?? null;
+}
+
+/** Файл .eskiz из перетаскивания. */
+export function eskizFileFromTransfer(data: DataTransfer | null): File | null {
+  if (!data) return null;
+  return Array.from(data.files ?? []).find((file) => file.name.toLowerCase().endsWith('.eskiz')) ?? null;
+}
+
 export function snapshotFromEskizProject(project: EskizProject): EskizProSnapshot {
   return {
     id: project.id,

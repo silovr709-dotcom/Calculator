@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizEquipmentType, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
-import { downloadEskizFile, eskizImageReplaceScale, readEskizFileBundle, replaceEskizProjectImage, scaleEskizCommunication, type EskizImageReplaceMode } from '../lib/eskizPro';
+import { createEskizProjectFromImage, downloadEskizFile, eskizFileFromTransfer, eskizImageReplaceScale, imageFileFromTransfer, readEskizFileBundle, readEskizImageFile, replaceEskizProjectImage, scaleEskizCommunication, SUPPORTED_ESKIZ_IMAGE_TYPES, type EskizImageReplaceMode } from '../lib/eskizPro';
+import EskizPhotoDialog from './EskizPhotoDialog';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, COMMUNICATION_KINDS, COMMUNICATION_VISUAL_SCALE_MAX, COMMUNICATION_VISUAL_SCALE_MIN, communicationColor, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale, defaultCommunicationDimensions, normalizeCommunicationVisualScale } from '../lib/eskizCommunications';
 import { evaluateNumericExpression } from '../lib/numericExpression';
 
@@ -105,59 +106,6 @@ function uid(prefix = 'eskiz') {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function todayRu() {
-  return new Intl.DateTimeFormat('ru-RU').format(new Date());
-}
-
-const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-
-function readImage(file: File | Blob, fallbackName = 'Снимок из буфера.png'): Promise<EskizProject['image']> {
-  return new Promise((resolve, reject) => {
-    if (!SUPPORTED_IMAGE_TYPES.includes(file.type)) {
-      reject(new Error('Поддерживаются JPG, PNG и WEBP'));
-      return;
-    }
-    const name = (file as File).name || fallbackName;
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
-    reader.onload = () => {
-      const image = new Image();
-      image.onerror = () => reject(new Error('Файл не является корректным изображением'));
-      image.onload = () => resolve({ dataUrl: String(reader.result), width: image.naturalWidth, height: image.naturalHeight, name });
-      image.src = String(reader.result);
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function imageFromTransfer(data: DataTransfer | null): File | null {
-  if (!data) return null;
-  const fromFiles = Array.from(data.files ?? []).find((file) => SUPPORTED_IMAGE_TYPES.includes(file.type));
-  if (fromFiles) return fromFiles;
-  const item = Array.from(data.items ?? []).find((entry) => entry.kind === 'file' && SUPPORTED_IMAGE_TYPES.includes(entry.type));
-  return item?.getAsFile() ?? null;
-}
-
-function eskizFileFromTransfer(data: DataTransfer | null): File | null {
-  if (!data) return null;
-  return Array.from(data.files ?? []).find((file) => file.name.toLowerCase().endsWith('.eskiz')) ?? null;
-}
-
-function createEskizProject(image: EskizProject['image'], projectName: string, clientName?: string): EskizProject {
-  const now = new Date().toISOString();
-  return {
-    version: 1,
-    id: uid('eskiz'),
-    title: projectName ? `Эскиз ${projectName}` : `Эскиз ${todayRu()}`,
-    createdAt: now,
-    updatedAt: now,
-    image,
-    imageDisplay: { opacity: 1, brightness: 1, contrast: 1, saturation: 1, grayscale: false },
-    objects: [],
-    header: { enabled: true, project: clientName || projectName || '', room: 'Кухня', date: todayRu(), variant: '01' },
-    integration: {},
-  };
-}
 
 function pointDistance(a: Point, b: Point) {
   return Math.hypot(a.x - b.x, a.y - b.y);
@@ -1164,7 +1112,7 @@ export default function EmbeddedEskizEditor(props: Props) {
   };
 
   const startNewFromImage = useCallback((image: EskizProject['image']) => {
-    const next = createEskizProject(image, props.calculatorProjectName, props.calculatorProjectClient);
+    const next = createEskizProjectFromImage(image, props.calculatorProjectName, props.calculatorProjectClient);
     past.current = [];
     future.current = [];
     setProject(next);
@@ -1210,7 +1158,7 @@ export default function EmbeddedEskizEditor(props: Props) {
     setError('');
     setPhotoBusy(true);
     try {
-      const image = await readImage(file);
+      const image = await readEskizImageFile(file);
       if (!project) startNewFromImage(image);
       else {
         setPhotoMode('scale');
@@ -1229,7 +1177,7 @@ export default function EmbeddedEskizEditor(props: Props) {
     const onPaste = (event: ClipboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
-      const file = imageFromTransfer(event.clipboardData);
+      const file = imageFileFromTransfer(event.clipboardData);
       if (!file) return;
       event.preventDefault();
       void takePhoto(file);
@@ -1268,7 +1216,7 @@ export default function EmbeddedEskizEditor(props: Props) {
     try {
       const items = await navigator.clipboard?.read?.();
       for (const item of items ?? []) {
-        const type = item.types.find((entry) => SUPPORTED_IMAGE_TYPES.includes(entry));
+        const type = item.types.find((entry) => SUPPORTED_ESKIZ_IMAGE_TYPES.includes(entry));
         if (type) {
           await takePhoto(await item.getType(type));
           return;
@@ -1300,49 +1248,22 @@ export default function EmbeddedEskizEditor(props: Props) {
       void importProject(eskizFile);
       return;
     }
-    const imageFile = imageFromTransfer(event.dataTransfer);
+    const imageFile = imageFileFromTransfer(event.dataTransfer);
     if (imageFile) void takePhoto(imageFile);
     else setError('Перетащите картинку JPG/PNG/WEBP или файл .eskiz');
   };
 
-  const photoDialog = photoCandidate && project ? <div className="modal-back embedded-eskiz-photo-back" onClick={() => setPhotoCandidate(null)}>
-    <div className="modal embedded-eskiz-photo-modal" onClick={(event) => event.stopPropagation()}>
-      <header className="modal-head">
-        <div>
-          <strong>Новое фото эскиза</strong>
-          <small className="muted">Вся разметка остаётся: размеры, сноски, модули, петли и коммуникации.</small>
-        </div>
-        <button type="button" className="btn tiny ghost" onClick={() => setPhotoCandidate(null)}>✕</button>
-      </header>
-      <div className="embedded-eskiz-photo-body">
-        <div className="embedded-eskiz-photo-preview">
-          <img src={photoCandidate.dataUrl} alt="Новое фото эскиза" />
-          <small className="muted">{photoCandidate.name} · {photoCandidate.width}×{photoCandidate.height}px</small>
-        </div>
-        <div className="embedded-eskiz-photo-options">
-          <div className="embedded-eskiz-photo-compare">
-            <span>Было: <b>{project.image.width}×{project.image.height}</b></span>
-            <span>Станет: <b>{photoCandidate.width}×{photoCandidate.height}</b></span>
-            <span>Разметка: <b>{project.objects.length} объект(ов)</b> · коммуникаций <b>{props.communications.filter((marker) => marker.eskizId === project.id).length}</b></span>
-          </div>
-          <label className={photoMode === 'scale' ? 'embedded-eskiz-photo-choice active' : 'embedded-eskiz-photo-choice'}>
-            <input type="radio" name="eskiz-photo-mode" checked={photoMode === 'scale'} onChange={() => setPhotoMode('scale')} />
-            <span><b>Подогнать разметку под новое фото</b><small>Координаты размеров и сносок пересчитываются пропорционально. Подходит, когда это то же изображение в другом разрешении.</small></span>
-          </label>
-          <label className={photoMode === 'keep' ? 'embedded-eskiz-photo-choice active' : 'embedded-eskiz-photo-choice'}>
-            <input type="radio" name="eskiz-photo-mode" checked={photoMode === 'keep'} onChange={() => setPhotoMode('keep')} />
-            <span><b>Оставить разметку на своих местах</b><small>Координаты не меняются. Подходит, когда новое фото того же размера или нужно подвинуть пометки вручную.</small></span>
-          </label>
-        </div>
-      </div>
-      <footer className="modal-foot embedded-eskiz-photo-foot">
-        <button type="button" className="btn ghost danger" onClick={() => startNewFromImage(photoCandidate)}>Новый эскиз с нуля</button>
-        <div className="spacer" />
-        <button type="button" className="btn ghost" onClick={() => setPhotoCandidate(null)}>Отмена</button>
-        <button type="button" className="btn primary" onClick={() => applyPhotoReplace(photoCandidate, photoMode)}>Заменить фото и сохранить разметку</button>
-      </footer>
-    </div>
-  </div> : null;
+  const photoDialog = photoCandidate && project ? <EskizPhotoDialog
+    image={photoCandidate}
+    project={project}
+    communicationCount={props.communications.filter((marker) => marker.eskizId === project.id).length}
+    mode={photoMode}
+    onMode={setPhotoMode}
+    onCancel={() => setPhotoCandidate(null)}
+    onReplace={() => applyPhotoReplace(photoCandidate, photoMode)}
+    onCreateNew={() => startNewFromImage(photoCandidate)}
+    createNewLabel="Новый эскиз с нуля"
+  /> : null;
 
   if (!project) {
     return <div
