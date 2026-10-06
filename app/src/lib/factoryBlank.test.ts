@@ -36,6 +36,15 @@ describe('бланк на фабрику (РЕцепт PRO)', () => {
     expect(autofillValue('handles', project, pb)).toContain('2 шт');
   });
 
+  it('разделяет верх/низ по типам модулей: мойка и духовой шкаф считаются нижними столами', () => {
+    const sink = { ...newModule('Шкаф под мойку'), id: 'sink1', name: 'Мойка 800', heightMm: 720, widthMm: 800, depthMm: 560, legs: 4 };
+    const oven = { ...newModule('Шкаф под духовой шкаф'), id: 'oven1', name: 'Духовой шкаф 600', heightMm: 720, widthMm: 600, depthMm: 560, legs: 4 };
+    const wall = { ...newModule('Верхний шкаф'), id: 'wall1', name: 'Верх 720', heightMm: 720, widthMm: 600, depthMm: 320 };
+    const project = makeProject({ modules: [sink, oven, wall] });
+    expect(autofillValue('hBase', project, pb)).toBe('820');
+    expect(autofillValue('hWall', project, pb)).toBe('720');
+  });
+
   it('пустой проект → пустая подстановка, проверка ругается на обязательные поля', () => {
     const project = makeProject();
     expect(autofillValue('hBase', project, pb)).toBe('');

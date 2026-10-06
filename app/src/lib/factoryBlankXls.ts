@@ -103,6 +103,8 @@ export interface BlankSheetMap {
   prefixed?: Record<string, { cell: string; prefix: string }>;
   /** Дубли реквизитов на листе 2 (та же величина в другой клетке). */
   mirrors?: Record<string, string>;
+  /** Поля официальной таблицы «Верх / Низ»: одно поле UI заполняет обе клетки, а текст «Верх — …; низ — …» раскладывается раздельно. */
+  splitColumns?: Record<string, { upper: string; lower: string }>;
   /** Клетки шаблона с примерами заполнения — их нужно очистить. */
   clear: string[];
   /** Левая область официального бланка, предназначенная под эскиз/схему. */
@@ -162,6 +164,16 @@ export const KITCHEN_SHEET_MAP: BlankSheetMap = {
     productName: { cell: 'C3', prefix: 'Наименование изделия:' },
   },
   mirrors: { startDate: 'J51', shipDate: 'L51', orderNo: 'L52', manager: 'L53', worktopScraps: 'L54' },
+  splitColumns: {
+    ldspColor: { upper: 'K5', lower: 'L5' },
+    bodyEdging: { upper: 'K6', lower: 'L6' },
+    backPanel: { upper: 'K7', lower: 'L7' },
+    facadeType: { upper: 'K8', lower: 'L8' },
+    facadeColor: { upper: 'K9', lower: 'L9' },
+    facadeMilling: { upper: 'K10', lower: 'L10' },
+    facadeFrame: { upper: 'K11', lower: 'L11' },
+    facadeEdging: { upper: 'K12', lower: 'L12' },
+  },
   clear: KITCHEN_VALUE_CELLS,
   sketch: {
     rangeLabel: 'A14:I47',
@@ -219,6 +231,8 @@ export const getBlankSheetMap = (specId: string): BlankSheetMap | undefined => S
 
 /** Все клетки шаблона, куда попадёт конкретное поле (основная + дубли на листе 2). */
 export function blankCellRefsForField(map: BlankSheetMap, key: string): string[] {
+  const split = map.splitColumns?.[key];
+  if (split) return [split.upper, split.lower];
   return [map.cells[key], map.prefixed?.[key]?.cell, map.mirrors?.[key]].filter((cell): cell is string => Boolean(cell));
 }
 
@@ -248,6 +262,25 @@ export function worktopAreaCells(map: BlankSheetMap): string[] {
 /** Одна запись «в клетку X положить значение Y». */
 export interface BlankCellWrite { cell: string; value: string }
 
+function splitUpperLowerValue(value: string): { upper: string; lower: string } {
+  const cleaned = value.trim();
+  const markers = /(верх|верхние|верхних|навесные|навесных|низ|нижние|нижних|столы|столов|тумбы|тумб)\s*[:—-]\s*/gi;
+  const matches = Array.from(cleaned.matchAll(markers));
+  if (matches.length === 0) return { upper: cleaned, lower: cleaned };
+  let upper = '';
+  let lower = '';
+  for (const [index, match] of matches.entries()) {
+    const start = (match.index ?? 0) + match[0].length;
+    const end = index + 1 < matches.length ? matches[index + 1].index ?? cleaned.length : cleaned.length;
+    const chunk = cleaned.slice(start, end).replace(/^[\s,;—-]+|[\s,;]+$/g, '').trim();
+    if (!chunk) continue;
+    const label = match[1].toLocaleLowerCase('ru-RU');
+    if (/^(верх|навес)/.test(label)) upper = chunk;
+    else lower = chunk;
+  }
+  return { upper: upper || cleaned, lower: lower || cleaned };
+}
+
 /**
  * Готовит список записей в клетки шаблона. Чистая функция — её и проверяют тесты,
  * чтобы карта ячеек не разъехалась незаметно.
@@ -258,7 +291,14 @@ export function buildBlankCellWrites(map: BlankSheetMap, draft: BlankDraftField[
 
   for (const [key, cell] of Object.entries(map.cells)) {
     const value = byKey.get(key);
-    if (value) writes.push({ cell, value });
+    if (!value) continue;
+    const split = map.splitColumns?.[key];
+    if (split) {
+      const splitValue = splitUpperLowerValue(value);
+      writes.push({ cell: split.upper, value: splitValue.upper }, { cell: split.lower, value: splitValue.lower });
+      continue;
+    }
+    writes.push({ cell, value });
   }
   for (const [key, { cell, prefix }] of Object.entries(map.prefixed ?? {})) {
     const value = byKey.get(key);

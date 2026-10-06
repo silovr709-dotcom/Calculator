@@ -138,9 +138,23 @@ describe('сборка значений для шаблона', () => {
     const writes = buildBlankCellWrites(KITCHEN_SHEET_MAP, draft);
     const byCell = new Map(writes.map((w) => [w.cell, w.value]));
     expect(byCell.get('K5')).toBe('U1655 Белый');
+    expect(byCell.get('L5')).toBe('U1655 Белый');
     expect(byCell.get('K33')).toBe('Boyard 110° — 12 шт');
     expect(byCell.has('K34')).toBe(false); // пустое поле не пишем
     expect(byCell.get('C3')).toBe('Наименование изделия:'); // подпись остаётся даже без значения
+  });
+
+  it('раскладывает официальную таблицу верх/низ и не оставляет нижнюю колонку пустой', () => {
+    const draft = draftOf(VISMA_KITCHEN_BLANK, {
+      ldspColor: 'Верх — U1655 Белый, низ — U1104 Венге',
+      facadeColor: 'Однотонный белый',
+    });
+    const byCell = new Map(buildBlankCellWrites(KITCHEN_SHEET_MAP, draft).map((w) => [w.cell, w.value]));
+    expect(byCell.get('K5')).toBe('U1655 Белый');
+    expect(byCell.get('L5')).toBe('U1104 Венге');
+    expect(byCell.get('K9')).toBe('Однотонный белый');
+    expect(byCell.get('L9')).toBe('Однотонный белый');
+    expect(blankCellRefLabel(KITCHEN_SHEET_MAP, 'ldspColor')).toBe('K5 / L5');
   });
 
   it('дублирует реквизиты на лист 2', () => {

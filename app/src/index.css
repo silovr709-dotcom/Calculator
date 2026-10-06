@@ -377,6 +377,20 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .cd-module-empty { padding: 9px 10px; color: var(--warn); background: #fffaf0; font-size: 12px; }
 .cd-module-brief { display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 10px; }
 .cd-module-brief span { padding: 3px 8px; border-radius: 999px; border: 1px solid #e0e8e4; background: #fbfcfb; color: #55675f; font-size: 11px; font-weight: 700; }
+.cd-module-table { border: 1px solid #dce7e2; border-radius: 11px; overflow: hidden; background: #fff; page-break-inside: avoid; }
+.cd-module-table-head, .cd-module-table-row { display: grid; grid-template-columns: 42px minmax(170px, .85fr) minmax(0, 1.35fr) 112px; gap: 8px; align-items: start; }
+.cd-module-table-head { padding: 7px 10px; background: #f1f6f4; color: #50625a; font-size: 10px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; border-bottom: 1px solid #dce7e2; }
+.cd-module-table-row { padding: 7px 10px; border-bottom: 1px solid #edf2ef; font-size: 11.5px; break-inside: avoid; page-break-inside: avoid; }
+.cd-module-table-row:nth-child(even) { background: #fbfdfc; }
+.cd-module-table-row:last-child { border-bottom: 0; }
+.cd-module-table-num { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: #e9f2ff; color: #123f73; font-weight: 900; font-size: 11px; }
+.cd-module-table-title, .cd-module-table-materials { min-width: 0; display: grid; gap: 3px; }
+.cd-module-table-title b { color: #20352c; line-height: 1.2; }
+.cd-module-table-title small { color: var(--muted); line-height: 1.25; }
+.cd-module-table-materials span, .cd-module-table-materials em { color: #52645c; font-size: 10.5px; line-height: 1.25; font-style: normal; }
+.cd-module-table-materials em { color: #7a6743; font-weight: 750; }
+.cd-module-table-row strong { text-align: right; white-space: nowrap; color: #1d332a; }
+.cd-compact-explain { margin-top: 6px; padding: 6px 9px; border: 1px dashed #d8e3de; border-radius: 9px; background: #fbfdfc; color: #60716a; font-size: 10.5px; line-height: 1.35; page-break-inside: avoid; }
 .cd-component-body .cd-component-kind { background: #e9f2ff; color: #315b9a; }
 .cd-component-facade .cd-component-kind, .cd-component-frame .cd-component-kind { background: #f2eafe; color: #6d28d9; }
 .cd-component-hinge .cd-component-kind, .cd-component-drawerSys .cd-component-kind, .cd-component-lift .cd-component-kind { background: #eef7f4; color: #25725d; }
@@ -794,6 +808,9 @@ input.dim { width: 54px; font-size: 11.5px; padding: 3px 4px; text-align: center
   .cd-section-head span { text-align: left; }
   .cd-module-card-head { grid-template-columns: 28px minmax(0, 1fr); }
   .cd-module-card-head strong { grid-column: 2; }
+  .cd-module-table-head { display: none; }
+  .cd-module-table-row { grid-template-columns: 28px minmax(0, 1fr); }
+  .cd-module-table-materials, .cd-module-table-row strong { grid-column: 2; text-align: left; }
   .cd-component, .cd-component.no-price { grid-template-columns: 1fr; gap: 4px; }
   .cd-component-qty, .cd-component-sum { text-align: left; }
 }
@@ -2773,6 +2790,8 @@ table.modules tr.drop-after td,
 .client-doc .cd-summary,
 .client-doc .cd-next-steps div,
 .client-doc .cd-module-card,
+.client-doc .cd-module-table,
+.client-doc .cd-module-table-row,
 .client-doc .cd-component-list-extra,
 .client-doc .cd-component,
 .client-doc .cd-module-brief span,

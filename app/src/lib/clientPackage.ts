@@ -1,6 +1,6 @@
 import { inflateSync } from 'fflate';
 import type { ClientDocumentPackageSettings, ClientOfferSettings, Project } from '../types';
-import type { ClientOfferDetail, ClientProjectSummary } from './clientOffer';
+import type { ClientOfferDetail, ClientOfferDetailKind, ClientProjectSummary } from './clientOffer';
 import { fmtDate, fmtMoney, fmtNum } from './format';
 import { downloadFile } from './storage';
 
@@ -368,6 +368,35 @@ async function docxBlob(title: string, blocks: DocxBlock[]): Promise<Blob> {
   ], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
 }
 
+const CLIENT_CATEGORY_ORDER: ClientOfferDetailKind[] = ['body', 'bodySurcharge', 'facade', 'frame', 'worktop', 'wallPanel', 'hinge', 'drawerSys', 'lift', 'handle', 'legs', 'shelf', 'sink', 'electric', 'other'];
+const CLIENT_CATEGORY_ORDER_INDEX = new Map<ClientOfferDetailKind, number>(CLIENT_CATEGORY_ORDER.map((kind, index) => [kind, index]));
+
+function compactCategoryRows(details: ClientOfferDetail[]): string[][] {
+  const byKind = new Map<ClientOfferDetailKind, ClientOfferDetail[]>();
+  for (const detail of details) {
+    const bucket = byKind.get(detail.kind) ?? [];
+    bucket.push(detail);
+    byKind.set(detail.kind, bucket);
+  }
+  return Array.from(byKind.entries())
+    .sort(([a], [b]) => (CLIENT_CATEGORY_ORDER_INDEX.get(a) ?? 999) - (CLIENT_CATEGORY_ORDER_INDEX.get(b) ?? 999))
+    .map(([, items], index) => {
+      const label = items[0]?.kindLabel ?? 'Комплектация';
+      const composition = items
+        .slice(0, 5)
+        .map((detail) => `${detail.name} — ${detailQtyText(detail)}`)
+        .join('\n');
+      const hidden = items.length > 5 ? `\nещё ${items.length - 5} поз.` : '';
+      const qty = `${items.length} поз.`;
+      const sum = items.reduce((acc, detail) => acc + (detail.clientSum ?? 0), 0);
+      return [String(index + 1), label, `${composition}${hidden}`, qty, fmtMoney(sum)];
+    });
+}
+
+function detailRows(details: ClientOfferDetail[]): string[][] {
+  return details.map((detail, index) => [String(index + 1), detail.kindLabel, [detail.name, detail.details.slice(0, 4).join('; ')].filter(Boolean).join('\n'), detailQtyText(detail), fmtMoney(detail.clientSum)]);
+}
+
 function offerBlocks(args: ClientDocumentArgs): DocxBlock[] {
   const { project, offer, details, modules, total, summary } = args;
   const blocks: DocxBlock[] = [
@@ -395,20 +424,19 @@ function offerBlocks(args: ClientDocumentArgs): DocxBlock[] {
     blocks.push(table(['№', 'Модуль', 'Описание', 'Кол-во', 'Сумма'], modules.map((module, index) => [String(index + 1), module.title, module.sub || '', fmtNum(module.qty, 3), fmtMoney(module.total)])));
   }
   blocks.push(p('Состав по категориям', { bold: true, size: 14, color: '0F2F57' }));
-  blocks.push(table(['№', 'Категория', 'Позиция', 'Кол-во', 'Сумма'], details.map((detail, index) => [String(index + 1), detail.kindLabel, [detail.name, detail.details.slice(0, 4).join('; ')].filter(Boolean).join('\n'), detailQtyText(detail), fmtMoney(detail.clientSum)])));
+  if (offer.moduleDetailMode === 'full') {
+    blocks.push(table(['№', 'Категория', 'Позиция', 'Кол-во', 'Сумма'], detailRows(details)));
+  } else {
+    blocks.push(p('Компактная сводка: повторяющаяся фурнитура и однотипные позиции собраны по проекту, чтобы КП без эскизов оставалось в 2–3 страницы.', { size: 10, color: '52667A' }));
+    blocks.push(table(['№', 'Категория', 'Основной состав', 'Строк', 'Сумма'], compactCategoryRows(details)));
+  }
   if (offer.notes) blocks.push(p(`Примечания:\n${offer.notes}`, { size: 11 }));
   return blocks;
 }
 
 function specificationBlocks(args: ClientDocumentArgs): DocxBlock[] {
   const { project, details, modules, total, summary } = args;
-  const categoryRows = details.map((detail, index) => [
-    String(index + 1),
-    detail.kindLabel,
-    [detail.name, detail.details.slice(0, 6).join('; ')].filter(Boolean).join('\n'),
-    detailQtyText(detail),
-    fmtMoney(detail.clientSum),
-  ]);
+  const categoryRows = detailRows(details);
   const summaryRows = [
     ['Модулей', `${fmtNum(summary.moduleCount, 3)} шт`],
     ['Фасады, площадь/шт', summary.facadeAreaM2 > 0 ? `${fmtNum(summary.facadeAreaM2, 2)} м² / ${fmtNum(summary.facadeQty, 3)} шт` : `${fmtNum(summary.facadeQty, 3)} шт`],

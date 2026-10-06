@@ -74,20 +74,20 @@ export const VISMA_KITCHEN_BLANK: FactoryBlankSpec = {
     { key: 'hBread', label: 'h хлебниц/антр.', section: 'Каркас', required: false, expected: 'manual', hint: 'Только h каркаса, без высоты заниженного фасада. Пример: 360 мм' },
     { key: 'hWall', label: 'h шкафов', section: 'Каркас', required: false, expected: 'project', autoFrom: 'hWall', hint: 'Только h каркаса, без высоты заниженного фасада. Пример: 720 мм' },
     { key: 'hBase', label: 'h столов общ.', section: 'Каркас', required: false, expected: 'project', autoFrom: 'hBase', hint: 'Общая высота с ногами. Пример: 820 мм при опорах h100' },
-    { key: 'ldspColor', label: 'Цвет ЛДСП', section: 'Каркас', required: true, expected: 'dict', hint: 'Цвет низа, верха и пеналов — строго по разбивке фабрики. Несколько цветов — указать где какой. Пример: «Верх — белый U1655, низ — !венге линум U1104»' },
-    { key: 'bodyEdging', label: 'Кромка каркаса', section: 'Каркас', required: true, expected: 'dict', hint: 'Толщина, артикул, название и производитель. Пример: 0,4мм 201 белый GP. Не указана — фабрика подбирает сама, претензии не принимаются' },
-    { key: 'backPanel', label: 'ДА (задняя стенка)', section: 'Каркас', required: false, expected: 'manual', hint: 'ХДФ (паз/набивное)' },
+    { key: 'ldspColor', label: 'Цвет ЛДСП (верх/низ)', section: 'Каркас', required: true, expected: 'dict', hint: 'В официальном бланке есть отдельные клетки «Верх» и «Низ». Если цвет общий — впишите один раз, экспорт продублирует его в обе клетки. Если разные — пишите: «Верх — белый U1655; низ — !венге линум U1104»' },
+    { key: 'bodyEdging', label: 'Кромка каркаса (верх/низ)', section: 'Каркас', required: true, expected: 'dict', hint: 'Толщина, артикул, название и производитель. Если верх/низ отличаются — пишите «Верх — …; низ — …». Не указана — фабрика подбирает сама, претензии не принимаются' },
+    { key: 'backPanel', label: 'ДА (задняя стенка, верх/низ)', section: 'Каркас', required: false, expected: 'manual', hint: 'ХДФ (паз/набивное). Если верх/низ отличаются — пишите «Верх — …; низ — …»' },
     { key: 'hardPackFacade', label: 'Жесткая упаковка фасадов', section: 'Каркас', required: false, expected: 'manual' },
     { key: 'doublePack', label: 'Двойная гофра на каркас', section: 'Каркас', required: false, expected: 'manual' },
     { key: 'worktopScraps', label: 'Остатки столешниц клиенту', section: 'Каркас', required: false, expected: 'manual' },
     { key: 'packNotes', label: 'Доп. сведения на упаковку', section: 'Каркас', required: false, expected: 'manual' },
 
     // Фасад
-    { key: 'facadeType', label: 'Вид фасада', section: 'Фасад', required: true, expected: 'project', autoFrom: 'facadeMaterial', hint: 'Вид фасада и поставщик плёнки/пластика/TSS. Пример: МДФ (ПВХ) АДИЛЕТ' },
-    { key: 'facadeColor', label: 'Цвет фасада и текстура', section: 'Фасад', required: true, expected: 'dict', hint: 'Артикул и название по разбивке фабрики. Плёнка с текстурой — ОБЯЗАТЕЛЬНО знак «!» (в разбивке отмечено), иначе претензии по текстуре не принимаются. Разные цвета — указать на эскизе где какие' },
-    { key: 'facadeMilling', label: 'Тип фрезеровки/фаска', section: 'Фасад', required: false, expected: 'dict', hint: 'По техничке фабрики (пример: Пирамида). По образцу заказчика — толщина фасада, фаска/обкатка, ширина рамки, фото с рулеткой' },
-    { key: 'facadeFrame', label: 'Вид рамки', section: 'Фасад', required: false, expected: 'manual', hint: 'Для фасадов в алюминиевой рамке' },
-    { key: 'facadeEdging', label: 'Кромка фасада', section: 'Фасад', required: false, expected: 'dict', hint: 'Пластик — 1мм с производителем и артикулом; ЛДСП — 2мм GP Plast с артикулом; TSS/AGT — кромка производителя' },
+    { key: 'facadeType', label: 'Вид фасада (верх/низ)', section: 'Фасад', required: true, expected: 'project', autoFrom: 'facadeMaterial', hint: 'Вид фасада и поставщик плёнки/пластика/TSS. Если верх/низ отличаются — пишите «Верх — …; низ — …». Пример: МДФ (ПВХ) АДИЛЕТ' },
+    { key: 'facadeColor', label: 'Цвет фасада и текстура (верх/низ)', section: 'Фасад', required: true, expected: 'dict', hint: 'Артикул и название по разбивке фабрики. Плёнка с текстурой — ОБЯЗАТЕЛЬНО знак «!». Если разные цвета — пишите «Верх — …; низ — …» и отметьте на эскизе' },
+    { key: 'facadeMilling', label: 'Тип фрезеровки/фаска (верх/низ)', section: 'Фасад', required: false, expected: 'dict', hint: 'По техничке фабрики (пример: Пирамида). Если верх/низ отличаются — пишите «Верх — …; низ — …». По образцу заказчика — толщина фасада, фаска/обкатка, ширина рамки, фото с рулеткой' },
+    { key: 'facadeFrame', label: 'Вид рамки (верх/низ)', section: 'Фасад', required: false, expected: 'manual', hint: 'Для фасадов в алюминиевой рамке; при различиях пишите «Верх — …; низ — …»' },
+    { key: 'facadeEdging', label: 'Кромка фасада (верх/низ)', section: 'Фасад', required: false, expected: 'dict', hint: 'Пластик — 1мм с производителем и артикулом; ЛДСП — 2мм GP Plast с артикулом; TSS/AGT — кромка производителя. Если верх/низ отличаются — пишите «Верх — …; низ — …»' },
 
     // Дополнения к каркасам/фасадам
     { key: 'legs', label: 'Ножки', section: 'Дополнения', required: false, expected: 'project', autoFrom: 'legs', hint: 'Пластмассовые под цоколь — только высота (100/150). Хром — высота и количество. Пример: Хром, Н=150мм, D=50 — 12 шт.' },
@@ -207,6 +207,27 @@ function modeOf(values: number[]): number | null {
   return best;
 }
 
+function moduleSearchText(module: KitchenModule): string {
+  return `${module.type} ${module.name}`.toLocaleLowerCase('ru-RU');
+}
+
+function isTallCabinet(module: KitchenModule): boolean {
+  const text = moduleSearchText(module);
+  return module.type === 'Пенал' || /пенал|холодильн/.test(text);
+}
+
+function isWallCabinet(module: KitchenModule): boolean {
+  const text = moduleSearchText(module);
+  return module.type === 'Верхний шкаф' || /верх|навес/.test(text);
+}
+
+function isBaseCabinet(module: KitchenModule): boolean {
+  if (isTallCabinet(module)) return false;
+  if (moduleStandsOnFloor(module.type)) return true;
+  const text = moduleSearchText(module);
+  return /нижн|стол|тумб|мойк|духов/.test(text);
+}
+
 /** Сокращённое имя позиции прайса для бланка (без служебного хвоста). */
 const shortName = (name: string) => name.replace(/\s+/g, ' ').trim();
 
@@ -259,18 +280,18 @@ export function autofillValue(kind: BlankAutoFrom, project: Project, pricebook: 
   switch (kind) {
     case 'productType': return 'кухня';
     case 'hTall': {
-      const heights = modules.filter((m) => m.type === 'Пенал' && m.heightMm != null).map((m) => m.heightMm!);
+      const heights = modules.filter((m) => isTallCabinet(m) && m.heightMm != null).map((m) => m.heightMm!);
       const max = heights.length ? Math.max(...heights) : null;
       if (max == null) return '';
-      const withLegs = modules.some((m) => m.type === 'Пенал' && (m.legs ?? 0) > 0) ? legsHeightMm(modules, project, pricebook) : 0;
+      const withLegs = modules.some((m) => isTallCabinet(m) && (m.legs ?? 0) > 0) ? legsHeightMm(modules, project, pricebook) : 0;
       return String(max + withLegs);
     }
     case 'hWall': {
-      const height = modeOf(modules.filter((m) => m.type === 'Верхний шкаф' && m.heightMm != null).map((m) => m.heightMm!));
+      const height = modeOf(modules.filter((m) => isWallCabinet(m) && m.heightMm != null).map((m) => m.heightMm!));
       return height != null ? String(height) : '';
     }
     case 'hBase': {
-      const height = modeOf(modules.filter((m) => m.type === 'Нижний шкаф' && m.heightMm != null).map((m) => m.heightMm!));
+      const height = modeOf(modules.filter((m) => isBaseCabinet(m) && m.heightMm != null).map((m) => m.heightMm!));
       if (height == null) return '';
       const legsHeight = legsHeightMm(modules, project, pricebook);
       return String(height + legsHeight);
