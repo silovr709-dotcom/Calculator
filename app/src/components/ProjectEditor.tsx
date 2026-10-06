@@ -510,11 +510,8 @@ export default function ProjectEditor(props: {
       )}
 
       {tab === 'modules' && (
-        <div className="editor-grid">
-          <div className="lines-col">
-            <ModulesPanel project={project} pricebook={pricebook} onChange={props.onChange} templates={props.templates} onSaveModuleTemplate={props.onSaveModuleTemplate} focusModuleId={focusModuleId} />
-          </div>
-          <TotalsAside totals={totals} project={project} />
+        <div className="modules-editor-full">
+          <ModulesPanel project={project} pricebook={pricebook} onChange={props.onChange} templates={props.templates} onSaveModuleTemplate={props.onSaveModuleTemplate} focusModuleId={focusModuleId} />
         </div>
       )}
 

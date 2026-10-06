@@ -476,8 +476,19 @@ export default function ModulesPanel(props: {
           </section>
           {sel ? (
             <section className="card mod-editor module-editor-panel">
-          <h3>Позиция: {sel.name} {statusDot(checks.get(sel.id)!.level)}</h3>
-          <div className="grid4">
+          <div className="module-editor-hero">
+            <div>
+              <span className="eyebrow">Редактор модуля</span>
+              <h3>{sel.name} {statusDot(checks.get(sel.id)!.level)}</h3>
+              <p>{sel.type} · {sel.widthMm || '—'}×{sel.heightMm || '—'}×{sel.depthMm || '—'} мм · {sel.qty} шт</p>
+            </div>
+            <div className="module-editor-hero-stats">
+              <span><b>{selectedModuleCalculation ? fmtMoney(selectedModuleCalculation.totals.cost) : '—'}</b><small>себестоимость</small></span>
+              <span><b>{selectedBody ? 'выбран' : 'нет'}</b><small>корпус</small></span>
+              <span><b>{checks.get(sel.id)!.level === 'ok' ? 'OK' : checks.get(sel.id)!.level === 'error' ? 'ошибка' : 'проверить'}</b><small>статус</small></span>
+            </div>
+          </div>
+          <div className="grid4 module-editor-main-fields">
             <label>Название<input value={sel.name} onChange={(e) => updMod(sel.id, { name: e.target.value })} /></label>
             <label>Тип<input list="mod-types" value={sel.type} onChange={(e) => updMod(sel.id, { type: e.target.value })} />
               <datalist id="mod-types">{MODULE_TYPES.map((t) => <option key={t} value={t} />)}</datalist></label>
