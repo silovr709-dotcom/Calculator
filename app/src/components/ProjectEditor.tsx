@@ -402,7 +402,7 @@ export default function ProjectEditor(props: {
           onOpenAdvanced={() => { setEditorMode('advanced'); props.onChange({ ...project, wizardMode: 'advanced' }); }}
         />
       ) : (
-      <div className="project-workspace-frame">
+      <div className={`project-workspace-frame ${tab === 'modules' ? 'modules-workspace-frame' : ''}`}>
         <aside className="project-flow-rail no-print" aria-label="Навигация проекта">
           <div className="project-flow-title">
             <span className="eyebrow">Проект</span>
