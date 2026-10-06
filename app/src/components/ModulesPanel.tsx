@@ -339,8 +339,8 @@ export default function ModulesPanel(props: {
       <section className="module-workbench-panel no-print" aria-label="Рабочее место модулей кухни">
         <div className="module-workbench-main">
           <span className="eyebrow">Состав кухни</span>
-          <h3>{mods.length > 0 ? 'Список модулей → выбранная позиция → проверка' : 'Добавьте первый модуль кухни'}</h3>
-          <p>Оставляем быстрый список и табличный ввод. Клик по модулю открывает большое всплывающее окно редактирования — без тесной правой панели.</p>
+          <h3>{mods.length > 0 ? 'Список модулей + окно редактирования' : 'Добавьте первый модуль кухни'}</h3>
+          <p>Основной экран — это список модулей. Нажмите любую карточку: откроется отдельное большое окно со всеми параметрами выбранного модуля.</p>
         </div>
         <div className="module-workbench-steps">
           <span className={mods.length > 0 ? 'ready' : ''}><b>{mods.length || '—'}</b><small>модулей</small></span>
@@ -374,23 +374,43 @@ export default function ModulesPanel(props: {
               </div>
               <span className="module-list-count">{mods.length} поз.</span>
             </div>
-            <div className="module-card-list" aria-label="Быстрый выбор модуля">
+            <div className="module-card-list module-card-list-comfort" aria-label="Список модулей для редактирования">
               {mods.map((m, idx) => {
                 const c = checks.get(m.id)!;
                 const body = resolveSlot(m, 'body', defaults, pricebook).item;
                 const filled = ALL_SLOTS.filter((k) => slotNeed(m, k) > 0 || k === 'body');
                 const chosen = filled.filter((k) => resolveSlot(m, k, defaults, pricebook).item);
                 return (
-                  <button type="button" key={m.id} className={`module-mini-card ${selId === m.id ? 'active' : ''} ${c.level !== 'ok' ? c.level : ''}`} onClick={() => setSelId(m.id)}>
+                  <article
+                    key={m.id}
+                    className={`module-mini-card module-list-item ${selId === m.id ? 'active' : ''} ${c.level !== 'ok' ? c.level : ''}`}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Открыть редактирование ${m.name}`}
+                    onClick={() => setSelId(m.id)}
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget) return;
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setSelId(m.id);
+                      }
+                    }}
+                  >
                     <span className="module-mini-line top"><b>{idx + 1}. {m.name}</b><em>{fmtMoney(costs.get(m.id) ?? 0)}</em></span>
                     <span className="module-mini-line"><small>{m.type}</small><small>{m.widthMm || '—'}×{m.heightMm || '—'}×{m.depthMm || '—'} мм · {m.qty} шт</small></span>
-                    <span className="module-mini-line"><small>{body ? body.name.slice(0, 34) : 'корпус не выбран'}</small><small>{chosen.length}/{filled.length} слотов {statusDot(c.level)}</small></span>
-                  </button>
+                    <span className="module-mini-line"><small>{body ? body.name.slice(0, 44) : 'корпус не выбран'}</small><small>{chosen.length}/{filled.length} слотов {statusDot(c.level)}</small></span>
+                    <span className="module-mini-hint">Кликните карточку, чтобы открыть все параметры модуля</span>
+                    <span className="module-mini-actions" onClick={(event) => event.stopPropagation()}>
+                      <button type="button" className="btn tiny primary" onClick={() => setSelId(m.id)}>Редактировать</button>
+                      <button type="button" className="btn tiny ghost" title="Дублировать" onClick={() => { const cp = { ...JSON.parse(JSON.stringify(m)), id: newModule(m.type).id, name: `${m.name} (копия)` }; setMods([...mods, cp]); setSelId(cp.id); }}>⧉</button>
+                      <button type="button" className="btn tiny danger" title="Удалить" onClick={() => deleteModuleWithUndo(m, idx)}>✕</button>
+                    </span>
+                  </article>
                 );
               })}
             </div>
-            <details className="module-spreadsheet-panel" open>
-              <summary>Табличный ввод размеров и количества</summary>
+            <details className="module-spreadsheet-panel">
+              <summary>Дополнительно: табличный ввод размеров и количества</summary>
           <div className="module-order-hint">↕ Порядок позиций задаёт порядок модулей в эскизе · ⌨ Enter/Tab — следующее поле · ↑↓ — между строк · Ctrl+D — заполнить с верхней позиции</div>
           <table className="table modules" ref={tableRef} onKeyDown={onTableKeyDown}>
             <thead>
@@ -763,6 +783,14 @@ export default function ModulesPanel(props: {
               )}
             </div>
           )}
+          <div className="module-editor-footer">
+            <span>Все изменения сохраняются сразу в проекте.</span>
+            <div>
+              <button className="btn ghost" type="button" onClick={() => { const cp = { ...JSON.parse(JSON.stringify(sel)), id: newModule(sel.type).id, name: `${sel.name} (копия)` }; setMods([...mods, cp]); setSelId(cp.id); }}>⧉ Дублировать</button>
+              <button className="btn danger" type="button" onClick={() => { const index = mods.findIndex((module) => module.id === sel.id); if (index >= 0) deleteModuleWithUndo(sel, index); }}>Удалить</button>
+              <button className="btn primary" type="button" onClick={() => setSelId(null)}>Готово</button>
+            </div>
+          </div>
         </section>
             </div>
           )}

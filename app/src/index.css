@@ -6911,3 +6911,69 @@ select option { background: #fff !important; color: #102037 !important; }
 }
 /* Catalog/material pickers opened from the module popup must appear above it. */
 .modal-back { z-index: 360; }
+
+/* ---------- Clean module list + popup editing ---------- */
+.module-master-detail .module-list-card { order: 0; }
+.module-card-list-comfort {
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 12px;
+}
+.module-list-item {
+  position: relative;
+  padding: 14px;
+  gap: 8px;
+}
+.module-list-item:focus-visible {
+  outline: none;
+  border-color: #1f6feb;
+  box-shadow: 0 0 0 4px rgba(31,111,235,.16), 0 14px 32px rgba(15,47,87,.10);
+}
+.module-list-item .module-mini-line b { font-size: 14.5px; }
+.module-list-item .module-mini-line em { font-size: 13.5px; }
+.module-mini-hint {
+  display: block;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: #edf5ff;
+  color: #0b3a75;
+  font-size: 11.5px;
+  font-weight: 850;
+}
+.module-list-item.active .module-mini-hint {
+  background: rgba(255,255,255,.14);
+  color: rgba(255,255,255,.82);
+}
+.module-mini-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 2px;
+}
+.module-editor-footer {
+  position: sticky;
+  bottom: -22px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 22px -22px -22px;
+  padding: 12px 22px;
+  border-top: 1px solid #dbe7f3;
+  background: rgba(248, 251, 255, .94);
+  backdrop-filter: blur(10px);
+}
+.module-editor-footer span { color: #64748b; font-size: 12px; font-weight: 850; }
+.module-editor-footer div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+@media (max-width: 760px) {
+  .module-card-list-comfort { grid-template-columns: 1fr; }
+  .module-editor-footer {
+    bottom: -14px;
+    margin: 20px -12px -14px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .module-editor-footer div { display: grid; grid-template-columns: 1fr; }
+}
