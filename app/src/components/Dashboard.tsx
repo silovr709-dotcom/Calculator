@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Pricebook, Project } from '../types';
+import type { ClientProfile, Pricebook, Project } from '../types';
 import { calcTotals } from '../lib/engine';
 import { moduleToLines } from '../lib/modules';
 import { fmtMoney, fmtDate, todayISO } from '../lib/format';
@@ -7,9 +7,11 @@ import { downloadFile, makeBackup, restoreBackup } from '../lib/storage';
 import { projectFinance } from '../lib/finance';
 import { filterDashboardProjects, projectReadiness, sortDashboardProjects, type DashboardReadinessFilter, type DashboardSort, type DashboardStatusFilter } from '../lib/dashboard';
 import { isClosedWorkflowStatus, nextContactTone, workflowForProject, workflowStatusMeta } from '../lib/crm';
+import { buildDayDesk } from '../lib/workflow';
 
 export default function Dashboard(props: {
   projects: Project[];
+  clients: ClientProfile[];
   pricebooks: Pricebook[];
   pricebookLabel: string;
   onOpen: (id: string) => void;
@@ -60,6 +62,8 @@ export default function Dashboard(props: {
       unpricedProjects: finances.filter((f) => f.unpricedCount > 0).length,
     };
   }, [filteredProjects, props.pricebooks]);
+
+  const dayDesk = useMemo(() => buildDayDesk(props.projects, props.pricebooks, props.clients), [props.projects, props.pricebooks, props.clients]);
 
   const crmSummary = useMemo(() => {
     const rows = props.projects.map((project) => {
@@ -148,6 +152,38 @@ export default function Dashboard(props: {
         </div>
         <input ref={backupRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) doRestore(f); e.target.value = ''; }} />
         <input ref={fileRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) props.onImport(f); e.target.value = ''; }} />
+      </section>
+
+      <section className="dashboard-daydesk card" aria-label="Рабочий стол дня">
+        <div className="daydesk-head">
+          <div>
+            <span className="eyebrow">Сегодня</span>
+            <h2>{dayDesk.overdueContacts + dayDesk.contactsToday > 0 ? `Контакты требуют внимания: ${dayDesk.overdueContacts + dayDesk.contactsToday}` : 'День под контролем'}</h2>
+            <p>Приложение само собирает рабочий список: контакты, КП без ответа, оплаты, фабрику, пустые клиенты и проверки.</p>
+          </div>
+          <button type="button" className="btn primary" onClick={props.onOpenCrm}>Открыть задачи CRM</button>
+        </div>
+        <div className="daydesk-metrics">
+          <button type="button" onClick={props.onOpenCrm}><b>{dayDesk.overdueContacts}</b><span>просрочено</span></button>
+          <button type="button" onClick={props.onOpenCrm}><b>{dayDesk.contactsToday}</b><span>контакт сегодня</span></button>
+          <button type="button" onClick={props.onOpenCrm}><b>{dayDesk.offersWaiting}</b><span>КП ждут ответа</span></button>
+          <button type="button" onClick={props.onOpenCrm}><b>{dayDesk.missingPayment}</b><span>нет предоплаты</span></button>
+          <button type="button" onClick={() => setReadinessFilter('problem')}><b>{dayDesk.problems}</b><span>проблемы расчёта</span></button>
+          <button type="button" onClick={props.onOpenCrm}><b>{dayDesk.factoryNotExported}</b><span>к фабрике без бланка</span></button>
+        </div>
+        <div className="daydesk-task-list">
+          {dayDesk.tasks.length === 0 ? <div className="daydesk-empty">Нет срочных задач. Можно создавать новый расчёт или продолжать текущие проекты.</div> : dayDesk.tasks.slice(0, 8).map((task) => (
+            <button type="button" key={`${task.projectId}-${task.id}`} className={`daydesk-task tone-${task.tone}`} onClick={() => {
+              if (task.target === 'factory') props.onOpen(task.projectId);
+              else if (task.target === 'crm' || task.target === 'payment') props.onOpenCrm?.();
+              else props.onOpen(task.projectId);
+            }}>
+              <span>{task.clientName}</span>
+              <b>{task.title}</b>
+              <small>{task.projectName} · {task.detail}</small>
+            </button>
+          ))}
+        </div>
       </section>
 
       {showNew && (

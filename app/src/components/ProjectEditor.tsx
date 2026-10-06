@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Pricebook, Project, ProjectLine, PriceItem, LineParams, Template, KitchenModule } from '../types';
+import type { ClientProfile, Pricebook, Project, ProjectLine, PriceItem, LineParams, Template, KitchenModule } from '../types';
 import { SUMMARY_GROUPS } from '../types';
 import { calcTotals, lineFromItem } from '../lib/engine';
 import { fmtMoney, fmtNum, fmtDate } from '../lib/format';
@@ -17,11 +17,12 @@ import VariantsPanel from './VariantsPanel';
 import MeasurementPanel from './MeasurementPanel';
 import KitchenChecklistPanel from './KitchenChecklistPanel';
 import OrderCenterPanel from './OrderCenterPanel';
+import ProjectContextPanel from './ProjectContextPanel';
 import { exportInternalXlsx, exportClientXlsx, exportInternalCsv, exportProjectJson } from '../lib/exporters';
 import QRCode from 'qrcode';
 import { makeProjectQrShare } from '../lib/sync';
 
-type ProjectTab = 'modules' | 'sketch' | 'order' | 'lines' | 'photos' | 'settings' | 'client' | 'check' | 'variants' | 'measurement';
+export type ProjectTab = 'modules' | 'sketch' | 'order' | 'lines' | 'photos' | 'settings' | 'client' | 'check' | 'variants' | 'measurement';
 type ProjectStage = 'composition' | 'eskiz' | 'check' | 'client' | 'order';
 type ReadinessStatus = 'ready' | 'warning' | 'error' | 'idle';
 
@@ -63,12 +64,15 @@ export default function ProjectEditor(props: {
   templates?: Template[];
   onSaveModuleTemplate?: (name: string, module: KitchenModule) => void;
   onOpenFactoryBlank?: () => void;
+  onOpenCrm?: () => void;
+  clientProfile?: ClientProfile | null;
+  initialTab?: ProjectTab;
 }) {
   const { project, pricebook } = props;
   const [tab, setTab] = useState<ProjectTab>(
-    () => ((project.modules?.length ?? 0) > 0 || project.lines.length === 0 ? 'modules' : 'lines'),
+    () => props.initialTab ?? ((project.modules?.length ?? 0) > 0 || project.lines.length === 0 ? 'modules' : 'lines'),
   );
-  const [editorMode, setEditorMode] = useState<'wizard' | 'advanced'>(() => project.wizardMode ?? 'advanced');
+  const [editorMode, setEditorMode] = useState<'wizard' | 'advanced'>(() => props.initialTab ? 'advanced' : project.wizardMode ?? 'advanced');
   const [focusModuleId, setFocusModuleId] = useState<string | null>(null);
   const [focusLineId, setFocusLineId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
@@ -237,7 +241,6 @@ export default function ProjectEditor(props: {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setShowPicker(true); }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); props.onChange({ ...project }); }
     };
     window.addEventListener('keydown', onKey);
@@ -519,7 +522,7 @@ export default function ProjectEditor(props: {
         <div className="editor-grid">
           <div className="lines-col">
             <div className="lines-toolbar">
-              <button className="btn primary" onClick={() => setShowPicker(true)}>+ Добавить элемент (Ctrl+K)</button>
+              <button className="btn primary" onClick={() => setShowPicker(true)}>+ Добавить элемент из прайса</button>
               {totals.unpricedCount > 0 && <span className="warn">⚠ строк без цены: {totals.unpricedCount}</span>}
             </div>
             {moduleLines.length > 0 && (
@@ -559,6 +562,14 @@ export default function ProjectEditor(props: {
       )}
 
         </section>
+        <ProjectContextPanel
+          project={project}
+          pricebook={pricebook}
+          client={props.clientProfile}
+          onOpenTab={openProjectTab}
+          onOpenFactory={props.onOpenFactoryBlank}
+          onOpenCrm={props.onOpenCrm}
+        />
       </div>)}
 
       {showPicker && (

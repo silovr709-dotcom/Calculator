@@ -16,7 +16,7 @@ import { projectStatusForWorkflow, workflowForProject } from './lib/crm';
 import { appendClientHistory, applyClientProfileToProject, applyClientProfilesToProjects, createClientProfileFromProject, ensureClientProfiles, findClientForProject, mergeClientProfiles, mergeClientPatch } from './lib/clientProfiles';
 import Dashboard from './components/Dashboard';
 import CrmView from './components/CrmView';
-import ProjectEditor from './components/ProjectEditor';
+import ProjectEditor, { type ProjectTab } from './components/ProjectEditor';
 import SettingsPanel from './components/SettingsPanel';
 import PricebookView from './components/PricebookView';
 import QuickCalc from './components/QuickCalc';
@@ -24,11 +24,13 @@ import SyncPanel from './components/SyncPanel';
 import FactoryBlankView from './components/FactoryBlankView';
 import KnowledgeView from './components/KnowledgeView';
 import NumberFieldCalculator from './components/NumberFieldCalculator';
+import CommandPalette from './components/CommandPalette';
+import { WORK_MODE_LABELS, type WorkMode } from './lib/workflow';
 
 type View =
   | { kind: 'dashboard' }
   | { kind: 'crm' }
-  | { kind: 'project'; id: string }
+  | { kind: 'project'; id: string; tab?: ProjectTab }
   | { kind: 'quick' }
   | { kind: 'factory'; id?: string }
   | { kind: 'kb' }
@@ -51,12 +53,32 @@ export default function App() {
 const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig());
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => (loadSyncConfig().enabled ? 'synced' : 'idle'));
   const [projectHistory] = useState(() => new ProjectHistory());
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [workMode, setWorkMode] = useState<WorkMode>(() => {
+    const storedMode = localStorage.getItem('recept.workMode') as WorkMode | null;
+    return storedMode && storedMode in WORK_MODE_LABELS ? storedMode : 'manager';
+  });
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}data/pricebook-visma-2026.json`)
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((pb: Pricebook) => setBuiltin(pb))
       .catch((e) => setLoadError(String(e)));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('recept.workMode', workMode);
+  }, [workMode]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setCommandOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   // Обработка URL-хэша при старте (сканирование QR-кода на телефоне)
@@ -375,13 +397,18 @@ const persistTemplates = useCallback((next: Template[]) => {
   const current = currentRaw ? applyClientProfileToProject(currentRaw, findClientForProject(currentRaw, clients)) : undefined;
 
   return (
-    <div className="app">
+    <div className={`app work-mode-${workMode}`}>
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-name">РЕцепт</div>
           <div className="brand-sub">J.A.R.V.I.S. kitchen operations</div>
           <div className="brand-pro">PRO</div>
         </div>
+        <button type="button" className="global-command-button" onClick={() => setCommandOpen(true)} title="Глобальный поиск и действия: Ctrl+K">
+          <span>⌘K</span>
+          <b>Найти / выполнить</b>
+          <small>{WORK_MODE_LABELS[workMode].label}</small>
+        </button>
         <nav className="sidebar-nav" aria-label="Главная навигация">
           <div className="sidebar-nav-group">
             <div className="sidebar-nav-title">Работа</div>
@@ -433,6 +460,7 @@ const persistTemplates = useCallback((next: Template[]) => {
           <Dashboard
             pricebooks={pricebooks}
             projects={projectsForUi}
+            clients={clients}
             onOpen={(id) => setView({ kind: 'project', id })}
             onCreate={createProject}
             onDuplicate={duplicateProject}
@@ -489,7 +517,7 @@ const persistTemplates = useCallback((next: Template[]) => {
         )}
         {view.kind === 'project' && current && (
           <ProjectEditor
-            key={current.id}
+            key={`${current.id}:${view.tab ?? 'auto'}`}
             project={current}
             pricebook={pricebooks.find((pb) => pb.meta.id === current.pricebookId) ?? activePricebook}
             onChange={updateProject}
@@ -497,6 +525,9 @@ const persistTemplates = useCallback((next: Template[]) => {
             canUndo={canUndoProject(current.id)}
             onBack={() => setView({ kind: 'dashboard' })}
             onDuplicate={() => duplicateProject(current.id)}
+            initialTab={view.tab}
+            clientProfile={findClientForProject(currentRaw ?? current, clients) ?? null}
+            onOpenCrm={() => setView({ kind: 'crm' })}
             onDelete={() => deleteProject(current.id)}
             templates={templates}
             onOpenFactoryBlank={() => setView({ kind: 'factory', id: current.id })}
@@ -584,6 +615,27 @@ const persistTemplates = useCallback((next: Template[]) => {
           </div>
         </div>
       </nav>
+      <CommandPalette
+        open={commandOpen}
+        onClose={() => setCommandOpen(false)}
+        projects={projectsForUi}
+        clients={clients}
+        pricebooks={pricebooks}
+        activePricebook={activePricebook}
+        kbArticles={kbArticles}
+        currentProject={current ?? null}
+        workMode={workMode}
+        onWorkModeChange={setWorkMode}
+        onOpenDashboard={() => setView({ kind: 'dashboard' })}
+        onOpenCrm={() => setView({ kind: 'crm' })}
+        onOpenQuick={() => setView({ kind: 'quick' })}
+        onOpenFactory={(projectId) => setView({ kind: 'factory', id: projectId })}
+        onOpenKb={() => setView({ kind: 'kb' })}
+        onOpenSettings={() => setView({ kind: 'settings' })}
+        onOpenPricebook={() => setView({ kind: 'pricebook' })}
+        onOpenSync={() => setView({ kind: 'sync' })}
+        onOpenProject={(id, tab) => setView({ kind: 'project', id, tab })}
+      />
       <NumberFieldCalculator />
     </div>
   );
