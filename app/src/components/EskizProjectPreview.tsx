@@ -2,6 +2,7 @@ import type { KeyboardEvent, MouseEvent } from 'react';
 import type { EskizCommunicationDistance, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationColor, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale } from '../lib/eskizCommunications';
+import { normalizeEskizLinkUrl } from '../lib/eskizSketchExport';
 
 export type EskizModulePreviewStatus = { level: 'new' | 'error' | 'warn' | 'ok'; label: string; summary?: string };
 export type EskizModuleMarkerMode = 'full' | 'compact' | 'hidden';
@@ -332,7 +333,22 @@ function CommunicationPreview(props: { marker: EskizCommunicationMarker; width: 
   );
 }
 
-function ObjectPreview({ object, projectId, activeModuleKey, moduleBindings, moduleStatuses, moduleMarkerMode = 'full', onModuleClick }: { object: EskizObject; projectId: string; activeModuleKey?: string | null; moduleBindings?: Record<string, string>; moduleStatuses?: Record<string, EskizModulePreviewStatus>; moduleMarkerMode?: EskizModuleMarkerMode; onModuleClick?: (projectId: string, object: EskizModuleObject) => void }) {
+function objectUrl(object: EskizObject): string | null {
+  if (object.type === 'link' || object.type === 'equipment' || object.type === 'comment' || object.type === 'callout') return normalizeEskizLinkUrl(object.url);
+  return null;
+}
+
+function ObjectPreview(props: { object: EskizObject; projectId: string; activeModuleKey?: string | null; moduleBindings?: Record<string, string>; moduleStatuses?: Record<string, EskizModulePreviewStatus>; moduleMarkerMode?: EskizModuleMarkerMode; onModuleClick?: (projectId: string, object: EskizModuleObject) => void }) {
+  const body = <ObjectPreviewBody {...props} />;
+  const url = objectUrl(props.object);
+  if (!url || props.object.hidden) return body;
+  return <a className="eskiz-preview-link" href={url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
+    <title>{url}</title>
+    {body}
+  </a>;
+}
+
+function ObjectPreviewBody({ object, projectId, activeModuleKey, moduleBindings, moduleStatuses, moduleMarkerMode = 'full', onModuleClick }: { object: EskizObject; projectId: string; activeModuleKey?: string | null; moduleBindings?: Record<string, string>; moduleStatuses?: Record<string, EskizModulePreviewStatus>; moduleMarkerMode?: EskizModuleMarkerMode; onModuleClick?: (projectId: string, object: EskizModuleObject) => void }) {
   if (object.hidden) return null;
   if (object.type === 'dimension') return <DimensionPreview object={object} />;
   if (object.type === 'module') {

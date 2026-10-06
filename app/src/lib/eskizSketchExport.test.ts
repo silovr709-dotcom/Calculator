@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EskizProject } from './eskizPro';
-import { buildEskizSketchSvg, buildSingleImagePdf, eskizSketchFileName } from './eskizSketchExport';
+import { buildEskizSketchSvg, buildSingleImagePdf, collectEskizSketchLinks, eskizSketchFileName, eskizSketchPdfLinks, normalizeEskizLinkUrl } from './eskizSketchExport';
 import type { EskizCommunicationMarker } from '../types';
 
 const project: EskizProject = {
@@ -136,5 +136,76 @@ describe('buildEskizSketchSvg', () => {
     expect(text).toContain('/Subtype /Image');
     expect(text).toContain('/DCTDecode');
     expect(text).toContain('xref');
+  });
+});
+
+
+describe('кликабельные ссылки на технику в выгрузке', () => {
+  const withLinks: EskizProject = {
+    ...project,
+    objects: [
+      ...project.objects,
+      { id: 'eq1', type: 'equipment', x: 200, y: 100, text: 'Духовой шкаф', equipmentType: 'Духовой шкаф', url: 'https://shop.ru/oven-900', color: '#1d3f72', fontSize: 12 },
+      { id: 'lk1', type: 'link', x: 400, y: 300, text: 'Мойка', url: 'www.shop.ru/sink', color: '#1d3f72', fontSize: 12 },
+      { id: 'eq2', type: 'equipment', x: 60, y: 300, text: 'ПММ', equipmentType: 'ПММ', url: 'https://', color: '#1d3f72', fontSize: 12 },
+    ],
+  };
+
+  it('нормализует адрес без схемы и отбрасывает пустой', () => {
+    expect(normalizeEskizLinkUrl('https://shop.ru/a')).toBe('https://shop.ru/a');
+    expect(normalizeEskizLinkUrl('www.shop.ru/sink')).toBe('https://www.shop.ru/sink');
+    expect(normalizeEskizLinkUrl('shop.ru/sink')).toBe('https://shop.ru/sink');
+    expect(normalizeEskizLinkUrl('https://')).toBeNull();
+    expect(normalizeEskizLinkUrl('  ')).toBeNull();
+  });
+
+  it('собирает рамки объектов со ссылками и пропускает пустые', () => {
+    const links = collectEskizSketchLinks(withLinks);
+    expect(links.map((link) => link.objectId)).toEqual(['eq1', 'lk1']);
+    expect(links[0]).toMatchObject({ url: 'https://shop.ru/oven-900', x: 200, y: 100 });
+    expect(links[0].width).toBeGreaterThan(0);
+    expect(links[0].height).toBeGreaterThan(0);
+    expect(links[1].url).toBe('https://www.shop.ru/sink');
+  });
+
+  it('не отдаёт ссылки скрытых объектов и выключенных слоёв', () => {
+    const hiddenObject = collectEskizSketchLinks({ ...withLinks, objects: withLinks.objects.map((object) => object.id === 'eq1' ? { ...object, hidden: true } : object) });
+    expect(hiddenObject.map((link) => link.objectId)).toEqual(['lk1']);
+    const hiddenLayer = collectEskizSketchLinks(withLinks, { layerVisibility: { equipment: false } });
+    expect(hiddenLayer.map((link) => link.objectId)).toEqual(['lk1']);
+    expect(collectEskizSketchLinks(withLinks, { showAnnotations: false })).toHaveLength(0);
+  });
+
+  it('оборачивает технику со ссылкой в SVG-ссылку', () => {
+    const svg = buildEskizSketchSvg(withLinks);
+    expect(svg).toContain('<a href="https://shop.ru/oven-900" target="_blank"');
+    expect(svg).toContain('<a href="https://www.shop.ru/sink"');
+    expect(svg).not.toContain('href="https://"');
+  });
+
+  it('переводит ссылки в координаты страницы PDF', () => {
+    const annotations = eskizSketchPdfLinks(withLinks, { widthPx: 1786, heightPx: 2526, title: 'Кухня Иванов' }, 595.28, 841.89);
+    expect(annotations).toHaveLength(2);
+    annotations.forEach((annotation) => {
+      const [x1, y1, x2, y2] = annotation.rect;
+      expect(x2).toBeGreaterThan(x1);
+      expect(y2).toBeGreaterThan(y1);
+      expect(x1).toBeGreaterThanOrEqual(0);
+      expect(x2).toBeLessThanOrEqual(595.28);
+      expect(y1).toBeGreaterThanOrEqual(0);
+      expect(y2).toBeLessThanOrEqual(841.89);
+    });
+  });
+
+  it('кладёт ссылки в PDF как настоящие аннотации', async () => {
+    const blob = buildSingleImagePdf(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), 10, 10, 595.28, 841.89, [
+      { url: 'https://shop.ru/oven-900', rect: [10, 20, 120, 60] },
+    ]);
+    const text = new TextDecoder().decode(await blob.arrayBuffer());
+    expect(text).toContain('/Annots [6 0 R]');
+    expect(text).toContain('/Subtype /Link');
+    expect(text).toContain('/URI (https://shop.ru/oven-900)');
+    expect(text).toContain('xref\n0 7');
+    expect(text).toContain('/Size 7');
   });
 });

@@ -198,7 +198,7 @@ function renderHinge(o: EskizHingeObject) {
   </g>`;
 }
 
-function renderCallout(o: EskizCalloutObject) {
+function calloutBox(o: EskizCalloutObject): { width: number; height: number; lines: string[] } {
   const sourceLines = o.text.split('\n');
   const autoWidth = Math.max(120, ...sourceLines.map((text) => text.length * o.fontSize * .56)) + 24;
   const width = o.width ? Math.max(70, o.width) : autoWidth;
@@ -206,6 +206,11 @@ function renderCallout(o: EskizCalloutObject) {
   const lines = wrapLines(o.text, maxChars);
   const autoHeight = Math.max(48, lines.length * (o.fontSize + 5) + 18);
   const height = Math.max(autoHeight, o.height ?? 0);
+  return { width, height, lines };
+}
+
+function renderCallout(o: EskizCalloutObject) {
+  const { width, height, lines } = calloutBox(o);
   const elbowX = o.x > o.targetX ? o.x - 18 : o.x + width + 18;
   return `<g class="callout label">
     <polyline points="${o.targetX},${o.targetY} ${elbowX},${o.y + height / 2} ${o.x > o.targetX ? o.x : o.x + width},${o.y + height / 2}" fill="none" stroke="${xml(o.color)}" stroke-width="2" />
@@ -215,7 +220,7 @@ function renderCallout(o: EskizCalloutObject) {
   </g>`;
 }
 
-function renderTextObject(o: EskizTextObject) {
+function textObjectBox(o: EskizTextObject): { width: number; height: number; lines: string[]; isLink: boolean } {
   const isComment = o.type === 'comment';
   const isLink = o.type === 'link';
   const sourceLines = o.text.split('\n');
@@ -226,6 +231,12 @@ function renderTextObject(o: EskizTextObject) {
   const lines = wrapLines(o.text, maxChars);
   const autoHeight = lines.length * (o.fontSize + 5) + 22;
   const height = Math.max(autoHeight, o.height ?? 0);
+  return { width, height, lines, isLink };
+}
+
+function renderTextObject(o: EskizTextObject) {
+  const isComment = o.type === 'comment';
+  const { width, height, lines, isLink } = textObjectBox(o);
   return `<g class="text label" transform="translate(${o.x} ${o.y})">
     <rect x="0" y="0" width="${width}" height="${height}" rx="${o.borderRadius ?? 7}" fill="${xml(o.fill ?? (isComment ? '#fff8d8' : 'white'))}" fill-opacity="${o.fillOpacity ?? 1}" stroke="${xml(o.color)}" stroke-width="1.5" />
     ${isLink ? `<text x="13" y="${height / 2 + 5}" text-anchor="middle" font-size="${o.fontSize}" font-weight="900" fill="${xml(o.color)}">↗</text>` : ''}
@@ -347,8 +358,60 @@ function renderHelper(object: EskizObject, width: number, height: number) {
   return '';
 }
 
+/** Прямоугольник объекта со ссылкой в координатах исходного изображения. */
+export interface EskizSketchLinkBox {
+  objectId: string;
+  url: string;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Нормализует введённый адрес: без схемы считаем https. */
+export function normalizeEskizLinkUrl(value: string | null | undefined): string | null {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed || trimmed === 'https://' || trimmed === 'http://') return null;
+  if (/^(https?|mailto|tel):/iu.test(trimmed)) return trimmed;
+  if (/^www\./iu.test(trimmed) || /^[\w-]+\.[a-z]{2,}(?:[/?#]|$)/iu.test(trimmed)) return `https://${trimmed}`;
+  return null;
+}
+
+function objectLinkBox(object: EskizObject): EskizSketchLinkBox | null {
+  if (object.type === 'link' || object.type === 'equipment' || object.type === 'comment') {
+    const url = normalizeEskizLinkUrl((object as EskizTextObject).url);
+    if (!url) return null;
+    const box = textObjectBox(object as EskizTextObject);
+    return { objectId: object.id, url, label: (object as EskizTextObject).text || url, x: object.x, y: object.y, width: box.width, height: box.height };
+  }
+  if (object.type === 'callout') {
+    const url = normalizeEskizLinkUrl(object.url);
+    if (!url) return null;
+    const box = calloutBox(object);
+    return { objectId: object.id, url, label: object.text || url, x: object.x, y: object.y, width: box.width, height: box.height };
+  }
+  return null;
+}
+
+/** Все видимые в выгрузке объекты со ссылками: техника, ссылки и выноски с адресом. */
+export function collectEskizSketchLinks(project: EskizProject, options: EskizSketchSvgOptions = {}): EskizSketchLinkBox[] {
+  const layers = mergedLayerVisibility(options);
+  return project.objects
+    .filter((object) => objectVisibleInExport(object, options, layers))
+    .map((object) => objectLinkBox(object))
+    .filter((box): box is EskizSketchLinkBox => Boolean(box));
+}
+
 function renderObject(object: EskizObject, markerMode: EskizSketchModuleMarkerMode, options: EskizSketchSvgOptions, layers: EskizLayerVisibility, width: number, height: number) {
   if (!objectVisibleInExport(object, options, layers)) return '';
+  const body = renderObjectBody(object, markerMode, width, height);
+  const link = objectLinkBox(object);
+  if (!link || !body) return body;
+  return `<a href="${xml(link.url)}" target="_blank" rel="noopener noreferrer">${body}</a>`;
+}
+
+function renderObjectBody(object: EskizObject, markerMode: EskizSketchModuleMarkerMode, width: number, height: number) {
   if (object.type === 'dimension') return renderDimension(object);
   if (object.type === 'module') return renderModule(object, markerMode);
   if (object.type === 'hinge') return renderHinge(object);
@@ -449,6 +512,38 @@ function downloadBlob(blob: Blob, fileName: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
+/** Куда именно ляжет сам эскиз внутри итоговой картинки (для привязки кликабельных ссылок). */
+export interface EskizSketchPlacement {
+  displayWidth: number;
+  displayHeight: number;
+  x: number;
+  y: number;
+  drawWidth: number;
+  drawHeight: number;
+}
+
+export function eskizSketchPlacement(sourceWidth: number, sourceHeight: number, options: EskizSketchPngOptions): EskizSketchPlacement {
+  const displayWidth = Math.max(240, Math.round(options.widthPx));
+  const displayHeight = Math.max(220, Math.round(options.heightPx));
+  if (options.frame === 'none') return { displayWidth, displayHeight, x: 0, y: 0, drawWidth: displayWidth, drawHeight: displayHeight };
+  const hasHeader = Boolean(options.title || options.subtitle);
+  const headerHeight = hasHeader ? 54 : 12;
+  const margin = 14;
+  const availableWidth = displayWidth - margin * 2;
+  const availableHeight = displayHeight - headerHeight - margin * 1.5;
+  const scale = Math.min(availableWidth / Math.max(1, sourceWidth), availableHeight / Math.max(1, sourceHeight));
+  const drawWidth = Math.max(1, sourceWidth) * scale;
+  const drawHeight = Math.max(1, sourceHeight) * scale;
+  return {
+    displayWidth,
+    displayHeight,
+    x: (displayWidth - drawWidth) / 2,
+    y: headerHeight + Math.max(6, (availableHeight - drawHeight) / 2),
+    drawWidth,
+    drawHeight,
+  };
+}
+
 async function renderEskizSketchCanvas(project: EskizProject, options: EskizSketchPngOptions): Promise<{ canvas: HTMLCanvasElement; width: number; height: number }> {
   if (typeof document === 'undefined') throw new Error('Экспорт картинки Эскиз PRO доступен только в браузере');
   const source = await loadSvgImage(buildEskizSketchSvg(project, options));
@@ -482,14 +577,8 @@ async function renderEskizSketchCanvas(project: EskizProject, options: EskizSket
     ctx.fillText(options.subtitle || project.image.name, 16, 42);
   }
 
-  const margin = 14;
-  const availableWidth = displayWidth - margin * 2;
-  const availableHeight = displayHeight - headerHeight - margin * 1.5;
-  const scale = Math.min(availableWidth / source.width, availableHeight / source.height);
-  const drawWidth = source.width * scale;
-  const drawHeight = source.height * scale;
-  const x = (displayWidth - drawWidth) / 2;
-  const y = headerHeight + Math.max(6, (availableHeight - drawHeight) / 2);
+  const placement = eskizSketchPlacement(source.width, source.height, { ...options, widthPx: displayWidth, heightPx: displayHeight });
+  const { x, y, drawWidth, drawHeight } = placement;
   ctx.fillStyle = '#eef2ef';
   ctx.fillRect(x - 1, y - 1, drawWidth + 2, drawHeight + 2);
   ctx.drawImage(source, x, y, drawWidth, drawHeight);
@@ -538,7 +627,24 @@ function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return buffer;
 }
 
-export function buildSingleImagePdf(jpegBytes: Uint8Array, imageWidth: number, imageHeight: number, pageWidthPt: number, pageHeightPt: number): Blob {
+/** Кликабельная ссылка в PDF: прямоугольник в пунктах, начало координат — левый нижний угол страницы. */
+export interface PdfLinkAnnotation {
+  url: string;
+  rect: [number, number, number, number];
+}
+
+function pdfString(value: string): string {
+  return value.replace(/\\/gu, '\\\\').replace(/\(/gu, '\\(').replace(/\)/gu, '\\)').replace(/[\r\n]+/gu, '');
+}
+
+export function buildSingleImagePdf(
+  jpegBytes: Uint8Array,
+  imageWidth: number,
+  imageHeight: number,
+  pageWidthPt: number,
+  pageHeightPt: number,
+  links: PdfLinkAnnotation[] = [],
+): Blob {
   const encoder = new TextEncoder();
   const parts: Uint8Array[] = [];
   const offsets: number[] = [];
@@ -557,13 +663,17 @@ export function buildSingleImagePdf(jpegBytes: Uint8Array, imageWidth: number, i
     pushString(`${id} 0 obj\n`);
   };
 
+  const annotIds = links.map((_, index) => 6 + index);
+  const annotsEntry = annotIds.length ? ` /Annots [${annotIds.map((id) => `${id} 0 R`).join(' ')}]` : '';
+  const totalObjects = 5 + annotIds.length;
+
   pushString('%PDF-1.4\n');
   startObject(1);
   pushString('<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
   startObject(2);
   pushString('<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n');
   startObject(3);
-  pushString(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidthPt.toFixed(2)} ${pageHeightPt.toFixed(2)}] /Resources << /XObject << /Im1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`);
+  pushString(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidthPt.toFixed(2)} ${pageHeightPt.toFixed(2)}] /Resources << /XObject << /Im1 4 0 R >> >> /Contents 5 0 R${annotsEntry} >>\nendobj\n`);
   startObject(4);
   pushString(`<< /Type /XObject /Subtype /Image /Width ${imageWidth} /Height ${imageHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`);
   pushBytes(jpegBytes);
@@ -572,9 +682,46 @@ export function buildSingleImagePdf(jpegBytes: Uint8Array, imageWidth: number, i
   const contentLength = encoder.encode(content).length;
   startObject(5);
   pushString(`<< /Length ${contentLength} >>\nstream\n${content}endstream\nendobj\n`);
+  links.forEach((link, index) => {
+    const [x1, y1, x2, y2] = link.rect;
+    startObject(annotIds[index]);
+    pushString(`<< /Type /Annot /Subtype /Link /Rect [${x1.toFixed(2)} ${y1.toFixed(2)} ${x2.toFixed(2)} ${y2.toFixed(2)}] /Border [0 0 0] /F 4 /A << /Type /Action /S /URI /URI (${pdfString(link.url)}) >> >>\nendobj\n`);
+  });
   const xrefOffset = offset;
-  pushString(`xref\n0 6\n0000000000 65535 f \n${[1, 2, 3, 4, 5].map((id) => `${String(offsets[id]).padStart(10, '0')} 00000 n `).join('\n')}\ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
+  const ids = Array.from({ length: totalObjects }, (_, index) => index + 1);
+  pushString(`xref\n0 ${totalObjects + 1}\n0000000000 65535 f \n${ids.map((id) => `${String(offsets[id]).padStart(10, '0')} 00000 n `).join('\n')}\ntrailer\n<< /Size ${totalObjects + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
   return new Blob([bytesToArrayBuffer(concatBytes(parts))], { type: 'application/pdf' });
+}
+
+/** Переводит рамки объектов со ссылками в координаты страницы PDF. */
+export function eskizSketchPdfLinks(
+  project: EskizProject,
+  options: EskizSketchPngOptions,
+  pageWidthPt: number,
+  pageHeightPt: number,
+): PdfLinkAnnotation[] {
+  const sourceWidth = Math.max(1, project.image.width);
+  const sourceHeight = Math.max(1, project.image.height);
+  const placement = eskizSketchPlacement(sourceWidth, sourceHeight, options);
+  const scaleX = placement.drawWidth / sourceWidth;
+  const scaleY = placement.drawHeight / sourceHeight;
+  const ptPerPxX = pageWidthPt / placement.displayWidth;
+  const ptPerPxY = pageHeightPt / placement.displayHeight;
+  return collectEskizSketchLinks(project, options).map((box) => {
+    const left = (placement.x + box.x * scaleX) * ptPerPxX;
+    const right = (placement.x + (box.x + box.width) * scaleX) * ptPerPxX;
+    const top = (placement.y + box.y * scaleY) * ptPerPxY;
+    const bottom = (placement.y + (box.y + box.height) * scaleY) * ptPerPxY;
+    return {
+      url: box.url,
+      rect: [
+        clamp(left, 0, pageWidthPt),
+        clamp(pageHeightPt - bottom, 0, pageHeightPt),
+        clamp(right, 0, pageWidthPt),
+        clamp(pageHeightPt - top, 0, pageHeightPt),
+      ] as [number, number, number, number],
+    };
+  });
 }
 
 export async function renderEskizSketchPdf(project: EskizProject, options: EskizSketchPdfOptions = {}): Promise<EskizSketchPdf> {
@@ -594,7 +741,13 @@ export async function renderEskizSketchPdf(project: EskizProject, options: Eskiz
     pixelRatio: 1,
     quality: options.quality ?? .92,
   });
-  const blob = buildSingleImagePdf(dataUrlToBytes(image.base64), image.width, image.height, page.widthPt, page.heightPt);
+  const pdfOptions: EskizSketchPngOptions = {
+    ...options,
+    widthPx: Math.round(page.widthPt * pxScale),
+    heightPx: Math.round(page.heightPt * pxScale),
+  };
+  const links = eskizSketchPdfLinks(project, pdfOptions, page.widthPt, page.heightPt);
+  const blob = buildSingleImagePdf(dataUrlToBytes(image.base64), image.width, image.height, page.widthPt, page.heightPt, links);
   return { blob, extension: 'pdf', widthPt: page.widthPt, heightPt: page.heightPt };
 }
 

@@ -26,7 +26,7 @@ import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surch
 import { calcLines } from '../lib/engine';
 import { fmtMoney, fmtNum } from '../lib/format';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, defaultCommunicationDimensions } from '../lib/eskizCommunications';
-import { downloadEskizSketchPdf, downloadEskizSketchPng } from '../lib/eskizSketchExport';
+import { collectEskizSketchLinks, downloadEskizSketchPdf, downloadEskizSketchPng } from '../lib/eskizSketchExport';
 import { evaluateNumericExpression } from '../lib/numericExpression';
 import CatalogPicker from './CatalogPicker';
 import EskizProjectPreview, { type EskizModuleMarkerMode, type EskizModulePreviewStatus } from './EskizProjectPreview';
@@ -546,6 +546,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
   const activeModuleId = activeMarker ? moduleBindings[activeMarker.key] : null;
   const activeModule = activeModuleId ? project.modules?.find((module) => module.id === activeModuleId) ?? null : null;
   const photoCandidateProject = photoCandidate ? linkedProjects.find((item) => item.id === photoCandidate.id) ?? null : null;
+  const activeSketchLinks = activePreviewProject ? collectEskizSketchLinks(activePreviewProject, exportViewSettings) : [];
 
   useEffect(() => {
     if (!fullScreenSketch) return;
@@ -1126,7 +1127,11 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
                 </div>
               </div>
             </div>
-            <div className="eskiz-pro-export-hints"><span>Модули: {moduleMarkerMode === 'hidden' ? 'скрыты' : moduleMarkerMode === 'compact' ? 'компактно' : 'полностью'}</span><span>Коммуникаций: {activePreviewProject ? communications.filter((marker) => marker.eskizId === activePreviewProject.id).length : 0}</span><span>{showCommunicationSizeBadges ? 'Плашки размеров включены' : 'Плашки размеров скрыты'}</span></div>
+            <div className="eskiz-pro-export-hints"><span>Модули: {moduleMarkerMode === 'hidden' ? 'скрыты' : moduleMarkerMode === 'compact' ? 'компактно' : 'полностью'}</span><span>Коммуникаций: {activePreviewProject ? communications.filter((marker) => marker.eskizId === activePreviewProject.id).length : 0}</span><span>{showCommunicationSizeBadges ? 'Плашки размеров включены' : 'Плашки размеров скрыты'}</span>{activeSketchLinks.length > 0 && <span>Ссылок на технику: {activeSketchLinks.length} · кликабельны в PDF</span>}</div>
+            {activeSketchLinks.length > 0 && <div className="eskiz-pro-link-hint">
+              <b>Ссылки на технику</b>
+              <small>В PDF они кликабельны: {activeSketchLinks.map((link) => link.label).slice(0, 4).join(', ')}{activeSketchLinks.length > 4 ? ` и ещё ${activeSketchLinks.length - 4}` : ''}. PNG — обычная картинка, в ней ссылок нет.</small>
+            </div>}
           </section>
 
           <section className="card no-print eskiz-pro-module-sync">

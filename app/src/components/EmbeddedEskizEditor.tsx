@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizEquipmentType, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
+import { normalizeEskizLinkUrl } from '../lib/eskizSketchExport';
 import { createEskizProjectFromImage, downloadEskizFile, eskizFileFromTransfer, eskizImageReplaceScale, imageFileFromTransfer, readEskizFileBundle, readEskizImageFile, replaceEskizProjectImage, scaleEskizCommunication, SUPPORTED_ESKIZ_IMAGE_TYPES, type EskizImageReplaceMode } from '../lib/eskizPro';
 import EskizPhotoDialog from './EskizPhotoDialog';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, COMMUNICATION_KINDS, COMMUNICATION_VISUAL_SCALE_MAX, COMMUNICATION_VISUAL_SCALE_MIN, communicationColor, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale, defaultCommunicationDimensions, normalizeCommunicationVisualScale } from '../lib/eskizCommunications';
@@ -97,6 +98,12 @@ const TOOL_ITEMS: { id: Tool; label: string; hotkey?: string }[] = [
   { id: 'equipment', label: 'Техника', hotkey: 'E' },
   { id: 'link', label: 'Ссылка', hotkey: 'K' },
 ];
+
+/** Адрес, привязанный к объекту эскиза (техника, ссылка, выноска). */
+function objectLinkUrl(object: EskizObject): string | null {
+  if (object.type === 'link' || object.type === 'equipment' || object.type === 'comment' || object.type === 'callout') return normalizeEskizLinkUrl(object.url);
+  return null;
+}
 
 let embeddedClipboard: EskizObject[] = [];
 let embeddedStyleClipboard: Partial<EskizObject> | null = null;
@@ -1035,6 +1042,14 @@ export default function EmbeddedEskizEditor(props: Props) {
     if (!project || communicationMode) return;
     event.stopPropagation();
     if (tool !== 'select') return;
+    // Ctrl/⌘ + клик по технике, ссылке или выноске с адресом открывает ссылку.
+    if (event.ctrlKey || event.metaKey) {
+      const url = objectLinkUrl(object);
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+    }
     if (event.shiftKey) {
       const next = selectedIds.includes(object.id) ? selectedIds.filter((id) => id !== object.id) : [...selectedIds, object.id];
       setSelectedIds(next);
@@ -1626,8 +1641,8 @@ function ObjectFields({ object, moduleSummary, onOpenModule, onObject, onSelectC
     {object.type === 'module' && <><div className={`embedded-eskiz-module-mini ${moduleSummary?.status ?? 'new'}`}><b>{moduleSummary ? moduleSummary.label : 'Модуль ещё не создан в просчёте'}</b><span>{moduleSummary?.body ?? 'Кликните «Редактор модуля», чтобы создать/открыть позицию расчёта.'}</span>{moduleSummary?.cost && <small>{moduleSummary.cost}{moduleSummary.lines != null ? ` · ${moduleSummary.lines} строк` : ''}</small>}<button type="button" onClick={onOpenModule}>{moduleSummary ? 'Редактор модуля' : 'Создать в просчёте'}</button></div><label>Номер модуля<input autoFocus value={object.number} onChange={(event) => onObject({ number: event.target.value } as Partial<EskizObject>)} /></label><label>Описание<textarea rows={4} placeholder={'600\nНиз'} value={object.description} onChange={(event) => onObject({ description: event.target.value } as Partial<EskizObject>)} /></label></>}
     {object.type === 'hinge' && <><div className="embedded-eskiz-helper-card"><b>Отдельный слой «Петли»</b><span>На эскизе петли показываются маленькими точками без подписи; слой можно скрыть в документе и экспорте.</span></div><label>Название в списке<input autoFocus value={object.label} placeholder="Петля" onChange={(event) => onObject({ label: event.target.value } as Partial<EskizObject>)} /></label></>}
     {(object.type === 'comment' || object.type === 'callout') && <label>Текст<textarea autoFocus rows={5} value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label>}
-    {object.type === 'equipment' && <><label>Тип техники<select value={object.equipmentType} onChange={(event) => onObject({ equipmentType: event.target.value, text: event.target.value } as Partial<EskizObject>)}>{EQUIPMENT_TYPES.map((item) => <option key={item}>{item}</option>)}</select></label><label>Подпись<input autoFocus value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label><label>Ссылка на модель<input type="url" placeholder="https://…" value={object.url || ''} onChange={(event) => onObject({ url: event.target.value } as Partial<EskizObject>)} /></label></>}
-    {object.type === 'link' && <><label>Название<input autoFocus value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label><label>URL<input type="url" placeholder="https://…" value={object.url || ''} onChange={(event) => onObject({ url: event.target.value } as Partial<EskizObject>)} /></label>{object.url && <a className="embedded-eskiz-test-link" href={object.url} target="_blank" rel="noreferrer">Открыть ссылку ↗</a>}</>}
+    {object.type === 'equipment' && <><label>Тип техники<select value={object.equipmentType} onChange={(event) => onObject({ equipmentType: event.target.value, text: event.target.value } as Partial<EskizObject>)}>{EQUIPMENT_TYPES.map((item) => <option key={item}>{item}</option>)}</select></label><label>Подпись<input autoFocus value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label><label>Ссылка на модель<input type="url" placeholder="https://…" value={object.url || ''} onChange={(event) => onObject({ url: event.target.value } as Partial<EskizObject>)} /></label>{objectLinkUrl(object) ? <><a className="embedded-eskiz-test-link" href={objectLinkUrl(object) ?? '#'} target="_blank" rel="noreferrer">Открыть ссылку ↗</a><small className="muted">Ссылка кликается в PDF-выгрузке, в КП и на эскизе по Ctrl/⌘ + клик.</small></> : object.url ? <small className="muted">Проверьте адрес: нужен вид https://site.ru/model</small> : null}</>}
+    {object.type === 'link' && <><label>Название<input autoFocus value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label><label>URL<input type="url" placeholder="https://…" value={object.url || ''} onChange={(event) => onObject({ url: event.target.value } as Partial<EskizObject>)} /></label>{objectLinkUrl(object) ? <><a className="embedded-eskiz-test-link" href={objectLinkUrl(object) ?? '#'} target="_blank" rel="noreferrer">Открыть ссылку ↗</a><small className="muted">Ссылка кликается в PDF-выгрузке, в КП и на эскизе по Ctrl/⌘ + клик.</small></> : object.url ? <small className="muted">Проверьте адрес: нужен вид https://site.ru/model</small> : null}</>}
     {hasFrame && <><div className="embedded-eskiz-section-label">Оформление рамки</div><div className="embedded-eskiz-field-row"><label>Заливка<input className="embedded-eskiz-color-input" type="color" value={object.fill ?? (object.type === 'comment' ? '#fff8d8' : '#ffffff')} onChange={(event) => onObject({ fill: event.target.value } as Partial<EskizObject>)} /></label><label>Скругление<input type="number" min="0" max="40" value={object.borderRadius ?? 7} onChange={(event) => onObject({ borderRadius: +event.target.value } as Partial<EskizObject>)} /></label></div><label>Прозрачность заливки<div className="embedded-eskiz-range-row"><input type="range" min="0" max="1" step=".05" value={object.fillOpacity ?? 1} onChange={(event) => onObject({ fillOpacity: +event.target.value } as Partial<EskizObject>)} /><span>{Math.round((object.fillOpacity ?? 1) * 100)}%</span></div></label></>}
     <label className="embedded-eskiz-toggle-row">Заблокировать объект<input type="checkbox" checked={Boolean(object.locked)} onChange={(event) => onObject({ locked: event.target.checked } as Partial<EskizObject>)} /><i /></label>
     <div className="embedded-eskiz-section-label">Положение</div><div className="embedded-eskiz-field-row"><label>X<input type="number" value={Math.round(object.x)} onChange={(event) => onObject({ x: +event.target.value } as Partial<EskizObject>)} /></label><label>Y<input type="number" value={Math.round(object.y)} onChange={(event) => onObject({ y: +event.target.value } as Partial<EskizObject>)} /></label></div>
