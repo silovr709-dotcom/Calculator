@@ -6274,3 +6274,44 @@ select option { background: #fff !important; color: #102037 !important; }
   .crm-history-add input,
   .crm-history-add .btn { width: 100%; }
 }
+
+/* CRM action cleanup: keep one primary action visible, move secondary actions into menus */
+.compact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+.compact-actions .btn {
+  min-height: 32px;
+}
+.action-dropdown {
+  flex: 0 1 150px;
+}
+.action-dropdown > .btn {
+  width: 100%;
+  justify-content: center;
+}
+.action-dropdown .dropdown-menu button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.crm-client-project-actions.compact-actions {
+  padding-top: 4px;
+  border-top: 1px dashed #dbe7f4;
+}
+.crm-row-footer.compact-actions {
+  padding-top: 2px;
+}
+@media (max-width: 620px) {
+  .compact-actions,
+  .compact-actions .btn,
+  .action-dropdown,
+  .action-dropdown > .btn {
+    width: 100%;
+  }
+  .compact-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}

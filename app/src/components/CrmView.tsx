@@ -409,15 +409,27 @@ export default function CrmView(props: {
                   <label>Комментарий<input value={payment?.comment ?? ''} onChange={(event) => updatePayment(selectedClient, row.project.id, { comment: event.target.value })} placeholder="предоплата, долг, банк…" /></label>
                 </div>
                 <div className="crm-doc-status-grid">{(Object.keys(DOC_LABELS) as Array<keyof typeof DOC_LABELS>).map((key) => <label key={key}>{DOC_LABELS[key]}<select value={docs[key] ?? 'none'} onChange={(event) => updateDocs(selectedClient, row.project.id, { [key]: event.target.value as ClientDocumentState })}>{DOC_STATES.map((state) => <option key={state.value} value={state.value}>{state.label}</option>)}</select></label>)}</div>
-                <div className="crm-client-project-actions">
-                  <button className="btn tiny ghost" onClick={() => props.onOpen(row.project.id)}>Открыть проект</button>
-                  <button className="btn tiny ghost" onClick={() => changeStatus(row, 'offerSent')}>КП отправлено</button>
-                  <button className="btn tiny ghost" onClick={() => changeStatus(row, 'approved')}>Согласовано</button>
-                  <button className="btn tiny ghost" onClick={() => changeStatus(row, 'factorySent')}>Фабрика</button>
-                  <button className="btn tiny ghost" disabled={docBusy === `${row.project.id}-offer`} onClick={() => void runDocumentAction(row, 'offer')}>КП Word</button>
-                  <button className="btn tiny ghost" disabled={docBusy === `${row.project.id}-contract`} onClick={() => void runDocumentAction(row, 'contract')}>Договор</button>
-                  <button className="btn tiny ghost" disabled={docBusy === `${row.project.id}-receipt`} onClick={() => void runDocumentAction(row, 'receipt')}>Чек</button>
-                  <button className="btn tiny primary" disabled={docBusy === `${row.project.id}-package`} onClick={() => void runDocumentAction(row, 'package')}>ZIP</button>
+                <div className="crm-client-project-actions compact-actions">
+                  <button className="btn tiny primary" onClick={() => props.onOpen(row.project.id)}>Открыть проект</button>
+                  <div className="dropdown action-dropdown">
+                    <button className="btn tiny ghost" type="button">Статус ▾</button>
+                    <div className="dropdown-menu">
+                      <button type="button" onClick={() => changeStatus(row, 'offerSent')}>КП отправлено</button>
+                      <button type="button" onClick={() => changeStatus(row, 'approved')}>Согласовано</button>
+                      <button type="button" onClick={() => changeStatus(row, 'techCheck')}>Технолог</button>
+                      <button type="button" onClick={() => changeStatus(row, 'factorySent')}>Передано на фабрику</button>
+                      <button type="button" onClick={() => changeStatus(row, 'ready')}>Готово</button>
+                    </div>
+                  </div>
+                  <div className="dropdown action-dropdown">
+                    <button className="btn tiny ghost" type="button">Документы ▾</button>
+                    <div className="dropdown-menu">
+                      <button type="button" disabled={docBusy === `${row.project.id}-offer`} onClick={() => void runDocumentAction(row, 'offer')}>КП Word</button>
+                      <button type="button" disabled={docBusy === `${row.project.id}-contract`} onClick={() => void runDocumentAction(row, 'contract')}>Договор Word</button>
+                      <button type="button" disabled={docBusy === `${row.project.id}-receipt`} onClick={() => void runDocumentAction(row, 'receipt')}>Товарный чек Word</button>
+                      <button type="button" disabled={docBusy === `${row.project.id}-package`} onClick={() => void runDocumentAction(row, 'package')}>Пакет клиенту ZIP</button>
+                    </div>
+                  </div>
                 </div>
               </article>;
             })}
@@ -451,12 +463,26 @@ export default function CrmView(props: {
                   <label>Следующий шаг<input key={`action-${row.project.id}-${row.workflow.nextAction ?? ''}`} defaultValue={row.workflow.nextAction ?? ''} onBlur={(event) => { if (event.target.value !== (row.workflow.nextAction ?? '')) props.onWorkflowChange(row.project.id, { nextAction: event.target.value }); }} placeholder={defaultNextAction(row.workflow.status)} /></label>
                   <label>Дата контакта<input type="date" value={dateInputValue(row.workflow.nextContactAt)} onChange={(event) => props.onWorkflowChange(row.project.id, { nextContactAt: dateInputToIso(event.target.value) })} /></label>
                 </div>
-                <div className="crm-row-footer">
+                <div className="crm-row-footer compact-actions">
                   <span className={`crm-date-pill ${row.nextTone}`}>{toneLabel(row.nextTone, row.workflow.nextContactAt)}</span>
-                  <button className="btn tiny ghost" onClick={() => quickSchedule(row, 0, row.workflow.nextAction || defaultNextAction(row.workflow.status))}>Сегодня</button>
-                  <button className="btn tiny ghost" onClick={() => quickSchedule(row, 2, 'Повторный контакт с клиентом')}>+2 дня</button>
-                  <button className="btn tiny ghost" onClick={() => props.onWorkflowChange(row.project.id, { nextContactAt: undefined })}>Без даты</button>
-                  <button className="btn tiny ghost" onClick={() => props.onOpen(row.project.id)}>Открыть</button>
+                  <button className="btn tiny primary" onClick={() => row.client ? setSelectedClientId(row.client.id) : props.onOpen(row.project.id)}>Карточка клиента</button>
+                  <div className="dropdown action-dropdown">
+                    <button className="btn tiny ghost" type="button">Контакт ▾</button>
+                    <div className="dropdown-menu">
+                      <button type="button" onClick={() => quickSchedule(row, 0, row.workflow.nextAction || defaultNextAction(row.workflow.status))}>Назначить на сегодня</button>
+                      <button type="button" onClick={() => quickSchedule(row, 2, 'Повторный контакт с клиентом')}>Повторный контакт через 2 дня</button>
+                      <button type="button" onClick={() => quickSchedule(row, 7, 'Проверить решение клиента')}>Проверить через неделю</button>
+                      <button type="button" onClick={() => props.onWorkflowChange(row.project.id, { nextContactAt: undefined })}>Убрать дату</button>
+                    </div>
+                  </div>
+                  <div className="dropdown action-dropdown">
+                    <button className="btn tiny ghost" type="button">Быстро ▾</button>
+                    <div className="dropdown-menu">
+                      <button type="button" onClick={() => changeStatus(row, 'offerSent')}>Отметить КП отправленным</button>
+                      <button type="button" onClick={() => changeStatus(row, 'approved')}>Отметить согласованным</button>
+                      <button type="button" onClick={() => props.onOpen(row.project.id)}>Открыть проект</button>
+                    </div>
+                  </div>
                 </div>
                 <textarea key={`comment-${row.project.id}-${row.workflow.managerComment ?? ''}`} className="crm-manager-note" defaultValue={row.workflow.managerComment ?? ''} onBlur={(event) => { if (event.target.value !== (row.workflow.managerComment ?? '')) props.onWorkflowChange(row.project.id, { managerComment: event.target.value }); }} placeholder="Заметка менеджера: что согласовано, почему ждём, что по возражениям" rows={2} />
               </article>
