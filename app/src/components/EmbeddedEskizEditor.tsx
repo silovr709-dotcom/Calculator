@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ChangeEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizEquipmentType, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
-import { downloadEskizFile, readEskizFileBundle } from '../lib/eskizPro';
+import { downloadEskizFile, eskizImageReplaceScale, readEskizFileBundle, replaceEskizProjectImage, scaleEskizCommunication, type EskizImageReplaceMode } from '../lib/eskizPro';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, COMMUNICATION_KINDS, COMMUNICATION_VISUAL_SCALE_MAX, COMMUNICATION_VISUAL_SCALE_MIN, communicationColor, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale, defaultCommunicationDimensions, normalizeCommunicationVisualScale } from '../lib/eskizCommunications';
 import { evaluateNumericExpression } from '../lib/numericExpression';
 
@@ -109,22 +109,38 @@ function todayRu() {
   return new Intl.DateTimeFormat('ru-RU').format(new Date());
 }
 
-function readImage(file: File): Promise<EskizProject['image']> {
+const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+function readImage(file: File | Blob, fallbackName = 'Снимок из буфера.png'): Promise<EskizProject['image']> {
   return new Promise((resolve, reject) => {
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    if (!SUPPORTED_IMAGE_TYPES.includes(file.type)) {
       reject(new Error('Поддерживаются JPG, PNG и WEBP'));
       return;
     }
+    const name = (file as File).name || fallbackName;
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
     reader.onload = () => {
       const image = new Image();
       image.onerror = () => reject(new Error('Файл не является корректным изображением'));
-      image.onload = () => resolve({ dataUrl: String(reader.result), width: image.naturalWidth, height: image.naturalHeight, name: file.name });
+      image.onload = () => resolve({ dataUrl: String(reader.result), width: image.naturalWidth, height: image.naturalHeight, name });
       image.src = String(reader.result);
     };
     reader.readAsDataURL(file);
   });
+}
+
+function imageFromTransfer(data: DataTransfer | null): File | null {
+  if (!data) return null;
+  const fromFiles = Array.from(data.files ?? []).find((file) => SUPPORTED_IMAGE_TYPES.includes(file.type));
+  if (fromFiles) return fromFiles;
+  const item = Array.from(data.items ?? []).find((entry) => entry.kind === 'file' && SUPPORTED_IMAGE_TYPES.includes(entry.type));
+  return item?.getAsFile() ?? null;
+}
+
+function eskizFileFromTransfer(data: DataTransfer | null): File | null {
+  if (!data) return null;
+  return Array.from(data.files ?? []).find((file) => file.name.toLowerCase().endsWith('.eskiz')) ?? null;
 }
 
 function createEskizProject(image: EskizProject['image'], projectName: string, clientName?: string): EskizProject {
@@ -385,6 +401,10 @@ export default function EmbeddedEskizEditor(props: Props) {
   const [communicationDraftPoint, setCommunicationDraftPoint] = useState<Point | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
   const [error, setError] = useState('');
+  const [photoCandidate, setPhotoCandidate] = useState<EskizProject['image'] | null>(null);
+  const [photoMode, setPhotoMode] = useState<EskizImageReplaceMode>('scale');
+  const [photoDragOver, setPhotoDragOver] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -661,7 +681,13 @@ export default function EmbeddedEskizEditor(props: Props) {
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'c') { event.preventDefault(); copySelectedStyle(); return; }
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'v') { event.preventDefault(); pasteSelectedStyle(); return; }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') { event.preventDefault(); copySelected(); return; }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') { event.preventDefault(); pasteClipboard(); return; }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') {
+        // Если своих скопированных объектов нет — не перехватываем Ctrl+V, чтобы сработала вставка фото из буфера.
+        if (!embeddedClipboard.length) return;
+        event.preventDefault();
+        pasteClipboard();
+        return;
+      }
       if (event.key.toLowerCase() === 'q' && !event.ctrlKey && !event.metaKey) { event.preventDefault(); setTool(lastDrawingTool); setPendingDimension(null); return; }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); if (event.shiftKey) redo(); else undo(); return; }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd') { event.preventDefault(); duplicate(); return; }
@@ -1137,18 +1163,80 @@ export default function EmbeddedEskizEditor(props: Props) {
     setQuickEdit(null);
   };
 
-  const openImage = async (file?: File) => {
+  const startNewFromImage = useCallback((image: EskizProject['image']) => {
+    const next = createEskizProject(image, props.calculatorProjectName, props.calculatorProjectClient);
+    past.current = [];
+    future.current = [];
+    setProject(next);
+    props.onProjectChange(next);
+    setSaved(true);
+    setPhotoCandidate(null);
+    selectOnly(null);
+    setError('');
+    window.requestAnimationFrame(() => fit());
+  }, [fit, props, selectOnly]);
+
+  /** Меняет фото на полотне, сохраняя размеры, сноски, модули и коммуникации. */
+  const applyPhotoReplace = (image: EskizProject['image'], mode: EskizImageReplaceMode) => {
+    if (!project) {
+      startNewFromImage(image);
+      return;
+    }
+    const previous = project.image;
+    const scale = eskizImageReplaceScale(previous, image, mode);
+    const next = replaceEskizProjectImage(project, image, mode);
+    past.current.push(project);
+    if (past.current.length > 80) past.current.shift();
+    future.current = [];
+    setProject(next);
+    props.onProjectChange(next);
+    setSaved(true);
+    const projectCommunications = props.communications.filter((marker) => marker.eskizId === project.id);
+    if (scale.x !== 1 || scale.y !== 1) {
+      projectCommunications.forEach((marker) => {
+        const scaled = scaleEskizCommunication(marker, scale);
+        props.onCommunicationChange(marker.id, { x: scaled.x, y: scaled.y, distances: scaled.distances });
+      });
+    }
+    setPhotoCandidate(null);
+    const kept = next.objects.length + projectCommunications.length;
+    setError(`Фото заменено: ${image.name} (${image.width}×${image.height}). Разметка сохранена: ${kept} объект(ов)${mode === 'scale' && (scale.x !== 1 || scale.y !== 1) ? ' с пересчётом под новый размер' : ''}. Отмена — Ctrl+Z.`);
+    if (previous.width !== image.width || previous.height !== image.height) window.requestAnimationFrame(() => fit());
+  };
+
+  /** Принимает фото из файла, перетаскивания или буфера обмена. */
+  const takePhoto = useCallback(async (file?: File | Blob | null) => {
     if (!file) return;
     setError('');
+    setPhotoBusy(true);
     try {
-      const next = createEskizProject(await readImage(file), props.calculatorProjectName, props.calculatorProjectClient);
-      setProject(next);
-      props.onProjectChange(next);
-      setSaved(true);
+      const image = await readImage(file);
+      if (!project) startNewFromImage(image);
+      else {
+        setPhotoMode('scale');
+        setPhotoCandidate(image);
+      }
     } catch (errorValue) {
       setError(errorValue instanceof Error ? errorValue.message : 'Не удалось загрузить скрин');
+    } finally {
+      setPhotoBusy(false);
     }
-  };
+  }, [project, startNewFromImage]);
+
+  const openImage = async (file?: File) => { await takePhoto(file); };
+
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+      const file = imageFromTransfer(event.clipboardData);
+      if (!file) return;
+      event.preventDefault();
+      void takePhoto(file);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [takePhoto]);
 
   const importProject = async (file?: File) => {
     if (!file) return;
@@ -1176,19 +1264,106 @@ export default function EmbeddedEskizEditor(props: Props) {
     event.target.value = '';
   };
 
+  const pastePhotoFromClipboard = async () => {
+    try {
+      const items = await navigator.clipboard?.read?.();
+      for (const item of items ?? []) {
+        const type = item.types.find((entry) => SUPPORTED_IMAGE_TYPES.includes(entry));
+        if (type) {
+          await takePhoto(await item.getType(type));
+          return;
+        }
+      }
+      setError('В буфере обмена нет картинки. Скопируйте скрин и нажмите Ctrl+V прямо в редакторе.');
+    } catch {
+      setError('Браузер не дал доступ к буферу. Нажмите Ctrl+V прямо в редакторе — вставка фото сработает.');
+    }
+  };
+
+  const onPhotoDragOver = (event: ReactDragEvent<HTMLElement>) => {
+    if (!Array.from(event.dataTransfer?.types ?? []).includes('Files')) return;
+    event.preventDefault();
+    setPhotoDragOver(true);
+  };
+
+  const onPhotoDragLeave = (event: ReactDragEvent<HTMLElement>) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    setPhotoDragOver(false);
+  };
+
+  const onPhotoDrop = (event: ReactDragEvent<HTMLElement>) => {
+    if (!Array.from(event.dataTransfer?.types ?? []).includes('Files')) return;
+    event.preventDefault();
+    setPhotoDragOver(false);
+    const eskizFile = eskizFileFromTransfer(event.dataTransfer);
+    if (eskizFile) {
+      void importProject(eskizFile);
+      return;
+    }
+    const imageFile = imageFromTransfer(event.dataTransfer);
+    if (imageFile) void takePhoto(imageFile);
+    else setError('Перетащите картинку JPG/PNG/WEBP или файл .eskiz');
+  };
+
+  const photoDialog = photoCandidate && project ? <div className="modal-back embedded-eskiz-photo-back" onClick={() => setPhotoCandidate(null)}>
+    <div className="modal embedded-eskiz-photo-modal" onClick={(event) => event.stopPropagation()}>
+      <header className="modal-head">
+        <div>
+          <strong>Новое фото эскиза</strong>
+          <small className="muted">Вся разметка остаётся: размеры, сноски, модули, петли и коммуникации.</small>
+        </div>
+        <button type="button" className="btn tiny ghost" onClick={() => setPhotoCandidate(null)}>✕</button>
+      </header>
+      <div className="embedded-eskiz-photo-body">
+        <div className="embedded-eskiz-photo-preview">
+          <img src={photoCandidate.dataUrl} alt="Новое фото эскиза" />
+          <small className="muted">{photoCandidate.name} · {photoCandidate.width}×{photoCandidate.height}px</small>
+        </div>
+        <div className="embedded-eskiz-photo-options">
+          <div className="embedded-eskiz-photo-compare">
+            <span>Было: <b>{project.image.width}×{project.image.height}</b></span>
+            <span>Станет: <b>{photoCandidate.width}×{photoCandidate.height}</b></span>
+            <span>Разметка: <b>{project.objects.length} объект(ов)</b> · коммуникаций <b>{props.communications.filter((marker) => marker.eskizId === project.id).length}</b></span>
+          </div>
+          <label className={photoMode === 'scale' ? 'embedded-eskiz-photo-choice active' : 'embedded-eskiz-photo-choice'}>
+            <input type="radio" name="eskiz-photo-mode" checked={photoMode === 'scale'} onChange={() => setPhotoMode('scale')} />
+            <span><b>Подогнать разметку под новое фото</b><small>Координаты размеров и сносок пересчитываются пропорционально. Подходит, когда это то же изображение в другом разрешении.</small></span>
+          </label>
+          <label className={photoMode === 'keep' ? 'embedded-eskiz-photo-choice active' : 'embedded-eskiz-photo-choice'}>
+            <input type="radio" name="eskiz-photo-mode" checked={photoMode === 'keep'} onChange={() => setPhotoMode('keep')} />
+            <span><b>Оставить разметку на своих местах</b><small>Координаты не меняются. Подходит, когда новое фото того же размера или нужно подвинуть пометки вручную.</small></span>
+          </label>
+        </div>
+      </div>
+      <footer className="modal-foot embedded-eskiz-photo-foot">
+        <button type="button" className="btn ghost danger" onClick={() => startNewFromImage(photoCandidate)}>Новый эскиз с нуля</button>
+        <div className="spacer" />
+        <button type="button" className="btn ghost" onClick={() => setPhotoCandidate(null)}>Отмена</button>
+        <button type="button" className="btn primary" onClick={() => applyPhotoReplace(photoCandidate, photoMode)}>Заменить фото и сохранить разметку</button>
+      </footer>
+    </div>
+  </div> : null;
+
   if (!project) {
-    return <div className="embedded-eskiz-start">
-      <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={onFileInput((file) => void openImage(file))} />
+    return <div
+      className={`embedded-eskiz-start ${photoDragOver ? 'drop-active' : ''}`}
+      onDragOver={onPhotoDragOver}
+      onDragLeave={onPhotoDragLeave}
+      onDrop={onPhotoDrop}
+    >
+      <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; void openImage(file); }} />
       <input ref={projectInputRef} type="file" accept=".eskiz,application/json" hidden onChange={onFileInput((file) => void importProject(file))} />
       <div>
         <span className="eyebrow">Встроенный Эскиз PRO</span>
         <h3>Загрузите скрин проекта — эскиз будет храниться прямо в расчёте</h3>
-        <p className="muted small">Это код Эскиз PRO внутри калькулятора: размеры, модули и коммуникации ставятся на одном основном полотне без iframe и без отдельного маленького превью.</p>
+        <p className="muted small">Перетащите картинку сюда, вставьте её из буфера по Ctrl+V или выберите файл. Размеры, модули и коммуникации ставятся на одном основном полотне.</p>
       </div>
       <div className="embedded-eskiz-start-actions">
-        <button className="btn primary" onClick={() => imageInputRef.current?.click()}>Загрузить скрин JPG/PNG/WEBP</button>
+        <button className="btn primary" disabled={photoBusy} onClick={() => imageInputRef.current?.click()}>Загрузить скрин JPG/PNG/WEBP</button>
+        <button className="btn ghost" disabled={photoBusy} onClick={() => void pastePhotoFromClipboard()}>Вставить из буфера</button>
         <button className="btn ghost" onClick={() => projectInputRef.current?.click()}>Импорт .eskiz</button>
       </div>
+      {photoDragOver && <div className="embedded-eskiz-dropzone-hint">Отпустите файл — загрузим фото эскиза</div>}
       {error && <div className="note small">{error}</div>}
     </div>;
   }
@@ -1205,14 +1380,15 @@ export default function EmbeddedEskizEditor(props: Props) {
   const eskizCommunicationCount = props.communications.filter((marker) => marker.eskizId === project.id).length;
 
   return <div className={`embedded-eskiz-editor ${communicationMode ? 'communication-mode' : ''}`}>
-    <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={onFileInput((file) => void openImage(file))} />
+    <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; void openImage(file); }} />
     <input ref={projectInputRef} type="file" accept=".eskiz,application/json" hidden onChange={onFileInput((file) => void importProject(file))} />
     <header className="embedded-eskiz-header">
       <div className="embedded-eskiz-title"><b>Эскиз PRO</b><input value={project.title} onChange={(event) => titleUpdate(event.target.value)} /><span className={saved ? 'ok' : ''}>{saved ? 'сохранено в расчёт' : 'сохраняем…'}</span></div>
       <div className="embedded-eskiz-actions">
         <button className="btn tiny ghost" onClick={undo}>↶</button>
         <button className="btn tiny ghost" onClick={redo}>↷</button>
-        <button className="btn tiny ghost" onClick={() => imageInputRef.current?.click()}>Новый скрин</button>
+        <button className="btn tiny ghost" disabled={photoBusy} title="Поменять фото, сохранив все размеры, сноски и модули" onClick={() => imageInputRef.current?.click()}>Заменить фото</button>
+        <button className="btn tiny ghost" disabled={photoBusy} title="Вставить скрин из буфера обмена (Ctrl+V прямо на полотне)" onClick={() => void pastePhotoFromClipboard()}>Фото из буфера</button>
         <button className="btn tiny ghost" onClick={() => projectInputRef.current?.click()}>Импорт .eskiz</button>
         <button className="btn tiny ghost" onClick={exportProject}>Экспорт .eskiz</button>
         {props.onExportImage && <button className="btn tiny ghost" disabled={props.exportBusy} onClick={() => props.onExportImage?.(project, exportViewSettings)}>PNG</button>}
@@ -1252,10 +1428,14 @@ export default function EmbeddedEskizEditor(props: Props) {
       <span><b>Вид</b><small>{Math.round(zoom * 100)}% · слои справа</small></span>
     </div>
     {communicationMode && <div className="embedded-eskiz-communication-banner">{props.communicationAddKind ? `Режим добавления: ${COMMUNICATION_KIND_META[props.communicationAddKind].label}. Тапните по основному эскизу Эскиз PRO.` : 'Рисуйте свободную линию расстояния: ведите курсор от выбранной коммуникации и кликните конечную точку.'}</div>}
+    {error && <div className="embedded-eskiz-toast no-print" role="status"><span>{error}</span><button type="button" aria-label="Скрыть сообщение" onClick={() => setError('')}>✕</button></div>}
     <div className="embedded-eskiz-workarea">
       <section
         ref={viewportRef}
-        className={`embedded-eskiz-viewport ${spaceDown ? 'panning' : ''}`}
+        className={`embedded-eskiz-viewport ${spaceDown ? 'panning' : ''} ${photoDragOver ? 'drop-active' : ''}`}
+        onDragOver={onPhotoDragOver}
+        onDragLeave={onPhotoDragLeave}
+        onDrop={onPhotoDrop}
         onPointerDown={(event) => {
           if (!spaceDown && event.button !== 1) return;
           const viewport = viewportRef.current;
@@ -1299,12 +1479,14 @@ export default function EmbeddedEskizEditor(props: Props) {
           </div>
         </div>
         {pendingDimension ? <div className="embedded-eskiz-hint"><b>Шаг 3 из 3</b> Отведите размерную линию и кликните для фиксации</div> : tool === 'chain' && <div className="embedded-eskiz-hint"><b>Цепочка</b> Укажите следующую точку · Esc — закончить</div>}
+        {photoDragOver && <div className="embedded-eskiz-dropzone-overlay"><b>Отпустите файл</b><span>Фото заменится, а размеры и сноски останутся</span></div>}
       </section>
       {quickEdit && <div className="embedded-eskiz-quick" style={{ left: Math.min(quickEdit.left + 14, window.innerWidth - 210), top: Math.min(quickEdit.top + 14, window.innerHeight - 105) }}><span>Размер</span><div><input autoFocus inputMode="decimal" value={quickEdit.value} onChange={(event) => setQuickEdit({ ...quickEdit, value: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); finishQuickEdit(false); } if (event.key === 'Tab') { event.preventDefault(); finishQuickEdit(true); } if (event.key === 'Escape') { event.preventDefault(); setQuickEdit(null); } }} /><b>мм</b></div><small>Enter — готово · Tab — следующий</small></div>}
       {communicationQuickEdit && inlineCommunication && <CommunicationQuickPopover key={`${communicationQuickEdit.mode}-${communicationQuickEdit.communicationId}-${communicationQuickEdit.mode === 'distance' ? communicationQuickEdit.distanceId : 'marker'}`} edit={communicationQuickEdit} marker={inlineCommunication} onChange={(patch) => props.onCommunicationChange(inlineCommunication.id, patch)} onDistanceChange={(distanceId, patch) => props.onCommunicationDistanceChange(inlineCommunication.id, distanceId, patch)} onStartDistance={() => { startCommunicationDistance(inlineCommunication.id); setCommunicationQuickEdit(null); }} onClose={() => setCommunicationQuickEdit(null)} />}
       {sidebarOpen && <Inspector project={project} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} moduleSummaries={props.moduleSummaries} onModuleObjectClick={(projectId, object) => { props.onProjectChange(project); props.onModuleObjectClick?.(projectId, object); }} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} showCommunicationMeasures={showCommunicationMeasures} layerVisibility={layerVisibility} onShowImage={setImageLayerVisible} onShowAnnotations={setAnnotationLayersVisible} onShowHelpers={setHelperLayersVisible} onShowCommunicationMeasures={setCommunicationMeasuresVisible} onLayerVisibility={setEskizLayerVisible} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); setCommunicationQuickEdit(null); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceAddSet={props.onCommunicationDistanceAddSet} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
     </div>
-    <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span>Ctrl/⌘ + колесо — точное приближение под курсором · Пробел — перемещение</span><div><button onClick={() => zoomTo((value) => value / ZOOM_FACTOR)}>−</button><button onClick={fit}>Вписать · {Math.round(zoom * 100)}%</button><button onClick={() => zoomTo((value) => value * ZOOM_FACTOR)}>+</button></div></footer>
+    <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span>Перетащите новое фото на полотно или вставьте Ctrl+V — разметка сохранится · Ctrl/⌘ + колесо — зум · Пробел — перемещение</span><div><button onClick={() => zoomTo((value) => value / ZOOM_FACTOR)}>−</button><button onClick={fit}>Вписать · {Math.round(zoom * 100)}%</button><button onClick={() => zoomTo((value) => value * ZOOM_FACTOR)}>+</button></div></footer>
+    {photoDialog}
   </div>;
 }
 

@@ -130,6 +130,87 @@ export function eskizFilePayload(project: EskizProject, communications: EskizCom
   };
 }
 
+/** Как поступить с существующей разметкой при замене фото эскиза. */
+export type EskizImageReplaceMode = 'scale' | 'keep';
+
+export interface EskizImageReplaceScale {
+  x: number;
+  y: number;
+}
+
+/** Коэффициенты пересчёта координат разметки со старого изображения на новое. */
+export function eskizImageReplaceScale(
+  previous: { width: number; height: number },
+  next: { width: number; height: number },
+  mode: EskizImageReplaceMode = 'scale',
+): EskizImageReplaceScale {
+  if (mode === 'keep') return { x: 1, y: 1 };
+  const x = previous.width > 0 && next.width > 0 ? next.width / previous.width : 1;
+  const y = previous.height > 0 && next.height > 0 ? next.height / previous.height : 1;
+  return { x: Number.isFinite(x) && x > 0 ? x : 1, y: Number.isFinite(y) && y > 0 ? y : 1 };
+}
+
+function scaleNumber(value: number, factor: number): number {
+  return Math.round(value * factor * 100) / 100;
+}
+
+function scaleOptional(value: number | null | undefined, factor: number): number | null | undefined {
+  if (value == null) return value;
+  return scaleNumber(value, factor);
+}
+
+/** Пересчитывает объект разметки под новое изображение. */
+export function scaleEskizObject(object: EskizObject, scale: EskizImageReplaceScale): EskizObject {
+  const next = { ...object, x: scaleNumber(object.x, scale.x), y: scaleNumber(object.y, scale.y) } as EskizObject;
+  if (next.width != null) next.width = scaleNumber(next.width, scale.x);
+  if (next.height != null) next.height = scaleNumber(next.height, scale.y);
+  if (next.type === 'dimension') {
+    next.x2 = scaleNumber(next.x2, scale.x);
+    next.y2 = scaleNumber(next.y2, scale.y);
+  }
+  if (next.type === 'callout') {
+    next.targetX = scaleNumber(next.targetX, scale.x);
+    next.targetY = scaleNumber(next.targetY, scale.y);
+  }
+  return next;
+}
+
+/** Пересчитывает коммуникацию (маркер и линии расстояний) под новое изображение. */
+export function scaleEskizCommunication(marker: EskizCommunicationMarker, scale: EskizImageReplaceScale): EskizCommunicationMarker {
+  return {
+    ...marker,
+    x: scaleNumber(marker.x, scale.x),
+    y: scaleNumber(marker.y, scale.y),
+    distances: (marker.distances ?? []).map((distance) => ({
+      ...distance,
+      anchorX: scaleOptional(distance.anchorX, scale.x),
+      anchorY: scaleOptional(distance.anchorY, scale.y),
+      labelX: scaleOptional(distance.labelX, scale.x),
+      labelY: scaleOptional(distance.labelY, scale.y),
+    })),
+  };
+}
+
+/**
+ * Меняет фото эскиза, сохраняя все сноски, размеры, модули и настройки документа.
+ * При mode='scale' координаты разметки пересчитываются под новый размер изображения.
+ */
+export function replaceEskizProjectImage(
+  project: EskizProject,
+  image: EskizProject['image'],
+  mode: EskizImageReplaceMode = 'scale',
+  now: string = new Date().toISOString(),
+): EskizProject {
+  const scale = eskizImageReplaceScale(project.image, image, mode);
+  const sameScale = scale.x === 1 && scale.y === 1;
+  return {
+    ...project,
+    image,
+    updatedAt: now,
+    objects: sameScale ? project.objects : project.objects.map((object) => scaleEskizObject(object, scale)),
+  };
+}
+
 function safeFilePart(value: string): string {
   return (value || 'eskiz')
     .replace(/[\\/:*?"<>|]+/g, '-')

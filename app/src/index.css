@@ -6977,3 +6977,148 @@ select option { background: #fff !important; color: #102037 !important; }
   }
   .module-editor-footer div { display: grid; grid-template-columns: 1fr; }
 }
+
+/* Эскиз PRO: удобная загрузка и замена фото с сохранением разметки */
+.embedded-eskiz-start.drop-active {
+  outline: 3px dashed #1d3f72;
+  outline-offset: -14px;
+  background: linear-gradient(135deg, #eef4ff, #f8fbff);
+}
+.embedded-eskiz-dropzone-hint {
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: #1d3f72;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 850;
+}
+.embedded-eskiz-viewport.drop-active::after {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  border: 3px dashed #1d3f72;
+  border-radius: 14px;
+  background: rgba(29, 63, 114, .08);
+  pointer-events: none;
+  z-index: 6;
+}
+.embedded-eskiz-dropzone-overlay {
+  position: absolute;
+  left: 50%;
+  top: 24px;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: #1d3f72;
+  color: #fff;
+  box-shadow: 0 14px 30px rgba(15, 32, 60, .28);
+  pointer-events: none;
+}
+.embedded-eskiz-dropzone-overlay b { font-size: 13px; }
+.embedded-eskiz-dropzone-overlay span { font-size: 11px; opacity: .85; }
+.embedded-eskiz-toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 12px 8px;
+  padding: 8px 12px;
+  border: 1px solid #c7dbf4;
+  border-left: 4px solid #1d3f72;
+  border-radius: 10px;
+  background: #f2f7ff;
+  color: #1f2c40;
+  font-size: 12px;
+  font-weight: 700;
+}
+.embedded-eskiz-toast button {
+  border: 0;
+  background: transparent;
+  color: #51627a;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.embedded-eskiz-toast button:hover { color: #1d3f72; }
+.embedded-eskiz-photo-modal {
+  width: min(880px, 96vw);
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+.embedded-eskiz-photo-modal .modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.embedded-eskiz-photo-modal .modal-head strong { display: block; font-size: 16px; color: #16243a; }
+.embedded-eskiz-photo-modal .modal-head small { display: block; margin-top: 2px; }
+.embedded-eskiz-photo-body {
+  display: grid;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.embedded-eskiz-photo-preview {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding: 10px;
+  border: 1px solid #dbe7f3;
+  border-radius: 12px;
+  background: #f7fafd;
+}
+.embedded-eskiz-photo-preview img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #fff;
+}
+.embedded-eskiz-photo-options { display: grid; gap: 10px; }
+.embedded-eskiz-photo-compare {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f2f7ff;
+  border: 1px solid #d9e7f8;
+  font-size: 12px;
+  color: #32415a;
+}
+.embedded-eskiz-photo-compare b { color: #16243a; }
+.embedded-eskiz-photo-choice {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 11px 13px;
+  border: 1px solid #dbe7f3;
+  border-radius: 12px;
+  cursor: pointer;
+  background: #fff;
+}
+.embedded-eskiz-photo-choice:hover { border-color: #1d3f72; }
+.embedded-eskiz-photo-choice.active { border-color: #1d3f72; background: #f4f8ff; box-shadow: inset 0 0 0 1px #1d3f72; }
+.embedded-eskiz-photo-choice span { display: grid; gap: 3px; }
+.embedded-eskiz-photo-choice b { font-size: 13px; color: #16243a; }
+.embedded-eskiz-photo-choice small { color: #5a6b85; font-size: 11.5px; line-height: 1.45; }
+.embedded-eskiz-photo-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid #e4edf7;
+  padding-top: 14px;
+}
+.embedded-eskiz-photo-foot .spacer { flex: 1 1 auto; }
+@media (max-width: 760px) {
+  .embedded-eskiz-photo-body { grid-template-columns: 1fr; }
+  .embedded-eskiz-photo-foot { flex-direction: column; align-items: stretch; }
+  .embedded-eskiz-photo-foot .btn { width: 100%; }
+}
