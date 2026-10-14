@@ -105,7 +105,7 @@ jobs:
               echo "Ответ сервера: $body"
               case "$body" in
                 *'"ok":true'*)
-                  echo "::notice::Сайт обновлён и отвечает: $SITE_URL"
+                  echo "::notice::Сайт обновлён до коммита ${GITHUB_SHA:0:7} и отвечает: $SITE_URL"
                   exit 0
                   ;;
               esac
