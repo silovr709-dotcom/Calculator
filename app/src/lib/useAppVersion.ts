@@ -25,7 +25,7 @@ export function useAppVersion(): AppVersion {
 
     const check = async () => {
       try {
-        const url = new URL('build.json', document.baseURI);
+        const url = new URL('build.json', new URL(import.meta.env.BASE_URL || '/', window.location.origin));
         url.searchParams.set('ts', String(Date.now()));
         const res = await fetch(url.toString(), { cache: 'no-store' });
         if (!res.ok) return;

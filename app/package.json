@@ -9,7 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "build:hosting": "vite build && node ../tools/pack-hosting.mjs"
+    "build:hosting": "vite build --base=/ && node ../tools/pack-hosting.mjs"
   },
   "dependencies": {
     "@types/qrcode": "^1.5.6",

@@ -86,8 +86,10 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
   const appVersion = useAppVersion();
   // Клиентская ссылка вида …/#offer=abc123 — определяем её до любой загрузки базы.
   const [publicOfferId] = useState(() => {
-    const match = /[#&]offer=([a-f0-9]{10,32})/.exec(window.location.hash);
-    return match ? match[1] : '';
+    const byPath = /\/kp\/([a-f0-9]{10,32})/.exec(window.location.pathname);
+    if (byPath) return byPath[1];
+    const byHash = /[#&]offer=([a-f0-9]{10,32})/.exec(window.location.hash);
+    return byHash ? byHash[1] : '';
   });
   // На своём сервере переполненный localStorage — не беда: база живёт на сервере.
   useEffect(() => { setStorageServerBacked(server.mode === 'server'); }, [server.mode]);

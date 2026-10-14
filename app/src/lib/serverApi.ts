@@ -2,6 +2,8 @@
 // Если сервера нет (например, открыли сборку на GitHub Pages или локально),
 // все функции сообщают об этом, и приложение продолжает работать только в браузере.
 
+import { prettyUrl } from './prettyUrl';
+
 export type ServerRole = 'admin' | 'user';
 
 export interface ServerUser {
@@ -52,8 +54,13 @@ export class ServerRequestError extends Error {
 }
 
 /** Адрес API считается от адреса самой страницы — работает и в подпапке сайта. */
+/** Корень приложения: от него считаются все адреса, даже когда открыта страница /kp/… */
+export function appRootUrl(): URL {
+  return new URL(import.meta.env.BASE_URL || '/', window.location.origin);
+}
+
 export function apiUrl(route: string, params: Record<string, string> = {}): string {
-  const base = new URL('api/index.php', document.baseURI);
+  const base = new URL('api/index.php', appRootUrl());
   base.searchParams.set('r', route);
   for (const [key, value] of Object.entries(params)) base.searchParams.set(key, value);
   return base.toString();
@@ -192,9 +199,9 @@ export async function restoreServerBackup<T>(file: string): Promise<{ rev: numbe
 /** Публикация проекта для передачи на телефон по QR — на своём сервере, без внешних сервисов. */
 export async function putServerShare(payload: unknown): Promise<{ id: string; url: string }> {
   const json = await request<{ id: string }>('share', { method: 'POST', body: JSON.stringify({ payload }) });
-  const url = new URL(document.baseURI);
+  const url = appRootUrl();
   url.hash = `#share=${json.id}`;
-  return { id: json.id, url: url.toString() };
+  return { id: json.id, url: prettyUrl(url) };
 }
 
 export async function getServerShare<T>(id: string): Promise<T> {
@@ -269,9 +276,21 @@ export async function publishClientOffer(input: {
   payload: unknown;
 }): Promise<{ id: string; url: string; offer: PublishedOffer }> {
   const json = await request<{ id: string; offer: PublishedOffer }>('offers', { method: 'POST', body: JSON.stringify(input) });
-  const url = new URL(document.baseURI);
-  url.hash = `#offer=${json.id}`;
-  return { id: json.id, url: url.toString(), offer: json.offer };
+  return { id: json.id, url: clientOfferUrl(json.id), offer: json.offer };
+}
+
+/**
+ * Ссылка для клиента. На своём домене получается короткий человеческий адрес
+ * вида https://рецепт-про.рф/kp/7b4111e41d60a92b, в остальных случаях — через #offer=.
+ */
+export function clientOfferUrl(id: string): string {
+  const root = appRootUrl();
+  if (root.pathname === '/') {
+    return prettyUrl(new URL(`kp/${id}`, root));
+  }
+  const url = new URL(root);
+  url.hash = `#offer=${id}`;
+  return prettyUrl(url);
 }
 
 /** Чтение КП клиентом — без входа, по длинной ссылке. */

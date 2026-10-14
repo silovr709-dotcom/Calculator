@@ -14,6 +14,7 @@ import { snapshotProject } from '../lib/eskizPro';
 import { downloadEskizSketchPdf, renderEskizSketchPdf } from '../lib/eskizSketchExport';
 import { mergeEskizExportImage, mergeEskizExportLayers } from '../lib/eskizExportOptions';
 import {
+  clientOfferUrl,
   deleteProjectDocument, listProjectDocuments, listPublishedOffers, publishClientOffer,
   revokePublishedOffer, saveProjectDocument, serverFileUrl, setProjectDocumentStatus,
   type ProjectDocument, type ProjectDocumentKind, type ProjectDocumentStatus, type PublishedOffer,
@@ -542,9 +543,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         const mine = offers.find((item) => item.projectId === project.id);
         if (mine) {
           setOfferStatus(mine);
-          const url = new URL(document.baseURI);
-          url.hash = `#offer=${mine.id}`;
-          setOfferLink({ id: mine.id, url: url.toString() });
+          setOfferLink({ id: mine.id, url: clientOfferUrl(mine.id) });
         }
       })
       .catch(() => { /* нет сервера — просто не показываем блок */ });
