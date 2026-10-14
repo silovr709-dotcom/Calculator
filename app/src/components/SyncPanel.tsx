@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ClientProfile, Project, ProjectSettings, Template } from '../types';
 import QRCode from 'qrcode';
 import {
@@ -11,7 +11,26 @@ import {
   saveSyncConfig,
 } from '../lib/sync';
 import type { SyncConfig, SyncStatus } from '../lib/sync';
+import type { ServerSync } from '../lib/useServerSync';
 import { fmtDate } from '../lib/format';
+
+const SERVER_STATE_TITLE: Record<string, string> = {
+  idle: '🟢 Сервер подключён',
+  loading: '🔄 Загрузка базы с сервера…',
+  saving: '🔄 Сохранение на сервере…',
+  synced: '🟢 Сервер подключён',
+  offline: '🟡 Нет связи с сервером',
+  error: '🔴 Ошибка сервера',
+};
+
+const SERVER_STATUS_TEXT: Record<string, string> = {
+  idle: 'Готово',
+  loading: 'Загрузка базы…',
+  saving: 'Сохранение…',
+  synced: 'Всё сохранено на сервере',
+  offline: 'Нет связи — правки ждут в браузере',
+  error: 'Ошибка',
+};
 
 export default function SyncPanel(props: {
   projects: Project[];
@@ -21,8 +40,19 @@ export default function SyncPanel(props: {
   onSyncUpdated: (data: { projects: Project[]; clients?: ClientProfile[]; templates: Template[]; settings: ProjectSettings }) => void;
   syncStatus: SyncStatus;
   onSetSyncStatus: (st: SyncStatus) => void;
+  server?: ServerSync;
 }) {
   const [config, setConfig] = useState<SyncConfig>(() => loadSyncConfig());
+  const serverMode = props.server?.mode === 'server';
+  const [siteQr, setSiteQr] = useState('');
+  const [siteCopied, setSiteCopied] = useState(false);
+  const siteUrl = useMemo(() => {
+    try {
+      return new URL(import.meta.env.BASE_URL || '/', window.location.origin).toString();
+    } catch {
+      return window.location.origin;
+    }
+  }, []);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [pinInput, setPinInput] = useState<string>('');
   const [statusMsg, setStatusMsg] = useState<string>('');
@@ -44,6 +74,16 @@ export default function SyncPanel(props: {
         .catch(() => {});
     }
   }, [config.enabled, config.roomCode, config.secretKey]);
+
+  // QR с адресом сервера: телефон открывает тот же сайт и входит под своим логином.
+  useEffect(() => {
+    if (!serverMode) return;
+    let alive = true;
+    QRCode.toDataURL(siteUrl, { width: 300, margin: 4, errorCorrectionLevel: 'M', color: { dark: '#092a55', light: '#ffffff' } })
+      .then((url) => { if (alive) setSiteQr(url); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [serverMode, siteUrl]);
 
   // Обновление QR-кода отдельного выбранного проекта.
   // В QR кладём сжатый проект напрямую или короткую #share-ссылку для крупных проектов.
@@ -183,8 +223,69 @@ export default function SyncPanel(props: {
         </div>
       </header>
 
-      {/* Основной блок облачной синхронизации */}
+      {/* Основной блок синхронизации */}
       <div className="grid2" style={{ alignItems: 'start' }}>
+        {serverMode ? (
+        <section className="card">
+          <h3>{SERVER_STATE_TITLE[props.server?.status ?? 'idle'] ?? '🟢 Сервер подключён'}</h3>
+          <div className="muted small" style={{ marginBottom: 16 }}>
+            Все проекты, клиенты и настройки хранятся на вашем сервере и сами синхронизируются между
+            всеми устройствами, где выполнен вход. Отдельные «комнаты» и PIN-коды больше не нужны.
+          </div>
+
+          <div className="sync-active-box">
+            {siteQr && (
+              <div className="qr-container">
+                <img src={siteQr} alt="QR-код с адресом сервера" className="qr-image" />
+                <div className="qr-hint">
+                  📱 <b>Наведите камеру телефона</b> на QR-код — откроется этот же калькулятор.
+                  Войдите своим логином, и вы увидите ту же общую базу.
+                </div>
+              </div>
+            )}
+
+            <div className="sync-url-box">
+              <input readOnly value={siteUrl} className="sync-url-input" />
+              <button
+                className="btn small ghost"
+                onClick={() => {
+                  navigator.clipboard.writeText(siteUrl).then(() => {
+                    setSiteCopied(true);
+                    setTimeout(() => setSiteCopied(false), 2000);
+                  }).catch(() => {});
+                }}
+              >
+                {siteCopied ? 'Скопировано! ✓' : 'Копировать адрес'}
+              </button>
+            </div>
+
+            <div className="sync-status-row">
+              <div>
+                Статус: <b>{SERVER_STATUS_TEXT[props.server?.status ?? 'idle'] ?? 'Готово'}</b>
+                {props.server?.savedAt && (
+                  <div className="muted small">Последнее сохранение: {fmtDate(props.server.savedAt)}</div>
+                )}
+                <div className="muted small">
+                  Вы вошли как {props.server?.user?.name || props.server?.user?.login || '—'} · версия базы №{props.server?.rev ?? 0}
+                  {props.server?.pendingChanges ? ' · есть несохранённые правки' : ''}
+                </div>
+                {props.server?.error && (
+                  <div className="small" style={{ marginTop: 4, color: 'var(--danger, #b3261e)' }}>{props.server.error}</div>
+                )}
+              </div>
+              <div className="actions system-action-strip">
+                <button
+                  className="btn primary small"
+                  onClick={() => { void props.server?.refresh(); }}
+                  disabled={props.server?.status === 'loading' || props.server?.status === 'saving'}
+                >
+                  ↻ Обновить с сервера
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+        ) : (
         <section className="card">
           <h3>
             {config.enabled ? '🟢 Облако подключено' : '⚪ Облачная синхронизация выключена'}
@@ -269,6 +370,7 @@ export default function SyncPanel(props: {
             </div>
           )}
         </section>
+        )}
 
         {/* Быстрая передача отдельного проекта по QR (Direct Share) */}
         <section className="card">

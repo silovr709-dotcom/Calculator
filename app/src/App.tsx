@@ -78,6 +78,12 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
   const server = useServerSync(applyWorkspace);
   const serverScheduleSave = server.scheduleSave;
   const serverReady = server.mode === 'server' && Boolean(server.user);
+  // Значок у пункта «Синхронизация»: на своём сервере показываем состояние сервера,
+  // иначе — старое облако.
+  const syncBadgeState = server.mode === 'server'
+    ? (server.status === 'saving' || server.status === 'loading' ? 'syncing' : server.status === 'offline' || server.status === 'error' ? 'offline' : 'synced')
+    : syncStatus;
+  const showSyncBadge = server.mode === 'server' || syncConfig.enabled;
 
   // Любая правка проектов, клиентов, шаблонов и настроек уходит на сервер пакетом,
   // через небольшую паузу после последнего изменения.
@@ -490,8 +496,8 @@ const persistTemplates = useCallback((next: Template[]) => {
             <div className="sidebar-nav-title">Система</div>
             <button className={view.kind === 'sync' ? 'active' : ''} onClick={() => setView({ kind: 'sync' })}>
               <span className="nav-icon nav-sync" aria-hidden="true" />Синхронизация
-              {syncConfig.enabled && (
-                <span className={`nav-sync-badge ${syncStatus}`} title={`Синхронизация: ${syncStatus === 'synced' ? 'в сети' : syncStatus === 'syncing' ? 'обновление...' : 'офлайн'}`} />
+              {showSyncBadge && (
+                <span className={`nav-sync-badge ${syncBadgeState}`} title={`Синхронизация: ${syncBadgeState === 'synced' ? 'в сети' : syncBadgeState === 'syncing' ? 'обновление...' : 'офлайн'}`} />
               )}
             </button>
             {server.mode === 'server' && (
@@ -565,6 +571,7 @@ const persistTemplates = useCallback((next: Template[]) => {
         )}
         {view.kind === 'sync' && (
           <SyncPanel
+            server={server}
             projects={projectsForUi}
             clients={clients}
             templates={templates}
@@ -675,7 +682,7 @@ const persistTemplates = useCallback((next: Template[]) => {
           <div className="dropdown-menu mobile-dock-menu">
             <button type="button" className={view.kind === 'kb' ? 'active' : ''} onClick={() => setView({ kind: 'kb' })}>База знаний <span>{kbArticles.length}</span></button>
             <button type="button" className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => setView({ kind: 'pricebook' })}>Прайс и версии <span>{activePricebook.meta.itemCount}</span></button>
-            <button type="button" className={view.kind === 'sync' ? 'active' : ''} onClick={() => setView({ kind: 'sync' })}>Синхронизация <span>{syncStatus === 'syncing' ? '...' : syncConfig.enabled ? syncStatus : 'off'}</span></button>
+            <button type="button" className={view.kind === 'sync' ? 'active' : ''} onClick={() => setView({ kind: 'sync' })}>Синхронизация <span>{syncBadgeState === 'syncing' ? '...' : showSyncBadge ? syncBadgeState : 'off'}</span></button>
             <button type="button" className={view.kind === 'settings' ? 'active' : ''} onClick={() => setView({ kind: 'settings' })}>Настройки <span>по умолч.</span></button>
           </div>
         </div>
