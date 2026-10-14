@@ -5,7 +5,7 @@ import {
   loadProjects, saveProjects, loadTemplates, saveTemplates,
   loadClientProfiles, saveClientProfiles,
   loadStoredPricebooks, saveStoredPricebooks, uid, loadKbArticles, saveKbArticles,
-  setStorageServerBacked } from './lib/storage';
+  isStorageServerBacked, setStorageServerBacked } from './lib/storage';
 import {
   loadSyncConfig, saveSyncConfig, performFullSync, parseIncomingHash,
   pushToCloud, loadProjectShare, loadCompressedProjectShare, loadJsonStorageProjectShare, loadServerProjectShare,
@@ -24,6 +24,7 @@ import QuickCalc from './components/QuickCalc';
 import SyncPanel from './components/SyncPanel';
 import { useAppVersion } from './lib/useAppVersion';
 import ServerSaveChip from './components/ServerSaveChip';
+import { dehydrateKnown } from './lib/photoStore';
 import FactoryBlankView from './components/FactoryBlankView';
 import KnowledgeView from './components/KnowledgeView';
 import NumberFieldCalculator from './components/NumberFieldCalculator';
@@ -152,7 +153,7 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
       p.id = uid('prj');
       p.updatedAt = new Date().toISOString();
       const next = [p, ...loadProjects()];
-      saveProjects(next);
+      saveProjects(dehydrateKnown(next));
       window.setTimeout(() => { setProjects(next); setView({ kind: 'project', id: p.id }); }, 0);
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
       alert(`📱 Проект «${p.name}» успешно импортирован на это устройство!`);
@@ -161,7 +162,7 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
       loadCompressedProjectShare(parsed.data).then((project) => {
         const p = { ...project, id: uid('prj'), updatedAt: new Date().toISOString() };
         const next = [p, ...loadProjects()];
-        saveProjects(next);
+        saveProjects(dehydrateKnown(next));
         setProjects(next);
         setView({ kind: 'project', id: p.id });
         alert(`📱 Проект «${p.name}» загружен по QR-коду!`);
@@ -173,7 +174,7 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
       loadProjectShare(parsed.token).then((project) => {
         const p = { ...project, id: uid('prj'), updatedAt: new Date().toISOString() };
         const next = [p, ...loadProjects()];
-        saveProjects(next);
+        saveProjects(dehydrateKnown(next));
         setProjects(next);
         setView({ kind: 'project', id: p.id });
         alert(`📱 Проект «${p.name}» загружен по QR-коду!`);
@@ -185,7 +186,7 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
       loadServerProjectShare(parsed.id).then((project) => {
         const p = { ...project, id: uid('prj'), updatedAt: new Date().toISOString() };
         const next = [p, ...loadProjects()];
-        saveProjects(next);
+        saveProjects(dehydrateKnown(next));
         setProjects(next);
         setView({ kind: 'project', id: p.id });
         alert(`📱 Проект «${p.name}» загружен по QR-коду!`);
@@ -197,7 +198,7 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
       loadJsonStorageProjectShare(parsed.url).then((project) => {
         const p = { ...project, id: uid('prj'), updatedAt: new Date().toISOString() };
         const next = [p, ...loadProjects()];
-        saveProjects(next);
+        saveProjects(dehydrateKnown(next));
         setProjects(next);
         setView({ kind: 'project', id: p.id });
         alert(`📱 Проект «${p.name}» загружен по QR-коду!`);
@@ -248,8 +249,8 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
   useEffect(() => {
     const normalized = ensureClientProfiles(projects, clients, () => uid('cli'));
     if (!normalized.changed) return;
-    saveProjects(normalized.projects);
-    saveClientProfiles(normalized.clients);
+    saveProjects(dehydrateKnown(normalized.projects));
+    saveClientProfiles(dehydrateKnown(normalized.clients));
     window.setTimeout(() => {
       setProjects(normalized.projects);
       setClients(normalized.clients);
@@ -258,29 +259,37 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
 
   const persistProjects = useCallback((next: Project[]) => {
     setProjects(next);
-    if (!saveProjects(next)) alert('Не удалось сохранить: закончилось место локального хранилища. Экспортируйте старые проекты в файл и удалите их.');
-    else {
-      setSavedFlash(true);
-      setTimeout(() => setSavedFlash(false), 1200);
-      const cfg = loadSyncConfig();
-      if (cfg.enabled) {
-        pushToCloud(cfg, { projects: next, clients: loadClientProfiles(), templates: loadTemplates(), settings: loadGlobalSettings() })
-          .then((r) => setSyncStatus(r.ok ? 'synced' : 'offline'));
-      }
+    // В браузер кладём лёгкую копию (фото — ссылками). На своём сервере браузерное
+    // хранилище — лишь кэш, поэтому его переполнение ничего не значит и не тревожит.
+    const storedOk = saveProjects(dehydrateKnown(next));
+    if (!storedOk && !isStorageServerBacked()) {
+      alert('Не удалось сохранить: закончилось место локального хранилища. Экспортируйте старые проекты в файл и удалите их.');
+      return;
+    }
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 1200);
+    if (isStorageServerBacked()) return;   // на сервер данные уходят отдельно
+    const cfg = loadSyncConfig();
+    if (cfg.enabled) {
+      pushToCloud(cfg, { projects: next, clients: loadClientProfiles(), templates: loadTemplates(), settings: loadGlobalSettings() })
+        .then((r) => setSyncStatus(r.ok ? 'synced' : 'offline'));
     }
   }, []);
 
   const persistClients = useCallback((next: ClientProfile[]) => {
     setClients(next);
-    if (!saveClientProfiles(next)) alert('Не удалось сохранить базу клиентов: закончилось место локального хранилища.');
-    else {
-      setSavedFlash(true);
-      setTimeout(() => setSavedFlash(false), 1200);
-      const cfg = loadSyncConfig();
-      if (cfg.enabled) {
-        pushToCloud(cfg, { projects: loadProjects(), clients: next, templates: loadTemplates(), settings: loadGlobalSettings() })
-          .then((r) => setSyncStatus(r.ok ? 'synced' : 'offline'));
-      }
+    const storedOk = saveClientProfiles(dehydrateKnown(next));
+    if (!storedOk && !isStorageServerBacked()) {
+      alert('Не удалось сохранить базу клиентов: закончилось место локального хранилища.');
+      return;
+    }
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 1200);
+    if (isStorageServerBacked()) return;
+    const cfg = loadSyncConfig();
+    if (cfg.enabled) {
+      pushToCloud(cfg, { projects: loadProjects(), clients: next, templates: loadTemplates(), settings: loadGlobalSettings() })
+        .then((r) => setSyncStatus(r.ok ? 'synced' : 'offline'));
     }
   }, []);
 
@@ -310,7 +319,9 @@ const persistTemplates = useCallback((next: Template[]) => {
 
   const persistStoredPricebooks = useCallback((next: Pricebook[]) => {
     setStored(next);
-    if (!saveStoredPricebooks(next)) alert('Прайс слишком большой для локального хранилища браузера. Он будет доступен до перезагрузки страницы; для постоянного использования положите JSON в app/public/data и пересоберите приложение.');
+    if (!saveStoredPricebooks(next) && !isStorageServerBacked()) {
+      alert('Прайс слишком большой для локального хранилища браузера. Он будет доступен до перезагрузки страницы; для постоянного использования положите JSON в app/public/data и пересоберите приложение.');
+    }
   }, []);
 
   const chooseActivePb = useCallback((id: string) => {

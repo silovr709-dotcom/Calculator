@@ -28,6 +28,11 @@ export function setStorageServerBacked(on: boolean): void {
   serverBacked = on;
 }
 
+/** Работает ли приложение на собственном сервере (там база — источник правды). */
+export function isStorageServerBacked(): boolean {
+  return serverBacked;
+}
+
 /** Пояснение для интерфейса, если пришлось урезать локальный кэш. */
 export function getStorageNote(): string {
   return storageNote;
