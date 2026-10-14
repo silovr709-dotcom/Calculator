@@ -21,6 +21,7 @@ import SettingsPanel from './components/SettingsPanel';
 import PricebookView from './components/PricebookView';
 import QuickCalc from './components/QuickCalc';
 import SyncPanel from './components/SyncPanel';
+import { useAppVersion } from './lib/useAppVersion';
 import FactoryBlankView from './components/FactoryBlankView';
 import KnowledgeView from './components/KnowledgeView';
 import NumberFieldCalculator from './components/NumberFieldCalculator';
@@ -76,6 +77,7 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
     setKbArticles(workspace.knowledge);
   }, []);
   const server = useServerSync(applyWorkspace);
+  const appVersion = useAppVersion();
   const serverScheduleSave = server.scheduleSave;
   const serverReady = server.mode === 'server' && Boolean(server.user);
   // Значок у пункта «Синхронизация»: на своём сервере показываем состояние сервера,
@@ -456,6 +458,12 @@ const persistTemplates = useCallback((next: Template[]) => {
 
   return (
     <div className={`app work-mode-${workMode}`}>
+      {appVersion.hasUpdate && (
+        <div className="app-update-bar" role="status">
+          <span>Вышла новая версия калькулятора</span>
+          <button type="button" onClick={appVersion.reload}>Обновить</button>
+        </div>
+      )}
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-name">РЕцепт</div>

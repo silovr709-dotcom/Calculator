@@ -94,22 +94,6 @@ jobs:
             **/api/config.php
             **/.well-known/**
 
-      - name: Диагностика HTTP (временная)
-        if: steps.guard.outputs.ready == 'true'
-        run: |
-          probe() {
-            code=$(curl -ksS -o /tmp/body.txt -w '%{http_code}' --max-time 25 "$1" 2>/tmp/err.txt)
-            body=$(head -c 220 /tmp/body.txt | tr '\r\n' '  ')
-            err=$(head -c 120 /tmp/err.txt | tr '\r\n' '  ')
-            echo "::warning::$1 -> код=${code:-нет} тело=${body:-пусто} ошибка=${err:-нет}"
-          }
-          probe "https://u3683615.isp.regruhosting.ru/build.json?x=$GITHUB_RUN_ID"
-          probe "http://u3683615.isp.regruhosting.ru/build.json?x=$GITHUB_RUN_ID"
-          probe "http://u3683615.isp.regruhosting.ru/api/index.php?r=health"
-          headers=$(curl -ksSI --max-time 25 "http://u3683615.isp.regruhosting.ru/" 2>&1 | head -c 400 | tr '\r\n' '  ')
-          echo "::warning::Заголовки корня -> $headers"
-          echo "::warning::Ожидаемый коммит: $GITHUB_SHA"
-
       - name: Проверить сайт после выкладки
         if: ${{ steps.guard.outputs.ready == 'true' && inputs.dry_run != true }}
         run: |
@@ -118,11 +102,11 @@ jobs:
           api_ok=no
           build_ok=no
           for attempt in 1 2 3 4; do
-            health=$(curl -fsS --max-time 30 "$SITE_URL/api/index.php?r=health")
+            health=$(curl -fksS --max-time 30 "$SITE_URL/api/index.php?r=health")
             if [ $? -eq 0 ]; then
               case "$health" in *'"ok":true'*) api_ok=yes ;; esac
             fi
-            build=$(curl -fsS --max-time 30 "$SITE_URL/build.json?nocache=$GITHUB_RUN_ID")
+            build=$(curl -fksS --max-time 30 "$SITE_URL/build.json?nocache=$GITHUB_RUN_ID")
             if [ $? -eq 0 ]; then
               echo "build.json на сайте: $build"
               case "$build" in *"$GITHUB_SHA"*) build_ok=yes ;; esac

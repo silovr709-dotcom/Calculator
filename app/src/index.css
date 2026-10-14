@@ -6992,3 +6992,31 @@ input.editable-number { max-width: 120px; text-align: right; }
   white-space: nowrap;
 }
 .server-check-link:hover { color: #0b1430; }
+
+/* Плашка «вышла новая версия»: появляется, когда на сервере лежит более свежая сборка. */
+.app-update-bar {
+  position: fixed;
+  top: 14px;
+  right: 18px;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 14px;
+  border-radius: 999px;
+  background: #16213f;
+  color: #fff;
+  font-size: 13px;
+  box-shadow: 0 6px 20px rgba(10, 20, 48, 0.28);
+}
+.app-update-bar button {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 14px;
+  background: #fff;
+  color: #16213f;
+  font-weight: 600;
+  cursor: pointer;
+}
+.app-update-bar button:hover { background: #e8ecf7; }
+@media print { .app-update-bar { display: none; } }
