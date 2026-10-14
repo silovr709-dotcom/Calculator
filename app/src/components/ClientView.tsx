@@ -289,7 +289,9 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const showModuleList = detailLevel !== 'rollup';
   const showProjectHardware = detailLevel === 'modules' || detailLevel === 'sections';
   const showExtraDetails = detailLevel !== 'rollup';
-  const showRollupItems = detailLevel !== 'full';
+  // Позиции внутри ведомости видны на всех уровнях: это единственное место,
+  // где количество и сумма правятся вручную, поэтому доступ к ним не прячем.
+  const showRollupItems = true;
   const linkedEskizIds = project.eskizPro?.linkedProjectIds ?? [];
   const eskizSnapshots = project.eskizPro?.snapshots ?? [];
   const eskizById = new Map(eskizSnapshots.map((snapshot) => [snapshot.id, snapshotProject(snapshot)]));
