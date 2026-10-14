@@ -357,6 +357,70 @@ switch ($route . ' ' . $method) {
         recept_json(200, ['ok' => true, 'rev' => $result['rev'], 'data' => $data]);
     }
 
+    /* ---------- КП по ссылке для клиента ---------- */
+
+    case 'offers POST': {
+        $user = recept_require_user();
+        $record = recept_offer_put(recept_body(), $user);
+        recept_json(200, ['ok' => true, 'id' => $record['id'], 'offer' => recept_offer_summary($record)]);
+    }
+
+    case 'offers GET': {
+        // Открывается клиентом без входа: ссылка содержит длинный случайный идентификатор.
+        $id = isset($_GET['id']) ? (string) $_GET['id'] : '';
+        $record = recept_offer_get($id);
+        if ($record === null) {
+            recept_fail(404, 'Предложение не найдено. Возможно, ссылка устарела.');
+        }
+        $record = recept_offer_track_view($record);
+        recept_json(200, [
+            'ok' => true,
+            'title' => $record['title'],
+            'client' => $record['client'],
+            'total' => $record['total'],
+            'payload' => $record['payload'],
+            'createdAt' => $record['createdAt'],
+            'approvedAt' => $record['approvedAt'],
+            'approvedBy' => $record['approvedBy'],
+            'approveComment' => $record['approveComment'],
+        ]);
+    }
+
+    case 'offers/approve POST': {
+        $id = isset($_GET['id']) ? (string) $_GET['id'] : '';
+        $record = recept_offer_get($id);
+        if ($record === null) {
+            recept_fail(404, 'Предложение не найдено');
+        }
+        if (!empty($record['approvedAt'])) {
+            recept_json(200, ['ok' => true, 'approvedAt' => $record['approvedAt'], 'approvedBy' => $record['approvedBy']]);
+        }
+        $body = recept_body();
+        $name = isset($body['name']) ? trim((string) $body['name']) : '';
+        $comment = isset($body['comment']) ? trim((string) $body['comment']) : '';
+        $record['approvedAt'] = gmdate('c');
+        $record['approvedBy'] = $name !== '' ? mb_substr($name, 0, 120) : ($record['client'] !== '' ? $record['client'] : 'Клиент');
+        $record['approveComment'] = $comment !== '' ? mb_substr($comment, 0, 1000) : null;
+        recept_offer_save($record);
+        recept_json(200, ['ok' => true, 'approvedAt' => $record['approvedAt'], 'approvedBy' => $record['approvedBy']]);
+    }
+
+    case 'offers/list GET': {
+        recept_require_user();
+        recept_json(200, ['ok' => true, 'offers' => recept_offers_list()]);
+    }
+
+    case 'offers DELETE': {
+        recept_require_user();
+        $id = isset($_GET['id']) ? (string) $_GET['id'] : '';
+        $file = recept_offer_file($id);
+        if ($file === null) {
+            recept_fail(404, 'Предложение не найдено');
+        }
+        @unlink($file);
+        recept_json(200, ['ok' => true]);
+    }
+
     /* ---------- файлы проектов: фото и подложки эскизов ---------- */
 
     case 'files/missing POST': {

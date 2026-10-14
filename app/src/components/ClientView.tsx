@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ClientDocumentPackageSettings, ClientOfferDetailLevel, ClientOfferModuleDetailMode, ClientOfferPresentationMode, ClientOfferSettings, EskizExportViewSettings, EskizLayerKey, EskizProIntegration, Pricebook, Project, ProjectLine } from '../types';
 import type { ClientOfferDetail, ClientOfferDetailKind } from '../lib/clientOffer';
 import { calcTotals } from '../lib/engine';
@@ -13,6 +13,8 @@ import { exportClientXlsx } from '../lib/exporters';
 import { snapshotProject } from '../lib/eskizPro';
 import { downloadEskizSketchPdf, renderEskizSketchPdf } from '../lib/eskizSketchExport';
 import { mergeEskizExportImage, mergeEskizExportLayers } from '../lib/eskizExportOptions';
+import { listPublishedOffers, publishClientOffer, revokePublishedOffer, type PublishedOffer } from '../lib/serverApi';
+import { dehydrate } from '../lib/photoStore';
 import { buildReceiptRows, downloadClientContractDocx, downloadClientDocumentZip, downloadClientOfferDocx, downloadClientReceiptDocx, downloadClientSpecificationDocx, normalizeClientDocumentPackage, type ClientDocumentArgs } from '../lib/clientPackage';
 import EskizProjectPreview from './EskizProjectPreview';
 
@@ -257,16 +259,23 @@ function moduleCompactSummary(details: ClientOfferDetail[]): string[] {
   return out;
 }
 
-export default function ClientView({ project, pricebook, moduleGroups, onOfferChange, onEskizProChange, onProjectMetaChange }: {
+export default function ClientView({ project, pricebook, moduleGroups, onOfferChange, onEskizProChange, onProjectMetaChange, publicMode = false }: {
   project: Project;
   pricebook?: Pricebook;
   moduleGroups?: ClientModuleGroup[];
+  /** Страница для клиента по ссылке: без панели настроек и выгрузок. */
+  publicMode?: boolean;
   onOfferChange?: (offer: ClientOfferSettings) => void;
   onEskizProChange?: (eskizPro: EskizProIntegration) => void;
   /** Правка шапки КП прямо на странице: название проекта, заказчик, дата. */
   onProjectMetaChange?: (patch: { name?: string; client?: string; date?: string }) => void;
 }) {
   const [packageExporting, setPackageExporting] = useState(false);
+  // Ссылка клиенту: публикация КП на своём сервере и отметка о согласовании.
+  const [offerLink, setOfferLink] = useState<{ id: string; url: string } | null>(null);
+  const [offerStatus, setOfferStatus] = useState<PublishedOffer | null>(null);
+  const [offerBusy, setOfferBusy] = useState(false);
+  const [offerCopied, setOfferCopied] = useState(false);
   const groups = moduleGroups ?? [];
   const baseProjectForVariants: Project = { ...project, lines: project.lines.filter((line) => !isModuleLine(line)) };
   const selectedVariant = project.variants?.find((variant) => variant.id === project.selectedVariantId);
@@ -497,6 +506,63 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
       await downloadEskizSketchPdf(eskiz, { ...sketchPdfOptions, title: eskiz.title, fileName: `Эскиз ${index + 1} — ${eskiz.title}.pdf` });
     }
   }, 'Не получилось выгрузить эскиз');
+  // Подтягиваем состояние уже опубликованной ссылки: открывал ли клиент, согласовал ли.
+  useEffect(() => {
+    if (publicMode || !onOfferChange) return;
+    let alive = true;
+    listPublishedOffers()
+      .then((offers) => {
+        if (!alive) return;
+        const mine = offers.find((item) => item.projectId === project.id);
+        if (mine) {
+          setOfferStatus(mine);
+          const url = new URL(document.baseURI);
+          url.hash = `#offer=${mine.id}`;
+          setOfferLink({ id: mine.id, url: url.toString() });
+        }
+      })
+      .catch(() => { /* нет сервера — просто не показываем блок */ });
+    return () => { alive = false; };
+  }, [project.id, publicMode, onOfferChange]);
+
+  const publishOffer = async () => {
+    setOfferBusy(true);
+    try {
+      const payload = await dehydrate({ project, moduleGroups: groups });
+      const result = await publishClientOffer({
+        id: offerLink?.id,
+        projectId: project.id,
+        title: project.name,
+        client: project.client,
+        total: offerTotal,
+        payload,
+      });
+      setOfferLink({ id: result.id, url: result.url });
+      setOfferStatus(result.offer);
+      await navigator.clipboard.writeText(result.url).catch(() => { /* скопируют вручную */ });
+      setOfferCopied(true);
+      window.setTimeout(() => setOfferCopied(false), 2500);
+    } catch (error) {
+      alert(`Не получилось опубликовать КП: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setOfferBusy(false);
+    }
+  };
+
+  const revokeOffer = async () => {
+    if (!offerLink || !confirm('Отозвать ссылку? Клиент больше не сможет открыть это КП.')) return;
+    setOfferBusy(true);
+    try {
+      await revokePublishedOffer(offerLink.id);
+      setOfferLink(null);
+      setOfferStatus(null);
+    } catch (error) {
+      alert(`Не получилось отозвать ссылку: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setOfferBusy(false);
+    }
+  };
+
   const exportClientPackage = () => runClientDownload(async () => {
     await downloadClientDocumentZip(clientDocumentArgs, await renderSketchFilesForPackage());
   }, 'Не получилось собрать пакет клиента');
@@ -504,6 +570,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   return (
     <div className="client-view">
       <div className="client-offer-workbench">
+        {!publicMode && (
         <aside className="client-offer-controls no-print">
       <section className="card client-document-hub no-print" aria-label="Документы для клиента">
         <div className="client-document-hub-main">
@@ -528,6 +595,32 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
               <button type="button" onClick={() => exportClientXlsx({ ...project, lines: activeCalculation.lines, settings: selectedVariant?.settings ?? project.settings })}>Excel, если нужен</button>
             </div>
           </div>
+        </div>
+        <div className="client-offer-link">
+          <div className="client-offer-link-main">
+            <b>Ссылка клиенту</b>
+            {offerLink
+              ? <input readOnly value={offerLink.url} onFocus={(event) => event.target.select()} />
+              : <span className="muted small">Опубликуйте КП — получится ссылка, которую можно отправить в мессенджер. Клиент увидит это же предложение и сможет нажать «Согласовать».</span>}
+          </div>
+          <div className="client-offer-link-actions">
+            <button type="button" className="btn primary" disabled={offerBusy} onClick={() => void publishOffer()}>
+              {offerBusy ? 'Публикую…' : offerCopied ? 'Ссылка скопирована ✓' : offerLink ? 'Обновить ссылку' : 'Опубликовать и скопировать'}
+            </button>
+            {offerLink && <>
+              <a className="btn ghost" href={offerLink.url} target="_blank" rel="noreferrer">Посмотреть глазами клиента</a>
+              <button type="button" className="btn ghost" disabled={offerBusy} onClick={() => void revokeOffer()}>Отозвать</button>
+            </>}
+          </div>
+          {offerStatus && (
+            <div className={`client-offer-link-status${offerStatus.approvedAt ? ' approved' : ''}`}>
+              {offerStatus.approvedAt
+                ? <><b>Клиент согласовал</b> · {offerStatus.approvedBy} · {new Date(offerStatus.approvedAt).toLocaleString('ru-RU')}{offerStatus.approveComment ? ` · «${offerStatus.approveComment}»` : ''}</>
+                : offerStatus.views > 0
+                  ? <>Клиент открывал {fmtNum(offerStatus.views, 0)} раз{offerStatus.lastViewAt ? `, последний — ${new Date(offerStatus.lastViewAt).toLocaleString('ru-RU')}` : ''}. Решения пока нет.</>
+                  : <>Ссылку ещё не открывали.</>}
+            </div>
+          )}
         </div>
         <div className="client-document-includes" aria-label="Что входит в пакет — нажмите, чтобы включить или выключить">
           <button type="button" className={packageSettings.includeSketch && clientSketchVisible ? 'ready' : ''} onClick={() => updatePackageSettings({ includeSketch: !packageSettings.includeSketch })}>Эскиз</button>
@@ -666,6 +759,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
       </section>
 
         </aside>
+        )}
         <main className="client-offer-preview">
 
       <div className={`client-doc client-doc-${presentationMode}`} id="client-doc">

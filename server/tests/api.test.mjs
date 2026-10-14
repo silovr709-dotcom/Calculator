@@ -99,6 +99,38 @@ check('сжатая отправка (gzip) принимается', r.status ==
 r = await call('state');
 check('данные из сжатого запроса сохранились', r.json?.data?.projects?.length === 3, r.text);
 
+// --- КП по ссылке для клиента ---
+r = await call('offers', { method: 'POST', body: { projectId: 'p1', title: 'Кухня Ирина', client: 'Ирина', total: 238016, payload: { project: { id: 'p1', name: 'Кухня Ирина' } } } });
+const offerId = r.json?.id ?? '';
+check('КП опубликовано по ссылке', r.status === 200 && /^[a-f0-9]{16}$/.test(offerId), r.text);
+
+const managerCookie = cookie;
+cookie = '';  // дальше смотрим глазами клиента, без входа
+r = await call('offers', { query: `&id=${offerId}` });
+check('клиент открывает КП без входа', r.status === 200 && r.json?.payload?.project?.name === 'Кухня Ирина', r.text);
+
+r = await call('offers/approve', { method: 'POST', query: `&id=${offerId}`, body: { name: 'Ирина Петрова', comment: 'Согласовано, начинайте' } });
+check('клиент согласовал КП', r.json?.ok === true && typeof r.json?.approvedAt === 'string', r.text);
+
+r = await call('offers', { query: `&id=${offerId}` });
+check('согласование видно в КП', r.json?.approvedBy === 'Ирина Петрова', r.text);
+
+r = await call('offers/list');
+check('список КП закрыт от посторонних', r.status === 401, r.text);
+
+cookie = managerCookie;
+r = await call('offers/list');
+const published = (r.json?.offers ?? [])[0];
+check('менеджер видит просмотры и согласование', published?.id === offerId && published?.views >= 2 && published?.approvedBy === 'Ирина Петрова', r.text);
+
+r = await call('offers', { method: 'DELETE', query: `&id=${offerId}` });
+check('ссылку можно отозвать', r.json?.ok === true, r.text);
+
+cookie = '';
+r = await call('offers', { query: `&id=${offerId}` });
+check('отозванная ссылка больше не открывается', r.status === 404, r.text);
+cookie = managerCookie;
+
 // --- файлы проектов (фото и подложки эскизов) ---
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',

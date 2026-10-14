@@ -230,3 +230,65 @@ export async function serverFilesUsage(): Promise<{ files: number; bytes: number
 export async function serverFilesGc(): Promise<{ removed: number; freed: number; files: number; bytes: number }> {
   return request('files/gc', { method: 'POST' });
 }
+
+/* ----------------------- КП по ссылке для клиента ----------------------- */
+
+export interface PublishedOffer {
+  id: string;
+  projectId: string;
+  title: string;
+  client: string;
+  total: number;
+  createdAt: string;
+  updatedAt: string;
+  views: number;
+  lastViewAt: string | null;
+  approvedAt: string | null;
+  approvedBy: string | null;
+  approveComment: string | null;
+}
+
+export interface PublicOffer<T> {
+  title: string;
+  client: string;
+  total: number;
+  payload: T;
+  createdAt: string;
+  approvedAt: string | null;
+  approvedBy: string | null;
+  approveComment: string | null;
+}
+
+/** Публикация КП: возвращает ссылку, которую можно отправить клиенту. */
+export async function publishClientOffer(input: {
+  id?: string;
+  projectId: string;
+  title: string;
+  client: string;
+  total: number;
+  payload: unknown;
+}): Promise<{ id: string; url: string; offer: PublishedOffer }> {
+  const json = await request<{ id: string; offer: PublishedOffer }>('offers', { method: 'POST', body: JSON.stringify(input) });
+  const url = new URL(document.baseURI);
+  url.hash = `#offer=${json.id}`;
+  return { id: json.id, url: url.toString(), offer: json.offer };
+}
+
+/** Чтение КП клиентом — без входа, по длинной ссылке. */
+export async function fetchPublicOffer<T>(id: string): Promise<PublicOffer<T>> {
+  return request<PublicOffer<T>>('offers', {}, { id });
+}
+
+/** Клиент нажал «Согласовать». */
+export async function approvePublicOffer(id: string, input: { name: string; comment?: string }): Promise<{ approvedAt: string; approvedBy: string }> {
+  return request('offers/approve', { method: 'POST', body: JSON.stringify(input) }, { id });
+}
+
+export async function listPublishedOffers(): Promise<PublishedOffer[]> {
+  const json = await request<{ offers: PublishedOffer[] }>('offers/list');
+  return json.offers ?? [];
+}
+
+export async function revokePublishedOffer(id: string): Promise<void> {
+  await request('offers', { method: 'DELETE' }, { id });
+}

@@ -477,6 +477,121 @@ function recept_backup_read(string $file)
 /* Передача проекта на телефон по QR                                    */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------ публичные КП по ссылке ------------------------------ */
+
+function recept_offers_dir(): string
+{
+    $dir = recept_path('offers');
+    if (!is_dir($dir) && !@mkdir($dir, 0770, true) && !is_dir($dir)) {
+        recept_fail(500, 'Нет доступа к папке коммерческих предложений');
+    }
+    recept_protect_dir($dir);
+    return $dir;
+}
+
+function recept_offer_file(string $id): ?string
+{
+    if (!preg_match('/^[a-f0-9]{10,32}$/', $id)) {
+        return null;
+    }
+    $file = recept_offers_dir() . '/' . $id . '.json';
+    return is_file($file) ? $file : null;
+}
+
+/** Публикация КП: сохраняем снимок и возвращаем короткий идентификатор ссылки. */
+function recept_offer_put(array $input, array $user): array
+{
+    $id = isset($input['id']) && is_string($input['id']) && preg_match('/^[a-f0-9]{10,32}$/', $input['id'])
+        ? $input['id']
+        : bin2hex(random_bytes(8));
+
+    $existing = recept_offer_file($id) !== null ? recept_read_json(recept_offers_dir() . '/' . $id . '.json', []) : [];
+    $record = [
+        'id' => $id,
+        'projectId' => isset($input['projectId']) ? (string) $input['projectId'] : '',
+        'title' => isset($input['title']) ? (string) $input['title'] : 'Коммерческое предложение',
+        'client' => isset($input['client']) ? (string) $input['client'] : '',
+        'total' => isset($input['total']) ? (float) $input['total'] : 0.0,
+        'payload' => isset($input['payload']) ? $input['payload'] : null,
+        'createdAt' => isset($existing['createdAt']) ? $existing['createdAt'] : gmdate('c'),
+        'createdBy' => isset($existing['createdBy']) ? $existing['createdBy'] : $user['login'],
+        'updatedAt' => gmdate('c'),
+        'updatedBy' => $user['login'],
+        'views' => isset($existing['views']) && is_array($existing['views']) ? $existing['views'] : [],
+        'approvedAt' => isset($existing['approvedAt']) ? $existing['approvedAt'] : null,
+        'approvedBy' => isset($existing['approvedBy']) ? $existing['approvedBy'] : null,
+        'approveComment' => isset($existing['approveComment']) ? $existing['approveComment'] : null,
+    ];
+    if (!recept_write_json(recept_offers_dir() . '/' . $id . '.json', $record)) {
+        recept_fail(500, 'Не удалось сохранить коммерческое предложение');
+    }
+    return $record;
+}
+
+function recept_offer_get(string $id): ?array
+{
+    $file = recept_offer_file($id);
+    if ($file === null) {
+        return null;
+    }
+    $data = recept_read_json($file, null);
+    return is_array($data) ? $data : null;
+}
+
+function recept_offer_save(array $record): void
+{
+    recept_write_json(recept_offers_dir() . '/' . $record['id'] . '.json', $record);
+}
+
+/** Отмечаем просмотр клиентом: храним последние 50 заходов. */
+function recept_offer_track_view(array $record): array
+{
+    $views = isset($record['views']) && is_array($record['views']) ? $record['views'] : [];
+    $views[] = ['at' => gmdate('c'), 'ip' => substr(hash('sha256', (string) ($_SERVER['REMOTE_ADDR'] ?? '')), 0, 12)];
+    if (count($views) > 50) {
+        $views = array_slice($views, -50);
+    }
+    $record['views'] = $views;
+    recept_offer_save($record);
+    return $record;
+}
+
+/** Краткая сводка для менеджера: открывал ли клиент, согласовал ли. */
+function recept_offer_summary(array $record): array
+{
+    $views = isset($record['views']) && is_array($record['views']) ? $record['views'] : [];
+    $last = count($views) > 0 ? $views[count($views) - 1] : null;
+    return [
+        'id' => $record['id'],
+        'projectId' => isset($record['projectId']) ? $record['projectId'] : '',
+        'title' => isset($record['title']) ? $record['title'] : '',
+        'client' => isset($record['client']) ? $record['client'] : '',
+        'total' => isset($record['total']) ? $record['total'] : 0,
+        'createdAt' => isset($record['createdAt']) ? $record['createdAt'] : '',
+        'updatedAt' => isset($record['updatedAt']) ? $record['updatedAt'] : '',
+        'views' => count($views),
+        'lastViewAt' => $last !== null ? $last['at'] : null,
+        'approvedAt' => isset($record['approvedAt']) ? $record['approvedAt'] : null,
+        'approvedBy' => isset($record['approvedBy']) ? $record['approvedBy'] : null,
+        'approveComment' => isset($record['approveComment']) ? $record['approveComment'] : null,
+    ];
+}
+
+function recept_offers_list(): array
+{
+    $out = [];
+    foreach (glob(recept_offers_dir() . '/*.json') ?: [] as $file) {
+        $data = recept_read_json($file, null);
+        if (is_array($data) && isset($data['id'])) {
+            $out[] = recept_offer_summary($data);
+        }
+    }
+    usort($out, function ($a, $b) {
+        return strcmp((string) $b['updatedAt'], (string) $a['updatedAt']);
+    });
+    return $out;
+}
+
 /* ------------------------------ файлы (фото, скриншоты) ------------------------------ */
 
 /** Папка с бинарными файлами проектов: фото замера и подложки Эскиз PRO. */

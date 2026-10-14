@@ -24,6 +24,7 @@ import QuickCalc from './components/QuickCalc';
 import SyncPanel from './components/SyncPanel';
 import { useAppVersion } from './lib/useAppVersion';
 import ServerSaveChip from './components/ServerSaveChip';
+import PublicOfferPage from './components/PublicOfferPage';
 import { dehydrateKnown } from './lib/photoStore';
 import FactoryBlankView from './components/FactoryBlankView';
 import KnowledgeView from './components/KnowledgeView';
@@ -81,6 +82,11 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
   }, []);
   const server = useServerSync(applyWorkspace);
   const appVersion = useAppVersion();
+  // Клиентская ссылка вида …/#offer=abc123 — определяем её до любой загрузки базы.
+  const [publicOfferId] = useState(() => {
+    const match = /[#&]offer=([a-f0-9]{10,32})/.exec(window.location.hash);
+    return match ? match[1] : '';
+  });
   // На своём сервере переполненный localStorage — не беда: база живёт на сервере.
   useEffect(() => { setStorageServerBacked(server.mode === 'server'); }, [server.mode]);
   const serverScheduleSave = server.scheduleSave;
@@ -447,6 +453,11 @@ const persistTemplates = useCallback((next: Template[]) => {
       } catch (e) { alert(`Не удалось импортировать проект: ${e}`); }
     });
   }, [projects, persistProjects]);
+
+  // Ссылка клиенту: КП открывается без входа и без рабочего интерфейса.
+  if (publicOfferId) {
+    return <PublicOfferPage id={publicOfferId} />;
+  }
 
   if (server.mode === 'checking') {
     return <div className="app-fatal app-boot">Подключаемся к серверу…</div>;
