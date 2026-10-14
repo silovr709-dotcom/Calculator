@@ -7020,3 +7020,32 @@ input.editable-number { max-width: 120px; text-align: right; }
 }
 .app-update-bar button:hover { background: #e8ecf7; }
 @media print { .app-update-bar { display: none; } }
+
+/* Индикатор сохранения на сервере (правый нижний угол). */
+.server-save-chip {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 3800;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 1px solid #d7deef;
+  border-radius: 999px;
+  background: #fff;
+  color: #16213f;
+  font-size: 12.5px;
+  box-shadow: 0 4px 14px rgba(10, 20, 48, 0.14);
+  cursor: pointer;
+}
+.server-save-chip small { color: #7c89a8; }
+.server-save-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: #1d9a57; }
+.server-save-chip.busy .dot { background: #2f6bd8; animation: server-chip-pulse 1s ease-in-out infinite; }
+.server-save-chip.warn { border-color: #f0d8a0; background: #fff9ec; }
+.server-save-chip.warn .dot { background: #c08a00; }
+.server-save-chip.bad { border-color: #f0bcbc; background: #fdf0f0; }
+.server-save-chip.bad .dot { background: #d13b3b; }
+.server-save-chip:hover { border-color: #16213f; }
+@keyframes server-chip-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@media print { .server-save-chip { display: none; } }
