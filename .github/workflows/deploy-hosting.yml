@@ -105,6 +105,11 @@ jobs:
           cert=$(echo | timeout 25 openssl s_client -servername "$host" -connect "$host:443" 2>/dev/null \
             | openssl x509 -noout -subject -issuer -dates -ext subjectAltName 2>/dev/null | tr '\n' ' ')
           echo "::notice::Сертификат домена: ${cert:-(не получен)}"
+          # Отдельно смотрим, как отвечает сайт по http и по https: так видно обрывы соединения.
+          for probe in "http://$host/build.json" "https://$host/build.json" "https://www.$host/build.json"; do
+            out=$(curl -sS -o /dev/null -w 'код=%{http_code} время=%{time_total}s' --max-time 20 "$probe" 2>&1 | tr '\n' ' ' | cut -c1-200)
+            echo "::notice::ОТВЕТ $probe -> $out"
+          done
           issuer=$(printf '%s' "$cert" | grep -o 'issuer=[^ ]*.*' | cut -c1-200)
           case "$issuer" in
             *"Let's Encrypt"*|*"R1"*|*"R10"*|*"R11"*|*"E1"*|*"E5"*|*"E6"*)
