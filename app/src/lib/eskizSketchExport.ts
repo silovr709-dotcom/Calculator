@@ -51,6 +51,8 @@ export interface EskizSketchDownloadOptions extends EskizSketchSvgOptions {
 }
 
 export interface EskizSketchPdfOptions extends EskizSketchSvgOptions {
+  /** false — не печатать под эскизом блок «Техника и ссылки». */
+  linkLegend?: boolean;
   title?: string;
   subtitle?: string;
   fileName?: string;

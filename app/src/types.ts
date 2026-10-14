@@ -486,6 +486,19 @@ export interface EskizExportViewSettings {
   layerVisibility?: Partial<EskizLayerVisibility>;
 }
 
+/**
+ * Что убрать именно при выгрузке PNG/PDF, не трогая видимость в самом редакторе.
+ * Элемент попадает в файл, только если он виден в редакторе И не выключен здесь.
+ */
+export interface EskizExportOverrides {
+  /** false — выгружать без фонового скрина. */
+  showImage?: boolean;
+  /** false у слоя — не выводить его в PNG/PDF (сноски, размеры, коммуникации и т. д.). */
+  layerVisibility?: Partial<EskizLayerVisibility>;
+  /** false — не печатать под эскизом список «Техника и ссылки». */
+  linkLegend?: boolean;
+}
+
 export interface EskizProIntegration {
   linkedProjectIds?: string[];
   activeProjectId?: string | null;
@@ -499,6 +512,8 @@ export interface EskizProIntegration {
   showCommunicationSizeBadges?: boolean;
   /** Текущее состояние слоёв/фона Эскиз PRO; экспорт PNG/PDF повторяет то, что скрыто в редакторе. */
   exportView?: EskizExportViewSettings;
+  /** Дополнительные выключатели только для выгрузки PNG/PDF: сноски, размеры, список техники. */
+  exportOverrides?: EskizExportOverrides;
   /** Связка: ключ маркера Эскиз PRO (`eskizId:objectId`) → id KitchenModule в расчёте. */
   moduleBindings?: Record<string, string>;
   /** Коммуникации, нанесённые поверх snapshot: розетки, вода, канализация, газ, вентиляция и расстояния до точек. */

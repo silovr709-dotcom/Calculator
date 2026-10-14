@@ -7062,3 +7062,19 @@ input.editable-number { max-width: 120px; text-align: right; }
   cursor: pointer;
 }
 .link-button:disabled { color: #9aa6c0; cursor: default; text-decoration: none; }
+
+/* Переключатели «что включать в PNG и PDF» в карточке экспорта Эскиз PRO. */
+.eskiz-pro-export-toggles {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e2e7f3;
+  border-radius: 12px;
+  background: #fafbff;
+}
+.eskiz-pro-export-toggles > b { font-size: 13px; }
+.eskiz-pro-export-toggles > p { margin: 2px 0 8px; }
+.eskiz-pro-export-toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+  gap: 4px 16px;
+}

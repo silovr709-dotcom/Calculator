@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizExportViewSettings, EskizProIntegration, ExtraFacadePart, FacadePart, KitchenModule, Pricebook, PriceItem, Project, SlotKey } from '../types';
+import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizProIntegration, ExtraFacadePart, FacadePart, KitchenModule, Pricebook, PriceItem, Project, SlotKey } from '../types';
 import {
   collectEskizModuleMarkers,
   createEskizProjectFromImage,
@@ -27,6 +27,7 @@ import { calcLines } from '../lib/engine';
 import { fmtMoney, fmtNum } from '../lib/format';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, defaultCommunicationDimensions } from '../lib/eskizCommunications';
 import { collectEskizSketchLinks, downloadEskizSketchPdf, downloadEskizSketchPng } from '../lib/eskizSketchExport';
+import { mergeEskizExportImage, mergeEskizExportLayers } from '../lib/eskizExportOptions';
 import { evaluateNumericExpression } from '../lib/numericExpression';
 import CatalogPicker from './CatalogPicker';
 import EskizProjectPreview, { type EskizModuleMarkerMode, type EskizModulePreviewStatus } from './EskizProjectPreview';
@@ -584,6 +585,15 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
 
   const updateEskizPro = useCallback((patch: Partial<EskizProIntegration>) => onChange({ ...project, eskizPro: { ...eskizPro, ...patch } }), [onChange, project, eskizPro]);
 
+  // Отдельные выключатели только для файлов PNG/PDF: в редакторе всё остаётся видимым.
+  const exportOverrides = eskizPro.exportOverrides ?? {};
+  const exportLayerOn = (key: EskizLayerKey) => exportOverrides.layerVisibility?.[key] !== false;
+  const setExportLayers = (keys: EskizLayerKey[], on: boolean) => {
+    const next = { ...(exportOverrides.layerVisibility ?? {}) };
+    for (const key of keys) next[key] = on;
+    updateEskizPro({ exportOverrides: { ...exportOverrides, layerVisibility: next } });
+  };
+
   const saveEmbeddedProject = useCallback((embeddedProject: EskizProject, importedCommunications?: EskizCommunicationMarker[]) => {
     const alreadyLinked = linkedIds.includes(embeddedProject.id);
     const normalizedCommunications = (importedCommunications ?? []).map((marker) => ({ ...marker, eskizId: embeddedProject.id }));
@@ -696,16 +706,22 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     setMessage(`Файл «${activePreviewProject.title}.eskiz» экспортирован. Его можно импортировать обратно через «Импорт .eskiz».`);
   };
 
-  const sketchExportOptions = (eskizProject: EskizProject, viewOverride?: EskizExportViewSettings) => ({
-    ...exportViewSettings,
-    ...(viewOverride ?? {}),
-    layerVisibility: { ...(exportViewSettings.layerVisibility ?? {}), ...(viewOverride?.layerVisibility ?? {}) },
-    moduleMarkerMode,
-    communications,
-    showCommunicationSizeBadges,
-    title: 'Эскиз PRO',
-    subtitle: `${project.name}${project.client ? ` · ${project.client}` : ''} · ${eskizProject.title}`,
-  });
+  const sketchExportOptions = (eskizProject: EskizProject, viewOverride?: EskizExportViewSettings) => {
+    // Выключатели выгрузки только убирают: что скрыто в редакторе, скрытым и остаётся.
+    const layers = mergeEskizExportLayers(exportViewSettings, exportOverrides, viewOverride);
+    return {
+      ...exportViewSettings,
+      ...(viewOverride ?? {}),
+      showImage: mergeEskizExportImage(exportViewSettings, exportOverrides, viewOverride),
+      linkLegend: exportOverrides.linkLegend !== false,
+      layerVisibility: layers,
+      moduleMarkerMode,
+      communications,
+      showCommunicationSizeBadges,
+      title: 'Эскиз PRO',
+      subtitle: `${project.name}${project.client ? ` · ${project.client}` : ''} · ${eskizProject.title}`,
+    };
+  };
 
   const exportEskizAs = async (format: 'png' | 'pdf', eskizProject = activePreviewProject, viewOverride?: EskizExportViewSettings) => {
     if (!eskizProject) {
@@ -1137,6 +1153,47 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
                   </div>
                 </div>
               </>}
+            </div>
+            <div className="eskiz-pro-export-toggles">
+              <b>Что включать в PNG и PDF</b>
+              <p className="muted small">Снятая галочка убирает элемент только из файла — в редакторе он остаётся на месте.</p>
+              <div className="eskiz-pro-export-toggle-grid">
+                <label className="chk-row">
+                  <input type="checkbox" checked={exportLayerOn('callouts') && exportLayerOn('comments')}
+                    onChange={(event) => setExportLayers(['callouts', 'comments'], event.target.checked)} />
+                  Сноски и комментарии
+                </label>
+                <label className="chk-row">
+                  <input type="checkbox" checked={exportLayerOn('dimensions')}
+                    onChange={(event) => setExportLayers(['dimensions'], event.target.checked)} />
+                  Размеры
+                </label>
+                <label className="chk-row">
+                  <input type="checkbox" checked={exportLayerOn('communications')}
+                    onChange={(event) => setExportLayers(['communications'], event.target.checked)} />
+                  Коммуникации
+                </label>
+                <label className="chk-row">
+                  <input type="checkbox" checked={exportLayerOn('hinges')}
+                    onChange={(event) => setExportLayers(['hinges'], event.target.checked)} />
+                  Петли
+                </label>
+                <label className="chk-row">
+                  <input type="checkbox" checked={exportLayerOn('equipment') && exportLayerOn('links')}
+                    onChange={(event) => setExportLayers(['equipment', 'links'], event.target.checked)} />
+                  Техника и ссылки на эскизе
+                </label>
+                <label className="chk-row">
+                  <input type="checkbox" checked={exportOverrides.linkLegend !== false}
+                    onChange={(event) => updateEskizPro({ exportOverrides: { ...exportOverrides, linkLegend: event.target.checked } })} />
+                  Список «Техника и ссылки» под эскизом
+                </label>
+                <label className="chk-row">
+                  <input type="checkbox" checked={exportOverrides.showImage !== false}
+                    onChange={(event) => updateEskizPro({ exportOverrides: { ...exportOverrides, showImage: event.target.checked } })} />
+                  Фоновый скрин (подложка)
+                </label>
+              </div>
             </div>
             <div className="eskiz-pro-export-hints"><span>Модули: {moduleMarkerMode === 'hidden' ? 'скрыты' : moduleMarkerMode === 'compact' ? 'компактно' : 'полностью'}</span><span>Коммуникаций: {activePreviewProject ? communications.filter((marker) => marker.eskizId === activePreviewProject.id).length : 0}</span><span>{showCommunicationSizeBadges ? 'Плашки размеров включены' : 'Плашки размеров скрыты'}</span>{activeSketchLinks.length > 0 && <span>Ссылок на технику: {activeSketchLinks.length} · кликабельны в PDF</span>}</div>
             {activeSketchLinks.length > 0 && <div className="eskiz-pro-link-hint">
