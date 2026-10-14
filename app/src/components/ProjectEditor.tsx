@@ -400,7 +400,7 @@ export default function ProjectEditor(props: {
           onOpenAdvanced={() => { setEditorMode('advanced'); props.onChange({ ...project, wizardMode: 'advanced' }); }}
         />
       ) : (
-      <div className={`project-workspace-frame ${tab === 'modules' ? 'modules-workspace-frame' : ''}`}>
+      <div className={`project-workspace-frame ${tab === 'modules' ? 'modules-workspace-frame' : ''} ${tab === 'sketch' ? 'sketch-workspace-frame' : ''}`}>
         <section className="project-work-area">
           <div className="project-section-head no-print">
             <p>{activeSubTab?.hint ?? activeStageMeta.hint}</p>

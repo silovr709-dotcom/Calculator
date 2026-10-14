@@ -414,7 +414,12 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 /* ---------- Эскиз PRO (встроенный инструмент) ---------- */
 .eskiz-pro-workspace { display: flex; flex-direction: column; gap: 12px; }
 .eskiz-pro-workspace.fullscreen { position: fixed; inset: 0; z-index: var(--z-fullscreen); padding: 10px; background: #eef0f2; overflow: hidden; }
-.eskiz-pro-workspace.fullscreen .eskiz-pro-intro, .eskiz-pro-workspace.fullscreen > .eskiz-pro-project-preview { display: none; }
+/* В полном экране остаётся только полотно: любая карточка над ним смещала
+   редактор вниз, за край экрана, а .fullscreen { overflow: hidden } обрезал
+   остаток — именно поэтому «вниз не листалось». */
+.eskiz-pro-workspace.fullscreen > .eskiz-pro-intro,
+.eskiz-pro-workspace.fullscreen > .eskiz-sketch-strip-card,
+.eskiz-pro-workspace.fullscreen > .eskiz-pro-project-preview { display: none; }
 .eskiz-pro-intro { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; border-left: 4px solid var(--accent); }
 .eskiz-pro-intro h3 { margin: 0 0 4px; color: #332255; }
 .eskiz-pro-intro p { margin: 0; max-width: 850px; }
@@ -422,11 +427,15 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .eskiz-pro-frame-card { padding: 0; overflow: hidden; }
 .eskiz-pro-frame-card .section-head { padding: 14px 16px 10px; margin: 0; }
 .eskiz-pro-editor-head { align-items: center; }
-.eskiz-pro-workspace.fullscreen .eskiz-pro-grid { height: 100%; min-height: 0; }
-.eskiz-pro-workspace.fullscreen .eskiz-pro-frame-card { height: calc(100vh - 20px); min-height: 0; display: flex; flex-direction: column; }
+.eskiz-pro-workspace.fullscreen .eskiz-pro-grid { flex: 1; min-height: 0; display: flex; }
+.eskiz-pro-workspace.fullscreen .eskiz-pro-frame-card { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+/* В полном экране заголовок карточки не должен съедать высоту полотна. */
+.eskiz-pro-workspace.fullscreen .eskiz-pro-editor-head { flex: 0 0 auto; padding: 8px 12px; }
+.eskiz-pro-workspace.fullscreen .eskiz-pro-editor-head p { display: none; }
 .eskiz-pro-workspace.fullscreen .eskiz-pro-side { display: none; }
 .eskiz-pro-workspace.fullscreen .eskiz-pro-frame-card > .embedded-eskiz-editor { flex: 1; min-height: 0; }
 .eskiz-pro-workspace.fullscreen .embedded-eskiz-workarea { flex: 1; min-height: 0; }
+.eskiz-pro-workspace.fullscreen .embedded-eskiz-workflow-strip { display: none; }
 .eskiz-pro-workspace.fullscreen .embedded-eskiz-viewport { min-height: 0; }
 .eskiz-pro-workspace.fullscreen .embedded-eskiz-inspector { max-height: none; }
 
@@ -434,7 +443,18 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .embedded-eskiz-start h3 { margin: 4px 0 6px; color: #332255; }
 .embedded-eskiz-start p { max-width: 620px; margin: 0 auto; }
 .embedded-eskiz-start-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.embedded-eskiz-editor { border-top: 1px solid var(--line); background: #171a1f; color: #eef2f5; min-height: clamp(760px, 82vh, 980px); display: flex; flex-direction: column; overflow: hidden; }
+.embedded-eskiz-editor {
+  border-top: 1px solid var(--line);
+  background: #171a1f;
+  color: #eef2f5;
+  /* Высота по экрану, а не фиксированные 760–980px: полотно всегда видно целиком,
+     а прокручивается только само полотно, а не вся страница. */
+  height: clamp(460px, calc(100vh - 230px), 1180px);
+  min-height: 460px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 .embedded-eskiz-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.08); background: #20242b; }
 .embedded-eskiz-title { display: flex; gap: 9px; align-items: center; min-width: 0; flex: 1; }
 .embedded-eskiz-title b { color: #ff8a6d; white-space: nowrap; }
@@ -462,8 +482,17 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .embedded-eskiz-tools button.communication-cancel-tool { background: rgba(220, 38, 38, .20); border-color: rgba(248, 113, 113, .35); color: #ffd6d6; }
 .embedded-eskiz-tools .side-toggle { margin-left: auto; }
 .embedded-eskiz-communication-banner { padding: 9px 12px; background: #332255; color: #fff; font-size: 12px; font-weight: 900; }
-.embedded-eskiz-workarea { position: relative; min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 310px; }
-.embedded-eskiz-viewport { position: relative; overflow: auto; background: #eef0f2; padding: 24px; min-height: clamp(650px, 72vh, 860px); }
+.embedded-eskiz-workarea { position: relative; min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
+/* Кнопка «Свойства» убирает панель — освободившиеся 300px уходят полотну. */
+.embedded-eskiz-workarea.no-inspector { grid-template-columns: minmax(0, 1fr); }
+.embedded-eskiz-viewport {
+  position: relative;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: #eef0f2;
+  padding: 14px;
+  min-height: 0;
+}
 .embedded-eskiz-viewport.panning { cursor: grab; }
 .embedded-eskiz-canvas-shell { position: relative; margin: 0 auto; flex: 0 0 auto; }
 .embedded-eskiz-canvas-content { position: absolute; inset: 0 auto auto 0; transform-origin: top left; will-change: transform; }
@@ -483,7 +512,7 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 .embedded-eskiz-quick span, .embedded-eskiz-quick small { display: block; color: var(--muted); font-size: 11px; }
 .embedded-eskiz-quick div { display: flex; align-items: center; gap: 6px; margin: 5px 0; }
 .embedded-eskiz-quick input { min-width: 0; flex: 1; padding: 6px 8px; border-radius: 8px; border: 1px solid #d9e5df; }
-.embedded-eskiz-inspector { min-width: 0; background: #fbfdfc; color: #23342e; border-left: 1px solid rgba(15,23,42,.12); display: flex; flex-direction: column; max-height: 760px; }
+.embedded-eskiz-inspector { min-width: 0; background: #fbfdfc; color: #23342e; border-left: 1px solid rgba(15,23,42,.12); display: flex; flex-direction: column; min-height: 0; overflow: auto; }
 .embedded-eskiz-tabs { display: grid; grid-template-columns: repeat(3, 1fr); padding: 8px; gap: 4px; border-bottom: 1px solid #e3ebe7; }
 .embedded-eskiz-tabs button { padding: 7px 6px; border: 1px solid #dce8e3; border-radius: 8px; background: #fff; color: #43564e; font-weight: 850; cursor: pointer; }
 .embedded-eskiz-tabs button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-2); }
@@ -1812,11 +1841,11 @@ label { color: #5f553f; font-weight: 760; }
   font-weight: 950;
   text-align: center;
 }
-.eskiz-pro-workspace.fullscreen .embedded-eskiz-editor { height: 100%; min-height: 0; }
+.eskiz-pro-workspace.fullscreen .embedded-eskiz-editor { flex: 1; height: auto; min-height: 0; }
 .eskiz-pro-workspace.fullscreen .embedded-eskiz-header,
 .eskiz-pro-workspace.fullscreen .embedded-eskiz-tools,
 .eskiz-pro-workspace.fullscreen .embedded-eskiz-status { flex: 0 0 auto; }
-.eskiz-pro-workspace.fullscreen .embedded-eskiz-viewport { height: 100%; min-height: 0; }
+.eskiz-pro-workspace.fullscreen .embedded-eskiz-viewport { height: auto; min-height: 0; }
 @media (max-width: 980px) {
   .embedded-eskiz-zoombar { order: 5; width: 100%; margin-left: 0; justify-content: flex-end; }
   .embedded-eskiz-tools .side-toggle { margin-left: 0; }
@@ -4303,7 +4332,7 @@ select option { background: #fff !important; color: #102037 !important; }
     grid-template-columns: 1fr !important;
   }
   .embedded-eskiz-workflow-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .embedded-eskiz-stage { min-height: 56dvh; }
+  .embedded-eskiz-editor { height: clamp(420px, calc(100dvh - 190px), 900px); }
 }
 
 @media (max-width: 680px) {
@@ -4492,7 +4521,7 @@ select option { background: #fff !important; color: #102037 !important; }
     grid-template-columns: 1fr;
   }
   .embedded-eskiz-workflow-strip { grid-template-columns: 1fr; }
-  .embedded-eskiz-stage { min-height: 62dvh; padding: 8px; }
+  .embedded-eskiz-editor { height: clamp(420px, calc(100dvh - 160px), 900px); }
   .eskiz-preview-stage svg { max-height: 62dvh; }
   .worktop-designer,
   .blank-worktop-designer { overflow-x: auto; }
@@ -7243,3 +7272,22 @@ select option { background: #fff !important; color: #102037 !important; }
 
 /* Контейнер порталов: сам по себе ничего не занимает */
 .overlay-portal:empty { display: none; }
+
+/* ----------------------------------------------------------------------
+   Эскиз PRO внутри расчёта: полотну нужна вся ширина.
+   Раньше его зажимали боковое меню (232) + контекст-панель (310) +
+   панель свойств (310) — на полотно оставалось ~470px, и скрин выходил
+   крошечным. Теперь на вкладке «Эскиз» контент во всю ширину, а контекст
+   проекта уходит вниз тремя колонками (ничего не потеряно).
+   ---------------------------------------------------------------------- */
+.project-workspace-frame.sketch-workspace-frame { grid-template-columns: minmax(0, 1fr); }
+.project-workspace-frame.sketch-workspace-frame .project-context-panel {
+  position: static;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .project-workspace-frame.sketch-workspace-frame .project-context-panel { grid-template-columns: 1fr; }
+}

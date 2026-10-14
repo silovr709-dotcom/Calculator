@@ -81,6 +81,10 @@ const COLORS = { ink: '#20242b', accent: '#ff5c35', blue: '#2563eb' };
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 6;
 const ZOOM_FACTOR = 1.18;
+// Вписывание не растягивает мелкий скрин бесконечно, но и не оставляет его крошечным.
+const MAX_FIT_ZOOM = 2.2;
+// Отступ внутри области просмотра (держать синхронно с .embedded-eskiz-viewport).
+const VIEWPORT_PAD = 14;
 const EQUIPMENT_TYPES: EskizEquipmentType[] = ['Холодильник', 'Духовой шкаф', 'СВЧ', 'ПММ', 'Варочная панель', 'Вытяжка', 'Стиральная машина', 'Мойка', 'Другое'];
 const TOOL_ITEMS: { id: Tool; label: string; hotkey?: string }[] = [
   { id: 'select', label: 'Курсор', hotkey: 'V' },
@@ -362,6 +366,7 @@ export default function EmbeddedEskizEditor(props: Props) {
   const [photoBusy, setPhotoBusy] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const manualZoomRef = useRef(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const projectInputRef = useRef<HTMLInputElement>(null);
   const dragRef = useRef<Drag | null>(null);
@@ -419,6 +424,7 @@ export default function EmbeddedEskizEditor(props: Props) {
   }, [onExportViewSettingsChange, showAnnotations, showHelpers, showImage]);
 
   const zoomTo = useCallback((nextZoom: number | ((currentZoom: number) => number), anchorClient?: Point) => {
+    manualZoomRef.current = true;
     const current = project;
     const viewport = viewportRef.current;
     const svg = svgRef.current;
@@ -458,20 +464,23 @@ export default function EmbeddedEskizEditor(props: Props) {
   const projectImageHeight = project?.image.height ?? 0;
   const projectHeaderEnabled = Boolean(project?.header.enabled);
 
+  // Вписать эскиз целиком в видимую область: ширина И высота, без обрезки снизу.
+  // VIEWPORT_PAD — внутренние отступы области (см. .embedded-eskiz-viewport в CSS).
   const fit = useCallback(() => {
     const viewport = viewportRef.current;
     if (!projectImageWidth || !projectImageHeight || !viewport) return;
-    const headerReserve = projectHeaderEnabled ? 54 : 0;
-    const availableWidth = Math.max(180, viewport.clientWidth - 64);
-    const availableHeight = Math.max(180, viewport.clientHeight - headerReserve - 72);
-    const next = clampZoom(Math.min(availableWidth / projectImageWidth, availableHeight / projectImageHeight, 1.35));
+    const headerReserve = projectHeaderEnabled ? 64 : 0;
+    const availableWidth = Math.max(160, viewport.clientWidth - VIEWPORT_PAD * 2);
+    const availableHeight = Math.max(160, viewport.clientHeight - VIEWPORT_PAD * 2 - headerReserve);
+    const next = clampZoom(Math.min(availableWidth / projectImageWidth, availableHeight / projectImageHeight, MAX_FIT_ZOOM));
+    manualZoomRef.current = false;
     setZoom(next);
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         const nextViewport = viewportRef.current;
         if (!nextViewport) return;
         nextViewport.scrollLeft = Math.max(0, (nextViewport.scrollWidth - nextViewport.clientWidth) / 2);
-        nextViewport.scrollTop = 0;
+        nextViewport.scrollTop = Math.max(0, (nextViewport.scrollHeight - nextViewport.clientHeight) / 2);
       });
     });
   }, [projectHeaderEnabled, projectImageHeight, projectImageWidth]);
@@ -1076,9 +1085,25 @@ export default function EmbeddedEskizEditor(props: Props) {
   };
 
   useEffect(() => {
+    manualZoomRef.current = false;
     const timer = window.setTimeout(fit, 80);
     return () => window.clearTimeout(timer);
   }, [fit, project?.id, props.fullScreen]);
+
+  // Область меняет размер: вход/выход из полного экрана, скрытие панели свойств,
+  // изменение окна. Пока масштаб не трогали руками — пересчитываем вписывание.
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || typeof ResizeObserver === 'undefined') return;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      if (manualZoomRef.current) return;
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => fit());
+    });
+    observer.observe(viewport);
+    return () => { window.cancelAnimationFrame(frame); observer.disconnect(); };
+  }, [fit]);
 
   const setActiveTool = (id: Tool) => {
     setTool(id);
@@ -1365,7 +1390,7 @@ export default function EmbeddedEskizEditor(props: Props) {
     </div>
     {communicationMode && <div className="embedded-eskiz-communication-banner">{props.communicationAddKind ? `Режим добавления: ${COMMUNICATION_KIND_META[props.communicationAddKind].label}. Тапните по основному эскизу Эскиз PRO.` : 'Рисуйте свободную линию расстояния: ведите курсор от выбранной коммуникации и кликните конечную точку.'}</div>}
     {error && <div className="embedded-eskiz-toast no-print" role="status"><span>{error}</span><button type="button" aria-label="Скрыть сообщение" onClick={() => setError('')}>✕</button></div>}
-    <div className="embedded-eskiz-workarea">
+    <div className={`embedded-eskiz-workarea ${sidebarOpen ? '' : 'no-inspector'}`}>
       <section
         ref={viewportRef}
         className={`embedded-eskiz-viewport ${spaceDown ? 'panning' : ''} ${photoDragOver ? 'drop-active' : ''}`}
