@@ -2851,8 +2851,13 @@ select option { background: #fff !important; color: #102037 !important; }
 .client-document-actions.big { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
 .client-document-actions.big .btn { min-height: 42px; padding: 8px 9px; white-space: normal; line-height: 1.15; }
 .client-document-includes { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
-.client-document-includes span { padding: 5px 9px; border-radius: 999px; background: #f1f5f9; color: #64748b; font-size: 11px; font-weight: 900; }
-.client-document-includes span.ready { background: #e8f7ef; color: #18723e; }
+.client-document-includes span,
+.client-document-includes button { padding: 5px 9px; border: 0; border-radius: 999px; background: #f1f5f9; color: #64748b; font-size: 11px; font-weight: 900; font-family: inherit; }
+.client-document-includes button { cursor: pointer; }
+.client-document-includes button:hover { background: #e2e8f0; color: #16213f; }
+.client-document-includes span.ready,
+.client-document-includes button.ready { background: #e8f7ef; color: #18723e; }
+.client-document-includes button.ready:hover { background: #d7f0e2; }
 
 .blank-workflow-panel {
   display: grid;
@@ -4290,7 +4295,8 @@ select option { background: #fff !important; color: #102037 !important; }
 .client-offer-controls .client-document-includes {
   gap: 5px;
 }
-.client-offer-controls .client-document-includes span {
+.client-offer-controls .client-document-includes span,
+.client-offer-controls .client-document-includes button {
   padding: 4px 7px;
   font-size: 10px;
 }
@@ -7077,4 +7083,15 @@ input.editable-number { max-width: 120px; text-align: right; }
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
   gap: 4px 16px;
+}
+
+/* Выпадающий выбор внутри списка настроек пакета клиента. */
+.client-package-options .client-package-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.client-package-options .client-package-select select {
+  padding: 2px 6px;
+  font-size: 12px;
 }

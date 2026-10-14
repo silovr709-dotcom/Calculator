@@ -152,6 +152,8 @@ export interface ClientDocumentPackageSettings {
   compact?: boolean;
   /** Показывать поверх эскиза сводку: петли, м² фасадов, корпуса и ключевые суммы. */
   sketchSummaryOverlay?: boolean;
+  /** Где показывать эту сводку: нигде, только на первом эскизе или на всех. */
+  sketchSummaryMode?: 'off' | 'first' | 'all';
 }
 
 export interface ClientOfferSettings {

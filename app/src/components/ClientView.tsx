@@ -11,6 +11,7 @@ import { fmtMoney, fmtDate, fmtNum } from '../lib/format';
 import { exportClientXlsx } from '../lib/exporters';
 import { snapshotProject } from '../lib/eskizPro';
 import { downloadEskizSketchPdf, renderEskizSketchPdf } from '../lib/eskizSketchExport';
+import { mergeEskizExportImage, mergeEskizExportLayers } from '../lib/eskizExportOptions';
 import { buildReceiptRows, downloadClientContractDocx, downloadClientDocumentZip, downloadClientOfferDocx, downloadClientReceiptDocx, downloadClientSpecificationDocx, normalizeClientDocumentPackage, type ClientDocumentArgs } from '../lib/clientPackage';
 import EskizProjectPreview from './EskizProjectPreview';
 
@@ -389,6 +390,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const moduleQty = groups.reduce((sum, group) => sum + group.qty, 0);
   const projectSummary = buildClientProjectSummary(allDetails, moduleQty);
   const sketchSummaryLines = clientSketchSummaryLines(projectSummary);
+  const sketchSummaryMode = packageSettings.sketchSummaryMode;
   const facadeQty = sumKind(allDetails, ['facade', 'frame']);
   const hingeQty = sumKind(allDetails, ['hinge']);
   const drawerQty = sumKind(allDetails, ['drawerSys']);
@@ -460,8 +462,13 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   };
   // Короткая подсказка в настройках: сколько строк уйдёт в товарный чек.
   const receiptRows = buildReceiptRows(clientDocumentArgs);
+  // Выключатели «Что включать в PNG и PDF» из Эскиз PRO действуют и на клиентскую выгрузку.
+  const eskizExportOverrides = project.eskizPro?.exportOverrides ?? {};
   const sketchPdfOptions = {
     ...(eskizViewSettings ?? {}),
+    showImage: mergeEskizExportImage(eskizViewSettings ?? {}, eskizExportOverrides),
+    layerVisibility: mergeEskizExportLayers(eskizViewSettings ?? {}, eskizExportOverrides),
+    linkLegend: eskizExportOverrides.linkLegend !== false,
     moduleMarkerMode: project.eskizPro?.moduleMarkerMode ?? 'full',
     communications: (project.eskizPro?.communications ?? []).filter((marker) => marker.showInClient !== false),
     showCommunicationSizeBadges,
@@ -521,13 +528,23 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
             </div>
           </div>
         </div>
-        <div className="client-document-includes">
-          <span className={packageSettings.includeSketch && clientSketchVisible ? 'ready' : ''}>Эскиз</span>
-          <span className={packageSettings.includeOffer ? 'ready' : ''}>КП</span>
-          <span className={packageSettings.includeSpecification ? 'ready' : ''}>Спецификация</span>
-          <span className={packageSettings.includeContract ? 'ready' : ''}>Договор</span>
-          <span className={packageSettings.includeReceipt ? 'ready' : ''}>Товарный чек</span>
-          <span className={packageSettings.sketchSummaryOverlay ? 'ready' : ''}>Сводка на эскизе</span>
+        <div className="client-document-includes" aria-label="Что входит в пакет — нажмите, чтобы включить или выключить">
+          <button type="button" className={packageSettings.includeSketch && clientSketchVisible ? 'ready' : ''} onClick={() => updatePackageSettings({ includeSketch: !packageSettings.includeSketch })}>Эскиз</button>
+          <button type="button" className={packageSettings.includeOffer ? 'ready' : ''} onClick={() => updatePackageSettings({ includeOffer: !packageSettings.includeOffer })}>КП</button>
+          <button type="button" className={packageSettings.includeSpecification ? 'ready' : ''} onClick={() => updatePackageSettings({ includeSpecification: !packageSettings.includeSpecification })}>Спецификация</button>
+          <button type="button" className={packageSettings.includeContract ? 'ready' : ''} onClick={() => updatePackageSettings({ includeContract: !packageSettings.includeContract })}>Договор</button>
+          <button type="button" className={packageSettings.includeReceipt ? 'ready' : ''} onClick={() => updatePackageSettings({ includeReceipt: !packageSettings.includeReceipt })}>Товарный чек</button>
+          <button
+            type="button"
+            className={sketchSummaryMode !== 'off' ? 'ready' : ''}
+            title="Плашка «Сводка проекта» поверх эскиза: выключить · только на первом · на всех"
+            onClick={() => updatePackageSettings({
+              sketchSummaryMode: sketchSummaryMode === 'all' ? 'first' : sketchSummaryMode === 'first' ? 'off' : 'all',
+              sketchSummaryOverlay: sketchSummaryMode === 'all' ? true : sketchSummaryMode !== 'first',
+            })}
+          >
+            Сводка на эскизе{sketchSummaryMode === 'first' ? ': 1-й' : sketchSummaryMode === 'off' ? ': нет' : ''}
+          </button>
         </div>
       </section>
 
@@ -589,7 +606,19 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
                 <label><input type="checkbox" checked={packageSettings.includeSpecification} onChange={(event) => updatePackageSettings({ includeSpecification: event.target.checked })} /> Спецификация Word</label>
                 <label><input type="checkbox" checked={packageSettings.includeContract} onChange={(event) => updatePackageSettings({ includeContract: event.target.checked })} /> Договор</label>
                 <label><input type="checkbox" checked={packageSettings.includeReceipt} onChange={(event) => updatePackageSettings({ includeReceipt: event.target.checked })} /> Товарный чек</label>
-                <label><input type="checkbox" checked={packageSettings.sketchSummaryOverlay} onChange={(event) => updatePackageSettings({ sketchSummaryOverlay: event.target.checked })} /> Сводка на эскизе</label>
+                <label className="client-package-select">Сводка поверх эскиза
+                  <select
+                    value={sketchSummaryMode}
+                    onChange={(event) => {
+                      const mode = event.target.value as 'off' | 'first' | 'all';
+                      updatePackageSettings({ sketchSummaryMode: mode, sketchSummaryOverlay: mode !== 'off' });
+                    }}
+                  >
+                    <option value="off">не показывать</option>
+                    <option value="first">только на первом эскизе</option>
+                    <option value="all">на всех эскизах</option>
+                  </select>
+                </label>
                 <label><input type="checkbox" checked={packageSettings.compact} onChange={(event) => updatePackageSettings({ compact: event.target.checked })} /> Компактно</label>
               </div>
               <p className="muted small">Товарный чек выгружается построчно: {fmtNum(receiptRows.length, 3)} позиций — какие корпуса по модулям, фасады, фурнитура и работы. Мелкие позиции схлопываются, чтобы чек оставался на 1–2 страницах.</p>
@@ -787,9 +816,10 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         {clientSketchVisible && (
           <section className="cd-sketch-pro">
             <div className="cd-section-head"><h3>Эскиз PRO</h3><span>{isTechnical ? 'внешний эскиз со скрином проекта и размерными аннотациями' : 'схема из внешнего Эскиз PRO'}</span></div>
-            {linkedEskizProjects.map((eskiz) => <div key={eskiz.id} className="cd-sketch-wrap">
+            {linkedEskizProjects.map((eskiz, index) => <div key={eskiz.id} className="cd-sketch-wrap">
               <EskizProjectPreview project={eskiz} compact={!isTechnical} moduleMarkerMode={project.eskizPro?.moduleMarkerMode ?? 'full'} communicationMarkers={(project.eskizPro?.communications ?? []).filter((marker) => marker.showInClient !== false)} showCommunicationSizeBadges={showCommunicationSizeBadges} viewSettings={eskizViewSettings} />
-              {packageSettings.sketchSummaryOverlay && sketchSummaryLines.length > 0 && <div className="cd-sketch-summary"><b>Сводка проекта</b>{sketchSummaryLines.slice(0, isTechnical ? 6 : 4).map((line) => <span key={line}>{line}</span>)}</div>}
+              {(sketchSummaryMode === 'all' || (sketchSummaryMode === 'first' && index === 0)) && sketchSummaryLines.length > 0
+                && <div className="cd-sketch-summary"><b>Сводка проекта</b>{sketchSummaryLines.slice(0, isTechnical ? 6 : 4).map((line) => <span key={line}>{line}</span>)}</div>}
             </div>)}
             {eskizModules.length > 0 && (
               <div className="cd-eskiz-modules">

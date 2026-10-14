@@ -54,6 +54,9 @@ export function normalizeClientDocumentPackage(settings?: ClientDocumentPackageS
     includeReceipt: settings?.includeReceipt !== false,
     compact: settings?.compact !== false,
     sketchSummaryOverlay: settings?.sketchSummaryOverlay !== false,
+    // Старые проекты знали только «да/нет» — приводим их к новому режиму без потери настройки.
+    sketchSummaryMode: settings?.sketchSummaryMode
+      ?? (settings?.sketchSummaryOverlay === false ? 'off' : 'all'),
   };
 }
 

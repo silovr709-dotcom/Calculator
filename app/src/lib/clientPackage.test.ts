@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ClientOfferDetail, ClientProjectSummary } from './clientOffer';
-import { buildClientContractDocx, buildClientOfferDocx, buildClientReceiptDocx, buildClientSpecificationDocx, buildReceiptRows } from './clientPackage';
+import { buildClientContractDocx, buildClientOfferDocx, buildClientReceiptDocx, buildClientSpecificationDocx, buildReceiptRows, normalizeClientDocumentPackage } from './clientPackage';
 import { defaultSettings } from './storage';
 import type { Project } from '../types';
 
@@ -177,5 +177,19 @@ describe('построчный товарный чек', () => {
     const text = visibleDocxText(await blobText(await buildClientReceiptDocx(receiptArgs)));
     expect(text).toContain('Низ 800 под мойку');
     expect(text).toContain('Петли: Blum 110 с доводчиком');
+  });
+});
+
+describe('сводка поверх эскиза в пакете клиента', () => {
+  it('по умолчанию показывается на всех эскизах', () => {
+    expect(normalizeClientDocumentPackage(undefined).sketchSummaryMode).toBe('all');
+  });
+
+  it('старое выключение «да/нет» переносится в режим «не показывать»', () => {
+    expect(normalizeClientDocumentPackage({ sketchSummaryOverlay: false }).sketchSummaryMode).toBe('off');
+  });
+
+  it('явный режим «только на первом» сохраняется', () => {
+    expect(normalizeClientDocumentPackage({ sketchSummaryMode: 'first' }).sketchSummaryMode).toBe('first');
   });
 });
