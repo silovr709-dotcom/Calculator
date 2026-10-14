@@ -6737,3 +6737,87 @@ input.editable-number { max-width: 120px; text-align: right; }
   .cd-component-edited { background: transparent !important; }
   .cd-term-empty { display: none !important; }
 }
+
+/* ----------------------------------------------------------------------
+   КП на печати и в PDF.
+   Было «блекло», потому что (1) браузер по умолчанию не печатает заливки,
+   (2) старые print-правила заливали .client-doc белым и гасили фирменную
+   шапку, (3) мелкий текст в КП задан светло-серыми тонами (#64748b и
+   соседние), которые на бумаге почти исчезают.
+   Здесь: разрешаем печать цвета, возвращаем заливки и затемняем текст.
+   ---------------------------------------------------------------------- */
+.cd-hero {
+  background:
+    radial-gradient(circle at 15% 10%, rgba(255,255,255,.20), transparent 36%),
+    linear-gradient(135deg, #0b3a75, #123f73 52%, #15607f) !important;
+  border: 1px solid rgba(9,42,85,.30);
+}
+
+@media print {
+  @page { margin: 12mm; }
+
+  .client-doc,
+  .client-doc * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* Тёмная типографика вместо светло-серой */
+  .client-doc,
+  .client-doc * {
+    --text: #0b1220 !important;
+    --muted: #3c4a5c !important;
+    --line: #aebccb !important;
+    --line-strong: #8496a9 !important;
+  }
+  .client-doc { color: #0b1220 !important; background: #fff !important; }
+  .client-doc :where(p, li, td, th, label, summary, div, b, strong) { color: #16233a; }
+  .client-doc :where(.muted, small, em, figcaption) { color: #3c4a5c !important; }
+  .client-doc :where(
+    .cd-section-head span, .cd-module-name span, .cd-module-table-title small,
+    .cd-module-table-materials span, .cd-module-table-materials em,
+    .cd-component-qty, .cd-component-notes span, .cd-compact-explain,
+    .cd-summary-facts span, .cd-terms b, .cd-materials ul, .cd-materials li,
+    .cd-next-steps span, .cd-comment, .cd-measured, .cd-sketch-summary span
+  ) { color: #33435c !important; }
+  .client-doc :where(h1, h2, h3, h4, .cd-section-head h3, .cd-component-main b, .cd-module-name b, .cd-module-table-title b) { color: #0b2342 !important; }
+
+  /* Фирменная шапка печатается цветной, а не белым прямоугольником */
+  .client-doc .cd-hero {
+    background: linear-gradient(135deg, #0b3a75, #123f73 52%, #15607f) !important;
+    color: #ffffff !important;
+    border-color: #0b3a75 !important;
+  }
+  .client-doc .cd-hero :where(h1, h2, b, strong, span, em, small, div) { color: #ffffff !important; }
+  .client-doc .cd-hero :where(.cd-sub, .cd-hero-meta, .cd-hero-price span, .cd-hero-price em) { color: rgba(255,255,255,.86) !important; }
+  .client-doc .cd-hero-price,
+  .client-doc .cd-hero-tags span { background: rgba(255,255,255,.18) !important; border-color: rgba(255,255,255,.40) !important; }
+
+  /* Заливки, которые держат структуру документа */
+  .client-doc .cd-rollup-head { background: #0f2f57 !important; }
+  .client-doc .cd-rollup-head span { color: #ffffff !important; }
+  .client-doc .cd-rollup-total { background: #e7eef8 !important; }
+  .client-doc .cd-rollup-grand { background: #0b3a75 !important; }
+  .client-doc .cd-rollup-grand :where(b, span, strong) { color: #ffffff !important; }
+  .client-doc .cd-module-table-head { background: #e7eef8 !important; }
+  .client-doc .cd-module-table-head span { color: #1f3350 !important; }
+  .client-doc .cd-module-table-row:nth-child(even) { background: #f6f9fd !important; }
+  .client-doc .cd-module-card-head { background: #eef3fa !important; }
+  .client-doc :where(.cd-module-num, .cd-next-steps b) { background: #0b3a75 !important; color: #ffffff !important; }
+  .client-doc .cd-module-table-num { background: #dbe8f8 !important; color: #0b2342 !important; }
+  .client-doc .cd-summary { background: #f3f7fc !important; }
+  .client-doc .cd-summary-facts div { background: #ffffff !important; border-color: #c3d1e0 !important; }
+  .client-doc .cd-terms { background: #eef3fa !important; }
+  .client-doc .cd-included span { background: #e3eefb !important; color: #0b3a75 !important; }
+  .client-doc .cd-component-kind { background: #e7eef8 !important; color: #28415f !important; }
+  .client-doc .cd-total { color: #0b1220 !important; font-weight: 800 !important; }
+
+  /* Линии: светло-серые рамки на бумаге пропадают */
+  .client-doc :where(
+    .cd-module-table, .cd-module-card, .cd-component-list-extra, .cd-rollup-table,
+    .cd-summary, .cd-next-steps div, .cd-terms, .cd-variants, .cd-eskiz-modules,
+    .cd-legal-card, .cd-receipt-grid, .cd-compact-explain
+  ) { border-color: #9db0c4 !important; }
+  .client-doc .cd-component { border-bottom-color: #ccd8e5 !important; }
+  .client-doc .cd-module-table-row { border-bottom-color: #ccd8e5 !important; }
+  .client-doc .cd-section-head { border-bottom-color: #9db0c4 !important; }
+}
