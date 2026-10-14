@@ -9,4 +9,11 @@ export const fmtDate = (iso: string): string => {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('ru-RU');
 };
 
+/** Длинная дата для документов: «15 октября 2026 г.». */
+export const fmtDateLong = (iso: string): string => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
 export const todayISO = (): string => new Date().toISOString().slice(0, 10);

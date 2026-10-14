@@ -6,8 +6,9 @@ import { calculateVariant } from '../lib/variants';
 import { applyClientOfferEdits, buildClientOfferDetails, buildClientOfferRollup, buildClientProjectSummary, clientBodyTotal, clientDetailKey, clientOfferEditsDelta, clientSketchSummaryLines, isModuleLine, moduleNoteMatches, stripModuleNote } from '../lib/clientOffer';
 import { clientLineName, makeClientNameResolver } from '../lib/clientNaming';
 import EditableText from './EditableText';
+import EditableDate from './EditableDate';
 import EditableNumber from './EditableNumber';
-import { fmtMoney, fmtDate, fmtNum } from '../lib/format';
+import { fmtMoney, fmtDate, fmtDateLong, fmtNum } from '../lib/format';
 import { exportClientXlsx } from '../lib/exporters';
 import { snapshotProject } from '../lib/eskizPro';
 import { downloadEskizSketchPdf, renderEskizSketchPdf } from '../lib/eskizSketchExport';
@@ -407,7 +408,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const materialHighlights = uniqueHighlights(allDetails, ['body', 'facade', 'frame', 'worktop', 'wallPanel'], isTechnical ? 10 : 6);
   const compositionSections = buildCompositionSections(allDetails);
   const editableTerms: { label: string; value: string; field: keyof ClientOfferSettings; placeholder: string }[] = [
-    { label: 'Действительно до', value: project.clientOffer?.validUntil ? fmtDate(project.clientOffer.validUntil) : '', field: 'validUntil', placeholder: 'дата' },
+    { label: 'Действительно до', value: project.clientOffer?.validUntil ? fmtDateLong(project.clientOffer.validUntil) : '', field: 'validUntil', placeholder: 'дата' },
     { label: 'Оплата', value: project.clientOffer?.paymentTerms ?? '', field: 'paymentTerms', placeholder: 'например, 50% аванс' },
     { label: 'Срок изготовления', value: project.clientOffer?.productionTerms ?? '', field: 'productionTerms', placeholder: 'например, 45 рабочих дней' },
     { label: 'Гарантия', value: project.clientOffer?.warranty ?? '', field: 'warranty', placeholder: 'например, 12 месяцев' },
@@ -415,7 +416,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
     { label: 'Доставка', value: project.clientOffer?.delivery ?? '', field: 'delivery', placeholder: 'например, по адресу клиента' },
   ];
   const offerTerms = [
-    project.clientOffer?.validUntil ? { label: 'Действительно до', value: fmtDate(project.clientOffer.validUntil) } : null,
+    project.clientOffer?.validUntil ? { label: 'Действительно до', value: fmtDateLong(project.clientOffer.validUntil) } : null,
     { label: 'Оплата', value: project.clientOffer?.paymentTerms || 'по согласованию' },
     project.clientOffer?.productionTerms ? { label: 'Срок изготовления', value: project.clientOffer.productionTerms } : null,
     project.clientOffer?.warranty ? { label: 'Гарантия', value: project.clientOffer.warranty } : null,
@@ -681,8 +682,8 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
                 ? <EditableText value={project.client} label="Заказчик" placeholder="имя заказчика" onChange={(value) => onProjectMetaChange({ client: value })} />
                 : project.client}</b></span>
               <span>Дата: {onProjectMetaChange
-                ? <input className="editable-date" type="date" value={project.date} aria-label="Дата КП" onChange={(event) => onProjectMetaChange({ date: event.target.value })} />
-                : fmtDate(project.date)}</span>
+                ? <EditableDate value={project.date} label="Дата КП" onChange={(value) => onProjectMetaChange({ date: value })} />
+                : fmtDateLong(project.date)}</span>
               {selectedVariant && <span>Вариант: <b>{selectedVariant.name}</b></span>}
             </div>
             <div className="cd-hero-tags"><span>{MODE_LABELS[presentationMode]}</span><span>Детализация: {DETAIL_LEVEL_LABELS[detailLevel]}</span>{clientSketchVisible && <span>Эскиз PRO включён</span>}{groups.length > 0 && <span>{fmtNum(moduleQty, 3)} модулей</span>}</div>
@@ -700,7 +701,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
               ? editableTerms.map((term) => <div key={term.label} className={term.value ? '' : 'cd-term-empty no-print'}>
                   <b>{term.label}</b>
                   {term.field === 'validUntil'
-                    ? <input className="editable-date" type="date" value={project.clientOffer?.validUntil ?? ''} aria-label="Предложение действительно до" onChange={(event) => updateOffer({ validUntil: event.target.value || undefined })} />
+                    ? <EditableDate value={project.clientOffer?.validUntil ?? ''} label="Предложение действительно до" onChange={(value) => updateOffer({ validUntil: value || undefined })} />
                     : <EditableText value={term.value} label={term.label} placeholder={term.placeholder} onChange={(value) => updateOffer({ [term.field]: value } as Partial<ClientOfferSettings>)} />}
                 </div>)
               : offerTerms.map((term) => <div key={term.label}><b>{term.label}</b><span>{term.value}</span></div>)}

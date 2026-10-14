@@ -6536,6 +6536,19 @@ textarea.editable-field { resize: vertical; line-height: 1.45; }
   border-bottom: 1px dashed rgba(11, 58, 117, .38);
   background: transparent;
 }
+/* Дата в документе показывается текстом; поле с календарём открывается по клику. */
+.editable-date-text {
+  font: inherit;
+  color: inherit;
+  padding: 0 1px;
+  border: 0;
+  border-bottom: 1px dashed rgba(11, 58, 117, .32);
+  background: transparent;
+  cursor: text;
+}
+.editable-date-text:hover { border-bottom-color: rgba(11, 58, 117, .7); }
+.editable-date-text.empty { color: #8a97b4; font-style: italic; }
+.cd-hero .editable-date-text { color: inherit; border-bottom-color: rgba(255, 255, 255, .45); }
 .cd-hero h1 .editable-text { border-bottom-color: rgba(255, 255, 255, .45); }
 .cd-component-main .editable-text { border-bottom-color: rgba(11, 58, 117, .22); }
 
@@ -6736,7 +6749,11 @@ input.editable-number { max-width: 120px; text-align: right; }
 
 @media print {
   .editable-text,
-  .editable-date { border-bottom: 0 !important; background: transparent !important; }
+  .editable-date-text,
+  .editable-date { border-bottom: 0 !important; background: transparent !important; padding: 0 !important; }
+  .editable-date-text.empty { display: none; }
+  /* На всякий случай: если календарь остался открытым, в печать уходит только текст. */
+  .editable-date::-webkit-calendar-picker-indicator { display: none; }
   .editable-text.empty { display: none; }
   .editable-number.edited { background: transparent !important; font-weight: inherit !important; }
   .cd-rollup-item.edited,
