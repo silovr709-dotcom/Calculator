@@ -1,16 +1,30 @@
 name: Deploy to hosting (FTP)
 
-# Выкладка собранного приложения на виртуальный хостинг (reg.ru и аналогичные).
-# Запускается вручную: вкладка Actions → Deploy to hosting (FTP) → Run workflow.
+# Автообновление сайта на виртуальном хостинге reg.ru.
 #
-# Перед первым запуском добавьте секреты репозитория
+# Запускается САМ после каждого пуша в ветки main и arena/01a0ee6f-calculator,
+# а также вручную: вкладка Actions → Deploy to hosting (FTP) → Run workflow.
+#
+# Обязателен только ОДИН секрет репозитория
 # (Settings → Secrets and variables → Actions → New repository secret):
-#   FTP_SERVER    — адрес FTP-сервера хостинга, например ftp.ваш-домен.ru
-#   FTP_USERNAME  — логин FTP
-#   FTP_PASSWORD  — пароль FTP
-#   FTP_DIR       — папка сайта на хостинге, например /public_html/ (с завершающим слешем)
+#   FTP_PASSWORD  — пароль FTP на хостинге
+#
+# Остальное имеет готовые значения для текущего хостинга и переопределяется
+# секретами, только если что-то изменится:
+#   FTP_SERVER    — адрес FTP-сервера      (по умолчанию u3683615.isp.regruhosting.ru)
+#   FTP_USERNAME  — логин FTP              (по умолчанию u3683615)
+#   FTP_DIR       — папка сайта            (по умолчанию /www/u3683615.isp.regruhosting.ru/)
+#   SITE_URL      — адрес сайта для проверки после выкладки
+#   FTP_PROTOCOL  — ftp (по умолчанию), ftps или ftps-legacy
 
 on:
+  push:
+    branches:
+      - main
+      - arena/01a0ee6f-calculator
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -18,42 +32,85 @@ on:
         type: boolean
         default: false
 
+# Две выкладки одновременно по FTP делать нельзя — ждём завершения предыдущей.
+concurrency:
+  group: hosting-ftp
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-22.04
+    env:
+      FTP_SERVER: ${{ secrets.FTP_SERVER || 'u3683615.isp.regruhosting.ru' }}
+      FTP_USERNAME: ${{ secrets.FTP_USERNAME || 'u3683615' }}
+      FTP_DIR: ${{ secrets.FTP_DIR || '/www/u3683615.isp.regruhosting.ru/' }}
+      SITE_URL: ${{ secrets.SITE_URL || 'https://u3683615.isp.regruhosting.ru' }}
+      FTP_PROTOCOL: ${{ secrets.FTP_PROTOCOL || 'ftp' }}
     steps:
       - uses: actions/checkout@v4
 
+      - name: Проверить, что пароль FTP задан
+        id: guard
+        env:
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          if [ -z "$FTP_PASSWORD" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Выкладка пропущена: нет секрета FTP_PASSWORD. Добавьте его в Settings → Secrets and variables → Actions → New repository secret."
+            exit 0
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+          echo "Хостинг: $FTP_USERNAME@$FTP_SERVER, папка $FTP_DIR"
+
       - uses: actions/setup-node@v4
+        if: steps.guard.outputs.ready == 'true'
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: app/package-lock.json
 
       - run: npm ci
+        if: steps.guard.outputs.ready == 'true'
         working-directory: app
 
       - run: npm run build:hosting
+        if: steps.guard.outputs.ready == 'true'
         working-directory: app
 
-      - name: Проверить, что секреты заданы
-        run: |
-          if [ -z "${{ secrets.FTP_SERVER }}" ]; then
-            echo "Не заданы секреты FTP_SERVER / FTP_USERNAME / FTP_PASSWORD / FTP_DIR."
-            echo "Добавьте их в Settings → Secrets and variables → Actions."
-            exit 1
-          fi
-
       - name: Залить файлы на хостинг
+        if: steps.guard.outputs.ready == 'true'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
+          server: ${{ env.FTP_SERVER }}
+          username: ${{ env.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: ${{ secrets.FTP_DIR }}
+          protocol: ${{ env.FTP_PROTOCOL }}
+          server-dir: ${{ env.FTP_DIR }}
           local-dir: ./release/site/
-          dry-run: ${{ inputs.dry_run }}
-          # Данные приложения на хостинге трогать нельзя.
+          dry-run: ${{ inputs.dry_run == true }}
+          # Данные приложения и локальные настройки на хостинге трогать нельзя.
           exclude: |
             **/recept-data/**
             **/api/config.php
+            **/.well-known/**
+
+      - name: Проверить сайт после выкладки
+        if: ${{ steps.guard.outputs.ready == 'true' && inputs.dry_run != true }}
+        run: |
+          set +e
+          for attempt in 1 2 3; do
+            body=$(curl -fsS --max-time 30 "$SITE_URL/api/index.php?r=health")
+            code=$?
+            if [ $code -eq 0 ]; then
+              echo "Ответ сервера: $body"
+              case "$body" in
+                *'"ok":true'*)
+                  echo "::notice::Сайт обновлён и отвечает: $SITE_URL"
+                  exit 0
+                  ;;
+              esac
+            fi
+            echo "Попытка $attempt: сайт пока не ответил как надо, ждём 15 с…"
+            sleep 15
+          done
+          echo "::warning::Файлы залиты, но проверка $SITE_URL/api/index.php?r=health не удалась. Откройте $SITE_URL/api/index.php?r=check и посмотрите подробности."
