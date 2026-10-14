@@ -13,9 +13,14 @@ import { exportClientXlsx } from '../lib/exporters';
 import { snapshotProject } from '../lib/eskizPro';
 import { downloadEskizSketchPdf, renderEskizSketchPdf } from '../lib/eskizSketchExport';
 import { mergeEskizExportImage, mergeEskizExportLayers } from '../lib/eskizExportOptions';
-import { listPublishedOffers, publishClientOffer, revokePublishedOffer, type PublishedOffer } from '../lib/serverApi';
+import {
+  deleteProjectDocument, listProjectDocuments, listPublishedOffers, publishClientOffer,
+  revokePublishedOffer, saveProjectDocument, serverFileUrl, setProjectDocumentStatus,
+  type ProjectDocument, type ProjectDocumentKind, type ProjectDocumentStatus, type PublishedOffer,
+} from '../lib/serverApi';
 import { dehydrate } from '../lib/photoStore';
-import { buildReceiptRows, downloadClientContractDocx, downloadClientDocumentZip, downloadClientOfferDocx, downloadClientReceiptDocx, downloadClientSpecificationDocx, normalizeClientDocumentPackage, type ClientDocumentArgs } from '../lib/clientPackage';
+import { buildClientContractDocx, buildClientOfferDocx, buildClientPackageZip, buildClientReceiptDocx,
+  buildClientSpecificationDocx, buildReceiptRows, downloadClientContractDocx, downloadClientDocumentZip, downloadClientOfferDocx, downloadClientReceiptDocx, downloadClientSpecificationDocx, normalizeClientDocumentPackage, type ClientDocumentArgs } from '../lib/clientPackage';
 import EskizProjectPreview from './EskizProjectPreview';
 
 /** Строка модуля в клиентской версии — без закупочных цен и внутренних данных. */
@@ -27,6 +32,24 @@ export interface ClientModuleGroup {
   lineIds: string[];
   composition: string[];
 }
+
+const DOCUMENT_KIND_LABELS: Record<string, string> = {
+  offer: 'КП',
+  specification: 'спецификация',
+  contract: 'договор',
+  receipt: 'товарный чек',
+  sketch: 'эскиз',
+  package: 'пакет клиента',
+  blank: 'бланк фабрики',
+  other: 'документ',
+};
+
+const DOCUMENT_STATUS_LABELS: Record<string, string> = {
+  created: 'создан',
+  sent: 'отправлен',
+  signed: 'подписан',
+  paid: 'оплачен',
+};
 
 const MODE_LABELS: Record<ClientOfferPresentationMode, string> = {
   brief: 'Кратко',
@@ -276,6 +299,8 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const [offerStatus, setOfferStatus] = useState<PublishedOffer | null>(null);
   const [offerBusy, setOfferBusy] = useState(false);
   const [offerCopied, setOfferCopied] = useState(false);
+  // Документы проекта, сохранённые на хостинге: договор, чек, КП, пакет.
+  const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const groups = moduleGroups ?? [];
   const baseProjectForVariants: Project = { ...project, lines: project.lines.filter((line) => !isModuleLine(line)) };
   const selectedVariant = project.variants?.find((variant) => variant.id === project.selectedVariantId);
@@ -503,7 +528,8 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const exportSketchPdf = () => runClientDownload(async () => {
     if (!clientSketchVisible || linkedEskizProjects.length === 0) { alert('Нет привязанного Эскиз PRO для выгрузки.'); return; }
     for (const [index, eskiz] of linkedEskizProjects.entries()) {
-      await downloadEskizSketchPdf(eskiz, { ...sketchPdfOptions, title: eskiz.title, fileName: `Эскиз ${index + 1} — ${eskiz.title}.pdf` });
+      const pdf = await downloadEskizSketchPdf(eskiz, { ...sketchPdfOptions, title: eskiz.title, fileName: `Эскиз ${index + 1} — ${eskiz.title}.pdf` });
+      if (index === 0) await keepDocument('sketch', `${project.name} — эскиз.pdf`, pdf.blob);
     }
   }, 'Не получилось выгрузить эскиз');
   // Подтягиваем состояние уже опубликованной ссылки: открывал ли клиент, согласовал ли.
@@ -522,8 +548,43 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         }
       })
       .catch(() => { /* нет сервера — просто не показываем блок */ });
+    listProjectDocuments(project.id)
+      .then((list) => { if (alive) setDocuments(list); })
+      .catch(() => { /* нет сервера — блок документов не показываем */ });
     return () => { alive = false; };
   }, [project.id, publicMode, onOfferChange]);
+
+  /**
+   * Любая выгрузка сразу кладётся на хостинг рядом с проектом: файл больше не теряется
+   * в «Загрузках», и в карточке видно, что именно выдано клиенту и когда.
+   */
+  const keepDocument = async (kind: ProjectDocumentKind, name: string, blob: Blob) => {
+    try {
+      const saved = await saveProjectDocument({ projectId: project.id, kind, name, blob });
+      setDocuments((current) => [...current.filter((item) => item.id !== saved.id), saved]);
+    } catch {
+      /* сервера нет — файл всё равно скачан пользователю */
+    }
+  };
+
+  const changeDocumentStatus = async (id: string, status: ProjectDocumentStatus) => {
+    try {
+      const saved = await setProjectDocumentStatus(project.id, id, status);
+      setDocuments((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+    } catch (error) {
+      alert(`Не получилось изменить статус: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const removeDocument = async (id: string) => {
+    if (!confirm('Убрать документ из карточки проекта? Сам скачанный файл у вас останется.')) return;
+    try {
+      await deleteProjectDocument(project.id, id);
+      setDocuments((current) => current.filter((item) => item.id !== id));
+    } catch (error) {
+      alert(`Не получилось удалить документ: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
 
   const publishOffer = async () => {
     setOfferBusy(true);
@@ -564,7 +625,9 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   };
 
   const exportClientPackage = () => runClientDownload(async () => {
-    await downloadClientDocumentZip(clientDocumentArgs, await renderSketchFilesForPackage());
+    const sketches = await renderSketchFilesForPackage();
+    await downloadClientDocumentZip(clientDocumentArgs, sketches);
+    await keepDocument('package', `${project.name} — пакет клиента.zip`, await buildClientPackageZip(clientDocumentArgs, sketches));
   }, 'Не получилось собрать пакет клиента');
 
   return (
@@ -588,14 +651,42 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
             <button type="button" className="btn ghost">Отдельные файлы ▾</button>
             <div className="dropdown-menu">
               <button type="button" disabled={packageExporting || !clientSketchVisible} onClick={exportSketchPdf}>Эскиз PDF</button>
-              <button type="button" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientOfferDocx(clientDocumentArgs), 'Не получилось выгрузить КП')}>КП Word</button>
-              <button type="button" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientSpecificationDocx(clientDocumentArgs), 'Не получилось выгрузить спецификацию')}>Спецификация Word</button>
-              <button type="button" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientContractDocx(clientDocumentArgs), 'Не получилось выгрузить договор')}>Договор Word</button>
-              <button type="button" disabled={packageExporting} onClick={() => runClientDownload(() => downloadClientReceiptDocx(clientDocumentArgs), 'Не получилось выгрузить товарный чек')}>Товарный чек Word</button>
+              <button type="button" disabled={packageExporting} onClick={() => runClientDownload(async () => { await downloadClientOfferDocx(clientDocumentArgs); await keepDocument('offer', `${project.name} — полное КП.docx`, await buildClientOfferDocx(clientDocumentArgs)); }, 'Не получилось выгрузить КП')}>КП Word</button>
+              <button type="button" disabled={packageExporting} onClick={() => runClientDownload(async () => { await downloadClientSpecificationDocx(clientDocumentArgs); await keepDocument('specification', `${project.name} — спецификация.docx`, await buildClientSpecificationDocx(clientDocumentArgs)); }, 'Не получилось выгрузить спецификацию')}>Спецификация Word</button>
+              <button type="button" disabled={packageExporting} onClick={() => runClientDownload(async () => { await downloadClientContractDocx(clientDocumentArgs); await keepDocument('contract', `${project.name} — договор.docx`, await buildClientContractDocx(clientDocumentArgs)); }, 'Не получилось выгрузить договор')}>Договор Word</button>
+              <button type="button" disabled={packageExporting} onClick={() => runClientDownload(async () => { await downloadClientReceiptDocx(clientDocumentArgs); await keepDocument('receipt', `${project.name} — товарный чек.docx`, await buildClientReceiptDocx(clientDocumentArgs)); }, 'Не получилось выгрузить товарный чек')}>Товарный чек Word</button>
               <button type="button" onClick={() => exportClientXlsx({ ...project, lines: activeCalculation.lines, settings: selectedVariant?.settings ?? project.settings })}>Excel, если нужен</button>
             </div>
           </div>
         </div>
+        {documents.length > 0 && (
+          <div className="client-docs-store">
+            <b>Документы проекта на хостинге</b>
+            <p className="muted small">Каждая выгрузка сохраняется здесь: файл не потеряется в «Загрузках», а по статусу видно, что уже выдано клиенту.</p>
+            <ul>
+              {documents.map((doc) => (
+                <li key={doc.id} className={`doc-status-${doc.status}`}>
+                  <a href={serverFileUrl(doc.fileId)} target="_blank" rel="noreferrer" download={doc.name}>{doc.name}</a>
+                  <small>{DOCUMENT_KIND_LABELS[doc.kind] ?? 'документ'} · {new Date(doc.createdAt).toLocaleString('ru-RU')} · {Math.max(1, Math.round(doc.size / 1024))} КБ</small>
+                  <span className="doc-status-pill">{DOCUMENT_STATUS_LABELS[doc.status]}</span>
+                  <span className="doc-status-actions">
+                    {(['sent', 'signed', 'paid'] as ProjectDocumentStatus[]).map((status) => (
+                      <button
+                        key={status}
+                        type="button"
+                        className={doc.status === status ? 'active' : ''}
+                        onClick={() => void changeDocumentStatus(doc.id, doc.status === status ? 'created' : status)}
+                      >
+                        {DOCUMENT_STATUS_LABELS[status]}
+                      </button>
+                    ))}
+                    <button type="button" className="danger" onClick={() => void removeDocument(doc.id)} aria-label="Убрать документ">✕</button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="client-offer-link">
           <div className="client-offer-link-main">
             <b>Ссылка клиенту</b>

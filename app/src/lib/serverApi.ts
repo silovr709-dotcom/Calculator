@@ -292,3 +292,64 @@ export async function listPublishedOffers(): Promise<PublishedOffer[]> {
 export async function revokePublishedOffer(id: string): Promise<void> {
   await request('offers', { method: 'DELETE' }, { id });
 }
+
+/* ----------------------- документы проекта на хостинге ----------------------- */
+
+export type ProjectDocumentKind = 'offer' | 'specification' | 'contract' | 'receipt' | 'sketch' | 'package' | 'blank' | 'other';
+export type ProjectDocumentStatus = 'created' | 'sent' | 'signed' | 'paid';
+
+export interface ProjectDocument {
+  id: string;
+  fileId: string;
+  kind: ProjectDocumentKind;
+  name: string;
+  size: number;
+  status: ProjectDocumentStatus;
+  statusAt: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
+    reader.readAsDataURL(blob);
+  });
+  return dataUrl.slice(dataUrl.indexOf(',') + 1);
+}
+
+/** Кладём выгруженный документ рядом с проектом на хостинге. */
+export async function saveProjectDocument(input: {
+  projectId: string;
+  kind: ProjectDocumentKind;
+  name: string;
+  blob: Blob;
+}): Promise<ProjectDocument> {
+  const json = await request<{ document: ProjectDocument }>('docs', {
+    method: 'POST',
+    body: JSON.stringify({
+      projectId: input.projectId,
+      kind: input.kind,
+      name: input.name,
+      mime: input.blob.type || 'application/octet-stream',
+      data: await blobToBase64(input.blob),
+    }),
+  });
+  return json.document;
+}
+
+export async function listProjectDocuments(projectId: string): Promise<ProjectDocument[]> {
+  const json = await request<{ documents: ProjectDocument[] }>('docs', {}, { projectId });
+  return json.documents ?? [];
+}
+
+export async function setProjectDocumentStatus(projectId: string, id: string, status: ProjectDocumentStatus): Promise<ProjectDocument> {
+  const json = await request<{ document: ProjectDocument }>('docs/status', { method: 'POST', body: JSON.stringify({ projectId, id, status }) });
+  return json.document;
+}
+
+export async function deleteProjectDocument(projectId: string, id: string): Promise<void> {
+  await request('docs', { method: 'DELETE' }, { projectId, id });
+}

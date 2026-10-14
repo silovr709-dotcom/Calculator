@@ -99,6 +99,33 @@ check('сжатая отправка (gzip) принимается', r.status ==
 r = await call('state');
 check('данные из сжатого запроса сохранились', r.json?.data?.projects?.length === 3, r.text);
 
+// --- документы проекта ---
+const docx = Buffer.from('PK\u0003\u0004 фиктивный договор');
+r = await call('docs', { method: 'POST', body: { projectId: 'p1', kind: 'contract', name: 'Кухня — договор.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', data: docx.toString('base64') } });
+const docId = r.json?.document?.id ?? '';
+check('договор сохранён у проекта', r.status === 200 && r.json?.document?.kind === 'contract' && r.json?.document?.status === 'created', r.text);
+
+r = await call('docs', { method: 'POST', body: { projectId: 'p1', kind: 'contract', name: 'Кухня — договор.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', data: docx.toString('base64') } });
+check('повторная выгрузка обновляет карточку, а не плодит копии', r.json?.document?.id === docId, r.text);
+
+r = await call('docs', { query: '&projectId=p1' });
+check('список документов проекта виден', (r.json?.documents ?? []).length === 1, r.text);
+
+r = await call('docs/status', { method: 'POST', body: { projectId: 'p1', id: docId, status: 'signed' } });
+check('статус документа меняется', r.json?.document?.status === 'signed', r.text);
+
+r = await call('docs/status', { method: 'POST', body: { projectId: 'p1', id: docId, status: 'что-то' } });
+check('чужие статусы не принимаются', r.status === 400, r.text);
+
+r = await call('files/gc', { method: 'POST' });
+check('файл договора уборка не удаляет', r.json?.ok === true && r.json?.removed === 0, r.text);
+
+r = await call('docs', { method: 'DELETE', query: `&projectId=p1&id=${docId}` });
+check('документ можно удалить', r.json?.ok === true, r.text);
+
+r = await call('files/gc', { method: 'POST' });
+check('после удаления карточки файл документа убирается', r.json?.removed === 1, r.text);
+
 // --- КП по ссылке для клиента ---
 r = await call('offers', { method: 'POST', body: { projectId: 'p1', title: 'Кухня Ирина', client: 'Ирина', total: 238016, payload: { project: { id: 'p1', name: 'Кухня Ирина' } } } });
 const offerId = r.json?.id ?? '';

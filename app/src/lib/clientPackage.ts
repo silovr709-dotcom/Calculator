@@ -712,7 +712,8 @@ export async function downloadClientOrderBlankDoc(args: ClientDocumentArgs): Pro
   downloadFile(`${safeFilePart(args.project.name)} — бланк заказа.doc`, await buildClientOrderBlankDoc(args));
 }
 
-export async function downloadClientDocumentZip(args: ClientDocumentArgs, sketchFiles: ClientPackageSketchFile[] = []): Promise<void> {
+/** Собирает ZIP-пакет клиента; тот же архив уходит и в скачивание, и на хостинг. */
+export async function buildClientPackageZip(args: ClientDocumentArgs, sketchFiles: ClientPackageSketchFile[] = []): Promise<Blob> {
   const settings = normalizeClientDocumentPackage(args.offer.documentPackage);
   const files: ZipInput[] = [];
   if (settings.includeOffer) files.push({ name: `${safeFilePart(args.project.name)} — полное КП.docx`, data: await buildClientOfferDocx(args) });
@@ -720,7 +721,11 @@ export async function downloadClientDocumentZip(args: ClientDocumentArgs, sketch
   if (settings.includeContract) files.push({ name: `${safeFilePart(args.project.name)} — договор.docx`, data: await buildClientContractDocx(args) });
   if (settings.includeReceipt) files.push({ name: `${safeFilePart(args.project.name)} — товарный чек.docx`, data: await buildClientReceiptDocx(args) });
   if (settings.includeSketch) files.push(...sketchFiles.map((file, index) => ({ name: file.fileName || `Эскиз ${index + 1} — ${safeFilePart(file.title)}.pdf`, data: file.blob })));
-  downloadFile(`${safeFilePart(args.project.name)} — пакет клиента.zip`, await zipFiles(files, 'application/zip'));
+  return zipFiles(files, 'application/zip');
+}
+
+export async function downloadClientDocumentZip(args: ClientDocumentArgs, sketchFiles: ClientPackageSketchFile[] = []): Promise<void> {
+  downloadFile(`${safeFilePart(args.project.name)} — пакет клиента.zip`, await buildClientPackageZip(args, sketchFiles));
 }
 
 const CRC_TABLE = (() => {

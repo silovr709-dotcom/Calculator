@@ -357,6 +357,62 @@ switch ($route . ' ' . $method) {
         recept_json(200, ['ok' => true, 'rev' => $result['rev'], 'data' => $data]);
     }
 
+    /* ---------- документы проекта (договор, чек, КП, бланк) ---------- */
+
+    case 'docs GET': {
+        recept_require_user();
+        $projectId = isset($_GET['projectId']) ? (string) $_GET['projectId'] : '';
+        recept_json(200, ['ok' => true, 'documents' => recept_docs_list($projectId)]);
+    }
+
+    case 'docs POST': {
+        $user = recept_require_user();
+        $body = recept_body();
+        $projectId = isset($body['projectId']) ? (string) $body['projectId'] : '';
+        $data = isset($body['data']) ? (string) $body['data'] : '';
+        if ($data === '') {
+            recept_fail(400, 'Пустой документ');
+        }
+        $bytes = base64_decode($data, true);
+        if ($bytes === false) {
+            recept_fail(400, 'Документ повреждён при передаче');
+        }
+        $saved = recept_file_put($bytes, isset($body['mime']) ? (string) $body['mime'] : '');
+        $record = recept_docs_add($projectId, [
+            'fileId' => $saved['id'],
+            'kind' => isset($body['kind']) ? (string) $body['kind'] : 'other',
+            'name' => isset($body['name']) ? (string) $body['name'] : 'Документ',
+            'size' => $saved['size'],
+        ], $user);
+        recept_json(200, ['ok' => true, 'document' => $record]);
+    }
+
+    case 'docs/status POST': {
+        recept_require_user();
+        $body = recept_body();
+        $record = recept_docs_set_status(
+            isset($body['projectId']) ? (string) $body['projectId'] : '',
+            isset($body['id']) ? (string) $body['id'] : '',
+            isset($body['status']) ? (string) $body['status'] : ''
+        );
+        if ($record === null) {
+            recept_fail(404, 'Документ не найден');
+        }
+        recept_json(200, ['ok' => true, 'document' => $record]);
+    }
+
+    case 'docs DELETE': {
+        recept_require_user();
+        $ok = recept_docs_delete(
+            isset($_GET['projectId']) ? (string) $_GET['projectId'] : '',
+            isset($_GET['id']) ? (string) $_GET['id'] : ''
+        );
+        if (!$ok) {
+            recept_fail(404, 'Документ не найден');
+        }
+        recept_json(200, ['ok' => true]);
+    }
+
     /* ---------- КП по ссылке для клиента ---------- */
 
     case 'offers POST': {

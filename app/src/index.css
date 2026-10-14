@@ -7177,3 +7177,53 @@ input.editable-number { max-width: 120px; text-align: right; }
   border-radius: 9px;
   font-size: 14px;
 }
+
+/* Документы проекта, сохранённые на хостинге. */
+.client-docs-store {
+  grid-column: 1 / -1;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid #e2e7f3;
+  border-radius: 12px;
+  background: #fff;
+}
+.client-docs-store > b { font-size: 13px; }
+.client-docs-store > p { margin: 2px 0 8px; }
+.client-docs-store ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.client-docs-store li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 10px;
+  border: 1px solid #e8ecf6;
+  border-radius: 10px;
+  background: #fafbff;
+  font-size: 12px;
+}
+.client-docs-store li a { font-weight: 600; color: #16213f; }
+.client-docs-store li small { color: #7c89a8; }
+.client-docs-store .doc-status-pill {
+  margin-left: auto;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #eef2fb;
+  color: #45536f;
+  font-weight: 700;
+}
+.client-docs-store li.doc-status-signed .doc-status-pill { background: #e8f0ff; color: #1b4ea8; }
+.client-docs-store li.doc-status-paid .doc-status-pill { background: #e8f7ef; color: #18723e; }
+.client-docs-store li.doc-status-sent .doc-status-pill { background: #fff5e2; color: #8a5a00; }
+.client-docs-store .doc-status-actions { display: flex; gap: 4px; }
+.client-docs-store .doc-status-actions button {
+  padding: 3px 9px;
+  border: 1px solid #dde4f2;
+  border-radius: 999px;
+  background: #fff;
+  color: #5b6b8f;
+  font-size: 11px;
+  cursor: pointer;
+}
+.client-docs-store .doc-status-actions button:hover { border-color: #16213f; color: #16213f; }
+.client-docs-store .doc-status-actions button.active { background: #16213f; border-color: #16213f; color: #fff; }
+.client-docs-store .doc-status-actions button.danger { color: #b3261e; }

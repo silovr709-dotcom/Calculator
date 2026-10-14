@@ -477,6 +477,119 @@ function recept_backup_read(string $file)
 /* Передача проекта на телефон по QR                                    */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------ документы проекта ------------------------------ */
+
+function recept_docs_dir(): string
+{
+    $dir = recept_path('docs');
+    if (!is_dir($dir) && !@mkdir($dir, 0770, true) && !is_dir($dir)) {
+        recept_fail(500, 'Нет доступа к папке документов');
+    }
+    recept_protect_dir($dir);
+    return $dir;
+}
+
+function recept_docs_file(string $projectId): ?string
+{
+    if (!preg_match('/^[A-Za-z0-9_.-]{1,80}$/', $projectId)) {
+        return null;
+    }
+    return recept_docs_dir() . '/' . $projectId . '.json';
+}
+
+function recept_docs_list(string $projectId): array
+{
+    $file = recept_docs_file($projectId);
+    if ($file === null) {
+        return [];
+    }
+    $data = recept_read_json($file, []);
+    return is_array($data) ? array_values($data) : [];
+}
+
+/** Регистрируем выгруженный документ рядом с проектом: файл + карточка со статусом. */
+function recept_docs_add(string $projectId, array $entry, array $user): array
+{
+    $file = recept_docs_file($projectId);
+    if ($file === null) {
+        recept_fail(400, 'Неверный проект');
+    }
+    $list = recept_docs_list($projectId);
+    $record = [
+        'id' => bin2hex(random_bytes(6)),
+        'fileId' => isset($entry['fileId']) ? (string) $entry['fileId'] : '',
+        'kind' => isset($entry['kind']) ? (string) $entry['kind'] : 'other',
+        'name' => isset($entry['name']) ? mb_substr((string) $entry['name'], 0, 200) : 'Документ',
+        'size' => isset($entry['size']) ? (int) $entry['size'] : 0,
+        'status' => 'created',
+        'statusAt' => gmdate('c'),
+        'createdAt' => gmdate('c'),
+        'createdBy' => $user['login'],
+    ];
+
+    // Один и тот же документ (договор, чек) обновляется, а не плодит копии.
+    $replaced = false;
+    foreach ($list as $index => $item) {
+        if (isset($item['kind']) && $item['kind'] === $record['kind']) {
+            $record['id'] = $item['id'];
+            $record['createdAt'] = isset($item['createdAt']) ? $item['createdAt'] : $record['createdAt'];
+            $record['status'] = isset($item['status']) ? $item['status'] : 'created';
+            $list[$index] = $record;
+            $replaced = true;
+            break;
+        }
+    }
+    if (!$replaced) {
+        $list[] = $record;
+    }
+    recept_write_json($file, array_values($list));
+    return $record;
+}
+
+function recept_docs_set_status(string $projectId, string $id, string $status): ?array
+{
+    $allowed = ['created', 'sent', 'signed', 'paid'];
+    if (!in_array($status, $allowed, true)) {
+        recept_fail(400, 'Неизвестный статус документа');
+    }
+    $file = recept_docs_file($projectId);
+    if ($file === null) {
+        return null;
+    }
+    $list = recept_docs_list($projectId);
+    foreach ($list as $index => $item) {
+        if (isset($item['id']) && $item['id'] === $id) {
+            $list[$index]['status'] = $status;
+            $list[$index]['statusAt'] = gmdate('c');
+            recept_write_json($file, array_values($list));
+            return $list[$index];
+        }
+    }
+    return null;
+}
+
+function recept_docs_delete(string $projectId, string $id): bool
+{
+    $file = recept_docs_file($projectId);
+    if ($file === null) {
+        return false;
+    }
+    $list = recept_docs_list($projectId);
+    $next = [];
+    $found = false;
+    foreach ($list as $item) {
+        if (isset($item['id']) && $item['id'] === $id) {
+            $found = true;
+            continue;
+        }
+        $next[] = $item;
+    }
+    if ($found) {
+        recept_write_json($file, $next);
+    }
+    return $found;
+}
+
 /* ------------------------------ публичные КП по ссылке ------------------------------ */
 
 function recept_offers_dir(): string
@@ -615,6 +728,10 @@ function recept_file_ext(string $mime): string
         'image/gif' => 'gif',
         'image/svg+xml' => 'svg',
         'application/pdf' => 'pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+        'application/msword' => 'doc',
+        'application/zip' => 'zip',
     ];
     return isset($map[$mime]) ? $map[$mime] : '';
 }
@@ -628,6 +745,10 @@ function recept_file_mime(string $ext): string
         'gif' => 'image/gif',
         'svg' => 'image/svg+xml',
         'pdf' => 'application/pdf',
+        'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'doc' => 'application/msword',
+        'zip' => 'application/zip',
     ];
     return isset($map[$ext]) ? $map[$ext] : 'application/octet-stream';
 }
@@ -691,6 +812,17 @@ function recept_files_gc(): array
     if (is_string($state) && $state !== '') {
         if (preg_match_all('/recept-file:([a-f0-9]{64})/', $state, $m)) {
             foreach ($m[1] as $hash) {
+                $used[$hash] = true;
+            }
+        }
+    }
+    foreach (array_merge(glob(recept_docs_dir() . '/*.json') ?: [], glob(recept_offers_dir() . '/*.json') ?: []) as $extra) {
+        $raw = @file_get_contents($extra);
+        if (!is_string($raw) || $raw === '') {
+            continue;
+        }
+        if (preg_match_all('/[a-f0-9]{64}/', $raw, $m)) {
+            foreach ($m[0] as $hash) {
                 $used[$hash] = true;
             }
         }
