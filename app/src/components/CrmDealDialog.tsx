@@ -1,21 +1,33 @@
-// Карточка сделки в всплывающем окне: контакты, деньги, документы, история.
-// Список на экране остаётся списком — всё подробное открывается здесь.
+// Карточка сделки: всё по клиенту и заказу в одном окне — задачи, деньги,
+// документы, контакты и лента событий. Список на экране CRM остаётся списком.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type {
   ClientDocumentState, ClientProfile, ClientProjectDocuments, ClientProjectPayment,
-  OrderWorkflow, OrderWorkflowStatus,
+  CrmTask, CrmTaskKind, OrderWorkflow, OrderWorkflowStatus, PaymentKind, Project,
 } from '../types';
 import { Overlay } from './Portal';
 import { fmtDate, fmtMoney } from '../lib/format';
-import { CLIENT_TAGS, paymentStatusLabel, splitContactList } from '../lib/clientProfiles';
+import { CLIENT_TAGS, splitContactList } from '../lib/clientProfiles';
 import { ORDER_WORKFLOW_STATUSES, dateInputToIso, dateInputValue, defaultNextAction } from '../lib/crm';
 import { toneLabel } from '../lib/crmBoard';
+import {
+  PAYMENT_KINDS, TASK_KINDS, paymentEntries, paymentState, sortTasks, taskKindMeta, taskTone,
+} from '../lib/crmTasks';
+import { buildDealTimeline } from '../lib/crmTimeline';
 import type { NextContactTone } from '../lib/crm';
 
+export interface DealOfferLink {
+  url: string;
+  views: number;
+  lastViewAt: string | null;
+  createdAt?: string;
+  approvedAt: string | null;
+  approvedBy: string | null;
+}
+
 export interface DealCard {
-  projectId: string;
-  projectName: string;
+  project: Project;
   clientName: string;
   client: ClientProfile | null;
   workflow: OrderWorkflow;
@@ -26,7 +38,7 @@ export interface DealCard {
   email: string;
   payment?: ClientProjectPayment;
   documents: Partial<ClientProjectDocuments>;
-  offerLink?: { url: string; views: number; approvedAt: string | null; approvedBy: string | null } | null;
+  offerLink: DealOfferLink | null;
 }
 
 const DOC_LABELS: Array<{ key: keyof Omit<ClientProjectDocuments, 'updatedAt' | 'comment'>; label: string }> = [
@@ -45,27 +57,57 @@ const DOC_STATES: Array<{ value: ClientDocumentState; label: string }> = [
   { value: 'approved', label: 'согласован' },
 ];
 
-type Tab = 'deal' | 'money' | 'client' | 'history';
+const LOST_REASONS = ['Дорого', 'Выбрал другого подрядчика', 'Передумал / отложил', 'Не устроили сроки', 'Не вышли на связь', 'Другое'];
+
+type Tab = 'deal' | 'tasks' | 'money' | 'client' | 'timeline';
+
+function todayInput(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export default function CrmDealDialog(props: {
   card: DealCard;
   message: string;
+  assignees: string[];
+  docBusy: string | null;
   onClose: () => void;
   onOpenProject: () => void;
   onWorkflow: (patch: Partial<OrderWorkflow>) => void;
   onClient: (patch: Partial<ClientProfile>) => void;
-  onPayment: (patch: Partial<ClientProjectPayment>) => void;
+  onPaymentAdd: (entry: { amount: number; at: string; kind: PaymentKind; comment?: string }) => void;
+  onPaymentRemove: (id: string) => void;
   onDocuments: (patch: Partial<ClientProjectDocuments>) => void;
+  onTaskAdd: (task: { title: string; kind: CrmTaskKind; dueAt?: string; assignee?: string }) => void;
+  onTaskToggle: (taskId: string) => void;
+  onTaskRemove: (taskId: string) => void;
   onNote: (text: string) => void;
   onSchedule: (days: number) => void;
   onDocumentExport: (kind: 'offer' | 'contract' | 'receipt' | 'package') => void;
-  docBusy: string | null;
 }) {
   const { card } = props;
   const [tab, setTab] = useState<Tab>('deal');
   const [note, setNote] = useState('');
   const [copied, setCopied] = useState(false);
-  const pay = paymentStatusLabel(card.payment, card.total);
+
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskKind, setTaskKind] = useState<CrmTaskKind>('call');
+  const [taskDue, setTaskDue] = useState(todayInput());
+  const [taskWho, setTaskWho] = useState('');
+
+  const [payAmount, setPayAmount] = useState('');
+  const [payKind, setPayKind] = useState<PaymentKind>('prepay');
+  const [payDate, setPayDate] = useState(todayInput());
+  const [payComment, setPayComment] = useState('');
+
+  const pay = paymentState(card.payment, card.total);
+  const tasks = useMemo(() => sortTasks(card.project.tasks ?? []), [card.project.tasks]);
+  const openCount = tasks.filter((task) => !task.done).length;
+  const timeline = useMemo(() => buildDealTimeline({
+    project: card.project,
+    history: card.client?.history ?? [],
+    payment: card.payment,
+    offer: card.offerLink,
+  }), [card.project, card.client, card.payment, card.offerLink]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') props.onClose(); };
@@ -79,17 +121,60 @@ export default function CrmDealDialog(props: {
     window.setTimeout(() => setCopied(false), 1500);
   };
 
+  const submitTask = () => {
+    const title = taskTitle.trim() || taskKindMeta(taskKind).label;
+    props.onTaskAdd({ title, kind: taskKind, dueAt: taskDue || undefined, assignee: taskWho.trim() || undefined });
+    setTaskTitle('');
+  };
+
+  const submitPayment = () => {
+    const amount = Number(payAmount.replace(',', '.'));
+    if (!Number.isFinite(amount) || amount === 0) return;
+    props.onPaymentAdd({
+      amount: payKind === 'refund' ? -Math.abs(amount) : Math.abs(amount),
+      at: payDate || todayInput(),
+      kind: payKind,
+      comment: payComment.trim() || undefined,
+    });
+    setPayAmount('');
+    setPayComment('');
+  };
+
+  const taskRow = (task: CrmTask) => {
+    const tone = taskTone(task);
+    const meta = taskKindMeta(task.kind);
+    return (
+      <li key={task.id} className={`crm-task tone-${tone}`}>
+        <label>
+          <input type="checkbox" checked={Boolean(task.done)} onChange={() => props.onTaskToggle(task.id)} />
+          <span className="crm-task-icon" aria-hidden="true">{meta.icon}</span>
+          <span className="crm-task-text">
+            <b>{task.title}</b>
+            <small>
+              {meta.label}
+              {task.dueAt ? ` · ${fmtDate(task.dueAt)}` : ' · без срока'}
+              {tone === 'overdue' ? ' · просрочено' : tone === 'today' ? ' · сегодня' : ''}
+              {task.assignee ? ` · ${task.assignee}` : ''}
+            </small>
+          </span>
+        </label>
+        <button type="button" className="crm-task-remove" aria-label="Удалить задачу" onClick={() => props.onTaskRemove(task.id)}>✕</button>
+      </li>
+    );
+  };
+
   return (
     <Overlay className="crm-dialog-backdrop" onClick={props.onClose}>
-      <div className="crm-dialog" role="dialog" aria-label={`Сделка ${card.projectName}`} onClick={(event) => event.stopPropagation()}>
+      <div className="crm-dialog" role="dialog" aria-label={`Сделка ${card.project.name}`} onClick={(event) => event.stopPropagation()}>
         <header className="crm-dialog-head">
           <div>
             <span className="eyebrow">{card.clientName}</span>
-            <h2>{card.projectName}</h2>
+            <h2>{card.project.name}</h2>
             <p>
               {fmtMoney(card.total)}
               {card.marginPct != null && ` · маржа ${card.marginPct.toFixed(1)} %`}
               {` · ${toneLabel(card.tone, card.workflow.nextContactAt)}`}
+              {card.workflow.assignee ? ` · ведёт ${card.workflow.assignee}` : ''}
             </p>
           </div>
           <div className="crm-dialog-head-actions">
@@ -99,10 +184,15 @@ export default function CrmDealDialog(props: {
         </header>
 
         <nav className="crm-dialog-tabs">
-          {([['deal', 'Сделка'], ['money', 'Деньги и документы'], ['client', 'Клиент'], ['history', 'История']] as Array<[Tab, string]>)
-            .map(([id, label]) => (
-              <button key={id} type="button" className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label}</button>
-            ))}
+          {([
+            ['deal', 'Сделка'],
+            ['tasks', openCount > 0 ? `Задачи · ${openCount}` : 'Задачи'],
+            ['money', 'Деньги и документы'],
+            ['client', 'Клиент'],
+            ['timeline', 'Лента'],
+          ] as Array<[Tab, string]>).map(([id, label]) => (
+            <button key={id} type="button" className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>{label}</button>
+          ))}
         </nav>
 
         <div className="crm-dialog-body">
@@ -114,14 +204,29 @@ export default function CrmDealDialog(props: {
                     {ORDER_WORKFLOW_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
                   </select>
                 </label>
+                <label>Ответственный
+                  <input list="crm-assignees" value={card.workflow.assignee ?? ''} placeholder="кто ведёт сделку"
+                    onChange={(event) => props.onWorkflow({ assignee: event.target.value })} />
+                  <datalist id="crm-assignees">
+                    {props.assignees.map((name) => <option key={name} value={name} />)}
+                  </datalist>
+                </label>
                 <label>Дата следующего контакта
                   <input type="date" value={dateInputValue(card.workflow.nextContactAt)}
                     onChange={(event) => props.onWorkflow({ nextContactAt: dateInputToIso(event.target.value) })} />
                 </label>
-                <label className="span-2">Следующий шаг
+                <label>Следующий шаг
                   <input defaultValue={card.workflow.nextAction ?? ''} placeholder={defaultNextAction(card.workflow.status)}
                     onBlur={(event) => { if (event.target.value !== (card.workflow.nextAction ?? '')) props.onWorkflow({ nextAction: event.target.value }); }} />
                 </label>
+                {card.workflow.status === 'rejected' && (
+                  <label className="span-2">Причина отказа
+                    <select value={card.workflow.lostReason ?? ''} onChange={(event) => props.onWorkflow({ lostReason: event.target.value })}>
+                      <option value="">выберите причину</option>
+                      {LOST_REASONS.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+                    </select>
+                  </label>
+                )}
                 <label className="span-2">Заметка менеджера
                   <textarea rows={2} defaultValue={card.workflow.managerComment ?? ''} placeholder="Что согласовано, чего ждём, возражения"
                     onBlur={(event) => { if (event.target.value !== (card.workflow.managerComment ?? '')) props.onWorkflow({ managerComment: event.target.value }); }} />
@@ -139,11 +244,32 @@ export default function CrmDealDialog(props: {
 
               <div className="crm-dialog-contact">
                 <b>Связаться</b>
-                {card.phone ? <a className="btn tiny ghost" href={`tel:${card.phone.replace(/[^+\d]/g, '')}`}>Позвонить {card.phone}</a> : <span className="muted small">Телефон не заполнен — добавьте его во вкладке «Клиент».</span>}
-                {card.email && <a className="btn tiny ghost" href={`mailto:${card.email}`}>Написать {card.email}</a>}
-                <button type="button" className="btn tiny" onClick={() => void copyMessage()}>{copied ? '✓ Текст скопирован' : 'Скопировать сообщение'}</button>
+                {card.phone
+                  ? <a className="btn tiny ghost" href={`tel:${card.phone.replace(/[^+\d]/g, '')}`}>Позвонить {card.phone}</a>
+                  : <span className="muted small">Телефон не заполнен — добавьте во вкладке «Клиент».</span>}
+                {card.email && <a className="btn tiny ghost" href={`mailto:${card.email}`}>Написать</a>}
+                {card.phone && <a className="btn tiny ghost" href={`https://wa.me/${card.phone.replace(/[^\d]/g, '')}?text=${encodeURIComponent(props.message)}`} target="_blank" rel="noreferrer">WhatsApp</a>}
+                <button type="button" className="btn tiny" onClick={() => void copyMessage()}>{copied ? '✓ Скопировано' : 'Скопировать текст'}</button>
               </div>
               <p className="crm-dialog-message">{props.message}</p>
+            </>
+          )}
+
+          {tab === 'tasks' && (
+            <>
+              <div className="crm-task-form">
+                <input value={taskTitle} placeholder="Что сделать: позвонить, согласовать цвет…" onChange={(event) => setTaskTitle(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') submitTask(); }} />
+                <select value={taskKind} onChange={(event) => setTaskKind(event.target.value as CrmTaskKind)}>
+                  {TASK_KINDS.map((kind) => <option key={kind.id} value={kind.id}>{kind.label}</option>)}
+                </select>
+                <input type="date" value={taskDue} onChange={(event) => setTaskDue(event.target.value)} />
+                <input list="crm-assignees" value={taskWho} placeholder="кто" onChange={(event) => setTaskWho(event.target.value)} />
+                <button type="button" className="btn primary" onClick={submitTask}>Добавить</button>
+              </div>
+              {tasks.length === 0
+                ? <div className="empty small">Задач нет. Добавьте звонок, замер или напоминание об оплате — они появятся в списке «Сегодня».</div>
+                : <ul className="crm-task-list">{tasks.map(taskRow)}</ul>}
             </>
           )}
 
@@ -153,31 +279,40 @@ export default function CrmDealDialog(props: {
                 <b>{pay.label}</b>
                 <span>оплачено {fmtMoney(pay.paid)} · остаток {fmtMoney(pay.remainder)} из {fmtMoney(card.total)}</span>
               </div>
-              <div className="crm-dialog-grid">
-                <label>Оплачено, ₽
-                  <input type="number" value={card.payment?.paidTotal ?? card.payment?.prepayment ?? ''}
-                    onChange={(event) => {
-                      const value = event.target.value === '' ? null : Number(event.target.value);
-                      props.onPayment({ paidTotal: value, status: value != null && value >= card.total ? 'paid' : value ? 'prepaid' : 'none' });
-                    }} />
-                </label>
-                <label>Дата оплаты
-                  <input type="date" value={card.payment?.paymentDate ?? ''} onChange={(event) => props.onPayment({ paymentDate: event.target.value || undefined })} />
-                </label>
-                <label className="span-2">Комментарий к оплате
-                  <input value={card.payment?.comment ?? ''} placeholder="предоплата, долг, банк…"
-                    onChange={(event) => props.onPayment({ comment: event.target.value })} />
-                </label>
+
+              <div className="crm-pay-form">
+                <input value={payAmount} inputMode="decimal" placeholder="Сумма, ₽" onChange={(event) => setPayAmount(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') submitPayment(); }} />
+                <select value={payKind} onChange={(event) => setPayKind(event.target.value as PaymentKind)}>
+                  {PAYMENT_KINDS.map((kind) => <option key={kind.id} value={kind.id}>{kind.label}</option>)}
+                </select>
+                <input type="date" value={payDate} onChange={(event) => setPayDate(event.target.value)} />
+                <input value={payComment} placeholder="комментарий" onChange={(event) => setPayComment(event.target.value)} />
+                <button type="button" className="btn primary" onClick={submitPayment}>Записать платёж</button>
               </div>
+
+              {paymentEntries(card.payment).length > 0 && (
+                <ul className="crm-pay-list">
+                  {paymentEntries(card.payment).map((entry) => (
+                    <li key={entry.id}>
+                      <b>{fmtMoney(entry.amount)}</b>
+                      <span>{PAYMENT_KINDS.find((kind) => kind.id === entry.kind)?.label} · {fmtDate(entry.at)}{entry.comment ? ` · ${entry.comment}` : ''}</span>
+                      <button type="button" aria-label="Удалить платёж" onClick={() => props.onPaymentRemove(entry.id)}>✕</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
               {card.offerLink && (
                 <div className={`crm-dialog-offerlink${card.offerLink.approvedAt ? ' approved' : ''}`}>
-                  <b>Ссылка клиенту</b>
+                  <b>Ссылка клиенту на КП</b>
                   <input readOnly value={card.offerLink.url} onFocus={(event) => event.target.select()} />
                   <span>
                     {card.offerLink.approvedAt
                       ? `Согласовано: ${card.offerLink.approvedBy} · ${fmtDate(card.offerLink.approvedAt)}`
-                      : card.offerLink.views > 0 ? `Клиент открывал ${card.offerLink.views} раз, решения пока нет` : 'Ссылку ещё не открывали'}
+                      : card.offerLink.views > 0
+                        ? `Клиент открывал ${card.offerLink.views} раз${card.offerLink.lastViewAt ? `, последний — ${fmtDate(card.offerLink.lastViewAt)}` : ''}`
+                        : 'Ссылку ещё не открывали'}
                   </span>
                 </div>
               )}
@@ -196,9 +331,9 @@ export default function CrmDealDialog(props: {
                 <div className="crm-dialog-docs-actions">
                   {([['offer', 'КП Word'], ['contract', 'Договор'], ['receipt', 'Товарный чек'], ['package', 'Пакет ZIP']] as Array<['offer' | 'contract' | 'receipt' | 'package', string]>)
                     .map(([kind, label]) => (
-                      <button key={kind} type="button" className="btn tiny ghost" disabled={props.docBusy === `${card.projectId}-${kind}`}
+                      <button key={kind} type="button" className="btn tiny ghost" disabled={props.docBusy === `${card.project.id}-${kind}`}
                         onClick={() => props.onDocumentExport(kind)}>
-                        {props.docBusy === `${card.projectId}-${kind}` ? 'Готовлю…' : label}
+                        {props.docBusy === `${card.project.id}-${kind}` ? 'Готовлю…' : label}
                       </button>
                     ))}
                 </div>
@@ -229,25 +364,27 @@ export default function CrmDealDialog(props: {
               </div>
             </div>
           ) : (
-            <div className="empty small">Проект не привязан к карточке клиента. Откройте проект и укажите клиента — тогда здесь появятся контакты, оплаты и история.</div>
+            <div className="empty small">Сделка не привязана к карточке клиента. Откройте проект и укажите клиента — появятся контакты, оплаты и история.</div>
           ))}
 
-          {tab === 'history' && (
+          {tab === 'timeline' && (
             <>
               <div className="crm-dialog-note">
-                <input value={note} placeholder="Например: просил вариант дешевле, согласовал Rehau"
+                <input value={note} placeholder="Записать в ленту: о чём договорились"
                   onChange={(event) => setNote(event.target.value)}
                   onKeyDown={(event) => { if (event.key === 'Enter' && note.trim()) { props.onNote(note.trim()); setNote(''); } }} />
                 <button type="button" className="btn ghost" disabled={!note.trim()} onClick={() => { props.onNote(note.trim()); setNote(''); }}>Записать</button>
               </div>
-              <div className="crm-dialog-history">
-                {!card.client || card.client.history.length === 0
-                  ? <div className="empty small">История пока пустая. Статусы и документы будут записываться сюда автоматически.</div>
-                  : card.client.history.slice(0, 20).map((entry) => (
-                    <div key={entry.id}>
-                      <b>{entry.title}</b>
-                      <span>{fmtDate(entry.createdAt)}</span>
-                      {entry.text && <small>{entry.text}</small>}
+              <div className="crm-timeline">
+                {timeline.length === 0
+                  ? <div className="empty small">Событий пока нет: статусы, задачи, оплаты и документы появятся здесь сами.</div>
+                  : timeline.map((event) => (
+                    <div key={event.id} className={`crm-timeline-item kind-${event.kind}`}>
+                      <span className="crm-timeline-date">{fmtDate(event.at)}</span>
+                      <div>
+                        <b>{event.title}</b>
+                        {event.detail && <small>{event.detail}</small>}
+                      </div>
                     </div>
                   ))}
               </div>

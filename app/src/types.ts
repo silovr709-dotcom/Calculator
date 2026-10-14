@@ -232,6 +232,27 @@ export interface OrderWorkflow {
   nextContactAt?: string;
   managerComment?: string;
   updatedAt?: string;
+  /** Кто ведёт сделку: логин или имя сотрудника. */
+  assignee?: string;
+  /** Причина отказа — нужна, чтобы считать, почему теряем заказы. */
+  lostReason?: string;
+}
+
+/** Тип задачи в CRM: от него зависит значок и подсказка. */
+export type CrmTaskKind = 'call' | 'meet' | 'measure' | 'docs' | 'payment' | 'delivery' | 'other';
+
+export interface CrmTask {
+  id: string;
+  title: string;
+  kind: CrmTaskKind;
+  /** Срок в формате YYYY-MM-DD. Без срока задача считается «когда-нибудь». */
+  dueAt?: string;
+  done?: boolean;
+  doneAt?: string;
+  assignee?: string;
+  comment?: string;
+  createdAt: string;
+  createdBy?: string;
 }
 
 export type ClientTag = 'hot' | 'discount' | 'repeat' | 'install' | 'problem' | 'designer' | string;
@@ -255,6 +276,20 @@ export interface ClientProjectPayment {
   paidTotal?: number | null;
   paymentDate?: string;
   comment?: string;
+  /** Отдельные платежи: предоплата, доплата, доп. работы. Сумма считается по ним. */
+  entries?: PaymentEntry[];
+}
+
+export type PaymentKind = 'prepay' | 'final' | 'extra' | 'refund';
+
+export interface PaymentEntry {
+  id: string;
+  /** Сумма в рублях; для возврата — отрицательная. */
+  amount: number;
+  at: string;
+  kind: PaymentKind;
+  comment?: string;
+  createdBy?: string;
 }
 
 export type ClientDocumentState = 'none' | 'created' | 'sent' | 'approved';
@@ -577,6 +612,8 @@ export interface Project {
   sketch?: KitchenSketchSettings;
   /** Связь с внешним инструментом Эскиз PRO: https://silovr709-dotcom.github.io/ESCIZ/ */
   eskizPro?: EskizProIntegration;
+  /** Задачи CRM по сделке: звонки, замеры, документы, оплаты. */
+  tasks?: CrmTask[];
   /** Режим открытия проекта: мастер или привычные вкладки. */
   wizardMode?: 'wizard' | 'advanced';
   wizardStep?: WizardStepId;

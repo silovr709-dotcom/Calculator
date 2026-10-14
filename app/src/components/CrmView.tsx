@@ -4,8 +4,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
-  ClientHistoryEntry, ClientProfile, ClientProjectDocuments, ClientProjectPayment,
-  OrderWorkflow, OrderWorkflowStatus, Pricebook, Project,
+  ClientHistoryEntry, ClientProfile, ClientProjectDocuments, CrmTask, CrmTaskKind,
+  OrderWorkflow, OrderWorkflowStatus, PaymentKind, Pricebook, Project,
 } from '../types';
 import { calcTotals } from '../lib/engine';
 import { fmtMoney, fmtNum } from '../lib/format';
@@ -14,7 +14,7 @@ import { applyClientOfferEdits, buildClientOfferDetails, buildClientProjectSumma
 import { makeClientNameResolver } from '../lib/clientNaming';
 import { downloadClientContractDocx, downloadClientDocumentZip, downloadClientOfferDocx, downloadClientReceiptDocx, type ClientDocumentArgs } from '../lib/clientPackage';
 import {
-  applyClientProfileToProject, findDuplicateClientGroups, mergeClientPatch, paymentStatusLabel,
+  applyClientProfileToProject, findDuplicateClientGroups, mergeClientPatch,
   updateClientProjectDocuments, updateClientProjectPayment,
 } from '../lib/clientProfiles';
 import {
@@ -27,6 +27,10 @@ import {
 } from '../lib/crmBoard';
 import { clientOfferUrl, listPublishedOffers, type PublishedOffer } from '../lib/serverApi';
 import CrmDealDialog, { type DealCard } from './CrmDealDialog';
+import {
+  addPayment, addTask, nextTask, openTasks, paymentState, removePayment, removeTask,
+  taskKindMeta, taskStats, taskTone, toggleTask,
+} from '../lib/crmTasks';
 
 interface CrmRow extends CrmRowLike {
   project: Project;
@@ -37,6 +41,11 @@ interface CrmRow extends CrmRowLike {
   marginPct: number | null;
   phone: string;
   email: string;
+  task: CrmTask | null;
+  openTasks: number;
+  paidLabel: string;
+  paidTone: string;
+  remainder: number;
 }
 
 function projectMoney(project: Project, pricebook: Pricebook | null) {
@@ -78,10 +87,9 @@ function buildClientArgs(project: Project, pricebook: Pricebook | null): ClientD
 }
 
 /** Готовый текст сообщения клиенту под текущий этап сделки. */
-function dealMessage(row: CrmRow, payment?: ClientProjectPayment): string {
+function dealMessage(row: CrmRow, remainder: number): string {
   const name = row.client?.name || row.project.client || 'Добрый день';
   const total = fmtMoney(row.total);
-  const pay = paymentStatusLabel(payment, row.total);
   const terms = row.project.clientOffer?.productionTerms || 'согласованный срок';
   switch (row.workflow.status) {
     case 'draft':
@@ -96,9 +104,9 @@ function dealMessage(row: CrmRow, payment?: ClientProjectPayment): string {
       return `${name}, проект «${row.project.name}» согласован. Готовим договор и товарный чек, срок изготовления — ${terms}.`;
     case 'factorySent':
     case 'production':
-      return `${name}, ваш заказ «${row.project.name}» в производстве. Срок — ${terms}. Остаток к оплате: ${fmtMoney(pay.remainder)}.`;
+      return `${name}, ваш заказ «${row.project.name}» в производстве. Срок — ${terms}. Остаток к оплате: ${fmtMoney(remainder)}.`;
     case 'ready':
-      return `${name}, заказ «${row.project.name}» готов. Остаток к оплате ${fmtMoney(pay.remainder)} — давайте согласуем доставку и монтаж.`;
+      return `${name}, заказ «${row.project.name}» готов. Остаток к оплате ${fmtMoney(remainder)} — давайте согласуем доставку и монтаж.`;
     case 'delivered':
       return `${name}, спасибо за заказ «${row.project.name}»! Будем рады рекомендациям и всегда поможем с сервисом.`;
     default:
@@ -111,6 +119,7 @@ export default function CrmView(props: {
   clients: ClientProfile[];
   pricebooks: Pricebook[];
   onOpen: (id: string) => void;
+  onProjectChange: (project: Project) => void;
   onWorkflowChange: (id: string, patch: Partial<OrderWorkflow>) => void;
   onClientChange: (client: ClientProfile) => void;
   onClientHistory: (clientId: string, entry: Omit<ClientHistoryEntry, 'id' | 'createdAt'>) => void;
@@ -121,6 +130,8 @@ export default function CrmView(props: {
   const [focus, setFocus] = useState<CrmFocus>('active');
   const [stage, setStage] = useState<string>('');
   const [openProjectId, setOpenProjectId] = useState<string | null>(null);
+  const [assignee, setAssignee] = useState('');
+  const [sort, setSort] = useState<'urgency' | 'money' | 'updated'>('urgency');
   const [docBusy, setDocBusy] = useState<string | null>(null);
   const [offers, setOffers] = useState<PublishedOffer[]>([]);
 
@@ -139,6 +150,9 @@ export default function CrmView(props: {
     const money = projectMoney(project, pricebook);
     const phone = client?.phones?.[0] || project.clientOffer?.clientPhone?.trim() || '';
     const email = client?.emails?.[0] || project.clientOffer?.clientEmail?.trim() || '';
+    const payment = client?.paymentsByProject?.[project.id];
+    const pay = paymentState(payment, money.total);
+    const task = nextTask(project);
     return {
       project,
       client,
@@ -148,13 +162,18 @@ export default function CrmView(props: {
       marginPct: money.marginPct,
       phone,
       email,
+      task,
+      openTasks: openTasks(project).length,
+      paidLabel: pay.label,
+      paidTone: pay.tone,
+      remainder: pay.remainder,
       status: workflow.status,
       tone: nextContactTone(workflow.nextContactAt),
-      hasNextAction: Boolean(workflow.nextAction?.trim()),
+      hasNextAction: Boolean(workflow.nextAction?.trim()) || Boolean(task),
       closed: isClosedWorkflowStatus(workflow.status),
       total: money.total,
       updatedAt: project.updatedAt,
-      search: [project.name, project.client, client?.name, workflow.nextAction, workflow.managerComment, phone, email, client?.source, client?.tags?.join(' ')].filter(Boolean).join(' '),
+      search: [project.name, project.client, client?.name, workflow.nextAction, workflow.managerComment, workflow.assignee, task?.title, phone, email, client?.source, client?.tags?.join(' ')].filter(Boolean).join(' '),
     };
   }), [props.projects, props.clients, props.pricebooks]);
 
@@ -162,17 +181,44 @@ export default function CrmView(props: {
   const stages = useMemo(() => summarizeStages(rows), [rows]);
   const duplicates = useMemo(() => findDuplicateClientGroups(props.clients), [props.clients]);
 
+  const assignees = useMemo(() => {
+    const set = new Set<string>();
+    for (const row of rows) if (row.workflow.assignee?.trim()) set.add(row.workflow.assignee.trim());
+    return Array.from(set).sort((left, right) => left.localeCompare(right, 'ru'));
+  }, [rows]);
+
+  const tasksSummary = useMemo(() => taskStats(props.projects), [props.projects]);
+
   const visible = useMemo(() => {
     const stageDef = stages.find((item) => item.id === stage);
-    return rows
+    const list = rows
       .filter((row) => matchesFocus(row, focus) && matchesQuery(row, query))
       .filter((row) => !stageDef || stageDef.statuses.includes(row.status))
-      .sort(compareCrmRows);
-  }, [rows, focus, query, stage, stages]);
+      .filter((row) => !assignee || (row.workflow.assignee ?? '') === assignee);
+    if (sort === 'money') return [...list].sort((left, right) => right.total - left.total);
+    if (sort === 'updated') return [...list].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    return [...list].sort(compareCrmRows);
+  }, [rows, focus, query, stage, stages, assignee, sort]);
 
   const openRow = openProjectId ? rows.find((row) => row.project.id === openProjectId) ?? null : null;
 
   const updateClient = (client: ClientProfile, patch: Partial<ClientProfile>) => props.onClientChange(mergeClientPatch(client, patch));
+
+  const addDealTask = (row: CrmRow, task: { title: string; kind: CrmTaskKind; dueAt?: string; assignee?: string }) => {
+    props.onProjectChange(addTask(row.project, { ...task, done: false }));
+    // Ближайшая задача заодно становится следующим шагом сделки — список и карточка не расходятся.
+    if (task.dueAt && (!row.workflow.nextContactAt || task.dueAt < row.workflow.nextContactAt.slice(0, 10))) {
+      props.onWorkflowChange(row.project.id, { nextContactAt: task.dueAt, nextAction: task.title });
+    }
+    if (row.client) props.onClientHistory(row.client.id, { kind: 'contact', title: `Задача: ${task.title}`, projectId: row.project.id });
+  };
+
+  const addDealPayment = (row: CrmRow, entry: { amount: number; at: string; kind: PaymentKind; comment?: string }) => {
+    if (!row.client) { alert('Чтобы вести оплаты, привяжите проект к карточке клиента.'); return; }
+    const payment = addPayment(row.client.paymentsByProject?.[row.project.id], entry);
+    props.onClientChange(updateClientProjectPayment(row.client, row.project.id, payment));
+    props.onClientHistory(row.client.id, { kind: 'payment', title: `Платёж ${fmtMoney(entry.amount)}`, text: entry.comment, projectId: row.project.id });
+  };
 
   const schedule = (row: CrmRow, days: number) => {
     props.onWorkflowChange(row.project.id, {
@@ -215,8 +261,7 @@ export default function CrmView(props: {
   const dealCard = (row: CrmRow): DealCard => {
     const offer = offers.find((item) => item.projectId === row.project.id) ?? null;
     return {
-      projectId: row.project.id,
-      projectName: row.project.name,
+      project: row.project,
       clientName: row.client?.name || row.project.client || 'Без клиента',
       client: row.client,
       workflow: row.workflow,
@@ -227,7 +272,9 @@ export default function CrmView(props: {
       email: row.email,
       payment: row.client?.paymentsByProject?.[row.project.id],
       documents: row.client?.documentsByProject?.[row.project.id] ?? {},
-      offerLink: offer ? { url: clientOfferUrl(offer.id), views: offer.views, approvedAt: offer.approvedAt, approvedBy: offer.approvedBy } : null,
+      offerLink: offer
+        ? { url: clientOfferUrl(offer.id), views: offer.views, lastViewAt: offer.lastViewAt, createdAt: offer.createdAt, approvedAt: offer.approvedAt, approvedBy: offer.approvedBy }
+        : null,
     };
   };
 
@@ -261,6 +308,27 @@ export default function CrmView(props: {
           );
         })}
         <span className="crm-focus-money">Активный портфель: <b>{fmtMoney(counts.pipeline)}</b></span>
+      </section>
+
+      <section className="crm-toolbar">
+        <span className={`crm-task-summary${tasksSummary.overdue > 0 ? ' alert' : ''}`}>
+          Задачи: <b>{tasksSummary.open}</b> открыто
+          {tasksSummary.overdue > 0 && <> · <b>{tasksSummary.overdue}</b> просрочено</>}
+          {tasksSummary.today > 0 && <> · <b>{tasksSummary.today}</b> на сегодня</>}
+        </span>
+        <label>Ответственный
+          <select value={assignee} onChange={(event) => setAssignee(event.target.value)}>
+            <option value="">все</option>
+            {assignees.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+        </label>
+        <label>Сортировать
+          <select value={sort} onChange={(event) => setSort(event.target.value as 'urgency' | 'money' | 'updated')}>
+            <option value="urgency">по срочности</option>
+            <option value="money">по сумме</option>
+            <option value="updated">по последнему изменению</option>
+          </select>
+        </label>
       </section>
 
       <section className="crm-funnel" aria-label="Воронка">
@@ -309,15 +377,25 @@ export default function CrmView(props: {
                   <div className="crm-item-title">
                     <b>{row.client?.name || row.project.client || 'Без клиента'}</b>
                     <span>{row.project.name}</span>
+                    {row.workflow.assignee && <em className="crm-item-who">{row.workflow.assignee}</em>}
                   </div>
                   <div className="crm-item-sub">
                     <span className="crm-item-stage">{row.statusLabel}</span>
-                    <span className={`crm-item-date tone-${row.tone}`}>{toneLabel(row.tone, row.workflow.nextContactAt)}</span>
-                    <span className="crm-item-next">{row.workflow.nextAction?.trim() || defaultNextAction(row.workflow.status)}</span>
+                    {row.task
+                      ? <span className={`crm-item-task tone-${taskTone(row.task)}`}>
+                          {taskKindMeta(row.task.kind).icon} {row.task.title}
+                          {row.task.dueAt ? ` · ${toneLabel(taskTone(row.task) === 'overdue' ? 'overdue' : taskTone(row.task) === 'today' ? 'today' : 'planned', row.task.dueAt)}` : ' · без срока'}
+                        </span>
+                      : <span className={`crm-item-date tone-${row.tone}`}>{toneLabel(row.tone, row.workflow.nextContactAt)}</span>}
+                    {row.openTasks > 1 && <span className="crm-item-taskcount">ещё задач: {row.openTasks - 1}</span>}
+                    {row.phone && <span className="crm-item-phone">{row.phone}</span>}
                   </div>
                 </button>
                 <div className="crm-item-money">
                   <b>{fmtMoney(row.total)}</b>
+                  <small className={`crm-item-paid tone-${row.paidTone}`}>
+                    {row.remainder > 0 && row.paidTone !== 'muted' ? `остаток ${fmtMoney(row.remainder)}` : row.paidLabel}
+                  </small>
                   <small>{row.marginPct == null ? 'маржа —' : `маржа ${fmtNum(row.marginPct, 1)} %`}</small>
                 </div>
                 <div className="crm-item-actions">
@@ -326,7 +404,8 @@ export default function CrmView(props: {
                       <option key={status} value={status}>{workflowStatusMeta(status).label}</option>
                     ))}
                   </select>
-                  <button type="button" className="btn tiny ghost" onClick={() => schedule(row, 0)}>Сегодня</button>
+                  <button type="button" className="btn tiny ghost" title="Поставить звонок на сегодня"
+                    onClick={() => addDealTask(row, { title: 'Позвонить клиенту', kind: 'call', dueAt: new Date().toISOString().slice(0, 10) })}>+ Звонок</button>
                   <button type="button" className="btn tiny ghost" onClick={() => schedule(row, 3)}>+3 дня</button>
                   <button type="button" className="btn tiny" onClick={() => setOpenProjectId(row.project.id)}>Карточка</button>
                 </div>
@@ -339,19 +418,35 @@ export default function CrmView(props: {
       {openRow && (
         <CrmDealDialog
           card={dealCard(openRow)}
-          message={dealMessage(openRow, openRow.client?.paymentsByProject?.[openRow.project.id])}
+          message={dealMessage(openRow, openRow.remainder)}
+          assignees={assignees}
           docBusy={docBusy}
           onClose={() => setOpenProjectId(null)}
           onOpenProject={() => { setOpenProjectId(null); props.onOpen(openRow.project.id); }}
           onWorkflow={(patch) => props.onWorkflowChange(openRow.project.id, patch)}
           onClient={(patch) => { if (openRow.client) updateClient(openRow.client, patch); }}
-          onPayment={(patch) => { if (openRow.client) props.onClientChange(updateClientProjectPayment(openRow.client, openRow.project.id, patch)); }}
+          onPaymentAdd={(entry) => addDealPayment(openRow, entry)}
+          onPaymentRemove={(id) => {
+            if (!openRow.client) return;
+            const payment = removePayment(openRow.client.paymentsByProject?.[openRow.project.id], id);
+            props.onClientChange(updateClientProjectPayment(openRow.client, openRow.project.id, payment));
+          }}
           onDocuments={(patch) => { if (openRow.client) props.onClientChange(updateClientProjectDocuments(openRow.client, openRow.project.id, patch)); }}
+          onTaskAdd={(task) => addDealTask(openRow, task)}
+          onTaskToggle={(taskId) => {
+            props.onProjectChange(toggleTask(openRow.project, taskId));
+            const task = (openRow.project.tasks ?? []).find((item) => item.id === taskId);
+            if (task && !task.done && openRow.client) {
+              props.onClientHistory(openRow.client.id, { kind: 'contact', title: `Выполнено: ${task.title}`, projectId: openRow.project.id });
+            }
+          }}
+          onTaskRemove={(taskId) => props.onProjectChange(removeTask(openRow.project, taskId))}
           onNote={(text) => { if (openRow.client) props.onClientHistory(openRow.client.id, { kind: 'note', title: text, projectId: openRow.project.id }); }}
           onSchedule={(days) => schedule(openRow, days)}
           onDocumentExport={(kind) => void exportDocument(openRow, kind)}
         />
       )}
+
     </div>
   );
 }
