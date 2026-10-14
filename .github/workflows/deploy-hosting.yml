@@ -62,6 +62,21 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
           echo "Хостинг: $FTP_USERNAME@$FTP_SERVER, папка $FTP_DIR"
 
+      - name: Диагностика FTP (временная)
+        if: steps.guard.outputs.ready == 'true'
+        env:
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          show() {
+            out=$(curl -s --max-time 25 --list-only --user "$FTP_USERNAME:$FTP_PASSWORD" "ftp://$FTP_SERVER$1" 2>&1 | tr '\r\n' '  ' | cut -c1-500)
+            echo "::warning::FTP $1 -> ${out:-(пусто или ошибка)}"
+          }
+          show "/"
+          show "/www/"
+          show "/www/u3683615.isp.regruhosting.ru/"
+          show "/www/u3683615.isp.regruhosting.ru/public_html/"
+          show "/domains/"
+
       - uses: actions/setup-node@v4
         if: steps.guard.outputs.ready == 'true'
         with:
