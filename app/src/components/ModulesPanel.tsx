@@ -12,6 +12,7 @@ import BulkEditPanel from './BulkEditPanel';
 import { fillFromAbove } from '../lib/bulkEdit';
 import { KITCHEN_SETS, modulesFromKitchenSet } from '../lib/kitchenSets';
 import { stripModuleNote } from '../lib/clientOffer';
+import { Overlay } from './Portal';
 
 const DEFAULT_SLOTS: SlotKey[] = ['facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf', 'legs'];
 /** Предупреждение → слот, который можно сразу открыть кнопкой-действием. */
@@ -503,7 +504,7 @@ export default function ModulesPanel(props: {
             </details>
           </section>
           {sel && (
-            <div className="module-editor-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelId(null); }}>
+            <Overlay className="module-editor-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelId(null); }}>
               <section className="card mod-editor module-editor-panel module-editor-modal" role="dialog" aria-modal="true" aria-labelledby="module-editor-title">
           <div className="module-editor-hero">
             <div>
@@ -792,7 +793,7 @@ export default function ModulesPanel(props: {
             </div>
           </div>
         </section>
-            </div>
+            </Overlay>
           )}
         </div>
       )}

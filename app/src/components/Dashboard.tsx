@@ -8,6 +8,7 @@ import { projectFinance } from '../lib/finance';
 import { filterDashboardProjects, projectReadiness, sortDashboardProjects, type DashboardReadinessFilter, type DashboardSort, type DashboardStatusFilter } from '../lib/dashboard';
 import { isClosedWorkflowStatus, nextContactTone, workflowForProject, workflowStatusMeta } from '../lib/crm';
 import { buildDayDesk } from '../lib/workflow';
+import { Overlay } from './Portal';
 
 export default function Dashboard(props: {
   projects: Project[];
@@ -187,7 +188,7 @@ export default function Dashboard(props: {
       </section>
 
       {showNew && (
-        <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowNew(false); }}>
+        <Overlay className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowNew(false); }}>
           <div className="modal narrow">
             <h2>Новый проект</h2>
             <label>Название проекта
@@ -209,7 +210,7 @@ export default function Dashboard(props: {
               <button className="btn primary" onClick={() => { props.onCreate(form); setShowNew(false); }}>Создать</button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {props.projects.length === 0 ? (

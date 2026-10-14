@@ -3,6 +3,7 @@ import type { Pricebook, PriceItem, LineParams } from '../types';
 import { fmtMoney } from '../lib/format';
 import { loadRecentItems, recordRecentItem } from '../lib/recents';
 import { sheetsFromLength, sheetLengthOf, unitIsHalfSheetAllowed, unitIsPerMeterMultiple, effectiveQty } from '../lib/engine';
+import { Overlay } from './Portal';
 
 const norm = (s: string) => s.toLowerCase().replace(/ё/g, 'е');
 const FAVORITES_KEY = 'recept-price-favorites';
@@ -210,7 +211,7 @@ export default function CatalogPicker(props: {
   }, [q, poolItems, favoriteIds]);
 
   return (
-    <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
+    <Overlay className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
       <div className="modal wide">
         {props.title && <div className="picker-title">{props.title}</div>}
         <div className="picker-workbench-head">
@@ -377,6 +378,6 @@ export default function CatalogPicker(props: {
           </div>
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }

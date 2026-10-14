@@ -1,5 +1,6 @@
 import type { EskizImageReplaceMode, EskizProject } from '../lib/eskizPro';
 import { eskizImageReplaceScale } from '../lib/eskizPro';
+import { Overlay } from './Portal';
 
 type Props = {
   /** Новое изображение, которое пользователь выбрал/перетащил/вставил. */
@@ -23,7 +24,7 @@ export default function EskizPhotoDialog(props: Props) {
   const scale = eskizImageReplaceScale(project.image, image, 'scale');
   const sameSize = project.image.width === image.width && project.image.height === image.height;
 
-  return <div className="modal-back embedded-eskiz-photo-back" onClick={props.onCancel}>
+  return <Overlay className="modal-back embedded-eskiz-photo-back" onClick={props.onCancel}>
     <div className="modal embedded-eskiz-photo-modal" onClick={(event) => event.stopPropagation()}>
       <header className="modal-head">
         <div>
@@ -60,5 +61,5 @@ export default function EskizPhotoDialog(props: Props) {
         <button type="button" className="btn primary" onClick={props.onReplace}>Заменить фото и сохранить разметку</button>
       </footer>
     </div>
-  </div>;
+  </Overlay>;
 }

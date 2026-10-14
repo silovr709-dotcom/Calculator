@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { Project, ProjectPhoto } from '../types';
 import { uid } from '../lib/storage';
 import { fmtDate } from '../lib/format';
+import { Overlay } from './Portal';
 
 /** Сжатие изображения в браузере: длинная сторона ≤ 1400 px, JPEG ~0.82 */
 async function compressImage(file: File): Promise<string> {
@@ -91,9 +92,9 @@ export default function PhotosPanel(props: { project: Project; onChange: (p: Pro
         </div>
       )}
       {zoom && (
-        <div className="modal-back photo-zoom" onMouseDown={() => setZoom(null)}>
+        <Overlay className="modal-back photo-zoom" onMouseDown={() => setZoom(null)}>
           <img src={zoom.dataUrl} alt={zoom.name} />
-        </div>
+        </Overlay>
       )}
     </div>
   );

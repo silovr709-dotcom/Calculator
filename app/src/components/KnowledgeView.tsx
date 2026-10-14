@@ -6,6 +6,7 @@ import { loadFactoryDicts, millingsOf, type FactoryDicts } from '../lib/factoryD
 import { millingPriceFrom, millingPrices, searchMillings, MILLING_CATEGORIES, type Milling } from '../lib/millings';
 import { hardwareCounts, hardwareEntries, HARDWARE_GROUPS, searchHardware } from '../lib/hardware';
 import { fmtMoney } from '../lib/format';
+import { Overlay } from './Portal';
 
 /**
  * База знаний РЕцепта: рабочий центр знаний.
@@ -492,7 +493,7 @@ function DocsTab(props: { articles: KbArticle[]; onChange: (a: KbArticle[]) => v
       </div>
 
       {editing && (
-        <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) setEditing(null); }}>
+        <Overlay className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) setEditing(null); }}>
           <div className="modal">
             <h2>{isNew ? 'Новая статья' : 'Редактировать статью'}</h2>
             <label>Заголовок
@@ -517,7 +518,7 @@ function DocsTab(props: { articles: KbArticle[]; onChange: (a: KbArticle[]) => v
               <button className="btn primary" onClick={saveEditing}>Сохранить</button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
     </>
   );
@@ -894,7 +895,7 @@ function MillingDialog(props: { milling: Milling; pricebook: Pricebook | undefin
   const m = props.milling;
   const prices = millingPrices(m, props.pricebook);
   return (
-    <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
+    <Overlay className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) props.onClose(); }}>
       <div className="modal milling-modal" role="dialog" aria-modal="true" aria-label={`Фрезеровка ${m.name}`}>
         <header className="milling-modal-head">
           <h2>{m.name}</h2>
@@ -949,7 +950,7 @@ function MillingDialog(props: { milling: Milling; pricebook: Pricebook | undefin
           </table>
         )}
       </div>
-    </div>
+    </Overlay>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { ClientProfile, Pricebook, Project, ProjectLine, PriceItem, LineParams, Template, KitchenModule } from '../types';
 import { SUMMARY_GROUPS } from '../types';
 import { calcTotals, lineFromItem } from '../lib/engine';
@@ -21,6 +21,7 @@ import ProjectContextPanel from './ProjectContextPanel';
 import { exportInternalXlsx, exportClientXlsx, exportInternalCsv, exportProjectJson } from '../lib/exporters';
 import QRCode from 'qrcode';
 import { makeProjectQrShare } from '../lib/sync';
+import { Overlay } from './Portal';
 
 export type ProjectTab = 'modules' | 'sketch' | 'order' | 'lines' | 'photos' | 'settings' | 'client' | 'check' | 'variants' | 'measurement';
 type ProjectStage = 'composition' | 'eskiz' | 'check' | 'client' | 'order';
@@ -115,6 +116,20 @@ export default function ProjectEditor(props: {
     generate();
     return () => { alive = false; };
   }, [showQrModal, project]);
+
+  // Высота единой шапки проекта → её знает CSS, чтобы липкие блоки контента
+  // (итоги, контекст-панель, шапки таблиц) вставали ПОД шапкой, а не поверх неё.
+  const topbarRef = useRef<HTMLElement | null>(null);
+  const [topbarH, setTopbarH] = useState(0);
+  useEffect(() => {
+    const el = topbarRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setTopbarH(el.getBoundingClientRect().height);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Горячие клавиши: Ctrl+Z — отмена последнего изменения проекта.
   // Не перехватываем, когда фокус в поле ввода (там собственный undo текста).
@@ -262,20 +277,10 @@ export default function ProjectEditor(props: {
   const groupsInUse = SUMMARY_GROUPS.filter((g) => project.lines.some((l) => l.group === g));
 
   return (
-    <div className="page project">
-      <header className="page-head project-page-head">
-        <div>
-          <button className="btn ghost small" onClick={props.onBack}>← Проекты</button>
-          <h1>{project.name}</h1>
-          <div className="muted">
-            {project.client && <>Клиент: <b>{project.client}</b> · </>}
-            {fmtDate(project.date)} · Прайс: {project.pricebookName}
-          </div>
-        </div>
-      </header>
+    <div className="page project" style={{ '--project-topbar-h': `${Math.round(topbarH)}px` } as CSSProperties}>
 
       {editMeta && (
-        <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) setEditMeta(false); }}>
+        <Overlay className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) setEditMeta(false); }}>
           <div className="modal narrow">
             <h2>Данные проекта</h2>
             <label>Название<input value={project.name} onChange={(e) => props.onChange({ ...project, name: e.target.value })} /></label>
@@ -284,11 +289,11 @@ export default function ProjectEditor(props: {
             <label>Комментарий<textarea rows={2} value={project.comment} onChange={(e) => props.onChange({ ...project, comment: e.target.value })} /></label>
             <div className="modal-actions"><button className="btn primary" onClick={() => setEditMeta(false)}>Готово</button></div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {showQrModal && (
-        <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowQrModal(false); }}>
+        <Overlay className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowQrModal(false); }}>
           <div className="modal narrow" style={{ textAlign: 'center' }}>
             <h2>📱 Открыть проект на смартфоне</h2>
             <div className="muted small" style={{ marginBottom: 16 }}>
@@ -314,32 +319,23 @@ export default function ProjectEditor(props: {
               <button className="btn primary" onClick={() => setShowQrModal(false)}>Закрыть</button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
-      <section className="project-command-center no-print" aria-label="Единый центр действий проекта">
-        <div className="project-command-main">
-          <span className="eyebrow">Действия проекта</span>
-          <h2>Всё важное — в одной панели</h2>
-          <p>Основной следующий шаг, клиентские документы, CRM, фабрика, обмен и сервисные операции собраны здесь, а не разбросаны по шапке.</p>
-        </div>
-        <div className="project-command-actions system-action-strip">
-          <button type="button" className="btn primary" onClick={() => openProjectTab(nextAction.tab)}>{nextAction.label}</button>
-          <div className="dropdown action-dropdown wide">
-            <button type="button" className="btn ghost">Разделы проекта ▾</button>
-            <div className="dropdown-menu">
-              <button type="button" onClick={() => openStage('composition')}>1. Состав и цена</button>
-              <button type="button" onClick={() => openStage('eskiz')}>2. Эскиз, замер и фото</button>
-              <button type="button" onClick={() => openStage('check')}>3. Проверка проекта</button>
-              <button type="button" onClick={() => openStage('client')}>4. КП / договор / чек</button>
-              <button type="button" onClick={() => openStage('order')}>5. CRM и заказ</button>
-              {props.onOpenFactoryBlank && <button type="button" title="Калькулятор → данные проекта → бланк → проверка → документ" onClick={props.onOpenFactoryBlank}>Бланк на фабрику</button>}
+      <header className="project-topbar no-print" ref={topbarRef}>
+        <div className="project-topbar-row project-topbar-main">
+          <button className="btn ghost small project-topbar-back" onClick={props.onBack} title="К списку проектов">← Проекты</button>
+          <div className="project-topbar-title">
+            <h1>{project.name}</h1>
+            <div className="muted small">
+              {project.client && <>Клиент: <b>{project.client}</b> · </>}
+              {fmtDate(project.date)} · Прайс: {project.pricebookName}
             </div>
           </div>
-        </div>
-        <div className="project-command-tools">
-          <label className="project-status-control">Статус
+          <div className="project-topbar-actions">
+            <button type="button" className="btn primary" title={nextAction.hint} onClick={() => openProjectTab(nextAction.tab)}>{nextAction.label}</button>
             <select
+              aria-label="Статус проекта"
               value={project.status}
               onChange={(e) => props.onChange({ ...project, status: e.target.value as Project['status'] })}
               className="status-select"
@@ -349,50 +345,52 @@ export default function ProjectEditor(props: {
               <option value="approved">Согласован</option>
               <option value="archived">Архив</option>
             </select>
-          </label>
-          <button className="btn ghost" disabled={!props.canUndo} title="Отменить последнее изменение проекта (Ctrl+Z)" onClick={props.onUndo}>↶ Отменить</button>
-          <div className="dropdown">
-            <button className="btn ghost">Экспорт и обмен ▾</button>
-            <div className="dropdown-menu">
-              <button onClick={() => exportInternalXlsx(outProject)}>Excel — внутренний расчёт</button>
-              <button onClick={() => exportClientXlsx(outProject)}>Excel — коммерческое предложение</button>
-              <button onClick={() => exportInternalCsv(outProject)}>CSV — внутренний расчёт</button>
-              <button onClick={() => exportProjectJson(project)}>Файл проекта (.json)</button>
-              <button onClick={() => setShowQrModal(true)}>Открыть на телефоне (QR-код)</button>
+            <button className="btn ghost icon-btn" disabled={!props.canUndo} title="Отменить последнее изменение (Ctrl+Z)" onClick={props.onUndo}>↶</button>
+            <div className="dropdown action-dropdown">
+              <button type="button" className="btn ghost">Ещё ▾</button>
+              <div className="dropdown-menu align-right">
+                <div className="dropdown-group-title">Выгрузки</div>
+                <button onClick={() => exportInternalXlsx(outProject)}>Excel — внутренний расчёт</button>
+                <button onClick={() => exportClientXlsx(outProject)}>Excel — коммерческое предложение</button>
+                <button onClick={() => exportInternalCsv(outProject)}>CSV — внутренний расчёт</button>
+                <button onClick={() => exportProjectJson(project)}>Файл проекта (.json)</button>
+                <button onClick={() => setShowQrModal(true)}>Открыть на телефоне (QR-код)</button>
+                {props.onOpenFactoryBlank && <button title="Калькулятор → данные проекта → бланк → проверка → документ" onClick={props.onOpenFactoryBlank}>Бланк на фабрику</button>}
+                <div className="dropdown-group-title">Проект</div>
+                <button onClick={() => setEditMeta(true)}>Изменить данные проекта</button>
+                <button onClick={props.onDuplicate}>Дублировать проект</button>
+                <button onClick={() => { const n = prompt('Название шаблона:', project.name); if (n) props.onSaveTemplate(n); }}>Сохранить как шаблон</button>
+                <button onClick={() => { const next = editorMode === 'wizard' ? 'advanced' : 'wizard'; setEditorMode(next); props.onChange({ ...project, wizardMode: next }); }}>{editorMode === 'wizard' ? 'Перейти к маршруту' : 'Открыть мастер сборки'}</button>
+                <button className="danger-menu-item" onClick={props.onDelete}>Удалить проект</button>
+              </div>
             </div>
           </div>
-          <div className="dropdown">
-            <button className="btn ghost">Проект ▾</button>
-            <div className="dropdown-menu">
-              <button onClick={() => setEditMeta(true)}>Изменить данные проекта</button>
-              <button onClick={props.onDuplicate}>Дублировать проект</button>
-              <button onClick={() => { const n = prompt('Название шаблона:', project.name); if (n) props.onSaveTemplate(n); }}>Сохранить как шаблон</button>
-              <button className="danger-menu-item" onClick={props.onDelete}>Удалить проект</button>
+        </div>
+        {editorMode === 'advanced' && (
+          <>
+            <nav className="project-topbar-row project-stage-nav" aria-label="Этапы проекта">
+              {PROJECT_STAGE_ORDER.map((stage) => {
+                const meta = PROJECT_STAGE_LABELS[stage];
+                const item = readinessItems.find((entry) => entry.key === stage);
+                return <button key={stage} type="button" className={`${activeStage === stage ? 'active' : ''} ${item?.status ?? ''}`} onClick={() => openStage(stage)} title={item?.value ?? meta.hint}>
+                  <i>{meta.step}</i><span>{meta.label}<small>{item?.value ?? meta.hint}</small></span>
+                </button>;
+              })}
+            </nav>
+            <div className="project-topbar-row project-subtab-row" role="tablist" aria-label="Разделы этапа">
+              {subTabs.map((item) => <button
+                key={item.tab}
+                type="button"
+                role="tab"
+                aria-selected={tab === item.tab}
+                className={`project-subtab ${tab === item.tab ? 'active' : ''}`}
+                title={item.hint}
+                onClick={() => openProjectTab(item.tab)}
+              >{item.label}{item.badge ? <b>{item.badge}</b> : null}</button>)}
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="project-readiness-panel no-print" aria-label="Готовность проекта">
-        <div className="project-readiness-main">
-          <span className="eyebrow">Маршрут проекта</span>
-          <h2>{unresolvedCriticals > 0 ? 'Проект требует доработки' : unresolvedWarnings > 0 ? 'Проект почти готов' : 'Проект готов к следующему шагу'}</h2>
-          <p>{nextAction.hint}</p>
-        </div>
-        <div className="project-readiness-steps">
-          {readinessItems.map((item) => (
-            <button key={item.key} type="button" className={`project-readiness-step ${item.status} ${activeStage === item.key ? 'active' : ''}`} onClick={() => openProjectTab(item.tab)}>
-              <span>{item.label}</span>
-              <b>{item.value}</b>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <div className="editor-mode-bar no-print">
-        <div><b>{editorMode === 'wizard' ? 'Мастер сборки' : 'Рабочий маршрут'}</b><span className="muted small"> {editorMode === 'wizard' ? ' · шаги проведут по обязательным данным' : ' · Состав → Эскиз/замер → Проверка → Клиент → Заказ'}</span></div>
-        <button className="btn tiny ghost" onClick={() => { const next = editorMode === 'wizard' ? 'advanced' : 'wizard'; setEditorMode(next); props.onChange({ ...project, wizardMode: next }); }}>{editorMode === 'wizard' ? 'Перейти к маршруту' : 'Открыть мастер'}</button>
-      </div>
+          </>
+        )}
+      </header>
       {editorMode === 'wizard' ? (
         <KitchenWizard
           project={project}
@@ -403,44 +401,9 @@ export default function ProjectEditor(props: {
         />
       ) : (
       <div className={`project-workspace-frame ${tab === 'modules' ? 'modules-workspace-frame' : ''}`}>
-        <aside className="project-flow-rail no-print" aria-label="Навигация проекта">
-          <div className="project-flow-title">
-            <span className="eyebrow">Проект</span>
-            <b>{activeStageMeta.label}</b>
-            <small>{activeSubTab?.label}</small>
-          </div>
-          <nav className="project-stage-nav compact" aria-label="Этапы проекта">
-            {PROJECT_STAGE_ORDER.map((stage) => {
-              const meta = PROJECT_STAGE_LABELS[stage];
-              const item = readinessItems.find((entry) => entry.key === stage);
-              return <button key={stage} type="button" className={`${activeStage === stage ? 'active' : ''} ${item?.status ?? ''}`} onClick={() => openStage(stage)}>
-                <i>{meta.step}</i><span>{meta.label}<small>{item?.value ?? meta.hint}</small></span>
-              </button>;
-            })}
-          </nav>
-          <div className="project-flow-subtabs" aria-label="Разделы этапа">
-            {subTabs.map((item) => <button key={item.tab} type="button" className={tab === item.tab ? 'active' : ''} onClick={() => openProjectTab(item.tab)}>
-              <span>{item.label}{item.badge ? <b>{item.badge}</b> : null}</span>{item.hint && <small>{item.hint}</small>}
-            </button>)}
-          </div>
-          <div className="project-flow-actions">
-            <div>
-              {previousStage && <button type="button" className="btn tiny ghost" onClick={() => openStage(previousStage)}>← {PROJECT_STAGE_LABELS[previousStage].label}</button>}
-              {nextStage && <button type="button" className="btn tiny ghost" onClick={() => openStage(nextStage)}>{PROJECT_STAGE_LABELS[nextStage].label} →</button>}
-            </div>
-          </div>
-        </aside>
         <section className="project-work-area">
-          <div className="project-mobile-switcher no-print">
-            <label>Этап<select value={activeStage} onChange={(event) => openStage(event.target.value as ProjectStage)}>{PROJECT_STAGE_ORDER.map((stage) => <option key={stage} value={stage}>{PROJECT_STAGE_LABELS[stage].step}. {PROJECT_STAGE_LABELS[stage].label}</option>)}</select></label>
-            <label>Раздел<select value={tab} onChange={(event) => openProjectTab(event.target.value as ProjectTab)}>{subTabs.map((item) => <option key={item.tab} value={item.tab}>{item.label}{item.badge ? ` (${item.badge})` : ''}</option>)}</select></label>
-          </div>
           <div className="project-section-head no-print">
-            <div>
-              <span className="eyebrow">{activeStageMeta.step}. {activeStageMeta.label}</span>
-              <h2>{activeSubTab?.label ?? activeStageMeta.label}</h2>
-              <p>{activeSubTab?.hint ?? activeStageMeta.hint}</p>
-            </div>
+            <p>{activeSubTab?.hint ?? activeStageMeta.hint}</p>
             <div className="project-pulse-strip">
               {projectPulseItems.map((item) => <span key={item.label}><b>{item.value}</b><small>{item.label}</small></span>)}
             </div>
@@ -558,6 +521,12 @@ export default function ProjectEditor(props: {
         </div>
       )}
 
+          <nav className="project-step-nav no-print" aria-label="Переход между этапами">
+            {previousStage
+              ? <button type="button" className="btn ghost" onClick={() => openStage(previousStage)}>← {PROJECT_STAGE_LABELS[previousStage].label}</button>
+              : <span />}
+            {nextStage && <button type="button" className="btn primary" onClick={() => openStage(nextStage)}>{PROJECT_STAGE_LABELS[nextStage].label} →</button>}
+          </nav>
         </section>
         <ProjectContextPanel
           project={project}

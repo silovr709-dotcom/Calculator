@@ -64,7 +64,7 @@ export default function ProjectContextPanel(props: {
         <span>{toneText(next.tone)}</span>
         <h3>{next.title}</h3>
         <p>{next.detail}</p>
-        <button type="button" className="btn primary" onClick={() => goForStep(next, props)}>{next.actionLabel}</button>
+        <button type="button" className="linkish" onClick={() => goForStep(next, props)}>{next.actionLabel} →</button>
       </div>
 
       <div className="project-context-card">
@@ -103,13 +103,6 @@ export default function ProjectContextPanel(props: {
             </button>
           ))}
         </div>
-      </div>
-
-      <div className="project-context-actions compact-actions">
-        <button type="button" className="btn tiny ghost" onClick={() => props.onOpenTab('modules')}>Состав</button>
-        <button type="button" className="btn tiny ghost" onClick={() => props.onOpenTab('client')}>КП</button>
-        <button type="button" className="btn tiny ghost" onClick={() => props.onOpenTab('check')}>Проверка</button>
-        <button type="button" className="btn tiny ghost" onClick={props.onOpenFactory}>Фабрика</button>
       </div>
     </aside>
   );
