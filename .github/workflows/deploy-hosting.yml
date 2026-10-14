@@ -98,19 +98,28 @@ jobs:
         if: ${{ steps.guard.outputs.ready == 'true' && inputs.dry_run != true }}
         run: |
           set +e
-          for attempt in 1 2 3; do
-            body=$(curl -fsS --max-time 30 "$SITE_URL/api/index.php?r=health")
-            code=$?
-            if [ $code -eq 0 ]; then
-              echo "Ответ сервера: $body"
-              case "$body" in
-                *'"ok":true'*)
-                  echo "::notice::Сайт обновлён до коммита ${GITHUB_SHA:0:7} и отвечает: $SITE_URL"
-                  exit 0
-                  ;;
-              esac
+          short="${GITHUB_SHA:0:7}"
+          api_ok=no
+          build_ok=no
+          for attempt in 1 2 3 4; do
+            health=$(curl -fsS --max-time 30 "$SITE_URL/api/index.php?r=health")
+            if [ $? -eq 0 ]; then
+              case "$health" in *'"ok":true'*) api_ok=yes ;; esac
             fi
-            echo "Попытка $attempt: сайт пока не ответил как надо, ждём 15 с…"
+            build=$(curl -fsS --max-time 30 "$SITE_URL/build.json?nocache=$GITHUB_RUN_ID")
+            if [ $? -eq 0 ]; then
+              echo "build.json на сайте: $build"
+              case "$build" in *"$GITHUB_SHA"*) build_ok=yes ;; esac
+            fi
+            if [ "$api_ok" = yes ] && [ "$build_ok" = yes ]; then
+              echo "::notice::Сайт обновлён до коммита $short и отвечает: $SITE_URL"
+              exit 0
+            fi
+            echo "Попытка $attempt: api=$api_ok, версия=$build_ok. Ждём 15 с…"
             sleep 15
           done
-          echo "::warning::Файлы залиты, но проверка $SITE_URL/api/index.php?r=health не удалась. Откройте $SITE_URL/api/index.php?r=check и посмотрите подробности."
+          if [ "$build_ok" != yes ]; then
+            echo "::error::На сайте не видно свежей версии ($short). Скорее всего, файлы уехали не в ту папку: проверьте секрет FTP_DIR (сейчас $FTP_DIR) и откройте $SITE_URL/build.json"
+            exit 1
+          fi
+          echo "::warning::Версия на сайте свежая, но $SITE_URL/api/index.php?r=health не ответил. Откройте $SITE_URL/api/index.php?r=check"

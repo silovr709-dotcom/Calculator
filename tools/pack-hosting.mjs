@@ -55,6 +55,27 @@ fs.writeFileSync(path.join(siteDir, 'КАК-ЗАГРУЗИТЬ.txt'), [
   '',
 ].join('\n'), 'utf8');
 
+// 4. Метка сборки: по ней видно, какая версия реально лежит на хостинге.
+let commit = process.env.GITHUB_SHA || '';
+if (!commit) {
+  try {
+    commit = (await import('node:child_process')).execSync('git rev-parse HEAD', { cwd: root }).toString().trim();
+  } catch {
+    commit = 'local';
+  }
+}
+const buildInfo = {
+  commit,
+  short: commit.slice(0, 7),
+  builtAt: new Date().toISOString(),
+};
+fs.writeFileSync(path.join(siteDir, 'build.json'), JSON.stringify(buildInfo, null, 2) + '\n', 'utf8');
+fs.writeFileSync(
+  path.join(siteDir, 'build.txt'),
+  `РЕцепт — калькулятор кухонь\nкоммит: ${buildInfo.commit}\nсобрано: ${buildInfo.builtAt}\n`,
+  'utf8',
+);
+
 /* ------------------------- минимальный упаковщик zip ------------------------- */
 
 function collect(dir, base = '') {
