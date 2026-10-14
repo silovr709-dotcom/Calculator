@@ -36,6 +36,29 @@ export interface ClientOfferDetail {
   clientSum: number | null;
   hasUnpriced: boolean;
   sort: number;
+  /** Количество из расчёта, до ручной правки менеджера в КП. */
+  baseQty?: number;
+  /** Сумма из расчёта, до ручной правки менеджера в КП. */
+  baseClientSum?: number | null;
+  /** true — количество в КП поправлено вручную. */
+  qtyEdited?: boolean;
+  /** true — сумма в КП поправлена вручную. */
+  sumEdited?: boolean;
+}
+
+/** Ручные правки КП: количество и суммы по ключу позиции. */
+export interface ClientOfferEdits {
+  qty?: Record<string, number>;
+  sums?: Record<string, number>;
+}
+
+/** Строка сводной ведомости: «Петли — 24 шт — Blum 110° с доводчиком …». */
+export interface ClientOfferRollupRow {
+  kind: ClientOfferDetailKind;
+  label: string;
+  qtyText: string;
+  sum: number | null;
+  items: ClientOfferDetail[];
 }
 
 export interface ClientProjectSummary {
@@ -230,6 +253,97 @@ export function buildClientOfferDetails(
   return Array.from(acc.values())
     .map(({ priced, ...row }) => ({ ...row, clientSum: priced ? row.clientSum : null }))
     .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name, 'ru'));
+}
+
+/** Ключ позиции КП для ручных правок: стабилен между пересчётами проекта. */
+export function clientDetailKey(detail: Pick<ClientOfferDetail, 'kind' | 'itemId' | 'name'>): string {
+  return detail.itemId ? `${detail.kind}|${detail.itemId}` : `${detail.kind}|name:${detail.name}`;
+}
+
+/**
+ * Накладывает ручные правки менеджера на рассчитанные строки КП.
+ * Правка количества пересчитывает сумму по цене за единицу, правка суммы — побеждает.
+ */
+export function applyClientOfferEdits(details: ClientOfferDetail[], edits?: ClientOfferEdits): ClientOfferDetail[] {
+  const qtyEdits = edits?.qty ?? {};
+  const sumEdits = edits?.sums ?? {};
+  if (Object.keys(qtyEdits).length === 0 && Object.keys(sumEdits).length === 0) return details;
+
+  return details.map((detail) => {
+    const key = clientDetailKey(detail);
+    const nextQty = qtyEdits[key];
+    const nextSum = sumEdits[key];
+    if (nextQty == null && nextSum == null) return detail;
+
+    const row: ClientOfferDetail = { ...detail, baseQty: detail.qty, baseClientSum: detail.clientSum };
+    if (nextQty != null && Number.isFinite(nextQty) && nextQty >= 0 && nextQty !== detail.qty) {
+      const factor = detail.qty > 0 ? nextQty / detail.qty : 0;
+      row.qty = nextQty;
+      row.qtyEffective = detail.qty > 0 ? detail.qtyEffective * factor : nextQty;
+      if (detail.clientSum != null && detail.qty > 0) row.clientSum = detail.clientSum * factor;
+      row.qtyEdited = true;
+    }
+    if (nextSum != null && Number.isFinite(nextSum) && nextSum >= 0) {
+      row.clientSum = nextSum;
+      row.sumEdited = true;
+    }
+    return row;
+  });
+}
+
+/** Насколько ручные правки сдвинули итог КП относительно расчёта. */
+export function clientOfferEditsDelta(details: ClientOfferDetail[]): number {
+  return details.reduce((delta, detail) => {
+    if (!detail.qtyEdited && !detail.sumEdited) return delta;
+    return delta + ((detail.clientSum ?? 0) - (detail.baseClientSum ?? 0));
+  }, 0);
+}
+
+/** Есть ли в КП хотя бы одна ручная правка количества/суммы. */
+export function hasClientOfferEdits(details: ClientOfferDetail[]): boolean {
+  return details.some((detail) => detail.qtyEdited || detail.sumEdited);
+}
+
+function rollupQtyText(items: ClientOfferDetail[]): string {
+  const area = items.reduce((sum, detail) => {
+    const unit = detail.unit.toLocaleLowerCase('ru-RU');
+    return detail.priceBasis === 'm2' || unit.includes('м²') || unit.includes('м2') ? sum + detail.qtyEffective : sum;
+  }, 0);
+  const length = items.reduce((sum, detail) => {
+    const unit = detail.unit.toLocaleLowerCase('ru-RU');
+    return detail.priceBasis === 'lm' || unit.includes('п.м') || unit.includes('пог') ? sum + detail.qtyEffective : sum;
+  }, 0);
+  const pieces = items.reduce((sum, detail) => sum + detail.qty, 0);
+  return [
+    area > 0 ? `${fmtNum(area, 2)} м²` : '',
+    length > 0 ? `${fmtNum(length, 2)} п.м` : '',
+    pieces > 0 ? `${fmtNum(pieces, 3)} шт` : '',
+  ].filter(Boolean).join(' / ') || '—';
+}
+
+/**
+ * Сводная ведомость самого короткого КП: по типам — сколько и какие.
+ * «Петли — 24 шт — Blum 110° с доводчиком 16 шт; Boyard 8 шт — 18 400 ₽».
+ */
+export function buildClientOfferRollup(details: ClientOfferDetail[]): ClientOfferRollupRow[] {
+  const byKind = new Map<ClientOfferDetailKind, ClientOfferDetail[]>();
+  for (const detail of details) {
+    const list = byKind.get(detail.kind);
+    if (list) list.push(detail);
+    else byKind.set(detail.kind, [detail]);
+  }
+  return Array.from(byKind.entries())
+    .sort(([a], [b]) => KIND_ORDER[a] - KIND_ORDER[b])
+    .map(([kind, items]) => {
+      const priced = items.some((detail) => detail.clientSum != null);
+      return {
+        kind,
+        label: KIND_LABELS[kind],
+        qtyText: rollupQtyText(items),
+        sum: priced ? items.reduce((sum, detail) => sum + (detail.clientSum ?? 0), 0) : null,
+        items: [...items].sort((a, b) => (b.clientSum ?? 0) - (a.clientSum ?? 0) || a.name.localeCompare(b.name, 'ru')),
+      };
+    });
 }
 
 function sumClient(details: ClientOfferDetail[], kinds: ClientOfferDetailKind[]): number {

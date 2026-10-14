@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import type { ClientDocumentPackageSettings, ClientOfferModuleDetailMode, ClientOfferPresentationMode, ClientOfferSettings, EskizExportViewSettings, EskizLayerKey, EskizProIntegration, Pricebook, Project, ProjectLine } from '../types';
+import type { ClientDocumentPackageSettings, ClientOfferDetailLevel, ClientOfferModuleDetailMode, ClientOfferPresentationMode, ClientOfferSettings, EskizExportViewSettings, EskizLayerKey, EskizProIntegration, Pricebook, Project, ProjectLine } from '../types';
 import type { ClientOfferDetail, ClientOfferDetailKind } from '../lib/clientOffer';
 import { calcTotals } from '../lib/engine';
 import { calculateVariant } from '../lib/variants';
-import { buildClientOfferDetails, buildClientProjectSummary, clientSketchSummaryLines, isModuleLine, moduleNoteMatches, stripModuleNote } from '../lib/clientOffer';
+import { applyClientOfferEdits, buildClientOfferDetails, buildClientOfferRollup, buildClientProjectSummary, clientDetailKey, clientOfferEditsDelta, clientSketchSummaryLines, isModuleLine, moduleNoteMatches, stripModuleNote } from '../lib/clientOffer';
 import { clientLineName, makeClientNameResolver } from '../lib/clientNaming';
 import EditableText from './EditableText';
+import EditableNumber from './EditableNumber';
 import { fmtMoney, fmtDate, fmtNum } from '../lib/format';
 import { exportClientXlsx } from '../lib/exporters';
 import { snapshotProject } from '../lib/eskizPro';
@@ -47,6 +48,47 @@ const AGGREGATED_HARDWARE_SET = new Set<ClientOfferDetailKind>(AGGREGATED_HARDWA
 
 function isAggregatedHardware(detail: ClientOfferDetail): boolean {
   return AGGREGATED_HARDWARE_SET.has(detail.kind);
+}
+
+/** Градация детализации КП — одна ручка для менеджера. */
+const DETAIL_LEVELS: { value: ClientOfferDetailLevel; title: string; hint: string }[] = [
+  { value: 'rollup', title: '1 — Сводка', hint: 'сколько модулей, петель, направляющих, м² фасадов и какие — и итог' },
+  { value: 'sections', title: '2 — По разделам', hint: 'сводка + смета по разделам + перечень модулей' },
+  { value: 'modules', title: '3 — По модулям', hint: 'состав каждого модуля, фурнитура общими строками по проекту' },
+  { value: 'full', title: '4 — Полное', hint: 'все позиции внутри каждого модуля, техническое приложение' },
+];
+const DETAIL_LEVEL_LABELS: Record<ClientOfferDetailLevel, string> = {
+  rollup: 'Сводка',
+  sections: 'По разделам',
+  modules: 'По модулям',
+  full: 'Полное',
+};
+/** Уровень задаёт остальные режимы, чтобы Word/ZIP совпадали с экраном. */
+const DETAIL_LEVEL_PRESETS: Record<ClientOfferDetailLevel, { presentationMode: ClientOfferPresentationMode; moduleDetailMode: ClientOfferModuleDetailMode; aggregateHardware: boolean }> = {
+  rollup: { presentationMode: 'brief', moduleDetailMode: 'summary', aggregateHardware: true },
+  sections: { presentationMode: 'detailed', moduleDetailMode: 'summary', aggregateHardware: true },
+  modules: { presentationMode: 'detailed', moduleDetailMode: 'compact', aggregateHardware: true },
+  full: { presentationMode: 'technical', moduleDetailMode: 'full', aggregateHardware: false },
+};
+
+function detailLevelFromLegacy(presentationMode: ClientOfferPresentationMode, moduleDetailMode: ClientOfferModuleDetailMode): ClientOfferDetailLevel {
+  if (moduleDetailMode === 'full' || presentationMode === 'technical') return 'full';
+  if (moduleDetailMode === 'compact') return 'modules';
+  return presentationMode === 'brief' ? 'rollup' : 'sections';
+}
+
+/** Единица, в которой считается «штучное» количество позиции. */
+function detailPieceUnit(detail: ClientOfferDetail): string {
+  if (detail.kind === 'bodySurcharge') return 'доп.';
+  if (detail.priceBasis === 'm2' || detail.priceBasis === 'lm') return 'шт';
+  if (detail.priceBasis === 'sheet') return detail.unit || 'лист';
+  return detail.unit || 'шт';
+}
+
+/** Пересчитанное количество (м²/п.м/листы), которое идёт в цену. */
+function detailMeasuredText(detail: ClientOfferDetail): string {
+  if (detail.priceBasis !== 'm2' && detail.priceBasis !== 'lm') return '';
+  return `${fmtNum(detail.qtyEffective, 4)} ${detail.unit || (detail.priceBasis === 'm2' ? 'м²' : 'п.м')}`;
 }
 
 const MODULE_DETAIL_MODE_LABELS: Record<ClientOfferModuleDetailMode, string> = {
@@ -135,11 +177,21 @@ function buildCompositionSections(details: ClientOfferDetail[]) {
   }).filter((section) => section.items.length > 0);
 }
 
-function DetailRow({ detail, showPrice, technical, onRename }: { detail: ClientOfferDetail; showPrice: boolean; technical: boolean; onRename?: (itemId: string, name: string) => void }) {
+function DetailRow({ detail, showPrice, technical, onRename, onQty, onSum }: {
+  detail: ClientOfferDetail;
+  showPrice: boolean;
+  technical: boolean;
+  onRename?: (itemId: string, name: string) => void;
+  /** Правка количества прямо в КП; null — вернуть расчётное значение. */
+  onQty?: (detail: ClientOfferDetail, value: number | null) => void;
+  /** Правка суммы прямо в КП; null — вернуть расчётную. */
+  onSum?: (detail: ClientOfferDetail, value: number | null) => void;
+}) {
   const visibleDetails = technical ? detail.details : detail.details.slice(0, 3);
   const hiddenCount = detail.details.length - visibleDetails.length;
+  const measured = detailMeasuredText(detail);
   return (
-    <div className={`cd-component cd-component-${detail.kind}${showPrice ? '' : ' no-price'}`}>
+    <div className={`cd-component cd-component-${detail.kind}${showPrice ? '' : ' no-price'}${detail.qtyEdited || detail.sumEdited ? ' cd-component-edited' : ''}`}>
       <div className="cd-component-main">
         <span className="cd-component-kind">{detail.kindLabel}</span>
         <b>{onRename && detail.itemId
@@ -152,8 +204,33 @@ function DetailRow({ detail, showPrice, technical, onRename }: { detail: ClientO
           </div>
         )}
       </div>
-      <div className="cd-component-qty">{detailQtyText(detail)}</div>
-      {showPrice && <div className="cd-component-sum">{detail.clientSum != null ? fmtMoney(detail.clientSum) : '—'}</div>}
+      <div className="cd-component-qty">
+        {onQty
+          ? <>
+              <EditableNumber
+                value={detail.qty}
+                edited={detail.qtyEdited}
+                baseHint={`${fmtNum(detail.baseQty ?? detail.qty, 3)} ${detailPieceUnit(detail)}`}
+                label={`Количество: ${detail.name}`}
+                format={(value) => `${fmtNum(value ?? 0, 3)} ${detailPieceUnit(detail)}`}
+                onChange={(value) => onQty(detail, value)}
+              />
+              {measured && <em className="cd-measured">{measured}</em>}
+            </>
+          : detailQtyText(detail)}
+      </div>
+      {showPrice && <div className="cd-component-sum">
+        {onSum
+          ? <EditableNumber
+              value={detail.clientSum}
+              edited={detail.sumEdited}
+              baseHint={detail.baseClientSum != null ? fmtMoney(detail.baseClientSum) : '—'}
+              label={`Сумма: ${detail.name}`}
+              format={(value) => (value == null ? '—' : fmtMoney(value))}
+              onChange={(value) => onSum(detail, value)}
+            />
+          : detail.clientSum != null ? fmtMoney(detail.clientSum) : '—'}
+      </div>}
     </div>
   );
 }
@@ -195,13 +272,24 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
     ? calculateVariant(baseProjectForVariants, pricebook, selectedVariant)
     : { ...calcTotals(project.lines, project.settings), lines: project.lines };
   const { lineCalcs, totals } = activeCalculation;
-  const presentationMode = project.clientOffer?.presentationMode ?? 'detailed';
   const showDetailPrices = project.clientOffer?.showDetailPrices !== false;
+  const legacyPresentationMode = project.clientOffer?.presentationMode ?? 'detailed';
+  const legacyModuleDetailMode: ClientOfferModuleDetailMode = project.clientOffer?.moduleDetailMode ?? (legacyPresentationMode === 'technical' ? 'full' : 'summary');
+  // Уровень детализации — главная ручка. Старые проекты без него читаются из прежних режимов.
+  const detailLevel: ClientOfferDetailLevel = project.clientOffer?.detailLevel ?? detailLevelFromLegacy(legacyPresentationMode, legacyModuleDetailMode);
+  const levelPreset = DETAIL_LEVEL_PRESETS[detailLevel];
+  const presentationMode = levelPreset.presentationMode;
+  const moduleDetailMode = levelPreset.moduleDetailMode;
+  const aggregateHardware = project.clientOffer?.aggregateHardware ?? levelPreset.aggregateHardware;
   const isBrief = presentationMode === 'brief';
   const isTechnical = presentationMode === 'technical';
-  const moduleDetailMode: ClientOfferModuleDetailMode = project.clientOffer?.moduleDetailMode ?? (isTechnical ? 'full' : 'summary');
-  const aggregateHardware = project.clientOffer?.aggregateHardware !== false;
   const extractHardwareFromModules = aggregateHardware && moduleDetailMode !== 'full';
+  // Что показываем на каждом уровне.
+  const showCompositionSections = detailLevel !== 'rollup';
+  const showModuleList = detailLevel !== 'rollup';
+  const showProjectHardware = detailLevel === 'modules' || detailLevel === 'sections';
+  const showExtraDetails = detailLevel !== 'rollup';
+  const showRollupItems = detailLevel !== 'full';
   const linkedEskizIds = project.eskizPro?.linkedProjectIds ?? [];
   const eskizSnapshots = project.eskizPro?.snapshots ?? [];
   const eskizById = new Map(eskizSnapshots.map((snapshot) => [snapshot.id, snapshotProject(snapshot)]));
@@ -265,8 +353,35 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   };
   const packageSettings = normalizeClientDocumentPackage(project.clientOffer?.documentPackage);
   const updatePackageSettings = (patch: Partial<ClientDocumentPackageSettings>) => updateOffer({ documentPackage: { ...packageSettings, ...patch } });
-  const extraDetails = buildClientOfferDetails(extraLines, lineCalcs, resolveClientName);
-  const allDetails = buildClientOfferDetails(activeCalculation.lines, lineCalcs, resolveClientName);
+  // Ручные правки прямо в КП: количество (петли, направляющие…) и суммы позиций.
+  const qtyOverrides = project.clientOffer?.lineQty ?? {};
+  const sumOverrides = project.clientOffer?.lineSums ?? {};
+  const offerEdits = { qty: qtyOverrides, sums: sumOverrides };
+  const setDetailQty = (detail: ClientOfferDetail, value: number | null) => {
+    const key = clientDetailKey(detail);
+    const base = detail.baseQty ?? detail.qty;
+    const next = { ...qtyOverrides };
+    if (value == null || Math.abs(value - base) < 0.0005) delete next[key];
+    else next[key] = value;
+    updateOffer({ lineQty: next });
+  };
+  const setDetailSum = (detail: ClientOfferDetail, value: number | null) => {
+    const key = clientDetailKey(detail);
+    const base = detail.baseClientSum ?? detail.clientSum;
+    const next = { ...sumOverrides };
+    if (value == null || (base != null && Math.abs(value - base) < 0.5)) delete next[key];
+    else next[key] = value;
+    updateOffer({ lineSums: next });
+  };
+  const resetOfferEdits = () => updateOffer({ lineQty: {}, lineSums: {} });
+  const editsCount = Object.keys(qtyOverrides).length + Object.keys(sumOverrides).length;
+
+  const extraDetails = applyClientOfferEdits(buildClientOfferDetails(extraLines, lineCalcs, resolveClientName), offerEdits);
+  const allDetails = applyClientOfferEdits(buildClientOfferDetails(activeCalculation.lines, lineCalcs, resolveClientName), offerEdits);
+  // Итог КП = расчёт плюс/минус ручные правки менеджера.
+  const editsDelta = clientOfferEditsDelta(allDetails);
+  const offerTotal = totals.client + editsDelta;
+  const rollupRows = buildClientOfferRollup(allDetails);
   const projectHardwareDetails = extractHardwareFromModules ? allDetails.filter(isAggregatedHardware) : [];
   const visibleExtraDetails = extractHardwareFromModules ? extraDetails.filter((detail) => !isAggregatedHardware(detail)) : extraDetails;
   const moduleQty = groups.reduce((sum, group) => sum + group.qty, 0);
@@ -321,7 +436,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
     offer: project.clientOffer ?? {},
     details: allDetails,
     modules: groups.map((group) => ({ title: group.title, sub: group.sub, qty: group.qty, total: groupSum(group) })),
-    total: totals.client,
+    total: offerTotal,
     summary: projectSummary,
   };
   const sketchPdfOptions = {
@@ -401,37 +516,45 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
             <h3>Настройки КП</h3>
             <p className="muted small">Компактные блоки: откройте только то, что нужно сейчас.</p>
           </div>
-          <span className="client-offer-mode-pill">{MODE_LABELS[presentationMode]}</span>
+          <span className="client-offer-mode-pill">{DETAIL_LEVEL_LABELS[detailLevel]}</span>
         </div>
         <div className="client-offer-quick-state">
-          <span><b>{fmtMoney(totals.client)}</b><small>итог КП</small></span>
+          <span><b>{fmtMoney(offerTotal)}</b><small>итог КП{editsDelta !== 0 ? ' (с правками)' : ''}</small></span>
           <span><b>{fmtNum(moduleQty, 3)}</b><small>модулей</small></span>
           <span><b>{clientSketchVisible ? linkedEskizProjects.length : '—'}</b><small>эскизов</small></span>
         </div>
         <div className="client-control-stack">
           <details className="client-control-section" open>
-            <summary><span>1. Вид, условия и детализация</span><small>{MODE_LABELS[presentationMode]} · {MODULE_DETAIL_MODE_LABELS[moduleDetailMode]}</small></summary>
+            <summary><span>1. Вид, условия и детализация</span><small>{DETAIL_LEVEL_LABELS[detailLevel]} · {MODULE_DETAIL_MODE_LABELS[moduleDetailMode]}</small></summary>
             <div className="client-control-body client-control-grid">
               <label>Предложение действительно до<input type="date" value={project.clientOffer?.validUntil ?? ''} onChange={(event) => updateOffer({ validUntil: event.target.value || undefined })} /></label>
               <label>Условия оплаты<input value={project.clientOffer?.paymentTerms ?? ''} placeholder="например, 50% аванс" onChange={(event) => updateOffer({ paymentTerms: event.target.value })} /></label>
               <label>Монтаж<input value={project.clientOffer?.installation ?? ''} placeholder="например, включён" onChange={(event) => updateOffer({ installation: event.target.value })} /></label>
               <label>Доставка<input value={project.clientOffer?.delivery ?? ''} placeholder="например, по адресу клиента" onChange={(event) => updateOffer({ delivery: event.target.value })} /></label>
-              <label>Вид КП
-                <select value={presentationMode} onChange={(event) => updateOffer({ presentationMode: event.target.value as ClientOfferPresentationMode })}>
-                  <option value="brief">Кратко — для отправки клиенту</option>
-                  <option value="detailed">Подробно — состав по модулям</option>
-                  <option value="technical">Техническое приложение — максимум деталей</option>
-                </select>
-              </label>
-              <label>Состав модулей
-                <select value={moduleDetailMode} onChange={(event) => updateOffer({ moduleDetailMode: event.target.value as ClientOfferModuleDetailMode })}>
-                  <option value="summary">Только карточки модулей</option>
-                  <option value="compact">Компактно: материалы в модуле, фурнитура общими строками</option>
-                  <option value="full">Полностью: все строки внутри каждого модуля</option>
-                </select>
-              </label>
+              <div className="span-2 client-detail-levels">
+                <b>Уровень детализации КП</b>
+                <div className="client-detail-level-list" role="radiogroup" aria-label="Уровень детализации КП">
+                  {DETAIL_LEVELS.map((level) => (
+                    <button
+                      type="button"
+                      key={level.value}
+                      role="radio"
+                      aria-checked={detailLevel === level.value}
+                      className={detailLevel === level.value ? 'active' : ''}
+                      onClick={() => updateOffer({ detailLevel: level.value, ...DETAIL_LEVEL_PRESETS[level.value] })}
+                    >
+                      <span>{level.title}</span>
+                      <small>{level.hint}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
               <label className="client-detail-price-toggle"><input type="checkbox" checked={showDetailPrices} onChange={(event) => updateOffer({ showDetailPrices: event.target.checked })} /> Показывать суммы в детализации</label>
               <label className="client-detail-price-toggle"><input type="checkbox" checked={aggregateHardware} onChange={(event) => updateOffer({ aggregateHardware: event.target.checked })} /> Фурнитуру общими строками по проекту</label>
+              <div className="span-2 client-offer-edits-state">
+                <span>{editsCount > 0 ? `Ручных правок в КП: ${editsCount}${editsDelta !== 0 ? ` · итог сдвинут на ${fmtMoney(editsDelta)}` : ''}` : 'Количество и суммы можно править прямо в КП: нажмите на число.'}</span>
+                {editsCount > 0 && <button type="button" className="btn tiny ghost" onClick={resetOfferEdits}>Вернуть расчётные значения</button>}
+              </div>
               <label className="span-2">Примечания для клиента<textarea rows={2} value={project.clientOffer?.notes ?? ''} onChange={(event) => updateOffer({ notes: event.target.value })} /></label>
             </div>
           </details>
@@ -511,11 +634,11 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
                 : fmtDate(project.date)}</span>
               {selectedVariant && <span>Вариант: <b>{selectedVariant.name}</b></span>}
             </div>
-            <div className="cd-hero-tags"><span>{MODE_LABELS[presentationMode]}</span>{clientSketchVisible && <span>Эскиз PRO включён</span>}{groups.length > 0 && <span>{fmtNum(moduleQty, 3)} модулей</span>}</div>
+            <div className="cd-hero-tags"><span>{MODE_LABELS[presentationMode]}</span><span>Детализация: {DETAIL_LEVEL_LABELS[detailLevel]}</span>{clientSketchVisible && <span>Эскиз PRO включён</span>}{groups.length > 0 && <span>{fmtNum(moduleQty, 3)} модулей</span>}</div>
           </div>
           <div className="cd-hero-price">
             <span>Итоговая стоимость</span>
-            <b>{fmtMoney(totals.client)}</b>
+            <b>{fmtMoney(offerTotal)}</b>
             <em>без внутренних закупочных цен</em>
           </div>
         </header>
@@ -559,7 +682,73 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           <div><b>4</b><span>Доставка и монтаж</span></div>
         </section>
 
-        {compositionSections.length > 0 && (
+        {rollupRows.length > 0 && (
+          <section className="cd-rollup">
+            <div className="cd-section-head">
+              <h3>Сводная ведомость</h3>
+              <span>сколько и какие — по типам{canEditInline ? '; количество и суммы правятся прямо здесь' : ''}</span>
+            </div>
+            <div className="cd-rollup-table" role="table" aria-label="Сводная ведомость по типам">
+              <div className="cd-rollup-head" role="row"><span>Раздел / позиция</span><span>Количество</span><span>Сумма</span></div>
+              {groups.length > 0 && (
+                <div className="cd-rollup-row cd-rollup-total" role="row">
+                  <b>Модули кухни</b>
+                  <span>{fmtNum(moduleQty, 3)} шт</span>
+                  <strong>{fmtMoney(projectSummary.bodyTotal + projectSummary.facadeTotal)}</strong>
+                </div>
+              )}
+              {rollupRows.map((row) => (
+                <div className="cd-rollup-group" key={row.kind}>
+                  <div className="cd-rollup-row cd-rollup-total" role="row">
+                    <b>{row.label}</b>
+                    <span>{row.qtyText}</span>
+                    <strong>{row.sum != null ? fmtMoney(row.sum) : '—'}</strong>
+                  </div>
+                  {showRollupItems && row.items.map((detail) => (
+                    <div className={`cd-rollup-row cd-rollup-item${detail.qtyEdited || detail.sumEdited ? ' edited' : ''}`} role="row" key={detail.id}>
+                      <span className="cd-rollup-name">{canEditInline && detail.itemId
+                        ? <EditableText value={detail.name} label="Название позиции в КП" onChange={(value) => renameDetail(detail.itemId, value)} />
+                        : detail.name}</span>
+                      <span className="cd-rollup-qty">
+                        {canEditInline
+                          ? <EditableNumber
+                              value={detail.qty}
+                              edited={detail.qtyEdited}
+                              baseHint={`${fmtNum(detail.baseQty ?? detail.qty, 3)} ${detailPieceUnit(detail)}`}
+                              label={`Количество: ${detail.name}`}
+                              format={(value) => `${fmtNum(value ?? 0, 3)} ${detailPieceUnit(detail)}`}
+                              onChange={(value) => setDetailQty(detail, value)}
+                            />
+                          : detailQtyText(detail)}
+                        {detailMeasuredText(detail) && <em className="cd-measured">{detailMeasuredText(detail)}</em>}
+                      </span>
+                      <span className="cd-rollup-sum">
+                        {canEditInline && showDetailPrices
+                          ? <EditableNumber
+                              value={detail.clientSum}
+                              edited={detail.sumEdited}
+                              baseHint={detail.baseClientSum != null ? fmtMoney(detail.baseClientSum) : '—'}
+                              label={`Сумма: ${detail.name}`}
+                              format={(value) => (value == null ? '—' : fmtMoney(value))}
+                              onChange={(value) => setDetailSum(detail, value)}
+                            />
+                          : detail.clientSum != null ? fmtMoney(detail.clientSum) : '—'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              <div className="cd-rollup-row cd-rollup-grand" role="row">
+                <b>Итого по проекту</b>
+                <span>{groups.length > 0 ? `${fmtNum(moduleQty, 3)} модулей` : ''}</span>
+                <strong>{fmtMoney(offerTotal)}</strong>
+              </div>
+            </div>
+            {editsDelta !== 0 && <div className="cd-rollup-note no-print">Итог учитывает ручные правки в КП: {fmtMoney(editsDelta)} к расчёту {fmtMoney(totals.client)}.</div>}
+          </section>
+        )}
+
+        {showCompositionSections && compositionSections.length > 0 && (
           <section className="cd-composition">
             <div className="cd-section-head"><h3>Смета по разделам</h3><span>коротко по категориям, без повторов внутри модулей</span></div>
             <div className="cd-composition-grid">
@@ -591,7 +780,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
 
         {variantSummaries.length > 1 && <section className="cd-variants"><h3>Варианты комплектации</h3>{variantSummaries.map(({ variant, totals: variantTotals }) => <div className={`cd-variant-row ${variant.id === project.selectedVariantId ? 'active' : ''}`} key={variant.id}><div><b>{variant.name}</b><span>{variant.description}</span></div><strong>{variantTotals ? fmtMoney(variantTotals.client) : '—'}</strong></div>)}</section>}
 
-        {groups.length > 0 && (
+        {showModuleList && groups.length > 0 && (
           <section className="cd-modules">
             <div className="cd-section-head">
               <h3>Состав мебели</h3>
@@ -656,25 +845,25 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           </section>
         )}
 
-        {projectHardwareDetails.length > 0 && (
+        {showProjectHardware && projectHardwareDetails.length > 0 && (
           <section className="cd-project-hardware">
             <div className="cd-section-head"><h3>Фурнитура по проекту</h3><span>общими строками, без повторения в каждом модуле</span></div>
             <div className="cd-component-list cd-component-list-extra cd-hardware-list">
-              {projectHardwareDetails.map((detail) => <DetailRow key={detail.id} detail={{ ...detail, details: detail.details.map((note) => stripModuleNote(note)) }} showPrice={showDetailPrices} technical={isTechnical} onRename={canEditInline ? renameDetail : undefined} />)}
+              {projectHardwareDetails.map((detail) => <DetailRow key={detail.id} detail={{ ...detail, details: detail.details.map((note) => stripModuleNote(note)) }} showPrice={showDetailPrices} technical={isTechnical} onRename={canEditInline ? renameDetail : undefined} onQty={canEditInline ? setDetailQty : undefined} onSum={canEditInline ? setDetailSum : undefined} />)}
             </div>
           </section>
         )}
 
-        {visibleExtraDetails.length > 0 && (
+        {showExtraDetails && visibleExtraDetails.length > 0 && (
           <section className="cd-extra">
             <div className="cd-section-head"><h3>Дополнительно</h3><span>столешницы, цоколь, мойки, работы и прочие позиции</span></div>
             <div className="cd-component-list cd-component-list-extra">
-              {visibleExtraDetails.map((detail) => <DetailRow key={detail.id} detail={{ ...detail, details: detail.details.map((note) => stripModuleNote(note)) }} showPrice={showDetailPrices && !isBrief} technical={isTechnical} onRename={canEditInline ? renameDetail : undefined} />)}
+              {visibleExtraDetails.map((detail) => <DetailRow key={detail.id} detail={{ ...detail, details: detail.details.map((note) => stripModuleNote(note)) }} showPrice={showDetailPrices && !isBrief} technical={isTechnical} onRename={canEditInline ? renameDetail : undefined} onQty={canEditInline ? setDetailQty : undefined} onSum={canEditInline ? setDetailSum : undefined} />)}
             </div>
           </section>
         )}
 
-        <div className="cd-total">Итоговая стоимость: <b>{fmtMoney(totals.client)}</b></div>
+        <div className="cd-total">Итоговая стоимость: <b>{fmtMoney(offerTotal)}</b></div>
         {project.clientOffer?.notes && <div className="cd-comment"><b>Примечания:</b><br />{project.clientOffer.notes}</div>}
         {project.comment && <div className="cd-comment">{project.comment}</div>}
 

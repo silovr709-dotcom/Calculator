@@ -1,6 +1,7 @@
 import { inflateSync } from 'fflate';
 import type { ClientDocumentPackageSettings, ClientOfferSettings, Project } from '../types';
 import type { ClientOfferDetail, ClientOfferDetailKind, ClientProjectSummary } from './clientOffer';
+import { buildClientOfferRollup } from './clientOffer';
 import { fmtDate, fmtMoney, fmtNum } from './format';
 import { downloadFile } from './storage';
 
@@ -397,6 +398,17 @@ function detailRows(details: ClientOfferDetail[]): string[][] {
   return details.map((detail, index) => [String(index + 1), detail.kindLabel, [detail.name, detail.details.slice(0, 4).join('; ')].filter(Boolean).join('\n'), detailQtyText(detail), fmtMoney(detail.clientSum)]);
 }
 
+/** Ведомость «сколько и какие» для Word: один ряд на раздел, состав — строками в ячейке. */
+function rollupRows(details: ClientOfferDetail[]): string[][] {
+  return buildClientOfferRollup(details).map((row) => [
+    row.label,
+    row.qtyText,
+    row.items.slice(0, 6).map((detail) => `${detail.name} — ${detailQtyText(detail)}`).join('\n')
+      + (row.items.length > 6 ? `\nещё ${row.items.length - 6} поз.` : ''),
+    row.sum != null ? fmtMoney(row.sum) : '—',
+  ]);
+}
+
 function offerBlocks(args: ClientDocumentArgs): DocxBlock[] {
   const { project, offer, details, modules, total, summary } = args;
   const blocks: DocxBlock[] = [
@@ -423,10 +435,18 @@ function offerBlocks(args: ClientDocumentArgs): DocxBlock[] {
     blocks.push(p('Модули', { bold: true, size: 14, color: '0F2F57' }));
     blocks.push(table(['№', 'Модуль', 'Описание', 'Кол-во', 'Сумма'], modules.map((module, index) => [String(index + 1), module.title, module.sub || '', fmtNum(module.qty, 3), fmtMoney(module.total)])));
   }
-  blocks.push(p('Состав по категориям', { bold: true, size: 14, color: '0F2F57' }));
-  if (offer.moduleDetailMode === 'full') {
+  const level = offer.detailLevel ?? (offer.moduleDetailMode === 'full' ? 'full' : offer.presentationMode === 'brief' ? 'rollup' : 'sections');
+  if (level === 'rollup') {
+    // Самое короткое КП: сколько и какие — одной ведомостью, без перечня позиций.
+    blocks.push(p('Сводная ведомость', { bold: true, size: 14, color: '0F2F57' }));
+    blocks.push(table(['Раздел', 'Количество', 'Состав', 'Сумма'], rollupRows(details)));
+  } else if (level === 'full' || offer.moduleDetailMode === 'full') {
+    blocks.push(p('Состав по категориям', { bold: true, size: 14, color: '0F2F57' }));
     blocks.push(table(['№', 'Категория', 'Позиция', 'Кол-во', 'Сумма'], detailRows(details)));
   } else {
+    blocks.push(p('Сводная ведомость', { bold: true, size: 14, color: '0F2F57' }));
+    blocks.push(table(['Раздел', 'Количество', 'Состав', 'Сумма'], rollupRows(details)));
+    blocks.push(p('Состав по категориям', { bold: true, size: 14, color: '0F2F57' }));
     blocks.push(p('Компактная сводка: повторяющаяся фурнитура и однотипные позиции собраны по проекту, чтобы КП без эскизов оставалось в 2–3 страницы.', { size: 10, color: '52667A' }));
     blocks.push(table(['№', 'Категория', 'Основной состав', 'Строк', 'Сумма'], compactCategoryRows(details)));
   }

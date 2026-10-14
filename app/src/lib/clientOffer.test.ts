@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LineCalc, ProjectLine } from '../types';
 import { roundClientPrice } from './engine';
-import { buildClientOfferDetails, buildClientProjectSummary, clientSketchSummaryLines, moduleLinePrefix, moduleNoteMatches, stripModuleNote } from './clientOffer';
+import { applyClientOfferEdits, buildClientOfferDetails, buildClientOfferRollup, buildClientProjectSummary, clientDetailKey, clientOfferEditsDelta, clientSketchSummaryLines, moduleLinePrefix, moduleNoteMatches, stripModuleNote } from './clientOffer';
 
 const line = (patch: Partial<ProjectLine>): ProjectLine => ({
   id: patch.id ?? 'ln',
@@ -109,5 +109,72 @@ describe('детализация КП клиента', () => {
     expect(summary.hingeQty).toBe(6);
     expect(summary.bodyTotal).toBe(18000);
     expect(clientSketchSummaryLines(summary).join('\n')).toContain('Петли: 6 шт');
+  });
+});
+
+
+describe('уровни детализации и ручные правки КП', () => {
+  const hingeLines = [
+    line({ id: 'h1', itemId: 'hinge-a', category: 'Петли', group: 'Фурнитура', name: 'Петля Blum 110 с доводчиком', unit: 'шт', priceBasis: 'unit', qty: 10 }),
+    line({ id: 'f1', itemId: 'facade-a', qty: 2, params: { widthMm: 400, heightMm: 700 } }),
+  ];
+  const hingeCalcs = new Map([
+    ['h1', calc('h1', 10, 5000)],
+    ['f1', calc('f1', 0.56, 2800)],
+  ]);
+  const baseDetails = () => buildClientOfferDetails(hingeLines, hingeCalcs);
+
+  it('собирает сводную ведомость «сколько и какие» по типам', () => {
+    const rollup = buildClientOfferRollup(baseDetails());
+    const hinges = rollup.find((row) => row.kind === 'hinge');
+    const facades = rollup.find((row) => row.kind === 'facade');
+    expect(rollup.map((row) => row.label)).toEqual(['Фасады', 'Петли']);
+    expect(hinges?.qtyText).toBe('10 шт');
+    expect(hinges?.sum).toBe(5000);
+    expect(hinges?.items[0].name).toBe('Петля Blum 110 с доводчиком');
+    expect(facades?.qtyText).toBe('0,56 м² / 2 шт');
+  });
+
+  it('правка количества пересчитывает сумму по цене за единицу', () => {
+    const details = baseDetails();
+    const hingeKey = clientDetailKey(details.find((detail) => detail.kind === 'hinge')!);
+    expect(hingeKey).toBe('hinge|hinge-a');
+    const edited = applyClientOfferEdits(details, { qty: { [hingeKey]: 12 } });
+    const hinge = edited.find((detail) => detail.kind === 'hinge')!;
+    expect(hinge.qty).toBe(12);
+    expect(hinge.qtyEffective).toBe(12);
+    expect(hinge.clientSum).toBe(6000);
+    expect(hinge.baseQty).toBe(10);
+    expect(hinge.qtyEdited).toBe(true);
+    expect(clientOfferEditsDelta(edited)).toBe(1000);
+  });
+
+  it('ручная сумма важнее пересчёта по количеству, а остальные позиции не трогаются', () => {
+    const details = baseDetails();
+    const hingeKey = clientDetailKey(details.find((detail) => detail.kind === 'hinge')!);
+    const edited = applyClientOfferEdits(details, { qty: { [hingeKey]: 12 }, sums: { [hingeKey]: 4500 } });
+    const hinge = edited.find((detail) => detail.kind === 'hinge')!;
+    const facade = edited.find((detail) => detail.kind === 'facade')!;
+    expect(hinge.qty).toBe(12);
+    expect(hinge.clientSum).toBe(4500);
+    expect(hinge.sumEdited).toBe(true);
+    expect(facade.clientSum).toBe(2800);
+    expect(facade.qtyEdited).toBeUndefined();
+    expect(clientOfferEditsDelta(edited)).toBe(-500);
+  });
+
+  it('без правок возвращает исходный массив и нулевой сдвиг итога', () => {
+    const details = baseDetails();
+    expect(applyClientOfferEdits(details, {})).toBe(details);
+    expect(clientOfferEditsDelta(details)).toBe(0);
+  });
+
+  it('сводка проекта учитывает правки: количество петель и суммы берутся из КП', () => {
+    const details = baseDetails();
+    const hingeKey = clientDetailKey(details.find((detail) => detail.kind === 'hinge')!);
+    const summary = buildClientProjectSummary(applyClientOfferEdits(details, { qty: { [hingeKey]: 14 } }), 3);
+    expect(summary.hingeQty).toBe(14);
+    expect(summary.hingeTypes).toEqual([{ name: 'Петля Blum 110 с доводчиком', qty: 14 }]);
+    expect(summary.hardwareTotal).toBe(7000);
   });
 });

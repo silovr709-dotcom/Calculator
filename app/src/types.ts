@@ -130,6 +130,12 @@ export type WizardStepId = 'data' | 'shape' | 'materials' | 'modules' | 'review'
 
 export type ClientOfferPresentationMode = 'brief' | 'detailed' | 'technical';
 export type ClientOfferModuleDetailMode = 'summary' | 'compact' | 'full';
+/** Уровень детализации КП — одна ручка вместо набора флажков:
+ *  rollup   — только сводная ведомость: сколько модулей, петель, направляющих, м² фасадов и какие;
+ *  sections — сводка + смета по разделам + перечень модулей без состава;
+ *  modules  — состав по модулям, фурнитура общими строками по проекту;
+ *  full     — всё: каждая строка внутри каждого модуля (техническое приложение). */
+export type ClientOfferDetailLevel = 'rollup' | 'sections' | 'modules' | 'full';
 
 export interface ClientDocumentPackageSettings {
   /** Включить титульное коммерческое предложение/сводку. */
@@ -177,6 +183,12 @@ export interface ClientOfferSettings {
   showDetailPrices?: boolean;
   /** Насколько подробно раскрывать состав каждого модуля в КП. */
   moduleDetailMode?: ClientOfferModuleDetailMode;
+  /** Уровень детализации КП: от короткой ведомости до полного приложения. */
+  detailLevel?: ClientOfferDetailLevel;
+  /** Ручная правка количества прямо в КП: ключ позиции → количество. Сумма пересчитывается по цене за единицу. */
+  lineQty?: Record<string, number>;
+  /** Ручная правка суммы позиции прямо в КП: ключ позиции → сумма для клиента. */
+  lineSums?: Record<string, number>;
   /** true/undefined — петли, опоры, ящики и другую фурнитуру показывать общими строками по проекту. */
   aggregateHardware?: boolean;
   /** Ручные названия позиций в КП: ключ — id позиции прайса, значение — текст для клиента. */

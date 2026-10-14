@@ -4,7 +4,7 @@ import { calcTotals } from '../lib/engine';
 import { fmtDate, fmtMoney, fmtNum } from '../lib/format';
 import { moduleToLines } from '../lib/modules';
 import { projectReadiness } from '../lib/dashboard';
-import { buildClientOfferDetails, buildClientProjectSummary } from '../lib/clientOffer';
+import { applyClientOfferEdits, buildClientOfferDetails, buildClientProjectSummary, clientOfferEditsDelta } from '../lib/clientOffer';
 import { makeClientNameResolver } from '../lib/clientNaming';
 import { downloadClientContractDocx, downloadClientDocumentZip, downloadClientOfferDocx, downloadClientReceiptDocx, type ClientDocumentArgs } from '../lib/clientPackage';
 import {
@@ -120,13 +120,17 @@ function buildClientArgs(project: Project, pricebook: Pricebook | null): ClientD
     new Map(pricebook.items.map((item) => [item.id, item])),
     project.clientOffer?.lineNames,
   );
-  const details = buildClientOfferDetails(data.lines, data.lineCalcs, resolveName);
+  // Те же ручные правки количества/сумм, что менеджер сделал прямо в КП.
+  const details = applyClientOfferEdits(
+    buildClientOfferDetails(data.lines, data.lineCalcs, resolveName),
+    { qty: project.clientOffer?.lineQty, sums: project.clientOffer?.lineSums },
+  );
   return {
     project: { ...project, lines: data.lines },
     offer: project.clientOffer ?? {},
     details,
     modules: data.modules,
-    total: data.client,
+    total: data.client + clientOfferEditsDelta(details),
     summary: buildClientProjectSummary(details, project.modules?.length ?? 0),
   };
 }

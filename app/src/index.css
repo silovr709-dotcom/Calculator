@@ -6654,9 +6654,86 @@ textarea.editable-field { resize: vertical; line-height: 1.45; }
 }
 .project-subtabs button.active span { color: #092a55; }
 
+/* ---------- КП: уровень детализации, сводная ведомость, правка чисел ---------- */
+.client-detail-levels { display: grid; gap: 6px; }
+.client-detail-levels > b { font-size: 12px; color: #0f2f57; }
+.client-detail-level-list { display: grid; gap: 6px; }
+.client-detail-level-list button {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid rgba(9,42,85,.14);
+  border-radius: 11px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+.client-detail-level-list button span { font-size: 12.5px; font-weight: 900; color: #0f2f57; }
+.client-detail-level-list button small { font-size: 11px; color: #64748b; line-height: 1.25; }
+.client-detail-level-list button.active { background: #dbeafe; border-color: #1f6feb; }
+.client-detail-level-list button.active span { color: #092a55; }
+.client-offer-edits-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: #f4f7fb;
+  border: 1px solid rgba(9,42,85,.10);
+  font-size: 11.5px;
+  color: #52667a;
+}
+
+.cd-rollup-table { display: grid; gap: 2px; border: 1px solid #e3eaf3; border-radius: 12px; overflow: hidden; }
+.cd-rollup-head,
+.cd-rollup-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px 130px;
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 11px;
+}
+.cd-rollup-head { background: #0f2f57; color: #fff; font-size: 10.5px; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; }
+.cd-rollup-head span:nth-child(2),
+.cd-rollup-head span:nth-child(3) { text-align: right; }
+.cd-rollup-group { display: grid; gap: 1px; }
+.cd-rollup-total { background: #eef3fa; font-size: 13px; }
+.cd-rollup-total b { color: #0b2342; }
+.cd-rollup-total span,
+.cd-rollup-item .cd-rollup-qty { text-align: right; color: #51645b; font-size: 12px; white-space: nowrap; }
+.cd-rollup-total strong,
+.cd-rollup-item .cd-rollup-sum { text-align: right; font-variant-numeric: tabular-nums; }
+.cd-rollup-item { background: #fff; font-size: 12px; border-top: 1px solid #f1f5f9; }
+.cd-rollup-item .cd-rollup-name { color: #27333f; }
+.cd-rollup-item.edited { background: #fffaf0; }
+.cd-rollup-grand { background: #0b3a75; color: #fff; font-size: 13.5px; }
+.cd-rollup-grand b,
+.cd-rollup-grand strong { color: #fff; }
+.cd-rollup-grand span { text-align: right; color: rgba(255,255,255,.74); }
+.cd-rollup-note { margin-top: 6px; font-size: 11px; color: #8a5a00; }
+.cd-measured { display: block; font-size: 10.5px; color: #8094a8; font-style: normal; }
+.cd-component-edited { background: #fffaf0; }
+
+/* Числа, которые правятся прямо в КП */
+.editable-number { font-variant-numeric: tabular-nums; }
+.editable-number.edited { background: #fff3d6; border-bottom-color: #d79a1f; font-weight: 800; }
+input.editable-number { max-width: 120px; text-align: right; }
+
+@media (max-width: 760px) {
+  .cd-rollup-head,
+  .cd-rollup-row { grid-template-columns: minmax(0, 1fr) 100px; }
+  .cd-rollup-head span:nth-child(3),
+  .cd-rollup-row .cd-rollup-sum,
+  .cd-rollup-row strong { grid-column: 2; text-align: right; }
+}
+
 @media print {
   .editable-text,
   .editable-date { border-bottom: 0 !important; background: transparent !important; }
   .editable-text.empty { display: none; }
+  .editable-number.edited { background: transparent !important; font-weight: inherit !important; }
+  .cd-rollup-item.edited,
+  .cd-component-edited { background: transparent !important; }
   .cd-term-empty { display: none !important; }
 }
