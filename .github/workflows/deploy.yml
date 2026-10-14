@@ -33,6 +33,19 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: app/dist
+      # Готовый пакет для виртуального хостинга (приложение + серверная часть на PHP).
+      # Скачивается на странице запуска: Actions → этот запуск → Artifacts → recept-site.
+      - name: Собрать пакет для хостинга
+        run: node ../tools/pack-hosting.mjs
+        working-directory: app
+      - name: Приложить пакет к запуску
+        uses: actions/upload-artifact@v4
+        with:
+          name: recept-site
+          path: release/site/
+          # .htaccess и .user.ini — скрытые файлы, без этого они бы не попали в архив
+          include-hidden-files: true
+          retention-days: 30
   deploy:
     # Публикуем и main, и текущую рабочую ветку Arena, чтобы ссылку можно было
     # проверить до merge. Для других arena-веток достаточно проверки сборки.
