@@ -117,6 +117,9 @@ export default function Dashboard(props: {
     }
   };
 
+  // Цвет плитки показателя = статус: ноль спокойный, проблема окрашена.
+  const metricTone = (value: number, tone: 'danger' | 'warn' | 'info') => (value > 0 ? `tone-${tone}` : 'tone-calm');
+
   return (
     <div className="page">
       <header className="page-head">
@@ -165,12 +168,12 @@ export default function Dashboard(props: {
           <button type="button" className="btn primary" onClick={props.onOpenCrm}>Открыть задачи CRM</button>
         </div>
         <div className="daydesk-metrics">
-          <button type="button" onClick={props.onOpenCrm}><b>{dayDesk.overdueContacts}</b><span>просрочено</span></button>
-          <button type="button" onClick={props.onOpenCrm}><b>{dayDesk.contactsToday}</b><span>контакт сегодня</span></button>
-          <button type="button" onClick={props.onOpenCrm}><b>{dayDesk.offersWaiting}</b><span>КП ждут ответа</span></button>
-          <button type="button" onClick={props.onOpenCrm}><b>{dayDesk.missingPayment}</b><span>нет предоплаты</span></button>
-          <button type="button" onClick={() => setReadinessFilter('problem')}><b>{dayDesk.problems}</b><span>проблемы расчёта</span></button>
-          <button type="button" onClick={props.onOpenCrm}><b>{dayDesk.factoryNotExported}</b><span>к фабрике без бланка</span></button>
+          <button type="button" className={metricTone(dayDesk.overdueContacts, 'danger')} onClick={props.onOpenCrm}><b>{dayDesk.overdueContacts}</b><span>просрочено</span></button>
+          <button type="button" className={metricTone(dayDesk.contactsToday, 'warn')} onClick={props.onOpenCrm}><b>{dayDesk.contactsToday}</b><span>контакт сегодня</span></button>
+          <button type="button" className={metricTone(dayDesk.offersWaiting, 'info')} onClick={props.onOpenCrm}><b>{dayDesk.offersWaiting}</b><span>КП ждут ответа</span></button>
+          <button type="button" className={metricTone(dayDesk.missingPayment, 'warn')} onClick={props.onOpenCrm}><b>{dayDesk.missingPayment}</b><span>нет предоплаты</span></button>
+          <button type="button" className={metricTone(dayDesk.problems, 'danger')} onClick={() => setReadinessFilter('problem')}><b>{dayDesk.problems}</b><span>проблемы расчёта</span></button>
+          <button type="button" className={metricTone(dayDesk.factoryNotExported, 'info')} onClick={props.onOpenCrm}><b>{dayDesk.factoryNotExported}</b><span>к фабрике без бланка</span></button>
         </div>
         <div className="daydesk-task-list">
           {dayDesk.tasks.length === 0 ? <div className="daydesk-empty">Нет срочных задач. Можно создавать новый расчёт или продолжать текущие проекты.</div> : dayDesk.tasks.slice(0, 8).map((task) => (
@@ -225,10 +228,10 @@ export default function Dashboard(props: {
               <h2>{crmSummary.due > 0 ? `Есть контакты на сегодня: ${crmSummary.due}` : 'Клиентская работа под контролем'}</h2>
               <p>Быстрый обзор клиентских задач прямо на главном экране. Полная воронка, база клиентов и редактирование следующих шагов — в отдельном разделе CRM.</p>
               <div className="dashboard-crm-metrics">
-                <button type="button" onClick={props.onOpenCrm}><b>{crmSummary.active}</b><span>активных заказов</span></button>
-                <button type="button" onClick={props.onOpenCrm}><b>{crmSummary.due}</b><span>контакт сегодня</span></button>
-                <button type="button" onClick={props.onOpenCrm}><b>{crmSummary.noNext}</b><span>без шага/даты</span></button>
-                <button type="button" onClick={props.onOpenCrm}><b>{crmSummary.stuck}</b><span>КП ждёт решения</span></button>
+                <button type="button" className="tone-info" onClick={props.onOpenCrm}><b>{crmSummary.active}</b><span>активных заказов</span></button>
+                <button type="button" className={metricTone(crmSummary.due, 'warn')} onClick={props.onOpenCrm}><b>{crmSummary.due}</b><span>контакт сегодня</span></button>
+                <button type="button" className={metricTone(crmSummary.noNext, 'warn')} onClick={props.onOpenCrm}><b>{crmSummary.noNext}</b><span>без шага/даты</span></button>
+                <button type="button" className={metricTone(crmSummary.stuck, 'danger')} onClick={props.onOpenCrm}><b>{crmSummary.stuck}</b><span>КП ждёт решения</span></button>
               </div>
             </div>
             <div className="dashboard-crm-focus">
