@@ -346,6 +346,14 @@ export function buildClientOfferRollup(details: ClientOfferDetail[]): ClientOffe
     });
 }
 
+/** Корпусная часть позиции: именно она идёт строкой «какой корпус» в товарном чеке. */
+export const CLIENT_BODY_KINDS: ClientOfferDetailKind[] = ['body', 'bodySurcharge', 'shelf'];
+
+export function clientBodyTotal(details: ClientOfferDetail[]): number {
+  const allowed = new Set(CLIENT_BODY_KINDS);
+  return details.filter((detail) => allowed.has(detail.kind)).reduce((sum, detail) => sum + (detail.clientSum ?? 0), 0);
+}
+
 function sumClient(details: ClientOfferDetail[], kinds: ClientOfferDetailKind[]): number {
   const allowed = new Set(kinds);
   return details

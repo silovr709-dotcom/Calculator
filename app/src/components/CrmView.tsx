@@ -4,7 +4,7 @@ import { calcTotals } from '../lib/engine';
 import { fmtDate, fmtMoney, fmtNum } from '../lib/format';
 import { moduleToLines } from '../lib/modules';
 import { projectReadiness } from '../lib/dashboard';
-import { applyClientOfferEdits, buildClientOfferDetails, buildClientProjectSummary, clientOfferEditsDelta } from '../lib/clientOffer';
+import { applyClientOfferEdits, buildClientOfferDetails, buildClientProjectSummary, clientBodyTotal, clientOfferEditsDelta } from '../lib/clientOffer';
 import { makeClientNameResolver } from '../lib/clientNaming';
 import { downloadClientContractDocx, downloadClientDocumentZip, downloadClientOfferDocx, downloadClientReceiptDocx, type ClientDocumentArgs } from '../lib/clientPackage';
 import {
@@ -108,6 +108,8 @@ function calcProjectData(project: Project, pricebook: Pricebook | null) {
       sub: module.widthMm && module.heightMm ? `${module.widthMm}×${module.heightMm}${module.depthMm ? `×${module.depthMm}` : ''} мм` : undefined,
       qty: module.qty,
       total: groupLines.reduce((sum, line) => sum + (result.lineCalcs.get(line.id)?.clientSum ?? 0), 0),
+      // Корпусная часть модуля — строка «какой корпус» в товарном чеке.
+      bodyTotal: clientBodyTotal(buildClientOfferDetails(groupLines, result.lineCalcs)),
     })),
   };
 }

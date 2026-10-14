@@ -1,7 +1,7 @@
 import { inflateSync } from 'fflate';
 import type { ClientDocumentPackageSettings, ClientOfferSettings, Project } from '../types';
 import type { ClientOfferDetail, ClientOfferDetailKind, ClientProjectSummary } from './clientOffer';
-import { buildClientOfferRollup } from './clientOffer';
+import { buildClientOfferRollup, CLIENT_BODY_KINDS } from './clientOffer';
 import { fmtDate, fmtMoney, fmtNum } from './format';
 import { downloadFile } from './storage';
 
@@ -10,6 +10,9 @@ export interface ClientPackageModuleRow {
   sub?: string;
   qty: number;
   total: number | null;
+  /** Сумма корпусной части модуля (корпус, надбавки, полки) — для построчного товарного чека.
+   *  Фасады и фурнитура в чеке идут отдельными строками, поэтому здесь их нет. */
+  bodyTotal?: number | null;
 }
 
 export interface ClientPackageSketchFile {
@@ -29,7 +32,16 @@ export interface ClientDocumentArgs {
 
 export type NormalizedClientDocumentPackageSettings = Required<ClientDocumentPackageSettings>;
 
-type DocxBlock = { type: 'p'; text: string; bold?: boolean; size?: number; color?: string } | { type: 'table'; headers: string[]; rows: string[][] };
+type DocxTableOptions = {
+  /** Мелкий шрифт и узкие поля ячеек — чтобы перечень позиций влезал на 1–2 страницы. */
+  compact?: boolean;
+  /** Ширины колонок в твипах (1/20 пункта). */
+  widths?: number[];
+  align?: ('left' | 'right')[];
+};
+type DocxBlock =
+  | { type: 'p'; text: string; bold?: boolean; size?: number; color?: string }
+  | ({ type: 'table'; headers: string[]; rows: string[][] } & DocxTableOptions);
 type ZipInput = { name: string; data: string | Uint8Array | Blob };
 type PreparedZipInput = { nameBytes: Uint8Array; dataBytes: Uint8Array; crc: number; offset: number };
 
@@ -320,8 +332,8 @@ function p(text: string, opts: { bold?: boolean; size?: number; color?: string }
   return { type: 'p', text, ...opts };
 }
 
-function table(headers: string[], rows: string[][]): DocxBlock {
-  return { type: 'table', headers, rows };
+function table(headers: string[], rows: string[][], options: DocxTableOptions = {}): DocxBlock {
+  return { type: 'table', headers, rows, ...options };
 }
 
 function paragraphXml(block: Extract<DocxBlock, { type: 'p' }>): string {
@@ -333,16 +345,31 @@ function paragraphXml(block: Extract<DocxBlock, { type: 'p' }>): string {
   return `<w:p><w:r>${rPr}${lines.map((line, index) => `${index ? '<w:br/>' : ''}<w:t xml:space="preserve">${xml(line)}</w:t>`).join('')}</w:r></w:p>`;
 }
 
-function cellXml(value: string, header = false): string {
+function cellXml(value: string, header = false, options: { compact?: boolean; width?: number; align?: 'left' | 'right' } = {}): string {
   const fill = header ? '<w:shd w:fill="EAF2FF"/>' : '';
   const bold = header ? '<w:b/><w:bCs/>' : '';
-  return `<w:tc><w:tcPr><w:tcW w:w="2400" w:type="dxa"/>${fill}</w:tcPr><w:p><w:r>${bold ? `<w:rPr>${bold}</w:rPr>` : ''}<w:t xml:space="preserve">${xml(value)}</w:t></w:r></w:p></w:tc>`;
+  const size = options.compact ? '<w:sz w:val="17"/><w:szCs w:val="17"/>' : '';
+  const rPr = bold || size ? `<w:rPr>${bold}${size}</w:rPr>` : '';
+  const width = options.width ?? 2400;
+  const jc = options.align === 'right' ? '<w:jc w:val="right"/>' : '';
+  const spacing = options.compact ? '<w:spacing w:before="0" w:after="0" w:line="200" w:lineRule="atLeast"/>' : '';
+  const pPr = jc || spacing ? `<w:pPr>${spacing}${jc}</w:pPr>` : '';
+  const lines = String(value ?? '').split('\n');
+  const runs = lines.map((line, index) => `${index ? '<w:br/>' : ''}<w:t xml:space="preserve">${xml(line)}</w:t>`).join('');
+  return `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>${fill}</w:tcPr><w:p>${pPr}<w:r>${rPr}${runs}</w:r></w:p></w:tc>`;
 }
 
 function tableXml(block: Extract<DocxBlock, { type: 'table' }>): string {
   const borders = '<w:tblBorders><w:top w:val="single" w:sz="4" w:color="D7E4EF"/><w:left w:val="single" w:sz="4" w:color="D7E4EF"/><w:bottom w:val="single" w:sz="4" w:color="D7E4EF"/><w:right w:val="single" w:sz="4" w:color="D7E4EF"/><w:insideH w:val="single" w:sz="4" w:color="D7E4EF"/><w:insideV w:val="single" w:sz="4" w:color="D7E4EF"/></w:tblBorders>';
   const rows = [block.headers, ...block.rows];
-  return `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/>${borders}</w:tblPr>${rows.map((row, rowIndex) => `<w:tr>${row.map((value) => cellXml(value, rowIndex === 0)).join('')}</w:tr>`).join('')}</w:tbl>`;
+  const cellMargins = block.compact
+    ? '<w:tblCellMar><w:top w:w="20" w:type="dxa"/><w:left w:w="60" w:type="dxa"/><w:bottom w:w="20" w:type="dxa"/><w:right w:w="60" w:type="dxa"/></w:tblCellMar>'
+    : '';
+  return `<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/>${borders}${cellMargins}</w:tblPr>${rows.map((row, rowIndex) => `<w:tr>${row.map((value, cellIndex) => cellXml(value, rowIndex === 0, {
+    compact: block.compact,
+    width: block.widths?.[cellIndex],
+    align: rowIndex === 0 ? undefined : block.align?.[cellIndex],
+  })).join('')}</w:tr>`).join('')}</w:tbl>`;
 }
 
 function documentXml(blocks: DocxBlock[]): string {
@@ -503,24 +530,125 @@ function contractBlocks(args: ClientDocumentArgs): DocxBlock[] {
   ];
 }
 
+/** Корпусные виды: они идут строками «какие корпуса», остальное — отдельными позициями. */
+const RECEIPT_BODY_KINDS = new Set<ClientOfferDetailKind>(CLIENT_BODY_KINDS);
+/** Жёсткие рамки, чтобы чек оставался на 1–2 страницах. */
+const RECEIPT_MAX_MODULE_ROWS = 18;
+const RECEIPT_MAX_DETAIL_ROWS = 24;
+
+export interface ReceiptRow {
+  name: string;
+  qty: number;
+  sum: number;
+}
+
+function shortenName(value: string, limit = 74): string {
+  const text = value.replace(/\s+/gu, ' ').trim();
+  return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
+}
+
+/** Схлопывает одинаковые модули и обрезает хвост, не теряя денег: остаток уходит в сводную строку. */
+function receiptModuleRows(modules: ClientPackageModuleRow[]): ReceiptRow[] {
+  const merged = new Map<string, ReceiptRow>();
+  for (const module of modules) {
+    const sum = module.bodyTotal ?? 0;
+    if (sum <= 0 && module.qty <= 0) continue;
+    const name = shortenName([module.title, module.sub].filter(Boolean).join(', '));
+    const row = merged.get(name);
+    if (row) { row.qty += module.qty; row.sum += sum; }
+    else merged.set(name, { name, qty: module.qty, sum });
+  }
+  const rows = Array.from(merged.values()).sort((a, b) => b.sum - a.sum);
+  if (rows.length <= RECEIPT_MAX_MODULE_ROWS) return rows;
+  const head = rows.slice(0, RECEIPT_MAX_MODULE_ROWS - 1);
+  const tail = rows.slice(RECEIPT_MAX_MODULE_ROWS - 1);
+  head.push({
+    name: `Прочие корпуса по эскизу (${tail.length} наим.)`,
+    qty: tail.reduce((sum, row) => sum + row.qty, 0),
+    sum: tail.reduce((sum, row) => sum + row.sum, 0),
+  });
+  return head;
+}
+
+/** Фасады, фурнитура, столешницы и прочее — отдельными строками с названием раздела. */
+function receiptDetailRows(details: ClientOfferDetail[]): ReceiptRow[] {
+  const rows = buildClientOfferRollup(details.filter((detail) => !RECEIPT_BODY_KINDS.has(detail.kind)))
+    .flatMap((group) => group.items.map((detail) => ({
+      name: shortenName(`${group.label}: ${detail.name}`),
+      qty: detail.qty,
+      sum: detail.clientSum ?? 0,
+    })))
+    .filter((row) => row.qty > 0 || row.sum > 0);
+  if (rows.length <= RECEIPT_MAX_DETAIL_ROWS) return rows;
+  // Обрезаем самые мелкие позиции, а их сумму честно оставляем одной строкой.
+  const byValue = [...rows].sort((a, b) => b.sum - a.sum);
+  const keep = new Set(byValue.slice(0, RECEIPT_MAX_DETAIL_ROWS - 1).map((row) => row.name));
+  const head = rows.filter((row) => keep.has(row.name));
+  const tail = rows.filter((row) => !keep.has(row.name));
+  head.push({
+    name: `Прочая комплектация (${tail.length} поз.)`,
+    qty: tail.reduce((sum, row) => sum + row.qty, 0),
+    sum: tail.reduce((sum, row) => sum + row.sum, 0),
+  });
+  return head;
+}
+
+/**
+ * Построчный товарный чек: какие именно корпуса, какие фасады, какая фурнитура.
+ * Корпуса берутся по модулям (корпусная часть), остальное — позициями по проекту,
+ * поэтому суммы не задваиваются, а остаток до итога уходит строкой «Работы и прочее».
+ */
+export function buildReceiptRows(args: ClientDocumentArgs): ReceiptRow[] {
+  const { project, details, modules, total, summary } = args;
+  const hasModuleBreakdown = modules.some((module) => module.bodyTotal != null);
+  if (!hasModuleBreakdown && details.length === 0) {
+    return [{ name: `Комплект мебели по проекту «${project.name}», согласно эскизу`, qty: 1, sum: total }];
+  }
+
+  const moduleRows = hasModuleBreakdown ? receiptModuleRows(modules) : [];
+  const detailRowsList = receiptDetailRows(details);
+  const bodyDetailsTotal = details
+    .filter((detail) => RECEIPT_BODY_KINDS.has(detail.kind))
+    .reduce((sum, detail) => sum + (detail.clientSum ?? 0), 0);
+  const moduleBodyTotal = moduleRows.reduce((sum, row) => sum + row.sum, 0);
+  const rows = [...moduleRows, ...detailRowsList];
+
+  // Корпусные позиции вне модулей (добавлены отдельной строкой в расчёте).
+  const bodyResidual = bodyDetailsTotal - moduleBodyTotal;
+  if (bodyResidual > 1) rows.push({ name: 'Корпусные элементы вне модулей', qty: 1, sum: bodyResidual });
+  if (!hasModuleBreakdown && summary.bodyTotal > 0) rows.unshift({ name: `Корпуса и каркас по проекту «${project.name}», согласно эскизу`, qty: 1, sum: summary.bodyTotal });
+
+  // Доставка, монтаж, скидки и прочее, чего нет в позициях: чек всегда сходится с итогом.
+  const rowsTotal = rows.reduce((sum, row) => sum + row.sum, 0);
+  const residual = Math.round((total - rowsTotal) * 100) / 100;
+  if (residual > 1) rows.push({ name: 'Работы, доставка и прочие услуги по проекту', qty: 1, sum: residual });
+  else if (residual < -1) rows.push({ name: 'Скидка по проекту', qty: 1, sum: residual });
+
+  return rows.filter((row) => row.sum !== 0 || row.qty > 0);
+}
+
 function receiptBlocks(args: ClientDocumentArgs): DocxBlock[] {
   const { project, offer, total, summary } = args;
   const prepayment = contractPrepaymentText(offer, total);
   const remainder = contractRemainderText(offer, total, prepayment.amount);
-  const knownTotal = summary.bodyTotal + summary.facadeTotal + summary.hardwareTotal;
-  const extraTotal = Math.max(0, total - knownTotal);
-  const rows = [
-    summary.bodyTotal > 0 ? ['1', `Корпуса и каркас по проекту «${project.name}», согласно эскизу`, fmtMoney(summary.bodyTotal), '1', fmtMoney(summary.bodyTotal)] : null,
-    summary.facadeTotal > 0 ? ['2', `Фасады${summary.facadeAreaM2 > 0 ? ` — ${fmtNum(summary.facadeAreaM2, 2)} м²` : ''}, согласно эскизу`, fmtMoney(summary.facadeTotal), '1', fmtMoney(summary.facadeTotal)] : null,
-    summary.hardwareTotal > 0 ? ['3', 'Фурнитура и механизмы по проекту', fmtMoney(summary.hardwareTotal), '1', fmtMoney(summary.hardwareTotal)] : null,
-    extraTotal > 0 ? ['4', 'Столешницы, работы и дополнительные позиции', fmtMoney(extraTotal), '1', fmtMoney(extraTotal)] : null,
-  ].filter((row): row is string[] => Boolean(row));
-  const productRows = rows.length ? rows : [['1', `Комплект мебели по проекту «${project.name}», согласно эскизу`, fmtMoney(total), '1', fmtMoney(total)]];
+  const rows = buildReceiptRows(args);
+  const productRows = rows.map((row, index) => [
+    String(index + 1),
+    row.name,
+    row.qty > 0 ? fmtMoney(row.sum / row.qty) : fmtMoney(row.sum),
+    fmtNum(row.qty > 0 ? row.qty : 1, 3),
+    fmtMoney(row.sum),
+  ]);
   return [
     p(`Товарный чек № ${contractNumber(project, offer)}`, { bold: true, size: 20, color: '0F2F57' }),
     p(`от ${formatContractDate(project)}`, { size: 11, color: '52667A' }),
     p(`Продавец: ${sellerName(offer)}\n${sellerDetails(offer)}\nПокупатель: ${project.client || '_________________________________'}\nАдрес доставки: ${offer.clientAddress || offer.clientContacts || '_________________________________'}`),
-    table(['№', 'Наименование товара', 'Цена', 'Кол-во', 'Сумма'], [...productRows, ['', 'Итого', '', '', fmtMoney(total)]]),
+    p(`Комплект мебели по проекту «${project.name}»${summary.moduleCount > 0 ? ` · ${fmtNum(summary.moduleCount, 3)} модулей` : ''}${summary.facadeAreaM2 > 0 ? ` · фасады ${fmtNum(summary.facadeAreaM2, 2)} м²` : ''}`, { size: 10, color: '52667A' }),
+    table(['№', 'Наименование товара', 'Цена', 'Кол-во', 'Сумма'], [...productRows, ['', 'Итого', '', '', fmtMoney(total)]], {
+      compact: true,
+      widths: [420, 6000, 1300, 900, 1500],
+      align: ['left', 'left', 'right', 'right', 'right'],
+    }),
     table(['Оплата', 'Сумма'], [
       ['Предоплата / задаток', `${prepayment.text} руб.`],
       ['Доплата', `${remainder} руб.`],

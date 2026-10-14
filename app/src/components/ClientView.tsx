@@ -3,7 +3,7 @@ import type { ClientDocumentPackageSettings, ClientOfferDetailLevel, ClientOffer
 import type { ClientOfferDetail, ClientOfferDetailKind } from '../lib/clientOffer';
 import { calcTotals } from '../lib/engine';
 import { calculateVariant } from '../lib/variants';
-import { applyClientOfferEdits, buildClientOfferDetails, buildClientOfferRollup, buildClientProjectSummary, clientDetailKey, clientOfferEditsDelta, clientSketchSummaryLines, isModuleLine, moduleNoteMatches, stripModuleNote } from '../lib/clientOffer';
+import { applyClientOfferEdits, buildClientOfferDetails, buildClientOfferRollup, buildClientProjectSummary, clientBodyTotal, clientDetailKey, clientOfferEditsDelta, clientSketchSummaryLines, isModuleLine, moduleNoteMatches, stripModuleNote } from '../lib/clientOffer';
 import { clientLineName, makeClientNameResolver } from '../lib/clientNaming';
 import EditableText from './EditableText';
 import EditableNumber from './EditableNumber';
@@ -11,7 +11,7 @@ import { fmtMoney, fmtDate, fmtNum } from '../lib/format';
 import { exportClientXlsx } from '../lib/exporters';
 import { snapshotProject } from '../lib/eskizPro';
 import { downloadEskizSketchPdf, renderEskizSketchPdf } from '../lib/eskizSketchExport';
-import { downloadClientContractDocx, downloadClientDocumentZip, downloadClientOfferDocx, downloadClientReceiptDocx, downloadClientSpecificationDocx, normalizeClientDocumentPackage, type ClientDocumentArgs } from '../lib/clientPackage';
+import { buildReceiptRows, downloadClientContractDocx, downloadClientDocumentZip, downloadClientOfferDocx, downloadClientReceiptDocx, downloadClientSpecificationDocx, normalizeClientDocumentPackage, type ClientDocumentArgs } from '../lib/clientPackage';
 import EskizProjectPreview from './EskizProjectPreview';
 
 /** Строка модуля в клиентской версии — без закупочных цен и внутренних данных. */
@@ -433,14 +433,33 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
     { label: 'Сроки', ready: Boolean(project.clientOffer?.productionTerms || project.clientOffer?.delivery || project.clientOffer?.installation), value: project.clientOffer?.productionTerms || project.clientOffer?.delivery || 'добавьте срок/доставку' },
     { label: 'Эскиз', ready: clientSketchVisible, value: clientSketchVisible ? `${linkedEskizProjects.length} PDF` : 'не прикреплён' },
   ];
+  // Товарный чек перечисляет, какие именно корпуса вошли в комплект, поэтому
+  // для каждого модуля считаем его корпусную часть (без фасадов и фурнитуры).
+  const groupBodyTotals = groups.map((group) => {
+    const ids = new Set(groupLineIds(group));
+    const lines = activeCalculation.lines.filter((line) => ids.has(line.id));
+    return clientBodyTotal(buildClientOfferDetails(lines, lineCalcs, resolveClientName));
+  });
+  const rawModuleBodyTotal = groupBodyTotals.reduce((sum, value) => sum + value, 0);
+  const modulesBodyTarget = clientBodyTotal(allDetails) - clientBodyTotal(extraDetails);
+  // Ручные правки сумм в КП распределяем по модулям пропорционально, чтобы чек сходился с итогом.
+  const bodyFactor = rawModuleBodyTotal > 0 ? modulesBodyTarget / rawModuleBodyTotal : 1;
   const clientDocumentArgs: ClientDocumentArgs = {
     project: { ...project, lines: activeCalculation.lines, settings: selectedVariant?.settings ?? project.settings },
     offer: project.clientOffer ?? {},
     details: allDetails,
-    modules: groups.map((group) => ({ title: group.title, sub: group.sub, qty: group.qty, total: groupSum(group) })),
+    modules: groups.map((group, index) => ({
+      title: group.title,
+      sub: group.sub,
+      qty: group.qty,
+      total: groupSum(group),
+      bodyTotal: groupBodyTotals[index] * bodyFactor,
+    })),
     total: offerTotal,
     summary: projectSummary,
   };
+  // Короткая подсказка в настройках: сколько строк уйдёт в товарный чек.
+  const receiptRows = buildReceiptRows(clientDocumentArgs);
   const sketchPdfOptions = {
     ...(eskizViewSettings ?? {}),
     moduleMarkerMode: project.eskizPro?.moduleMarkerMode ?? 'full',
@@ -573,6 +592,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
                 <label><input type="checkbox" checked={packageSettings.sketchSummaryOverlay} onChange={(event) => updatePackageSettings({ sketchSummaryOverlay: event.target.checked })} /> Сводка на эскизе</label>
                 <label><input type="checkbox" checked={packageSettings.compact} onChange={(event) => updatePackageSettings({ compact: event.target.checked })} /> Компактно</label>
               </div>
+              <p className="muted small">Товарный чек выгружается построчно: {fmtNum(receiptRows.length, 3)} позиций — какие корпуса по модулям, фасады, фурнитура и работы. Мелкие позиции схлопываются, чтобы чек оставался на 1–2 страницах.</p>
             </div>
           </details>
 
