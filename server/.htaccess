@@ -4,6 +4,8 @@
 # --- Только HTTPS ---
 <IfModule mod_rewrite.c>
   RewriteEngine On
+  # Проверка Let's Encrypt должна проходить по http и не уезжать в редирект.
+  RewriteRule ^\.well-known/acme-challenge/ - [L]
   RewriteCond %{HTTPS} !=on
   RewriteCond %{HTTP:X-Forwarded-Proto} !https
   RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
@@ -18,6 +20,7 @@
 
   # Приложение — одностраничное: любые неизвестные адреса отдаём index.html
   RewriteCond %{REQUEST_URI} !^/api/
+  RewriteCond %{REQUEST_URI} !^/\.well-known/
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^ index.html [L]
