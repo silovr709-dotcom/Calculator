@@ -1,6 +1,7 @@
 import { loadNodeRuntime, createNodeFsMountHandler } from '@php-wasm/node';
 import { PHP } from '@php-wasm/universal';
 import fs from 'node:fs';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 const SERVER_SRC = fileURLToPath(new URL('..', import.meta.url));
@@ -17,16 +18,21 @@ php.mkdir('/tmp/sessions');
 
 let cookie = '';
 
-async function call(route, { method = 'GET', body, query = '' } = {}) {
+async function call(route, { method = 'GET', body, query = '', gzip = false } = {}) {
   const headers = { Host: 'localhost' };
   if (body) headers['Content-Type'] = 'application/json';
   if (cookie) headers['Cookie'] = cookie;
+  let payload = body ? JSON.stringify(body) : undefined;
+  if (payload && gzip) {
+    payload = zlib.gzipSync(Buffer.from(payload, 'utf8'));
+    headers['X-Recept-Encoding'] = 'gzip';
+  }
   const res = await php.run({
     scriptPath: '/site/www/api/index.php',
     relativeUri: `/api/index.php?r=${route}${query}`,
     method,
     headers,
-    body: body ? JSON.stringify(body) : undefined,
+    body: payload,
     $_SERVER: {
       DOCUMENT_ROOT: '/site/www',
       REMOTE_ADDR: '127.0.0.1',
@@ -78,6 +84,12 @@ check('пустой объект настроек не ломается', r.json
 
 r = await call('state', { method: 'PUT', body: { baseRev: 1, data: { projects: [{ id: 'p1' }, { id: 'p2' }], clients: [], templates: [], settings: {} } } });
 check('второе сохранение прошло, rev=2', r.status === 200 && r.json?.rev === 2, r.text);
+
+r = await call('state', { method: 'PUT', gzip: true, body: { baseRev: 2, data: { projects: [{ id: 'p1' }, { id: 'p2' }, { id: 'p3', note: 'сжатая отправка' }], clients: [], templates: [], settings: {} } } });
+check('сжатая отправка (gzip) принимается', r.status === 200 && r.json?.rev === 3, r.text);
+
+r = await call('state');
+check('данные из сжатого запроса сохранились', r.json?.data?.projects?.length === 3, r.text);
 
 r = await call('users', { method: 'POST', body: { login: 'zamer', password: 'Zamer12345', name: 'Замерщик', role: 'user' } });
 check('сотрудник добавлен', r.status === 200 && r.json?.user?.role === 'user', r.text);

@@ -59,14 +59,39 @@ export function apiUrl(route: string, params: Record<string, string> = {}): stri
   return base.toString();
 }
 
+/**
+ * Большую базу отправляем сжатой: на хостингах с Apache + FastCGI есть предел размера
+ * запроса, а проект с фотографиями весит мегабайты. Сервер распаковывает сам.
+ * Если браузер не умеет сжимать на лету — отправляем как есть.
+ */
+async function packBody(body: string): Promise<{ body: BodyInit; headers: Record<string, string> }> {
+  if (body.length < 64 * 1024 || typeof CompressionStream === 'undefined') {
+    return { body, headers: {} };
+  }
+  try {
+    const stream = new Blob([body]).stream().pipeThrough(new CompressionStream('gzip'));
+    const packed = await new Response(stream).blob();
+    return { body: packed, headers: { 'X-Recept-Encoding': 'gzip' } };
+  } catch {
+    return { body, headers: {} };
+  }
+}
+
 async function request<T>(route: string, init: RequestInit = {}, params: Record<string, string> = {}): Promise<T> {
   let res: Response;
+  const packed = typeof init.body === 'string' ? await packBody(init.body) : null;
   try {
     res = await fetch(apiUrl(route, params), {
       credentials: 'same-origin',
       cache: 'no-store',
       ...init,
-      headers: { Accept: 'application/json', ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(init.headers ?? {}) },
+      body: packed ? packed.body : init.body,
+      headers: {
+        Accept: 'application/json',
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(packed ? packed.headers : {}),
+        ...(init.headers ?? {}),
+      },
     });
   } catch {
     throw new ServerUnavailableError('Нет связи с сервером');
@@ -77,6 +102,9 @@ async function request<T>(route: string, init: RequestInit = {}, params: Record<
   try {
     json = JSON.parse(text) as Record<string, unknown>;
   } catch {
+    if (res.status === 413 || res.status === 500) {
+      throw new ServerRequestError(res.status, 'Хостинг не принял данные такого размера. Поднимите post_max_size и upload_max_filesize в настройках PHP (файл .user.ini) или уменьшите количество фотографий в проектах.');
+    }
     // Не JSON — значит по этому адресу нет нашего API (статичный хостинг, страница 404 и т. п.).
     throw new ServerUnavailableError('На этом адресе нет серверной части');
   }

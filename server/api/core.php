@@ -129,11 +129,33 @@ function recept_fail(int $status, string $message, array $extra = []): void
     recept_json($status, array_merge(['ok' => false, 'error' => $message], $extra));
 }
 
-/** Тело запроса как объекты (пустой объект остаётся объектом, а не массивом). */
-function recept_body_raw()
+/**
+ * Сырое тело запроса. Браузер может прислать его сжатым (заголовок X-Recept-Encoding: gzip) —
+ * это важно для хостингов с жёстким лимитом на размер запроса: проект с фотографиями
+ * уезжает в несколько раз меньшим объёмом.
+ */
+function recept_input(): string
 {
     $raw = file_get_contents('php://input');
     if ($raw === false || $raw === '') {
+        return '';
+    }
+    $encoding = strtolower(trim((string) ($_SERVER['HTTP_X_RECEPT_ENCODING'] ?? '')));
+    if ($encoding === 'gzip' && function_exists('gzdecode')) {
+        $unpacked = @gzdecode($raw);
+        if ($unpacked === false) {
+            recept_fail(400, 'Не удалось распаковать данные запроса');
+        }
+        return $unpacked;
+    }
+    return $raw;
+}
+
+/** Тело запроса как объекты (пустой объект остаётся объектом, а не массивом). */
+function recept_body_raw()
+{
+    $raw = recept_input();
+    if ($raw === '') {
         return null;
     }
     $data = json_decode($raw, false);
@@ -145,8 +167,8 @@ function recept_body_raw()
 
 function recept_body(): array
 {
-    $raw = file_get_contents('php://input');
-    if ($raw === false || $raw === '') {
+    $raw = recept_input();
+    if ($raw === '') {
         return [];
     }
     $data = json_decode($raw, true);
