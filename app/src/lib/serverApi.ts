@@ -353,3 +353,24 @@ export async function setProjectDocumentStatus(projectId: string, id: string, st
 export async function deleteProjectDocument(projectId: string, id: string): Promise<void> {
   await request('docs', { method: 'DELETE' }, { projectId, id });
 }
+
+/* ----------------------- история версий проекта ----------------------- */
+
+export interface ProjectVersion {
+  file: string;
+  rev: number;
+  at: string;
+  by: string;
+  name: string;
+  size: number;
+}
+
+export async function listProjectVersions(projectId: string): Promise<ProjectVersion[]> {
+  const json = await request<{ versions: ProjectVersion[] }>('history', {}, { projectId });
+  return json.versions ?? [];
+}
+
+export async function readProjectVersion<T>(projectId: string, file: string): Promise<T> {
+  const json = await request<{ project: T }>('history/item', {}, { projectId, file });
+  return json.project;
+}

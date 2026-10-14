@@ -7227,3 +7227,29 @@ input.editable-number { max-width: 120px; text-align: right; }
 .client-docs-store .doc-status-actions button:hover { border-color: #16213f; color: #16213f; }
 .client-docs-store .doc-status-actions button.active { background: #16213f; border-color: #16213f; color: #fff; }
 .client-docs-store .doc-status-actions button.danger { color: #b3261e; }
+
+/* История версий проекта. */
+.project-history ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.project-history li {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: 1px solid #e8ecf6;
+  border-radius: 10px;
+  background: #fafbff;
+}
+.project-history-main { display: grid; gap: 2px; font-size: 12px; }
+.project-history-main b { font-size: 13px; color: #16213f; }
+.project-history-main span { color: #7c89a8; }
+.project-history-main em { color: #5b6b8f; font-style: normal; }
+.project-history-current {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #e8f7ef;
+  color: #18723e;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}

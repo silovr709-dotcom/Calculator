@@ -357,6 +357,25 @@ switch ($route . ' ' . $method) {
         recept_json(200, ['ok' => true, 'rev' => $result['rev'], 'data' => $data]);
     }
 
+    /* ---------- история версий проекта ---------- */
+
+    case 'history GET': {
+        recept_require_user();
+        $projectId = isset($_GET['projectId']) ? (string) $_GET['projectId'] : '';
+        recept_json(200, ['ok' => true, 'versions' => recept_history_list($projectId)]);
+    }
+
+    case 'history/item GET': {
+        recept_require_user();
+        $projectId = isset($_GET['projectId']) ? (string) $_GET['projectId'] : '';
+        $file = isset($_GET['file']) ? (string) $_GET['file'] : '';
+        $project = recept_history_read($projectId, $file);
+        if ($project === null) {
+            recept_fail(404, 'Версия проекта не найдена');
+        }
+        recept_json(200, ['ok' => true, 'project' => $project]);
+    }
+
     /* ---------- документы проекта (договор, чек, КП, бланк) ---------- */
 
     case 'docs GET': {

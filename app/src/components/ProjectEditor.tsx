@@ -13,6 +13,7 @@ import SettingsPanel from './SettingsPanel';
 import ClientView from './ClientView';
 import KitchenWizard from './KitchenWizard';
 import ProjectCheckCenter from './ProjectCheckCenter';
+import ProjectHistoryPanel from './ProjectHistoryPanel';
 import VariantsPanel from './VariantsPanel';
 import MeasurementPanel from './MeasurementPanel';
 import KitchenChecklistPanel from './KitchenChecklistPanel';
@@ -430,6 +431,15 @@ export default function ProjectEditor(props: {
             onSelectModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
             onSelectLine={(id) => { setFocusLineId(id); setTab('lines'); window.setTimeout(() => document.getElementById(`project-line-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0); }}
           />
+          <section className="card">
+            <div className="section-head">
+              <div>
+                <h3>История проекта</h3>
+                <p className="muted small">Кто и когда менял этот проект. Любую версию можно вернуть — остальные проекты не затрагиваются.</p>
+              </div>
+            </div>
+            <ProjectHistoryPanel project={project} onRestore={props.onChange} />
+          </section>
         </>
       )}
 

@@ -383,11 +383,152 @@ function recept_save_state($data, int $baseRev, array $user): array
             'size' => strlen($json),
         ];
         recept_write_json(recept_path('state-meta.json'), $next);
+        recept_history_record($data, $user, $next['rev']);
         return ['conflict' => false] + $next;
     } finally {
         @flock($lock, LOCK_UN);
         @fclose($lock);
     }
+}
+
+/* ------------------------------ история по проектам ------------------------------ */
+
+function recept_history_dir(string $projectId = ''): string
+{
+    $dir = recept_path('history');
+    if (!is_dir($dir) && !@mkdir($dir, 0770, true) && !is_dir($dir)) {
+        recept_fail(500, 'Нет доступа к папке истории');
+    }
+    recept_protect_dir($dir);
+    if ($projectId === '') {
+        return $dir;
+    }
+    if (!preg_match('/^[A-Za-z0-9_.-]{1,80}$/', $projectId)) {
+        recept_fail(400, 'Неверный проект');
+    }
+    $sub = $dir . '/' . $projectId;
+    if (!is_dir($sub) && !@mkdir($sub, 0770, true) && !is_dir($sub)) {
+        recept_fail(500, 'Нет доступа к папке истории проекта');
+    }
+    return $sub;
+}
+
+/** Короткая подпись проекта: по ней понимаем, менялся ли он с прошлого сохранения. */
+function recept_project_signature($project): string
+{
+    $json = json_encode($project, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return is_string($json) ? hash('sha256', $json) : '';
+}
+
+/**
+ * Снимок каждого изменившегося проекта. Храним по 40 версий на проект:
+ * это даёт откат одного проекта, не трогая работу коллег.
+ */
+function recept_history_record($data, array $user, int $rev): void
+{
+    if (!is_object($data) && !is_array($data)) {
+        return;
+    }
+    $projects = is_object($data) ? (isset($data->projects) ? $data->projects : null) : (isset($data['projects']) ? $data['projects'] : null);
+    if (!is_array($projects)) {
+        return;
+    }
+
+    foreach ($projects as $project) {
+        $id = is_object($project) ? (isset($project->id) ? (string) $project->id : '') : (isset($project['id']) ? (string) $project['id'] : '');
+        if ($id === '' || !preg_match('/^[A-Za-z0-9_.-]{1,80}$/', $id)) {
+            continue;
+        }
+        $signature = recept_project_signature($project);
+        $dir = recept_history_dir($id);
+        $indexFile = $dir . '/index.json';
+        $index = recept_read_json($indexFile, []);
+        if (!is_array($index)) {
+            $index = [];
+        }
+        $last = count($index) > 0 ? $index[count($index) - 1] : null;
+        if ($last !== null && isset($last['signature']) && $last['signature'] === $signature) {
+            continue;   // проект не менялся — новая версия не нужна
+        }
+
+        $name = is_object($project) ? (isset($project->name) ? (string) $project->name : '') : (isset($project['name']) ? (string) $project['name'] : '');
+        $file = 'v' . str_pad((string) $rev, 6, '0', STR_PAD_LEFT) . '-' . substr($signature, 0, 8) . '.json';
+        $json = json_encode($project, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_string($json)) {
+            continue;
+        }
+        $payload = function_exists('gzencode') ? gzencode($json, 6) : $json;
+        $storedFile = function_exists('gzencode') ? $file . '.gz' : $file;
+        if (!recept_write_raw($dir . '/' . $storedFile, $payload)) {
+            continue;
+        }
+
+        $index[] = [
+            'file' => $storedFile,
+            'rev' => $rev,
+            'at' => gmdate('c'),
+            'by' => (string) ($user['login'] ?? ''),
+            'name' => mb_substr($name, 0, 120),
+            'size' => strlen($json),
+            'signature' => $signature,
+        ];
+        if (count($index) > 40) {
+            $drop = array_splice($index, 0, count($index) - 40);
+            foreach ($drop as $old) {
+                if (isset($old['file'])) {
+                    @unlink($dir . '/' . $old['file']);
+                }
+            }
+        }
+        recept_write_json($indexFile, array_values($index));
+    }
+}
+
+function recept_history_list(string $projectId): array
+{
+    $dir = recept_history_dir($projectId);
+    $index = recept_read_json($dir . '/index.json', []);
+    if (!is_array($index)) {
+        return [];
+    }
+    $out = [];
+    foreach (array_reverse($index) as $item) {
+        $out[] = [
+            'file' => isset($item['file']) ? $item['file'] : '',
+            'rev' => isset($item['rev']) ? (int) $item['rev'] : 0,
+            'at' => isset($item['at']) ? $item['at'] : '',
+            'by' => isset($item['by']) ? $item['by'] : '',
+            'name' => isset($item['name']) ? $item['name'] : '',
+            'size' => isset($item['size']) ? (int) $item['size'] : 0,
+        ];
+    }
+    return $out;
+}
+
+/** Содержимое одной версии проекта — клиент подставит её вместо текущей. */
+function recept_history_read(string $projectId, string $file)
+{
+    $file = basename($file);
+    if (!preg_match('/^v\d{6}-[a-f0-9]{8}\.json(\.gz)?$/', $file)) {
+        return null;
+    }
+    $path = recept_history_dir($projectId) . '/' . $file;
+    if (!is_file($path)) {
+        return null;
+    }
+    $raw = @file_get_contents($path);
+    if (!is_string($raw)) {
+        return null;
+    }
+    if (substr($file, -3) === '.gz' && function_exists('gzdecode')) {
+        $unpacked = @gzdecode($raw);
+        if (!is_string($unpacked)) {
+            return null;
+        }
+        $raw = $unpacked;
+    }
+    $data = json_decode($raw, false);
+    return is_object($data) || is_array($data) ? $data : null;
 }
 
 /** Резервная копия предыдущего состояния — не чаще, чем раз в RECEPT_BACKUP_MIN_INTERVAL. */
@@ -813,6 +954,17 @@ function recept_files_gc(): array
         if (preg_match_all('/recept-file:([a-f0-9]{64})/', $state, $m)) {
             foreach ($m[1] as $hash) {
                 $used[$hash] = true;
+            }
+        }
+    }
+    foreach (glob(recept_history_dir() . '/*/*.json.gz') ?: [] as $snapshot) {
+        $raw = @file_get_contents($snapshot);
+        if (is_string($raw) && function_exists('gzdecode')) {
+            $unpacked = @gzdecode($raw);
+            if (is_string($unpacked) && preg_match_all('/recept-file:([a-f0-9]{64})/', $unpacked, $m)) {
+                foreach ($m[1] as $hash) {
+                    $used[$hash] = true;
+                }
             }
         }
     }
