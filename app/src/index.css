@@ -6982,3 +6982,13 @@ input.editable-number { max-width: 120px; text-align: right; }
   font-size: 13px;
   cursor: pointer;
 }
+
+.server-head-actions { display: flex; align-items: center; gap: 10px; }
+.server-check-link {
+  font-size: 13px;
+  color: var(--navy, #16213f);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+.server-check-link:hover { color: #0b1430; }

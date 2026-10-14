@@ -90,6 +90,9 @@ api/.htaccess
    (логин латиницей, пароль не короче 8 символов). Эта учётка получает полные права.
 3. Приложение сразу откроется с пустой общей базой.
 
+Наглядная самопроверка установки (видит в том числе скрытые `.htaccess` и `.user.ini`):
+`https://ваш-сайт/api/index.php?r=check`.
+
 Проверка, что сервер отвечает: откройте `https://ваш-сайт/api/index.php?r=health` —
 должен вернуться JSON вида `{"ok":true,"php":"8.2.…","needsSetup":false}`.
 
@@ -127,6 +130,7 @@ api/.htaccess
 | Запрос | Что делает |
 |---|---|
 | `GET api/index.php?r=health` | Проверка, что сервер жив |
+| `GET api/index.php?r=check` | Страница самопроверки установки (HTML) |
 | `GET api/index.php?r=session` | Кто вошёл и какая версия базы |
 | `POST api/index.php?r=login` | Вход |
 | `GET api/index.php?r=state` | Выгрузить всю базу |

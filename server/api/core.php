@@ -15,7 +15,7 @@ const RECEPT_BACKUP_MIN_INTERVAL = 600;       // не чаще одной коп
 const RECEPT_BACKUP_KEEP = 60;                // сколько копий держать
 
 /** Папка с данными. Выбирается один раз и запоминается в data-path.txt рядом с API. */
-function recept_data_dir(): string
+function recept_data_dir(bool $soft = false): string
 {
     static $resolved = null;
     if ($resolved !== null) {
@@ -57,6 +57,9 @@ function recept_data_dir(): string
         return $resolved;
     }
 
+    if ($soft) {
+        return '';
+    }
     recept_fail(500, 'Нет доступной папки для данных. Создайте папку recept-data рядом с папкой сайта и дайте права на запись.');
 }
 

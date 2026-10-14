@@ -44,6 +44,134 @@ switch ($route . ' ' . $method) {
         ]);
         // no break
 
+    /* ---------- страница самопроверки установки (открывается в браузере) ---------- */
+    case 'check GET': {
+        $root = dirname(__DIR__);
+        $rows = [];
+
+        $phpOk = version_compare(PHP_VERSION, '8.0', '>=');
+        $rows[] = [
+            $phpOk ? 'ok' : 'bad',
+            'Версия PHP',
+            PHP_VERSION,
+            $phpOk ? '' : 'Нужна PHP 8.0 и выше. Панель хостинга → Сайты → ваш сайт → PHP → версия 8.1 или 8.2.',
+        ];
+
+        $files = [
+            'index.html' => 'Главный файл приложения',
+            '.htaccess' => 'Скрытый файл настроек Apache',
+            '.user.ini' => 'Скрытый файл настроек PHP',
+            'assets' => 'Папка со стилями и скриптами',
+            'api/core.php' => 'Серверная часть',
+            'api/.htaccess' => 'Скрытый файл настроек папки api',
+        ];
+        foreach ($files as $name => $label) {
+            $exists = file_exists($root . '/' . $name);
+            $rows[] = [
+                $exists ? 'ok' : 'bad',
+                $label,
+                $name . ($exists ? ' — на месте' : ' — НЕ НАЙДЕН'),
+                $exists ? '' : 'Файл не загрузился на хостинг. Залейте его заново (в FTP-программе включите показ скрытых файлов).',
+            ];
+        }
+
+        $rootEnv = (string) ($_SERVER['RECEPT_ROOT_HTACCESS'] ?? getenv('RECEPT_ROOT_HTACCESS'));
+        $apiEnv = (string) ($_SERVER['RECEPT_API_HTACCESS'] ?? getenv('RECEPT_API_HTACCESS'));
+        $htOk = $rootEnv === '1' || $apiEnv === '1';
+        $rows[] = [
+            $htOk ? 'ok' : 'warn',
+            'Настройки .htaccess применяются',
+            $htOk ? 'да' : 'не удалось подтвердить',
+            $htOk ? '' : 'Либо файл .htaccess не залит, либо хостинг не даёт его применять (AllowOverride). Приложение будет работать, но красивые адреса и переход на HTTPS могут не действовать.',
+        ];
+
+        $dataDir = recept_data_dir(true);
+        $rows[] = [
+            $dataDir !== '' ? 'ok' : 'bad',
+            'Папка для данных',
+            $dataDir !== '' ? 'создана, запись разрешена' : 'нет доступа на запись',
+            $dataDir !== '' ? '' : 'Создайте папку recept-data рядом с папкой сайта и дайте права 755, либо укажите путь в файле api/config.php.',
+        ];
+
+        foreach (['json' => 'Обработка данных', 'mbstring' => 'Русские буквы', 'zlib' => 'Сжатие и резервные копии'] as $ext => $label) {
+            $has = extension_loaded($ext);
+            $rows[] = [
+                $has ? 'ok' : 'bad',
+                $label . ' (расширение ' . $ext . ')',
+                $has ? 'включено' : 'выключено',
+                $has ? '' : 'Включите расширение ' . $ext . ' в настройках PHP вашего хостинга.',
+            ];
+        }
+
+        $postMax = recept_bytes((string) ini_get('post_max_size'));
+        $postOk = $postMax >= 32 * 1048576;
+        $rows[] = [
+            $postOk ? 'ok' : 'warn',
+            'Максимальный размер сохранения',
+            (string) ini_get('post_max_size'),
+            $postOk ? '' : 'Маловато для проектов с фотографиями. В файле .user.ini поставьте post_max_size = 128M и upload_max_filesize = 128M.',
+        ];
+
+        $rows[] = [
+            'ok',
+            'Учётные записи',
+            $needsSetup ? 'ещё не созданы — откройте главную страницу сайта' : 'создано: ' . count($users),
+            '',
+        ];
+
+        $bad = 0;
+        $warn = 0;
+        foreach ($rows as $row) {
+            if ($row[0] === 'bad') {
+                $bad += 1;
+            } elseif ($row[0] === 'warn') {
+                $warn += 1;
+            }
+        }
+        if ($bad > 0) {
+            $verdict = ['bad', 'Есть проблемы: ' . $bad . '. Смотрите красные строки и подсказки к ним.'];
+        } elseif ($warn > 0) {
+            $verdict = ['warn', 'Работать можно, но есть замечания: ' . $warn . '.'];
+        } else {
+            $verdict = ['ok', 'Всё в порядке — можно пользоваться. Откройте главную страницу сайта.'];
+        }
+
+        $icons = ['ok' => '✓', 'warn' => '!', 'bad' => '✕'];
+        $html = '<!doctype html><html lang="ru"><head><meta charset="utf-8">'
+            . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            . '<title>Проверка установки — РЕцепт</title><style>'
+            . 'body{font:15px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#f4f6fb;color:#16213f;margin:0;padding:24px}'
+            . '.wrap{max-width:780px;margin:0 auto}h1{font-size:22px;margin:0 0 4px}'
+            . 'p.sub{color:#5b6b8f;margin:0 0 18px}'
+            . '.verdict{padding:14px 16px;border-radius:12px;font-weight:600;margin-bottom:18px}'
+            . '.verdict.ok{background:#e7f6ec;color:#17603a}.verdict.warn{background:#fff6e2;color:#7a5200}'
+            . '.verdict.bad{background:#fdeaea;color:#8d1f1f}'
+            . 'table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(22,33,63,.12)}'
+            . 'td{padding:10px 12px;border-top:1px solid #eef1f7;vertical-align:top}tr:first-child td{border-top:0}'
+            . 'td.i{width:28px;text-align:center;font-weight:700}td.i.ok{color:#1d9a57}td.i.warn{color:#c08a00}td.i.bad{color:#d13b3b}'
+            . 'td.n{width:38%}td.v{color:#44557d}.hint{display:block;margin-top:4px;color:#8d1f1f;font-size:13px}'
+            . '.foot{margin-top:18px;font-size:13px;color:#5b6b8f}a{color:#16213f}'
+            . '</style></head><body><div class="wrap"><h1>Проверка установки калькулятора</h1>'
+            . '<p class="sub">Эта страница смотрит на файлы сайта со стороны сервера — скрытые файлы видно даже там, где файловый менеджер их прячет.</p>'
+            . '<div class="verdict ' . $verdict[0] . '">' . htmlspecialchars($verdict[1], ENT_QUOTES, 'UTF-8') . '</div><table>';
+        foreach ($rows as $row) {
+            $html .= '<tr><td class="i ' . $row[0] . '">' . $icons[$row[0]] . '</td>'
+                . '<td class="n">' . htmlspecialchars($row[1], ENT_QUOTES, 'UTF-8') . '</td>'
+                . '<td class="v">' . htmlspecialchars($row[2], ENT_QUOTES, 'UTF-8')
+                . ($row[3] !== '' ? '<span class="hint">' . htmlspecialchars($row[3], ENT_QUOTES, 'UTF-8') . '</span>' : '')
+                . '</td></tr>';
+        }
+        $html .= '</table><p class="foot">Адрес этой страницы: <code>/api/index.php?r=check</code>. '
+            . 'Обновите её (F5) после любых изменений на хостинге. '
+            . 'Главная страница сайта: <a href="../">открыть приложение</a>.</p></div></body></html>';
+
+        http_response_code(200);
+        header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: no-store');
+        echo $html;
+        exit;
+    }
+
     /* ---------- первый запуск: создаём администратора ---------- */
     case 'setup POST': {
         if (!$needsSetup) {

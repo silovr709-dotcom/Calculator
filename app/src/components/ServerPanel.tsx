@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
+  apiUrl,
   changeOwnPassword, deleteServerUser, listServerBackups, listServerUsers, restoreServerBackup,
   saveServerUser, serverHealth, type ServerBackup, type ServerRole, type ServerUser,
 } from '../lib/serverApi';
@@ -117,7 +118,10 @@ export default function ServerPanel(props: {
           <h1>Сервер</h1>
           <p className="view-sub">Общая база на вашем хостинге: доступ сотрудников, состояние связи и резервные копии.</p>
         </div>
-        <button type="button" onClick={() => void sync.refresh()}>Обновить с сервера</button>
+        <div className="server-head-actions">
+          <a className="server-check-link" href={apiUrl('check')} target="_blank" rel="noreferrer">Проверка установки</a>
+          <button type="button" onClick={() => void sync.refresh()}>Обновить с сервера</button>
+        </div>
       </header>
 
       <section className="server-cards">

@@ -8,3 +8,6 @@ __pycache__/
 
 # Готовый пакет для загрузки на хостинг (npm run build:hosting)
 release/
+
+# Зависимости
+node_modules/

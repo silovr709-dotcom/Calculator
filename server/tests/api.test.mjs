@@ -45,7 +45,7 @@ async function call(route, { method = 'GET', body, query = '', gzip = false } = 
   const text = res.text;
   let json = null;
   try { json = JSON.parse(text); } catch { /* не JSON */ }
-  return { status: res.httpStatusCode, json, text: text.slice(0, 400) };
+  return { status: res.httpStatusCode, json, raw: text, text: text.slice(0, 400) };
 }
 
 function check(name, cond, info = '') {
@@ -56,6 +56,13 @@ function check(name, cond, info = '') {
 let r = await call('health');
 check('health отвечает', r.status === 200 && r.json?.ok === true, r.text);
 check('нужна первичная настройка', r.json?.needsSetup === true);
+
+r = await call('check');
+check(
+  'страница самопроверки открывается',
+  r.status === 200 && r.raw.includes('Проверка установки') && r.raw.includes('Версия PHP') && r.raw.includes('.user.ini'),
+  r.text,
+);
 
 r = await call('state');
 check('без входа база закрыта (401)', r.status === 401, r.text);
