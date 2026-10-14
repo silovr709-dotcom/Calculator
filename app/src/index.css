@@ -7291,3 +7291,54 @@ select option { background: #fff !important; color: #102037 !important; }
 @media (max-width: 1100px) {
   .project-workspace-frame.sketch-workspace-frame .project-context-panel { grid-template-columns: 1fr; }
 }
+
+/* ======================================================================
+   Правка КП прямо на странице документа.
+   Текст выглядит как текст, но по клику превращается в поле. В печать и PDF
+   уходит только содержимое: подчёркивания, подсказки и пустые строки условий
+   скрываются.
+   ====================================================================== */
+.editable-text {
+  display: inline;
+  border-bottom: 1px dashed rgba(11, 58, 117, .38);
+  border-radius: 3px;
+  cursor: text;
+  transition: background .12s ease;
+}
+.editable-text:hover,
+.editable-text:focus-visible {
+  background: rgba(31, 111, 235, .10);
+  outline: none;
+}
+.editable-text.empty { color: #93a3b8; font-style: italic; }
+.editable-text.locked { border-bottom: 0; cursor: inherit; }
+.editable-field {
+  font: inherit;
+  color: inherit;
+  width: 100%;
+  min-width: 140px;
+  max-width: 100%;
+  padding: 2px 6px;
+  border: 1px solid #1f6feb;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, .12);
+}
+textarea.editable-field { resize: vertical; line-height: 1.45; }
+.editable-date {
+  font: inherit;
+  color: inherit;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 1px dashed rgba(11, 58, 117, .38);
+  background: transparent;
+}
+.cd-hero h1 .editable-text { border-bottom-color: rgba(255, 255, 255, .45); }
+.cd-component-main .editable-text { border-bottom-color: rgba(11, 58, 117, .22); }
+
+@media print {
+  .editable-text,
+  .editable-date { border-bottom: 0 !important; background: transparent !important; }
+  .editable-text.empty { display: none; }
+  .cd-term-empty { display: none !important; }
+}

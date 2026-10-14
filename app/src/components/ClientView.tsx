@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import type { ClientDocumentPackageSettings, ClientOfferModuleDetailMode, ClientOfferPresentationMode, ClientOfferSettings, EskizExportViewSettings, EskizLayerKey, EskizProIntegration, Pricebook, Project } from '../types';
+import { useMemo, useState } from 'react';
+import type { ClientDocumentPackageSettings, ClientOfferModuleDetailMode, ClientOfferPresentationMode, ClientOfferSettings, EskizExportViewSettings, EskizLayerKey, EskizProIntegration, Pricebook, Project, ProjectLine } from '../types';
 import type { ClientOfferDetail, ClientOfferDetailKind } from '../lib/clientOffer';
 import { calcTotals } from '../lib/engine';
 import { calculateVariant } from '../lib/variants';
 import { buildClientOfferDetails, buildClientProjectSummary, clientSketchSummaryLines, isModuleLine, moduleNoteMatches, stripModuleNote } from '../lib/clientOffer';
+import { clientLineName, makeClientNameResolver } from '../lib/clientNaming';
+import EditableText from './EditableText';
 import { fmtMoney, fmtDate, fmtNum } from '../lib/format';
 import { exportClientXlsx } from '../lib/exporters';
 import { snapshotProject } from '../lib/eskizPro';
@@ -37,6 +39,8 @@ const CLIENT_ESKIZ_LAYERS: { key: EskizLayerKey; label: string }[] = [
   { key: 'equipment', label: 'Техника' },
   { key: 'links', label: 'Ссылки' },
 ];
+
+const DEFAULT_SUMMARY_NOTE = 'Основные цифры без себестоимости и внутренних закупочных данных. Подробный состав ниже сгруппирован так, чтобы не повторять фурнитуру внутри каждого модуля.';
 
 const AGGREGATED_HARDWARE_KINDS: ClientOfferDetailKind[] = ['hinge', 'drawerSys', 'lift', 'handle', 'legs'];
 const AGGREGATED_HARDWARE_SET = new Set<ClientOfferDetailKind>(AGGREGATED_HARDWARE_KINDS);
@@ -131,14 +135,16 @@ function buildCompositionSections(details: ClientOfferDetail[]) {
   }).filter((section) => section.items.length > 0);
 }
 
-function DetailRow({ detail, showPrice, technical }: { detail: ClientOfferDetail; showPrice: boolean; technical: boolean }) {
+function DetailRow({ detail, showPrice, technical, onRename }: { detail: ClientOfferDetail; showPrice: boolean; technical: boolean; onRename?: (itemId: string, name: string) => void }) {
   const visibleDetails = technical ? detail.details : detail.details.slice(0, 3);
   const hiddenCount = detail.details.length - visibleDetails.length;
   return (
     <div className={`cd-component cd-component-${detail.kind}${showPrice ? '' : ' no-price'}`}>
       <div className="cd-component-main">
         <span className="cd-component-kind">{detail.kindLabel}</span>
-        <b>{detail.name}</b>
+        <b>{onRename && detail.itemId
+          ? <EditableText value={detail.name} label="Название позиции в КП" onChange={(value) => onRename(detail.itemId, value)} />
+          : detail.name}</b>
         {visibleDetails.length > 0 && (
           <div className="cd-component-notes">
             {visibleDetails.map((note) => <span key={note}>{note}</span>)}
@@ -172,12 +178,14 @@ function moduleCompactSummary(details: ClientOfferDetail[]): string[] {
   return out;
 }
 
-export default function ClientView({ project, pricebook, moduleGroups, onOfferChange, onEskizProChange }: {
+export default function ClientView({ project, pricebook, moduleGroups, onOfferChange, onEskizProChange, onProjectMetaChange }: {
   project: Project;
   pricebook?: Pricebook;
   moduleGroups?: ClientModuleGroup[];
   onOfferChange?: (offer: ClientOfferSettings) => void;
   onEskizProChange?: (eskizPro: EskizProIntegration) => void;
+  /** Правка шапки КП прямо на странице: название проекта, заказчик, дата. */
+  onProjectMetaChange?: (patch: { name?: string; client?: string; date?: string }) => void;
 }) {
   const [packageExporting, setPackageExporting] = useState(false);
   const groups = moduleGroups ?? [];
@@ -234,10 +242,31 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   };
   const variantSummaries = visibleVariants.map((variant) => ({ variant, totals: pricebook ? calculateVariant(baseProjectForVariants, pricebook, variant).totals : null }));
   const updateOffer = (patch: Partial<ClientOfferSettings>) => onOfferChange?.({ ...(project.clientOffer ?? {}), ...patch });
+
+  // Названия для клиента: «Квадратный метр фасада … — 19мм» → «МДФ ПВХ (1 категория; 19 мм)».
+  // Ручная правка в КП (lineNames) всегда важнее автоматического названия.
+  const pricebookItems = useMemo(() => new Map((pricebook?.items ?? []).map((item) => [item.id, item])), [pricebook]);
+  const storedLineNames = project.clientOffer?.lineNames;
+  const resolveClientName = useMemo(
+    () => makeClientNameResolver(pricebookItems, storedLineNames),
+    [pricebookItems, storedLineNames],
+  );
+  const nameOverrides = storedLineNames ?? {};
+  const canEditInline = Boolean(onOfferChange);
+  const renameDetail = (itemId: string, name: string) => {
+    if (!itemId) return;
+    const next = { ...nameOverrides };
+    // Если менеджер вернул автоматическое название — правку не храним.
+    const sample = activeCalculation.lines.find((line: ProjectLine) => line.itemId === itemId);
+    const auto = sample ? clientLineName(sample, pricebookItems.get(itemId)) : '';
+    if (!name.trim() || name.trim() === auto) delete next[itemId];
+    else next[itemId] = name.trim();
+    updateOffer({ lineNames: next });
+  };
   const packageSettings = normalizeClientDocumentPackage(project.clientOffer?.documentPackage);
   const updatePackageSettings = (patch: Partial<ClientDocumentPackageSettings>) => updateOffer({ documentPackage: { ...packageSettings, ...patch } });
-  const extraDetails = buildClientOfferDetails(extraLines, lineCalcs);
-  const allDetails = buildClientOfferDetails(activeCalculation.lines, lineCalcs);
+  const extraDetails = buildClientOfferDetails(extraLines, lineCalcs, resolveClientName);
+  const allDetails = buildClientOfferDetails(activeCalculation.lines, lineCalcs, resolveClientName);
   const projectHardwareDetails = extractHardwareFromModules ? allDetails.filter(isAggregatedHardware) : [];
   const visibleExtraDetails = extractHardwareFromModules ? extraDetails.filter((detail) => !isAggregatedHardware(detail)) : extraDetails;
   const moduleQty = groups.reduce((sum, group) => sum + group.qty, 0);
@@ -258,6 +287,14 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   ].filter(Boolean);
   const materialHighlights = uniqueHighlights(allDetails, ['body', 'facade', 'frame', 'worktop', 'wallPanel'], isTechnical ? 10 : 6);
   const compositionSections = buildCompositionSections(allDetails);
+  const editableTerms: { label: string; value: string; field: keyof ClientOfferSettings; placeholder: string }[] = [
+    { label: 'Действительно до', value: project.clientOffer?.validUntil ? fmtDate(project.clientOffer.validUntil) : '', field: 'validUntil', placeholder: 'дата' },
+    { label: 'Оплата', value: project.clientOffer?.paymentTerms ?? '', field: 'paymentTerms', placeholder: 'например, 50% аванс' },
+    { label: 'Срок изготовления', value: project.clientOffer?.productionTerms ?? '', field: 'productionTerms', placeholder: 'например, 45 рабочих дней' },
+    { label: 'Гарантия', value: project.clientOffer?.warranty ?? '', field: 'warranty', placeholder: 'например, 12 месяцев' },
+    { label: 'Монтаж', value: project.clientOffer?.installation ?? '', field: 'installation', placeholder: 'например, включён' },
+    { label: 'Доставка', value: project.clientOffer?.delivery ?? '', field: 'delivery', placeholder: 'например, по адресу клиента' },
+  ];
   const offerTerms = [
     project.clientOffer?.validUntil ? { label: 'Действительно до', value: fmtDate(project.clientOffer.validUntil) } : null,
     { label: 'Оплата', value: project.clientOffer?.paymentTerms || 'по согласованию' },
@@ -462,8 +499,18 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
             <div className="cd-brand">РЕцепт</div>
             <div className="cd-sub">мебельное ателье · индивидуальная кухня</div>
             <h2>Коммерческое предложение</h2>
-            <h1>{project.name}</h1>
-            <div className="cd-hero-meta">{project.client && <span>Заказчик: <b>{project.client}</b></span>}<span>Дата: {fmtDate(project.date)}</span>{selectedVariant && <span>Вариант: <b>{selectedVariant.name}</b></span>}</div>
+            <h1>{onProjectMetaChange
+              ? <EditableText value={project.name} label="Название проекта" placeholder="Название проекта" onChange={(value) => onProjectMetaChange({ name: value })} />
+              : project.name}</h1>
+            <div className="cd-hero-meta">
+              <span>Заказчик: <b>{onProjectMetaChange
+                ? <EditableText value={project.client} label="Заказчик" placeholder="имя заказчика" onChange={(value) => onProjectMetaChange({ client: value })} />
+                : project.client}</b></span>
+              <span>Дата: {onProjectMetaChange
+                ? <input className="editable-date" type="date" value={project.date} aria-label="Дата КП" onChange={(event) => onProjectMetaChange({ date: event.target.value })} />
+                : fmtDate(project.date)}</span>
+              {selectedVariant && <span>Вариант: <b>{selectedVariant.name}</b></span>}
+            </div>
             <div className="cd-hero-tags"><span>{MODE_LABELS[presentationMode]}</span>{clientSketchVisible && <span>Эскиз PRO включён</span>}{groups.length > 0 && <span>{fmtNum(moduleQty, 3)} модулей</span>}</div>
           </div>
           <div className="cd-hero-price">
@@ -473,12 +520,25 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           </div>
         </header>
 
-        {offerTerms.length > 0 && <div className="cd-terms">{offerTerms.map((term) => <div key={term.label}><b>{term.label}</b><span>{term.value}</span></div>)}</div>}
+        {(editableTerms.length > 0 || offerTerms.length > 0) && (
+          <div className="cd-terms">
+            {canEditInline
+              ? editableTerms.map((term) => <div key={term.label} className={term.value ? '' : 'cd-term-empty no-print'}>
+                  <b>{term.label}</b>
+                  {term.field === 'validUntil'
+                    ? <input className="editable-date" type="date" value={project.clientOffer?.validUntil ?? ''} aria-label="Предложение действительно до" onChange={(event) => updateOffer({ validUntil: event.target.value || undefined })} />
+                    : <EditableText value={term.value} label={term.label} placeholder={term.placeholder} onChange={(value) => updateOffer({ [term.field]: value } as Partial<ClientOfferSettings>)} />}
+                </div>)
+              : offerTerms.map((term) => <div key={term.label}><b>{term.label}</b><span>{term.value}</span></div>)}
+          </div>
+        )}
 
         <section className="cd-summary cd-summary-modern">
           <div className="cd-summary-copy">
             <h3>Кратко по проекту</h3>
-            <p>Основные цифры без себестоимости и внутренних закупочных данных. Подробный состав ниже сгруппирован так, чтобы не повторять фурнитуру внутри каждого модуля.</p>
+            <p>{canEditInline
+              ? <EditableText as="span" multiline value={project.clientOffer?.summaryNote ?? DEFAULT_SUMMARY_NOTE} label="Описание в КП" onChange={(value) => updateOffer({ summaryNote: value || undefined })} />
+              : (project.clientOffer?.summaryNote ?? DEFAULT_SUMMARY_NOTE)}</p>
           </div>
           <div className="cd-summary-facts">
             <div><b>{fmtNum(moduleQty, 3)}</b><span>модулей</span></div>
@@ -545,7 +605,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
                     const ids = groupLineIds(group);
                     const idSet = new Set(ids);
                     const lines = activeCalculation.lines.filter((line) => idSet.has(line.id));
-                    const details = buildClientOfferDetails(lines, lineCalcs);
+                    const details = buildClientOfferDetails(lines, lineCalcs, resolveClientName);
                     const visibleDetails = extractHardwareFromModules ? details.filter((detail) => !isAggregatedHardware(detail)) : details;
                     const extractedCount = details.length - visibleDetails.length;
                     const total = groupSum(group);
@@ -571,7 +631,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
               const ids = groupLineIds(group);
               const idSet = new Set(ids);
               const lines = activeCalculation.lines.filter((line) => idSet.has(line.id));
-              const details = buildClientOfferDetails(lines, lineCalcs);
+              const details = buildClientOfferDetails(lines, lineCalcs, resolveClientName);
               const total = groupSum(group);
               return (
                 <article className="cd-module-card" key={group.id}>
@@ -585,7 +645,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
                   </div>
                   {details.length > 0 ? (
                     <div className="cd-component-list">
-                      {details.map((detail) => <DetailRow key={detail.id} detail={detail} showPrice={showDetailPrices} technical />)}
+                      {details.map((detail) => <DetailRow key={detail.id} detail={detail} showPrice={showDetailPrices} technical onRename={canEditInline ? renameDetail : undefined} />)}
                     </div>
                   ) : (
                     <div className="cd-module-empty">Нет рассчитанных строк по модулю — проверьте комплектацию.</div>
@@ -600,7 +660,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           <section className="cd-project-hardware">
             <div className="cd-section-head"><h3>Фурнитура по проекту</h3><span>общими строками, без повторения в каждом модуле</span></div>
             <div className="cd-component-list cd-component-list-extra cd-hardware-list">
-              {projectHardwareDetails.map((detail) => <DetailRow key={detail.id} detail={{ ...detail, details: detail.details.map((note) => stripModuleNote(note)) }} showPrice={showDetailPrices} technical={isTechnical} />)}
+              {projectHardwareDetails.map((detail) => <DetailRow key={detail.id} detail={{ ...detail, details: detail.details.map((note) => stripModuleNote(note)) }} showPrice={showDetailPrices} technical={isTechnical} onRename={canEditInline ? renameDetail : undefined} />)}
             </div>
           </section>
         )}
@@ -609,7 +669,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           <section className="cd-extra">
             <div className="cd-section-head"><h3>Дополнительно</h3><span>столешницы, цоколь, мойки, работы и прочие позиции</span></div>
             <div className="cd-component-list cd-component-list-extra">
-              {visibleExtraDetails.map((detail) => <DetailRow key={detail.id} detail={{ ...detail, details: detail.details.map((note) => stripModuleNote(note)) }} showPrice={showDetailPrices && !isBrief} technical={isTechnical} />)}
+              {visibleExtraDetails.map((detail) => <DetailRow key={detail.id} detail={{ ...detail, details: detail.details.map((note) => stripModuleNote(note)) }} showPrice={showDetailPrices && !isBrief} technical={isTechnical} onRename={canEditInline ? renameDetail : undefined} />)}
             </div>
           </section>
         )}

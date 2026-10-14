@@ -179,6 +179,10 @@ export interface ClientOfferSettings {
   moduleDetailMode?: ClientOfferModuleDetailMode;
   /** true/undefined — петли, опоры, ящики и другую фурнитуру показывать общими строками по проекту. */
   aggregateHardware?: boolean;
+  /** Ручные названия позиций в КП: ключ — id позиции прайса, значение — текст для клиента. */
+  lineNames?: Record<string, string>;
+  /** Вступительный абзац блока «Кратко по проекту», если менеджер переписал его прямо в КП. */
+  summaryNote?: string;
 }
 
 /** Снимок КП для истории согласований: не хранит весь проект, только контрольные цифры и контекст. */

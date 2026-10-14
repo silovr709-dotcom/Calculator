@@ -23,6 +23,8 @@ export interface ClientOfferDetail {
   kind: ClientOfferDetailKind;
   kindLabel: string;
   name: string;
+  /** id позиции прайса — по нему хранится ручное переименование в КП. */
+  itemId: string;
   lineIds: string[];
   /** Количество деталей/комплектов до пересчёта в м²/п.м. */
   qty: number;
@@ -176,13 +178,19 @@ function dedupePush(list: string[], value: string): void {
  * Компактная детализация КП: одинаковые позиции внутри модуля схлопываются в одну строку
  * («Фасады — материал — 3 шт / 1,24 м²», «Петли — модель — 6 шт»), а размеры остаются в подстроке.
  */
-export function buildClientOfferDetails(lines: ProjectLine[], lineCalcs: Map<string, LineCalc>): ClientOfferDetail[] {
+export function buildClientOfferDetails(
+  lines: ProjectLine[],
+  lineCalcs: Map<string, LineCalc>,
+  /** Имя позиции для клиента: понятное название материала или ручная правка из КП. */
+  resolveName?: (line: ProjectLine) => string,
+): ClientOfferDetail[] {
   const acc = new Map<string, ClientOfferDetail & { priced: boolean }>();
 
   for (const line of lines) {
     const meta = classifyClientLine(line);
     const unit = unitForClient(line);
-    const key = [meta.kind, line.itemId, line.name, unit, line.priceBasis ?? ''].join('|');
+    const displayName = resolveName?.(line) || line.name;
+    const key = [meta.kind, line.itemId, displayName, unit, line.priceBasis ?? ''].join('|');
     const calc = lineCalcs.get(line.id);
     const qtyEffective = calc?.qtyEffective ?? line.qty;
     const clientSum = calc?.clientSum ?? null;
@@ -192,7 +200,8 @@ export function buildClientOfferDetails(lines: ProjectLine[], lineCalcs: Map<str
         id: key,
         kind: meta.kind,
         kindLabel: meta.label,
-        name: line.name,
+        name: displayName,
+        itemId: line.itemId,
         lineIds: [],
         qty: 0,
         qtyEffective: 0,

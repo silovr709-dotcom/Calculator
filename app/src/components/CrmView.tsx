@@ -5,6 +5,7 @@ import { fmtDate, fmtMoney, fmtNum } from '../lib/format';
 import { moduleToLines } from '../lib/modules';
 import { projectReadiness } from '../lib/dashboard';
 import { buildClientOfferDetails, buildClientProjectSummary } from '../lib/clientOffer';
+import { makeClientNameResolver } from '../lib/clientNaming';
 import { downloadClientContractDocx, downloadClientDocumentZip, downloadClientOfferDocx, downloadClientReceiptDocx, type ClientDocumentArgs } from '../lib/clientPackage';
 import {
   CLIENT_TAGS,
@@ -114,7 +115,12 @@ function calcProjectData(project: Project, pricebook: Pricebook | null) {
 function buildClientArgs(project: Project, pricebook: Pricebook | null): ClientDocumentArgs | null {
   if (!pricebook) return null;
   const data = calcProjectData(project, pricebook);
-  const details = buildClientOfferDetails(data.lines, data.lineCalcs);
+  // Документы из CRM показывают клиенту те же названия, что и КП в проекте.
+  const resolveName = makeClientNameResolver(
+    new Map(pricebook.items.map((item) => [item.id, item])),
+    project.clientOffer?.lineNames,
+  );
+  const details = buildClientOfferDetails(data.lines, data.lineCalcs, resolveName);
   return {
     project: { ...project, lines: data.lines },
     offer: project.clientOffer ?? {},

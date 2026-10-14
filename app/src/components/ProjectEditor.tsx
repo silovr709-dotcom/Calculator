@@ -19,6 +19,7 @@ import KitchenChecklistPanel from './KitchenChecklistPanel';
 import OrderCenterPanel from './OrderCenterPanel';
 import ProjectContextPanel from './ProjectContextPanel';
 import { exportInternalXlsx, exportClientXlsx, exportInternalCsv, exportProjectJson } from '../lib/exporters';
+import { makeClientNameResolver } from '../lib/clientNaming';
 import QRCode from 'qrcode';
 import { makeProjectQrShare } from '../lib/sync';
 import { Overlay } from './Portal';
@@ -274,6 +275,12 @@ export default function ProjectEditor(props: {
     props.onChange({ ...project, lines: project.lines.filter((l) => l.id !== id).map((l) => (l.baseLineId === id ? { ...l, baseLineId: null } : l)) });
   };
 
+  // Названия позиций для клиента (КП, клиентский Excel): материал вместо строки прайса.
+  const clientNameResolver = makeClientNameResolver(
+    new Map(pricebook.items.map((item) => [item.id, item])),
+    project.clientOffer?.lineNames,
+  );
+
   const groupsInUse = SUMMARY_GROUPS.filter((g) => project.lines.some((l) => l.group === g));
 
   return (
@@ -351,7 +358,7 @@ export default function ProjectEditor(props: {
               <div className="dropdown-menu align-right">
                 <div className="dropdown-group-title">Выгрузки</div>
                 <button onClick={() => exportInternalXlsx(outProject)}>Excel — внутренний расчёт</button>
-                <button onClick={() => exportClientXlsx(outProject)}>Excel — коммерческое предложение</button>
+                <button onClick={() => exportClientXlsx(outProject, clientNameResolver)}>Excel — коммерческое предложение</button>
                 <button onClick={() => exportInternalCsv(outProject)}>CSV — внутренний расчёт</button>
                 <button onClick={() => exportProjectJson(project)}>Файл проекта (.json)</button>
                 <button onClick={() => setShowQrModal(true)}>Открыть на телефоне (QR-код)</button>
@@ -459,6 +466,7 @@ export default function ProjectEditor(props: {
             project={outProject}
             pricebook={pricebook}
             onOfferChange={(clientOffer) => props.onChange({ ...project, clientOffer })}
+            onProjectMetaChange={(patch) => props.onChange({ ...project, ...patch })}
             onEskizProChange={(eskizPro) => props.onChange({ ...project, eskizPro })}
             moduleGroups={moduleGroups.map(({ module: m, lines }) => ({
               id: m.id,

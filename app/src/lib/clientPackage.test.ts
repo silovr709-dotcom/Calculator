@@ -25,6 +25,7 @@ const details: ClientOfferDetail[] = [{
   kind: 'hinge',
   kindLabel: 'Петли',
   name: 'Петля Boyard 110',
+  itemId: 'it_hinge',
   lineIds: ['l1'],
   qty: 6,
   qtyEffective: 6,

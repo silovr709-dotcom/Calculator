@@ -1,7 +1,7 @@
 // Экспорт: Excel (внутренний и клиентский) и CSV. Клиентская версия не содержит
 // себестоимости, наценок и служебных данных.
 import * as XLSX from 'xlsx';
-import type { Project, LineCalc } from '../types';
+import type { Project, LineCalc, ProjectLine } from '../types';
 import type { ClientOfferDetail } from './clientOffer';
 import { downloadFile } from './storage';
 import { buildClientOfferDetails, isModuleLine, moduleNoteMatches } from './clientOffer';
@@ -77,7 +77,11 @@ function clientDetailQtyText(detail: ClientOfferDetail): string {
   return `${fmtNum(detail.qty, 3)} ${unit}`;
 }
 
-export function exportClientXlsx(p: Project) {
+/**
+ * Клиентский Excel. resolveName — те же названия, что видит клиент в КП
+ * («МДФ ПВХ (1 категория; 19 мм)» вместо строки прайса), включая ручные правки.
+ */
+export function exportClientXlsx(p: Project, resolveName?: (line: ProjectLine) => string) {
   const { lineCalcs, totals } = calcTotals(p.lines, p.settings);
   const rows: Record<string, string | number>[] = [];
   const groupedIds = new Set<string>();
@@ -87,7 +91,7 @@ export function exportClientXlsx(p: Project) {
       const moduleLines = p.lines.filter((line) => moduleNoteMatches(line.note, module.name, module.id));
       if (moduleLines.length === 0) return;
       moduleLines.forEach((line) => groupedIds.add(line.id));
-      const details = buildClientOfferDetails(moduleLines, lineCalcs);
+      const details = buildClientOfferDetails(moduleLines, lineCalcs, resolveName);
       const moduleTotal = details.reduce<number | null>((sum, detail) => {
         if (detail.clientSum == null) return sum;
         return (sum ?? 0) + detail.clientSum;
@@ -118,7 +122,7 @@ export function exportClientXlsx(p: Project) {
     : p.lines;
   if (extraLines.length > 0) {
     if (rows.length > 0) rows.push({ '№': '', 'Блок': 'Дополнительно', 'Наименование': '', 'Детализация': '', 'Кол-во': '', 'Стоимость': '' });
-    buildClientOfferDetails(extraLines, lineCalcs).forEach((detail, index) => {
+    buildClientOfferDetails(extraLines, lineCalcs, resolveName).forEach((detail, index) => {
       rows.push({
         '№': rows.length > 0 ? `Д${index + 1}` : index + 1,
         'Блок': detail.kindLabel,
