@@ -5,3 +5,6 @@ __pycache__/
 # Временные файлы ОС и редакторов
 .DS_Store
 *.swp
+
+# Готовый пакет для загрузки на хостинг (npm run build:hosting)
+release/

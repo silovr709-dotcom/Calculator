@@ -1,0 +1,59 @@
+name: Deploy to hosting (FTP)
+
+# Выкладка собранного приложения на виртуальный хостинг (reg.ru и аналогичные).
+# Запускается вручную: вкладка Actions → Deploy to hosting (FTP) → Run workflow.
+#
+# Перед первым запуском добавьте секреты репозитория
+# (Settings → Secrets and variables → Actions → New repository secret):
+#   FTP_SERVER    — адрес FTP-сервера хостинга, например ftp.ваш-домен.ru
+#   FTP_USERNAME  — логин FTP
+#   FTP_PASSWORD  — пароль FTP
+#   FTP_DIR       — папка сайта на хостинге, например /public_html/ (с завершающим слешем)
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Только показать, что будет залито, без изменений на хостинге'
+        type: boolean
+        default: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - run: npm ci
+        working-directory: app
+
+      - run: npm run build:hosting
+        working-directory: app
+
+      - name: Проверить, что секреты заданы
+        run: |
+          if [ -z "${{ secrets.FTP_SERVER }}" ]; then
+            echo "Не заданы секреты FTP_SERVER / FTP_USERNAME / FTP_PASSWORD / FTP_DIR."
+            echo "Добавьте их в Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - name: Залить файлы на хостинг
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: ${{ secrets.FTP_DIR }}
+          local-dir: ./release/site/
+          dry-run: ${{ inputs.dry_run }}
+          # Данные приложения на хостинге трогать нельзя.
+          exclude: |
+            **/recept-data/**
+            **/api/config.php

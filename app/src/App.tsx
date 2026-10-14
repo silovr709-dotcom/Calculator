@@ -7,7 +7,7 @@ import {
   loadStoredPricebooks, saveStoredPricebooks, uid, loadKbArticles, saveKbArticles } from './lib/storage';
 import {
   loadSyncConfig, saveSyncConfig, performFullSync, parseIncomingHash,
-  pushToCloud, loadProjectShare, loadCompressedProjectShare, loadJsonStorageProjectShare,
+  pushToCloud, loadProjectShare, loadCompressedProjectShare, loadJsonStorageProjectShare, loadServerProjectShare,
 } from './lib/sync';
 import type { SyncConfig, SyncStatus } from './lib/sync';
 import { ProjectHistory } from './lib/history';
@@ -26,6 +26,10 @@ import KnowledgeView from './components/KnowledgeView';
 import NumberFieldCalculator from './components/NumberFieldCalculator';
 import CommandPalette from './components/CommandPalette';
 import { WORK_MODE_LABELS, type WorkMode } from './lib/workflow';
+import ServerLogin from './components/ServerLogin';
+import ServerPanel from './components/ServerPanel';
+import { useServerSync } from './lib/useServerSync';
+import type { Workspace } from './lib/serverWorkspace';
 
 type View =
   | { kind: 'dashboard' }
@@ -36,6 +40,7 @@ type View =
   | { kind: 'kb' }
   | { kind: 'settings' }
   | { kind: 'pricebook' }
+  | { kind: 'server' }
   | { kind: 'sync' };
 
 export default function App() {
@@ -58,6 +63,28 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
     const storedMode = localStorage.getItem('recept.workMode') as WorkMode | null;
     return storedMode && storedMode in WORK_MODE_LABELS ? storedMode : 'manager';
   });
+
+  // ——— Общая база на своём сервере ———
+  // Если приложение открыто на хостинге с серверной частью, источник правды — сервер,
+  // а localStorage работает как быстрый кэш и страховка на случай обрыва связи.
+  const applyWorkspace = useCallback((workspace: Workspace) => {
+    setProjects(workspace.projects);
+    setClients(workspace.clients);
+    setTemplates(workspace.templates);
+    setGlobalSettings(workspace.settings);
+    setStored(workspace.pricebooks);
+    setKbArticles(workspace.knowledge);
+  }, []);
+  const server = useServerSync(applyWorkspace);
+  const serverScheduleSave = server.scheduleSave;
+  const serverReady = server.mode === 'server' && Boolean(server.user);
+
+  // Любая правка проектов, клиентов, шаблонов и настроек уходит на сервер пакетом,
+  // через небольшую паузу после последнего изменения.
+  useEffect(() => {
+    if (!serverReady) return;
+    serverScheduleSave({ projects, clients, templates, settings: globalSettings, pricebooks: stored, knowledge: kbArticles });
+  }, [clients, globalSettings, kbArticles, projects, serverReady, serverScheduleSave, stored, templates]);
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}data/pricebook-visma-2026.json`)
@@ -132,6 +159,18 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
     } else if (parsed.type === 'share') {
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
       loadProjectShare(parsed.token).then((project) => {
+        const p = { ...project, id: uid('prj'), updatedAt: new Date().toISOString() };
+        const next = [p, ...loadProjects()];
+        saveProjects(next);
+        setProjects(next);
+        setView({ kind: 'project', id: p.id });
+        alert(`📱 Проект «${p.name}» загружен по QR-коду!`);
+      }).catch((error) => {
+        alert(`Не удалось открыть проект по QR-коду: ${(error as Error).message}`);
+      });
+    } else if (parsed.type === 'servershare') {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      loadServerProjectShare(parsed.id).then((project) => {
         const p = { ...project, id: uid('prj'), updatedAt: new Date().toISOString() };
         const next = [p, ...loadProjects()];
         saveProjects(next);
@@ -386,6 +425,19 @@ const persistTemplates = useCallback((next: Template[]) => {
     });
   }, [projects, persistProjects]);
 
+  if (server.mode === 'checking') {
+    return <div className="app-fatal app-boot">Подключаемся к серверу…</div>;
+  }
+  if (server.mode === 'server' && !server.user) {
+    return (
+      <ServerLogin
+        needsSetup={server.needsSetup}
+        error={server.error}
+        onLogin={server.login}
+        onSetup={server.setup}
+      />
+    );
+  }
   if (loadError) {
     return <div className="app-fatal">Не удалось загрузить базу прайса: {loadError}</div>;
   }
@@ -442,6 +494,12 @@ const persistTemplates = useCallback((next: Template[]) => {
                 <span className={`nav-sync-badge ${syncStatus}`} title={`Синхронизация: ${syncStatus === 'synced' ? 'в сети' : syncStatus === 'syncing' ? 'обновление...' : 'офлайн'}`} />
               )}
             </button>
+            {server.mode === 'server' && (
+              <button className={view.kind === 'server' ? 'active' : ''} onClick={() => setView({ kind: 'server' })}>
+                <span className="nav-icon nav-sync" aria-hidden="true" />Сервер
+                <span className={`nav-sync-badge ${server.status === 'synced' ? 'synced' : server.status === 'saving' || server.status === 'loading' ? 'syncing' : 'offline'}`} title={`Сервер: ${server.status}`} />
+              </button>
+            )}
             <button className={view.kind === 'settings' ? 'active' : ''} onClick={() => setView({ kind: 'settings' })}>
               <span className="nav-icon nav-settings" aria-hidden="true" />Настройки
             </button>
@@ -496,6 +554,13 @@ const persistTemplates = useCallback((next: Template[]) => {
               persistClients([merged, ...clients.filter((item) => item.id !== targetId && item.id !== sourceId)]);
               persistProjects(projects.map((project) => project.clientId === sourceId ? { ...project, clientId: targetId, client: merged.name } : project));
             }}
+          />
+        )}
+        {view.kind === 'server' && (
+          <ServerPanel
+            sync={server}
+            workspace={{ projects, clients, templates, settings: globalSettings, pricebooks: stored, knowledge: kbArticles }}
+            onRestored={applyWorkspace}
           />
         )}
         {view.kind === 'sync' && (

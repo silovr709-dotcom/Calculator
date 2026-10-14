@@ -1,6 +1,7 @@
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
 import type { ClientProfile, Project, ProjectSettings, Template } from '../types';
 import { loadClientProfiles, loadProjects, loadTemplates, loadGlobalSettings, saveClientProfiles, saveProjects, saveTemplates, saveGlobalSettings, defaultSettings } from './storage';
+import { getServerShare, putServerShare } from './serverApi';
 
 export const K_SYNC_CONFIG = 'recept.sync.config.v1';
 
@@ -77,7 +78,7 @@ export function makeSyncShareUrl(roomCode: string, secretKey: string, baseUrl?: 
 /** Парсинг входящего хэша URL (при сканировании QR-кода на телефоне) */
 export interface ProjectSharePayload { version: 1; type: 'project-share'; token: string; createdAt: string; project: Project }
 
-export function parseIncomingHash(hash: string): { type: 'sync'; roomCode: string; secretKey: string } | { type: 'import'; project: Project } | { type: 'importz'; data: string } | { type: 'share'; token: string } | { type: 'shareurl'; url: string } | null {
+export function parseIncomingHash(hash: string): { type: 'sync'; roomCode: string; secretKey: string } | { type: 'import'; project: Project } | { type: 'importz'; data: string } | { type: 'share'; token: string } | { type: 'shareurl'; url: string } | { type: 'servershare'; id: string } | null {
   if (!hash) return null;
   const clean = hash.startsWith('#') ? hash.slice(1) : hash;
   
@@ -87,6 +88,13 @@ export function parseIncomingHash(hash: string): { type: 'sync'; roomCode: strin
     if (parts.length >= 2) {
       return { type: 'sync', roomCode: parts[0], secretKey: parts.slice(1).join(':') };
     }
+  }
+
+  // Передача через собственный сервер на хостинге: короткая ссылка вида #srv=...
+  if (clean.startsWith('srv=')) {
+    const id = decodeURIComponent(clean.slice('srv='.length)).trim();
+    if (/^[a-f0-9]{8,64}$/i.test(id)) return { type: 'servershare', id };
+    return null;
   }
 
   if (clean.startsWith('share=')) {
@@ -169,7 +177,7 @@ export async function loadCompressedProjectShare(data: string): Promise<Project>
 const QR_SAFE_INLINE_URL_LENGTH = 2200;
 const QR_MAX_INLINE_URL_LENGTH = 2950;
 
-export type ProjectQrShareMode = 'compressed' | 'cloud' | 'legacy';
+export type ProjectQrShareMode = 'compressed' | 'server' | 'cloud' | 'legacy';
 
 export interface ProjectQrShare {
   mode: ProjectQrShareMode;
@@ -187,6 +195,24 @@ export interface ProjectQrShare {
  */
 export async function makeProjectQrShare(project: Project, baseUrl?: string): Promise<ProjectQrShare> {
   const compressed = await makeCompressedProjectShareUrl(project, baseUrl);
+
+  // Если приложение работает на собственном сервере — публикуем проект там:
+  // ссылка получается короткой, а данные не уходят на сторонние сервисы.
+  if (compressed.url.length > QR_SAFE_INLINE_URL_LENGTH) {
+    try {
+      const published = await putServerShare({ version: 1, project: compactProjectForShare(project) });
+      return {
+        mode: 'server',
+        url: published.url,
+        bytes: compressed.bytes,
+        urlLength: published.url.length,
+        note: `QR ведёт на ваш сервер: короткая ссылка из ${published.url.length} символов, проект ${Math.round(compressed.bytes / 1024)} КБ.`,
+      };
+    } catch {
+      // сервера нет или нет входа — работаем по старой схеме ниже
+    }
+  }
+
   if (compressed.url.length <= QR_SAFE_INLINE_URL_LENGTH) {
     return {
       mode: 'compressed',
@@ -343,6 +369,15 @@ export async function loadJsonStorageProjectShare(storageUrl: string): Promise<P
   const res = await fetch(storageUrl, { method: 'GET', headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error(`Не удалось загрузить проект по QR (HTTP ${res.status})`);
   return assertProjectSharePayload(await res.json()).project;
+}
+
+/** Загрузка проекта, опубликованного на собственном сервере (ссылка #srv=...). */
+export async function loadServerProjectShare(id: string): Promise<Project> {
+  const payload = await getServerShare<{ project?: unknown }>(id);
+  if (!payload || typeof payload !== 'object' || !('project' in payload)) {
+    throw new Error('Передача не содержит проекта');
+  }
+  return assertProjectShape((payload as { project: unknown }).project);
 }
 
 /** Умное слияние локальных и удалённых данных по дате изменения (Smart Merge) */
