@@ -7253,3 +7253,59 @@ input.editable-number { max-width: 120px; text-align: right; }
   font-weight: 700;
   white-space: nowrap;
 }
+
+/* Экран аналитики. */
+.nav-analytics::before { width: 16px; height: 14px; border-left: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; }
+.nav-analytics::after { width: 3px; height: 9px; background: currentColor; box-shadow: 5px -4px 0 #f5b833, 10px -7px 0 rgba(103,232,249,.72); }
+
+.analytics-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.analytics-card {
+  display: grid;
+  gap: 3px;
+  padding: 14px 16px;
+  border: 1px solid #e2e7f3;
+  border-radius: 14px;
+  background: #fff;
+}
+.analytics-card span { color: #7c89a8; font-size: 12px; font-weight: 600; }
+.analytics-card b { font-size: 22px; color: #16213f; }
+.analytics-card small { color: #8a97b4; font-size: 11.5px; }
+.analytics-card.accent { background: linear-gradient(140deg, #16213f, #27406f); border-color: #16213f; }
+.analytics-card.accent span,
+.analytics-card.accent small { color: rgba(255,255,255,.72); }
+.analytics-card.accent b { color: #fff; }
+
+.analytics-months {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  overflow-x: auto;
+  padding: 10px 2px 2px;
+}
+.analytics-month { display: grid; gap: 3px; justify-items: center; min-width: 96px; text-align: center; }
+.analytics-month b { font-size: 12.5px; color: #16213f; }
+.analytics-month span { font-size: 11.5px; color: #5b6b8f; }
+.analytics-month small { font-size: 11px; color: #8a97b4; }
+.analytics-bars {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 130px;
+  width: 54px;
+}
+.analytics-bars .bar { width: 22px; border-radius: 6px 6px 0 0; min-height: 3px; }
+.analytics-bars .bar.offered { background: #dbe4f7; }
+.analytics-bars .bar.won { background: #16213f; }
+
+.analytics-tables {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}

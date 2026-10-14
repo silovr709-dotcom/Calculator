@@ -25,6 +25,7 @@ import SyncPanel from './components/SyncPanel';
 import { useAppVersion } from './lib/useAppVersion';
 import ServerSaveChip from './components/ServerSaveChip';
 import PublicOfferPage from './components/PublicOfferPage';
+import AnalyticsView from './components/AnalyticsView';
 import { dehydrateKnown } from './lib/photoStore';
 import FactoryBlankView from './components/FactoryBlankView';
 import KnowledgeView from './components/KnowledgeView';
@@ -46,6 +47,7 @@ type View =
   | { kind: 'settings' }
   | { kind: 'pricebook' }
   | { kind: 'server' }
+  | { kind: 'analytics' }
   | { kind: 'sync' };
 
 export default function App() {
@@ -529,6 +531,9 @@ const persistTemplates = useCallback((next: Template[]) => {
           </div>
           <div className="sidebar-nav-group">
             <div className="sidebar-nav-title">Система</div>
+            <button className={view.kind === 'analytics' ? 'active' : ''} onClick={() => setView({ kind: 'analytics' })}>
+              <span className="nav-icon nav-analytics" aria-hidden="true" />Аналитика
+            </button>
             <button className={view.kind === 'sync' ? 'active' : ''} onClick={() => setView({ kind: 'sync' })}>
               <span className="nav-icon nav-sync" aria-hidden="true" />Синхронизация
               {showSyncBadge && (
@@ -597,6 +602,7 @@ const persistTemplates = useCallback((next: Template[]) => {
             }}
           />
         )}
+        {view.kind === 'analytics' && <AnalyticsView projects={projectsForUi} pricebooks={pricebooks} />}
         {view.kind === 'server' && (
           <ServerPanel
             sync={server}
