@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizEquipmentType, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
 import { normalizeEskizLinkUrl } from '../lib/eskizSketchExport';
@@ -293,8 +293,35 @@ function CommunicationDistanceLabel({ text, x, y, color, onPointerDown }: { text
   </g>;
 }
 
-function CommunicationLayer({ project, communications, activeCommunicationId, showMeasureBadges, onCommunicationClick, onCommunicationPointerDown, onCommunicationScalePointerDown, onDistanceClick, onDistanceEndPointerDown, onDistanceLabelPointerDown }: {
-  project: EskizProject;
+/** Снимок указателя: pointermove складывается сюда и обсчитывается один раз за кадр. */
+type PointerSample = { clientX: number; clientY: number; altKey: boolean; shiftKey: boolean };
+
+/**
+ * Черновик перетаскиваемой коммуникации. Живёт только внутри редактора: пока тянем мышью,
+ * проект и localStorage не трогаем, а на отпускании кнопки отдаём одно итоговое изменение.
+ */
+type CommunicationPreview = {
+  communicationId: string;
+  marker?: Partial<EskizCommunicationMarker>;
+  distanceId?: string;
+  distance?: Partial<EskizCommunicationDistance>;
+};
+
+function withCommunicationPreview(markers: EskizCommunicationMarker[], preview: CommunicationPreview | null): EskizCommunicationMarker[] {
+  if (!preview) return markers;
+  return markers.map((marker) => {
+    if (marker.id !== preview.communicationId) return marker;
+    const next = preview.marker ? { ...marker, ...preview.marker } : marker;
+    if (!preview.distanceId || !preview.distance) return next;
+    const patch = preview.distance;
+    return { ...next, distances: (next.distances ?? []).map((distance) => (distance.id === preview.distanceId ? { ...distance, ...patch } : distance)) };
+  });
+}
+
+const CommunicationLayer = memo(function CommunicationLayer({ projectId, imageWidth, imageHeight, communications, activeCommunicationId, showMeasureBadges, onCommunicationClick, onCommunicationPointerDown, onCommunicationScalePointerDown, onDistanceClick, onDistanceEndPointerDown, onDistanceLabelPointerDown }: {
+  projectId: string;
+  imageWidth: number;
+  imageHeight: number;
   communications: EskizCommunicationMarker[];
   activeCommunicationId?: string | null;
   showMeasureBadges: boolean;
@@ -305,7 +332,7 @@ function CommunicationLayer({ project, communications, activeCommunicationId, sh
   onDistanceEndPointerDown: (event: ReactPointerEvent<SVGCircleElement>, marker: EskizCommunicationMarker, distance: EskizCommunicationDistance) => void;
   onDistanceLabelPointerDown: (event: ReactPointerEvent<SVGGElement>, marker: EskizCommunicationMarker, distance: EskizCommunicationDistance) => void;
 }) {
-  const projectCommunications = communications.filter((marker) => marker.eskizId === project.id);
+  const projectCommunications = communications.filter((marker) => marker.eskizId === projectId);
   return <g className="embedded-eskiz-communications">
     {projectCommunications.map((marker) => {
       const meta = COMMUNICATION_KIND_META[marker.kind] ?? COMMUNICATION_KIND_META.other;
@@ -315,8 +342,8 @@ function CommunicationLayer({ project, communications, activeCommunicationId, sh
       return <g key={marker.id} className={`embedded-eskiz-communication ${active ? 'active' : ''}`} onPointerDown={(event) => onCommunicationPointerDown(event, marker)} onClick={(event) => onCommunicationClick(event, marker)}>
         <title>{[marker.name || meta.label, communicationSizeText(marker), marker.note].filter(Boolean).join(' · ')}</title>
         {(marker.distances ?? []).map((distance) => {
-          const anchor = communicationAnchorPoint(distance, marker, project.image.width, project.image.height);
-          const labelPoint = communicationDistanceLabelPoint(distance, marker, project.image.width, project.image.height);
+          const anchor = communicationAnchorPoint(distance, marker, imageWidth, imageHeight);
+          const labelPoint = communicationDistanceLabelPoint(distance, marker, imageWidth, imageHeight);
           const text = `${distance.label || COMMUNICATION_ANCHOR_LABELS[distance.anchor]}: ${communicationDistanceText(distance.valueMm)}`;
           return <g key={distance.id} className="embedded-eskiz-communication-distance editable" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => onDistanceClick(event, marker, distance)}>
             <line className="embedded-eskiz-communication-distance-hit" x1={marker.x} y1={marker.y} x2={anchor.x} y2={anchor.y} stroke="transparent" strokeWidth="18" pointerEvents="stroke" />
@@ -328,11 +355,11 @@ function CommunicationLayer({ project, communications, activeCommunicationId, sh
         })}
         <CommunicationMarkerIcon marker={marker} active={active} />
         {active && <circle className="embedded-eskiz-communication-scale-handle" cx={marker.x + 30 * scale} cy={marker.y + 22 * scale} r="7" fill="#fff" stroke={color} strokeWidth="3" onPointerDown={(event) => onCommunicationScalePointerDown(event, marker)} onClick={(event) => event.stopPropagation()} />}
-        {showMeasureBadges && <CommunicationMeasureBadges marker={marker} width={project.image.width} height={project.image.height} />}
+        {showMeasureBadges && <CommunicationMeasureBadges marker={marker} width={imageWidth} height={imageHeight} />}
       </g>;
     })}
   </g>;
-}
+});
 
 export default function EmbeddedEskizEditor(props: Props) {
   const [project, setProject] = useState<EskizProject | null>(props.project);
@@ -372,13 +399,28 @@ export default function EmbeddedEskizEditor(props: Props) {
   const dragRef = useRef<Drag | null>(null);
   const communicationDragRef = useRef<{ mode: 'marker' | 'distance-end' | 'distance-label' | 'marker-scale'; communicationId: string; distanceId?: string; start: Point; originalMarker: EskizCommunicationMarker; originalDistance?: EskizCommunicationDistance; originalAnchor?: Point; originalLabel?: Point; originalScale?: number; startDistance?: number; moved?: boolean } | null>(null);
   const communicationClickIgnoreRef = useRef(false);
+  // Перетаскивание: последнюю позицию указателя копим в ref и применяем один раз за кадр,
+  // а коммуникацию во время движения держим в локальном черновике (без записи проекта).
+  const projectRef = useRef(project);
+  const pointerSampleRef = useRef<PointerSample | null>(null);
+  const moveFrameRef = useRef<number | null>(null);
+  const communicationPreviewRef = useRef<CommunicationPreview | null>(null);
+  const [communicationPreview, setCommunicationPreview] = useState<CommunicationPreview | null>(null);
   const distanceClickIgnoreRef = useRef(false);
   const panRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const past = useRef<EskizProject[]>([]);
   const future = useRef<EskizProject[]>([]);
+  useEffect(() => { projectRef.current = project; }, [project]);
+
+  useEffect(() => () => {
+    if (moveFrameRef.current != null) window.cancelAnimationFrame(moveFrameRef.current);
+  }, []);
+
+  const communications = useMemo(() => withCommunicationPreview(props.communications, communicationPreview), [communicationPreview, props.communications]);
+
   const { onCancelCommunicationMode } = props;
   const communicationMode = Boolean(props.communicationAddKind || props.pickingDistancePoint);
-  const activeCommunication = project ? props.communications.find((marker) => marker.id === props.activeCommunicationId && marker.eskizId === project.id) ?? null : null;
+  const activeCommunication = project ? communications.find((marker) => marker.id === props.activeCommunicationId && marker.eskizId === project.id) ?? null : null;
   const communicationDraftEnd = props.pickingDistancePoint && activeCommunication ? communicationDraftPoint ?? { x: activeCommunication.x + 140, y: activeCommunication.y } : null;
   const chosen = project?.objects.find((object) => object.id === selected);
   const onShowCommunicationSizeBadgesChange = props.onShowCommunicationSizeBadgesChange;
@@ -676,13 +718,13 @@ export default function EmbeddedEskizEditor(props: Props) {
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
   }, [copySelected, copySelectedStyle, deleteSelected, duplicate, fit, lastDrawingTool, nudgeSelected, onCancelCommunicationMode, pasteClipboard, pasteSelectedStyle, redo, saveNow, selectOnly, selected, undo, zoomTo]);
 
-  const point = useCallback((event: ReactPointerEvent): Point => {
-    const current = project;
+  const point = useCallback((event: { clientX: number; clientY: number }): Point => {
+    const current = projectRef.current;
     const svg = svgRef.current;
     if (!current || !svg) return { x: 0, y: 0 };
     const rect = svg.getBoundingClientRect();
     return { x: (event.clientX - rect.left) * current.image.width / rect.width, y: (event.clientY - rect.top) * current.image.height / rect.height };
-  }, [project]);
+  }, []);
 
   const nearestSnap = useCallback((raw: Point, excludeId?: string) => {
     if (!project) return null;
@@ -904,58 +946,82 @@ export default function EmbeddedEskizEditor(props: Props) {
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
-  const onStageMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+  const previewCommunication = (preview: CommunicationPreview) => {
+    const current = communicationPreviewRef.current;
+    const next: CommunicationPreview = current && current.communicationId === preview.communicationId
+      ? { ...current, ...preview, marker: { ...current.marker, ...preview.marker }, distance: preview.distance ? { ...current.distance, ...preview.distance } : current.distance }
+      : preview;
+    communicationPreviewRef.current = next;
+    setCommunicationPreview(next);
+  };
+
+  // Отпустили кнопку — отдаём наружу одно итоговое изменение вместо сотни покадровых.
+  const commitCommunicationPreview = () => {
+    const preview = communicationPreviewRef.current;
+    communicationPreviewRef.current = null;
+    setCommunicationPreview(null);
+    if (!preview) return;
+    if (preview.marker && Object.keys(preview.marker).length) props.onCommunicationChange(preview.communicationId, preview.marker);
+    if (preview.distanceId && preview.distance && Object.keys(preview.distance).length) props.onCommunicationDistanceChange(preview.communicationId, preview.distanceId, preview.distance);
+  };
+
+  const applyStageMove = (sample: PointerSample) => {
+    const project = projectRef.current;
     if (!project) return;
     const communicationDrag = communicationDragRef.current;
     if (communicationDrag) {
-      const target = point(event);
+      const target = point(sample);
       const dx = target.x - communicationDrag.start.x;
       const dy = target.y - communicationDrag.start.y;
       if (Math.hypot(dx, dy) > 2) communicationDrag.moved = true;
       if (communicationDrag.mode === 'marker') {
-        props.onCommunicationChange(communicationDrag.communicationId, { x: Math.round(clamp(communicationDrag.originalMarker.x + dx, 0, project.image.width)), y: Math.round(clamp(communicationDrag.originalMarker.y + dy, 0, project.image.height)) });
+        previewCommunication({ communicationId: communicationDrag.communicationId, marker: { x: Math.round(clamp(communicationDrag.originalMarker.x + dx, 0, project.image.width)), y: Math.round(clamp(communicationDrag.originalMarker.y + dy, 0, project.image.height)) } });
       } else if (communicationDrag.mode === 'marker-scale') {
         const distance = Math.max(1, pointDistance(target, { x: communicationDrag.originalMarker.x, y: communicationDrag.originalMarker.y }));
         const ratio = distance / Math.max(1, communicationDrag.startDistance ?? distance);
-        props.onCommunicationChange(communicationDrag.communicationId, { visualScale: normalizeCommunicationVisualScale((communicationDrag.originalScale ?? 1) * ratio) });
+        previewCommunication({ communicationId: communicationDrag.communicationId, marker: { visualScale: normalizeCommunicationVisualScale((communicationDrag.originalScale ?? 1) * ratio) } });
       } else if (communicationDrag.mode === 'distance-label' && communicationDrag.distanceId && communicationDrag.originalDistance) {
         const originalLabel = communicationDrag.originalLabel ?? communicationDistanceLabelPoint(communicationDrag.originalDistance, communicationDrag.originalMarker, project.image.width, project.image.height);
-        props.onCommunicationDistanceChange(communicationDrag.communicationId, communicationDrag.distanceId, {
-          labelX: Math.round(clamp(originalLabel.x + dx, 0, project.image.width)),
-          labelY: Math.round(clamp(originalLabel.y + dy, 0, project.image.height)),
+        previewCommunication({
+          communicationId: communicationDrag.communicationId,
+          distanceId: communicationDrag.distanceId,
+          distance: {
+            labelX: Math.round(clamp(originalLabel.x + dx, 0, project.image.width)),
+            labelY: Math.round(clamp(originalLabel.y + dy, 0, project.image.height)),
+          },
         });
       } else if (communicationDrag.distanceId && communicationDrag.originalDistance) {
         const originalAnchor = communicationDrag.originalAnchor ?? { x: communicationDrag.originalDistance.anchorX ?? communicationDrag.originalMarker.x + 120, y: communicationDrag.originalDistance.anchorY ?? communicationDrag.originalMarker.y };
         const anchorX = Math.round(clamp(originalAnchor.x + dx, 0, project.image.width));
         const anchorY = Math.round(clamp(originalAnchor.y + dy, 0, project.image.height));
-        props.onCommunicationDistanceChange(communicationDrag.communicationId, communicationDrag.distanceId, { anchor: 'custom', anchorX, anchorY });
+        previewCommunication({ communicationId: communicationDrag.communicationId, distanceId: communicationDrag.distanceId, distance: { anchor: 'custom', anchorX, anchorY } });
       }
       return;
     }
     if (communicationMode) return;
     const drag = dragRef.current;
     if (!drag && pendingDimension) {
-      const target = point(event);
+      const target = point(sample);
       setProject((current) => current ? { ...current, objects: current.objects.map((object) => object.id === pendingDimension.id && object.type === 'dimension' ? { ...object, offset: dimensionOffset(object, target) } : object) } : current);
       return;
     }
     if (!drag) return;
-    let target = point(event);
+    let target = point(sample);
     if (drag.mode === 'marquee') { setSelectionBox({ start: drag.start, end: target }); return; }
     if (drag.mode === 'create') {
-      const snapped = !event.altKey ? nearestSnap(target) : null;
+      const snapped = !sample.altKey ? nearestSnap(target) : null;
       if (snapped) { target = snapped; setSnapIndicator(snapped); } else setSnapIndicator(null);
-      if (tool === 'free-dimension' && event.shiftKey) target = snapAngle(drag.start, target);
+      if (tool === 'free-dimension' && sample.shiftKey) target = snapAngle(drag.start, target);
       if (tool === 'h-dimension') target.y = drag.start.y;
       if (tool === 'v-dimension') target.x = drag.start.x;
       setDraftLine({ start: drag.start, end: target, callout: tool === 'callout' });
       return;
     }
     if (drag.mode === 'handle' && drag.end !== 'offset' && drag.end !== 'resize') {
-      const snapped = !event.altKey ? nearestSnap(target, drag.id) : null;
+      const snapped = !sample.altKey ? nearestSnap(target, drag.id) : null;
       if (snapped) { target = snapped; setSnapIndicator(snapped); } else setSnapIndicator(null);
     }
-    if (drag.mode === 'handle' && drag.end !== 'offset' && drag.end !== 'resize' && drag.original?.type === 'dimension' && drag.original.orientation === 'free' && event.shiftKey) {
+    if (drag.mode === 'handle' && drag.end !== 'offset' && drag.end !== 'resize' && drag.original?.type === 'dimension' && drag.original.orientation === 'free' && sample.shiftKey) {
       const anchor = drag.end === 'start' ? { x: drag.original.x2, y: drag.original.y2 } : { x: drag.original.x, y: drag.original.y };
       target = snapAngle(anchor, target);
     }
@@ -990,13 +1056,41 @@ export default function EmbeddedEskizEditor(props: Props) {
     }) } : current);
   };
 
+
+  // На каждое движение мыши браузер шлёт десятки событий. Считаем только последнее за кадр —
+  // перетаскивание размеров и коммуникаций идёт плавно даже на большом эскизе.
+  const runPendingStageMove = () => {
+    if (moveFrameRef.current != null) {
+      window.cancelAnimationFrame(moveFrameRef.current);
+      moveFrameRef.current = null;
+    }
+    const sample = pointerSampleRef.current;
+    pointerSampleRef.current = null;
+    if (sample) applyStageMove(sample);
+  };
+
+  const onStageMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (!projectRef.current) return;
+    pointerSampleRef.current = { clientX: event.clientX, clientY: event.clientY, altKey: event.altKey, shiftKey: event.shiftKey };
+    if (moveFrameRef.current != null) return;
+    moveFrameRef.current = window.requestAnimationFrame(() => {
+      moveFrameRef.current = null;
+      const sample = pointerSampleRef.current;
+      pointerSampleRef.current = null;
+      if (sample) applyStageMove(sample);
+    });
+  };
+
   const onStageUp = (event: ReactPointerEvent<SVGSVGElement>) => {
+    // Досчитываем последнее движение, отложенное до кадра, чтобы объект встал ровно под курсор.
+    runPendingStageMove();
     if (communicationDragRef.current) {
       const drag = communicationDragRef.current;
       const moved = Boolean(drag.moved);
       communicationClickIgnoreRef.current = moved && (drag.mode === 'marker' || drag.mode === 'marker-scale');
       distanceClickIgnoreRef.current = moved && (drag.mode === 'distance-end' || drag.mode === 'distance-label');
       communicationDragRef.current = null;
+      commitCommunicationPreview();
       window.setTimeout(() => { communicationClickIgnoreRef.current = false; distanceClickIgnoreRef.current = false; }, 0);
       return;
     }
@@ -1047,7 +1141,8 @@ export default function EmbeddedEskizEditor(props: Props) {
     setSnapIndicator(null);
   };
 
-  const objectDown = (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => {
+  const objectDown = useCallback((event: ReactPointerEvent<SVGGElement>, object: EskizObject) => {
+    const project = projectRef.current;
     if (!project || communicationMode) return;
     event.stopPropagation();
     if (tool !== 'select') return;
@@ -1074,15 +1169,16 @@ export default function EmbeddedEskizEditor(props: Props) {
     const target = point(event);
     dragRef.current = { mode: 'move', start: target, id: object.id, before: project, original: object };
     svgRef.current?.setPointerCapture(event.pointerId);
-  };
+  }, [communicationMode, point, props, selectOnly, selectedIds, tool]);
 
-  const handleDown = (event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize') => {
+  const handleDown = useCallback((event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize') => {
+    const project = projectRef.current;
     if (!chosen || chosen.locked || communicationMode) return;
     event.stopPropagation();
     if (!project) return;
     dragRef.current = { mode: 'handle', start: point(event), id: chosen.id, before: project, original: chosen, end };
     svgRef.current?.setPointerCapture(event.pointerId);
-  };
+  }, [chosen, communicationMode, point]);
 
   useEffect(() => {
     manualZoomRef.current = false;
@@ -1330,9 +1426,9 @@ export default function EmbeddedEskizEditor(props: Props) {
   }
 
   const visibleObjects = project.objects.filter((object) => !object.hidden && objectVisibleInLayers(object, showAnnotations, showHelpers, layerVisibility));
-  const visibleCommunications = communicationLayerVisible(showAnnotations, layerVisibility) ? props.communications : [];
+  const visibleCommunications = communicationLayerVisible(showAnnotations, layerVisibility) ? communications : [];
   const activeCommunicationColor = props.communicationAddKind ? COMMUNICATION_KIND_META[props.communicationAddKind].color : activeCommunication ? communicationColor(activeCommunication) : '#ff5c35';
-  const inlineCommunication = communicationQuickEdit ? props.communications.find((marker) => marker.id === communicationQuickEdit.communicationId && marker.eskizId === project.id) ?? null : null;
+  const inlineCommunication = communicationQuickEdit ? communications.find((marker) => marker.id === communicationQuickEdit.communicationId && marker.eskizId === project.id) ?? null : null;
   const canvasHeaderHeight = project.header.enabled ? 58 : 0;
   const scaledCanvasWidth = project.image.width * zoom;
   const scaledCanvasHeight = (project.image.height + canvasHeaderHeight) * zoom;
@@ -1419,7 +1515,7 @@ export default function EmbeddedEskizEditor(props: Props) {
           <div className="embedded-eskiz-canvas-content" style={{ width: project.image.width, transform: `scale(${zoom})` }}>
             {project.header.enabled && <div className="embedded-eskiz-canvas-header" style={{ width: project.image.width }}><strong>РЕцепт <i>/</i> Эскиз PRO</strong><span>Проект: {project.header.project || '—'}</span><small>Помещение: {project.header.room || '—'} · Дата: {project.header.date} · Вариант: {project.header.variant}</small></div>}
             <div className="embedded-eskiz-stage" style={{ width: project.image.width, height: project.image.height }}>
-              <svg ref={svgRef} viewBox={`0 0 ${project.image.width} ${project.image.height}`} width={project.image.width} height={project.image.height} className={`embedded-eskiz-surface tool-${tool}`} onPointerDown={onStageDown} onPointerMove={onStageMove} onPointerUp={onStageUp}>
+              <svg ref={svgRef} viewBox={`0 0 ${project.image.width} ${project.image.height}`} width={project.image.width} height={project.image.height} className={`embedded-eskiz-surface tool-${tool}`} onPointerDown={onStageDown} onPointerMove={onStageMove} onPointerUp={onStageUp} onPointerCancel={onStageUp} style={{ touchAction: 'none' }}>
             <defs>
               <marker id="embeddedDimArrow" markerWidth="9" markerHeight="9" refX="4.5" refY="4.5" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M 8 1 L 1 4.5 L 8 8" fill="none" stroke="context-stroke" strokeWidth="1.5" /></marker>
               <marker id="embeddedDimArrowClosed" markerWidth="9" markerHeight="9" refX="4.5" refY="4.5" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M 8 1 L 1 4.5 L 8 8 Z" fill="context-stroke" /></marker>
@@ -1428,7 +1524,7 @@ export default function EmbeddedEskizEditor(props: Props) {
             </defs>
             {showImage && <image href={project.image.dataUrl} x="0" y="0" width={project.image.width} height={project.image.height} preserveAspectRatio="none" pointerEvents="none" style={{ opacity: project.imageDisplay?.opacity ?? 1, filter: `brightness(${project.imageDisplay?.brightness ?? 1}) contrast(${project.imageDisplay?.contrast ?? 1}) saturate(${project.imageDisplay?.saturation ?? 1}) grayscale(${project.imageDisplay?.grayscale ? 1 : 0})` }} />}
             {visibleObjects.map((object) => <EmbeddedObjectView key={object.id} object={object} selected={selectedIds.includes(object.id)} primary={object.id === selected} onPointerDown={objectDown} onHandleDown={handleDown} />)}
-            <CommunicationLayer project={project} communications={visibleCommunications} activeCommunicationId={props.activeCommunicationId} showMeasureBadges={showCommunicationMeasures} onCommunicationClick={handleCommunicationMarkerClick} onCommunicationPointerDown={handleCommunicationPointerDown} onCommunicationScalePointerDown={handleCommunicationScalePointerDown} onDistanceClick={handleCommunicationDistanceClick} onDistanceEndPointerDown={handleDistanceEndPointerDown} onDistanceLabelPointerDown={handleDistanceLabelPointerDown} />
+            <CommunicationLayer projectId={project.id} imageWidth={project.image.width} imageHeight={project.image.height} communications={visibleCommunications} activeCommunicationId={props.activeCommunicationId} showMeasureBadges={showCommunicationMeasures} onCommunicationClick={handleCommunicationMarkerClick} onCommunicationPointerDown={handleCommunicationPointerDown} onCommunicationScalePointerDown={handleCommunicationScalePointerDown} onDistanceClick={handleCommunicationDistanceClick} onDistanceEndPointerDown={handleDistanceEndPointerDown} onDistanceLabelPointerDown={handleDistanceLabelPointerDown} />
             {selectionBox && <rect pointerEvents="none" x={Math.min(selectionBox.start.x, selectionBox.end.x)} y={Math.min(selectionBox.start.y, selectionBox.end.y)} width={Math.abs(selectionBox.end.x - selectionBox.start.x)} height={Math.abs(selectionBox.end.y - selectionBox.start.y)} fill="#2563eb" fillOpacity=".1" stroke="#2563eb" strokeWidth="1.5" strokeDasharray="7 5" />}
             {draftLine && <g pointerEvents="none" opacity=".9"><line x1={draftLine.start.x} y1={draftLine.start.y} x2={draftLine.end.x} y2={draftLine.end.y} stroke={COLORS.accent} strokeWidth="3" strokeDasharray="10 7" /><circle cx={draftLine.start.x} cy={draftLine.start.y} r="6" fill={COLORS.accent} /><circle cx={draftLine.end.x} cy={draftLine.end.y} r="6" fill={COLORS.accent} /></g>}
             {tool === 'chain' && chainLast && <g pointerEvents="none"><circle cx={chainLast.x} cy={chainLast.y} r="8" fill={COLORS.accent} /><circle cx={chainLast.x} cy={chainLast.y} r="16" fill="none" stroke={COLORS.accent} opacity=".35" /></g>}
@@ -1753,7 +1849,7 @@ function wrapLines(text: string, maxChars: number) {
   });
 }
 
-function EmbeddedObjectView({ object, selected, primary = selected, onPointerDown, onHandleDown }: { object: EskizObject; selected: boolean; primary?: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void; onHandleDown: (event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize') => void }) {
+const EmbeddedObjectView = memo(function EmbeddedObjectView({ object, selected, primary = selected, onPointerDown, onHandleDown }: { object: EskizObject; selected: boolean; primary?: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void; onHandleDown: (event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize') => void }) {
   const objectClass = `embedded-eskiz-object ${selected ? 'selected' : ''}`;
   if (object.type === 'anchor') return <g className={`${objectClass} helper-object`} transform={`translate(${object.x} ${object.y})`} onPointerDown={(event) => onPointerDown(event, object)}><circle r="9" fill="#fff" fillOpacity=".8" stroke={object.color} strokeWidth="2" /><path d="M -14 0 H 14 M 0 -14 V 14" stroke={object.color} strokeWidth="1.5" /><text x="12" y="-11" fontSize={object.fontSize} fontWeight="800" fill={object.color} stroke="white" strokeWidth="3" paintOrder="stroke">{object.label}</text></g>;
   if (object.type === 'guide') return <g className={`${objectClass} helper-object`} onPointerDown={(event) => onPointerDown(event, object)}>{object.orientation === 'horizontal' ? <line x1="-100000" y1={object.y} x2="100000" y2={object.y} stroke={object.color} strokeWidth="1.5" strokeDasharray="8 6" /> : <line x1={object.x} y1="-100000" x2={object.x} y2="100000" stroke={object.color} strokeWidth="1.5" strokeDasharray="8 6" />}</g>;
@@ -1762,7 +1858,7 @@ function EmbeddedObjectView({ object, selected, primary = selected, onPointerDow
   if (object.type === 'hinge') return <HingeObjectView object={object} selected={selected} primary={primary} onPointerDown={onPointerDown} />;
   if (object.type === 'callout') return <CalloutObjectView object={object} selected={selected} primary={primary} onPointerDown={onPointerDown} onHandleDown={onHandleDown} />;
   return <TextObjectView object={object} selected={selected} primary={primary} onPointerDown={onPointerDown} onHandleDown={onHandleDown} />;
-}
+});
 
 function DimensionObjectView({ object, selected, primary, onPointerDown, onHandleDown }: { object: EskizDimensionObject; selected: boolean; primary: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void; onHandleDown: (event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize') => void }) {
   const x1 = object.x;
