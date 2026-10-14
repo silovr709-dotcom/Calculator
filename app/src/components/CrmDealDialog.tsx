@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type {
   ClientDocumentState, ClientProfile, ClientProjectDocuments, ClientProjectPayment,
-  CrmTask, CrmTaskKind, OrderWorkflow, OrderWorkflowStatus, PaymentKind, Project,
+  CrmTask, CrmTaskKind, OrderWorkflow, OrderWorkflowStatus, PaymentKind, Project, ProjectSchedule,
 } from '../types';
 import { Overlay } from './Portal';
 import { fmtDate, fmtMoney } from '../lib/format';
@@ -80,6 +80,7 @@ export default function CrmDealDialog(props: {
   onTaskAdd: (task: { title: string; kind: CrmTaskKind; dueAt?: string; assignee?: string }) => void;
   onTaskToggle: (taskId: string) => void;
   onTaskRemove: (taskId: string) => void;
+  onSchedulePatch: (patch: Partial<ProjectSchedule>) => void;
   onNote: (text: string) => void;
   onSchedule: (days: number) => void;
   onDocumentExport: (kind: 'offer' | 'contract' | 'receipt' | 'package') => void;
@@ -227,6 +228,14 @@ export default function CrmDealDialog(props: {
                     </select>
                   </label>
                 )}
+                <label>Дата монтажа
+                  <input type="date" value={card.project.schedule?.installAt ?? ''}
+                    onChange={(event) => props.onSchedulePatch({ installAt: event.target.value || undefined })} />
+                </label>
+                <label>Бригада на монтаж
+                  <input value={card.project.schedule?.team ?? ''} placeholder="кто монтирует"
+                    onChange={(event) => props.onSchedulePatch({ team: event.target.value })} />
+                </label>
                 <label className="span-2">Заметка менеджера
                   <textarea rows={2} defaultValue={card.workflow.managerComment ?? ''} placeholder="Что согласовано, чего ждём, возражения"
                     onBlur={(event) => { if (event.target.value !== (card.workflow.managerComment ?? '')) props.onWorkflow({ managerComment: event.target.value }); }} />

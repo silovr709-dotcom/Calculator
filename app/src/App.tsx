@@ -26,6 +26,7 @@ import { useAppVersion } from './lib/useAppVersion';
 import ServerSaveChip from './components/ServerSaveChip';
 import PublicOfferPage from './components/PublicOfferPage';
 import AnalyticsView from './components/AnalyticsView';
+import ScheduleView from './components/ScheduleView';
 import { dehydrateKnown } from './lib/photoStore';
 import FactoryBlankView from './components/FactoryBlankView';
 import KnowledgeView from './components/KnowledgeView';
@@ -48,6 +49,7 @@ type View =
   | { kind: 'pricebook' }
   | { kind: 'server' }
   | { kind: 'analytics' }
+  | { kind: 'schedule' }
   | { kind: 'sync' };
 
 export default function App() {
@@ -521,6 +523,9 @@ const persistTemplates = useCallback((next: Template[]) => {
             <button className={view.kind === 'factory' ? 'active' : ''} onClick={() => setView({ kind: 'factory' })}>
               <span className="nav-icon nav-factory" aria-hidden="true" />Бланк на фабрику
             </button>
+            <button className={view.kind === 'schedule' ? 'active' : ''} onClick={() => setView({ kind: 'schedule' })}>
+              <span className="nav-icon nav-schedule" aria-hidden="true" />График работ
+            </button>
           </div>
           <div className="sidebar-nav-group">
             <div className="sidebar-nav-title">Справочники</div>
@@ -606,6 +611,13 @@ const persistTemplates = useCallback((next: Template[]) => {
           />
         )}
         {view.kind === 'analytics' && <AnalyticsView projects={projectsForUi} pricebooks={pricebooks} />}
+        {view.kind === 'schedule' && (
+          <ScheduleView
+            projects={projectsForUi}
+            onOpen={(id) => setView({ kind: 'project', id })}
+            onProjectChange={updateProject}
+          />
+        )}
         {view.kind === 'server' && (
           <ServerPanel
             sync={server}

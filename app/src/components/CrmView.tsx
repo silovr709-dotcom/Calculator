@@ -441,6 +441,11 @@ export default function CrmView(props: {
             }
           }}
           onTaskRemove={(taskId) => props.onProjectChange(removeTask(openRow.project, taskId))}
+          onSchedulePatch={(patch) => props.onProjectChange({
+            ...openRow.project,
+            schedule: { ...(openRow.project.schedule ?? {}), ...patch },
+            updatedAt: new Date().toISOString(),
+          })}
           onNote={(text) => { if (openRow.client) props.onClientHistory(openRow.client.id, { kind: 'note', title: text, projectId: openRow.project.id }); }}
           onSchedule={(days) => schedule(openRow, days)}
           onDocumentExport={(kind) => void exportDocument(openRow, kind)}

@@ -238,6 +238,23 @@ export interface OrderWorkflow {
   lostReason?: string;
 }
 
+/** Плановые даты по заказу: замер, готовность, доставка и монтаж. */
+export type ScheduleStatus = 'planned' | 'confirmed' | 'done' | 'problem';
+
+export interface ProjectSchedule {
+  measureAt?: string;
+  readyAt?: string;
+  deliveryAt?: string;
+  installAt?: string;
+  /** Сколько дней занимает монтаж, по умолчанию 1. */
+  installDays?: number;
+  /** Бригада или монтажник. */
+  team?: string;
+  address?: string;
+  note?: string;
+  status?: ScheduleStatus;
+}
+
 /** Тип задачи в CRM: от него зависит значок и подсказка. */
 export type CrmTaskKind = 'call' | 'meet' | 'measure' | 'docs' | 'payment' | 'delivery' | 'other';
 
@@ -614,6 +631,8 @@ export interface Project {
   eskizPro?: EskizProIntegration;
   /** Задачи CRM по сделке: звонки, замеры, документы, оплаты. */
   tasks?: CrmTask[];
+  /** Плановые даты: замер, готовность, доставка, монтаж и бригада. */
+  schedule?: ProjectSchedule;
   /** Режим открытия проекта: мастер или привычные вкладки. */
   wizardMode?: 'wizard' | 'advanced';
   wizardStep?: WizardStepId;
