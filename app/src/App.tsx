@@ -4,7 +4,8 @@ import {
   loadGlobalSettings, saveGlobalSettings,
   loadProjects, saveProjects, loadTemplates, saveTemplates,
   loadClientProfiles, saveClientProfiles,
-  loadStoredPricebooks, saveStoredPricebooks, uid, loadKbArticles, saveKbArticles } from './lib/storage';
+  loadStoredPricebooks, saveStoredPricebooks, uid, loadKbArticles, saveKbArticles,
+  setStorageServerBacked } from './lib/storage';
 import {
   loadSyncConfig, saveSyncConfig, performFullSync, parseIncomingHash,
   pushToCloud, loadProjectShare, loadCompressedProjectShare, loadJsonStorageProjectShare, loadServerProjectShare,
@@ -79,6 +80,8 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
   }, []);
   const server = useServerSync(applyWorkspace);
   const appVersion = useAppVersion();
+  // На своём сервере переполненный localStorage — не беда: база живёт на сервере.
+  useEffect(() => { setStorageServerBacked(server.mode === 'server'); }, [server.mode]);
   const serverScheduleSave = server.scheduleSave;
   const serverReady = server.mode === 'server' && Boolean(server.user);
   // Значок у пункта «Синхронизация»: на своём сервере показываем состояние сервера,

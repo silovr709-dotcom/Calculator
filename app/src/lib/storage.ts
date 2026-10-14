@@ -19,18 +19,69 @@ function read<T>(key: string, fallback: T): T {
   }
 }
 let quotaWarned = false;
-function write(key: string, value: unknown): boolean {
+let cacheDegraded = false;
+let serverBacked = false;
+let storageNote = '';
+
+/** Приложение работает на собственном сервере: браузерная копия — только кэш. */
+export function setStorageServerBacked(on: boolean): void {
+  serverBacked = on;
+}
+
+/** Пояснение для интерфейса, если пришлось урезать локальный кэш. */
+export function getStorageNote(): string {
+  return storageNote;
+}
+
+// Тяжёлые ключи: проекты с фотографиями и загруженные прайсы.
+const HEAVY_KEYS = new Set<string>([K_PROJECTS, K_PRICEBOOKS]);
+
+function tryWrite(key: string, raw: string): boolean {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    localStorage.setItem(key, raw);
     return true;
   } catch {
-    // квота localStorage исчерпана — данные этого сохранения НЕ записаны
+    return false;
+  }
+}
+
+function write(key: string, value: unknown): boolean {
+  // На своём сервере после переполнения не пытаемся снова и снова сериализовать мегабайты.
+  if (cacheDegraded && serverBacked && HEAVY_KEYS.has(key)) return false;
+
+  const raw = JSON.stringify(value);
+  if (tryWrite(key, raw)) return true;
+
+  // 1. Освобождаем место: кэш прайсов всегда можно загрузить заново.
+  if (key !== K_PRICEBOOKS) {
+    try { localStorage.removeItem(K_PRICEBOOKS); } catch { /* нечего чистить */ }
+    if (tryWrite(key, raw)) {
+      cacheDegraded = true;
+      storageNote = 'Кэш прайсов в браузере очищен, чтобы освободить место. На ваши данные это не влияет.';
+      return true;
+    }
+  }
+
+  cacheDegraded = true;
+
+  // 2. Данные уже лежат на сервере — браузерная копия не нужна и терять нечего.
+  //    Неполную копию удаляем, чтобы при следующем запуске она не перетёрла серверную версию.
+  if (serverBacked) {
+    try { localStorage.removeItem(key); } catch { /* уже нет */ }
+    storageNote = 'Память браузера переполнена (в ней помещается всего несколько мегабайт), поэтому локальная копия базы отключена. Все проекты сохраняются на сервере — работайте как обычно.';
     if (!quotaWarned) {
       quotaWarned = true;
-      alert('Хранилище браузера переполнено — последнее изменение НЕ сохранено.\n\nЧаще всего это из-за большого количества фото в проектах: удалите лишние фото или выгрузите проект в файл (.json) через Экспорт.');
+      console.warn('[recept] localStorage переполнен: работаем напрямую с сервером');
     }
     return false;
   }
+
+  // 3. Сервера нет — это действительно потеря данных, предупреждаем громко.
+  if (!quotaWarned) {
+    quotaWarned = true;
+    alert('Хранилище браузера переполнено — последнее изменение НЕ сохранено.\n\nЧаще всего это из-за большого количества фото в проектах: удалите лишние фото или выгрузите проект в файл (.json) через Экспорт.');
+  }
+  return false;
 }
 
 // ---------- настройки по умолчанию: НИЧЕГО не придумано, поля пустые ----------

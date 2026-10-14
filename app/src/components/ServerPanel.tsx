@@ -8,6 +8,7 @@ import {
   saveServerUser, serverHealth, type ServerBackup, type ServerRole, type ServerUser,
 } from '../lib/serverApi';
 import { formatWorkspaceSize, normalizeWorkspace, type Workspace } from '../lib/serverWorkspace';
+import { getStorageNote } from '../lib/storage';
 import type { ServerSync } from '../lib/useServerSync';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -151,6 +152,8 @@ export default function ServerPanel(props: {
       {(message || error || sync.error) && (
         <div className={error || sync.error ? 'server-alert error' : 'server-alert'}>{error || sync.error || message}</div>
       )}
+
+      {getStorageNote() && <div className="server-alert">{getStorageNote()}</div>}
 
       <section className="server-block">
         <h2>Мой пароль</h2>
