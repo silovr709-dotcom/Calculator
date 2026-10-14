@@ -45,6 +45,8 @@ jobs:
       FTP_USERNAME: ${{ secrets.FTP_USERNAME || 'u3683615' }}
       FTP_DIR: ${{ secrets.FTP_DIR || '/www/u3683615.isp.regruhosting.ru/' }}
       SITE_URL: ${{ secrets.SITE_URL || 'https://u3683615.isp.regruhosting.ru' }}
+      # Основной домен: проверяем его отдельно, чтобы видеть, когда заработали DNS и SSL.
+      PUBLIC_URL: ${{ secrets.PUBLIC_URL || 'https://xn----itba1bdbcfp1b.xn--p1ai' }}
       FTP_PROTOCOL: ${{ secrets.FTP_PROTOCOL || 'ftp' }}
     steps:
       - uses: actions/checkout@v4
@@ -113,6 +115,14 @@ jobs:
             fi
             if [ "$api_ok" = yes ] && [ "$build_ok" = yes ]; then
               echo "::notice::Сайт обновлён до коммита $short и отвечает: $SITE_URL"
+              # Основной домен: отдельно сообщаем, виден ли он и валиден ли сертификат.
+              if curl -fsS --max-time 20 "$PUBLIC_URL/build.json?nocache=$GITHUB_RUN_ID" >/dev/null 2>&1; then
+                echo "::notice::Домен $PUBLIC_URL работает, сертификат принят браузерной проверкой"
+              elif curl -fksS --max-time 20 "$PUBLIC_URL/build.json?nocache=$GITHUB_RUN_ID" >/dev/null 2>&1; then
+                echo "::warning::Домен $PUBLIC_URL отвечает, но сертификат ещё не выпущен или не применился"
+              else
+                echo "Домен $PUBLIC_URL пока не отвечает — DNS пока не разошлись."
+              fi
               exit 0
             fi
             echo "Попытка $attempt: api=$api_ok, версия=$build_ok. Ждём 15 с…"
