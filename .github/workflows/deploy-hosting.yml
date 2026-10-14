@@ -96,6 +96,20 @@ jobs:
             **/api/config.php
             **/.well-known/**
 
+      - name: Диагностика сертификата (временная)
+        if: steps.guard.outputs.ready == 'true'
+        run: |
+          host="xn----itba1bdbcfp1b.xn--p1ai"
+          for name in "$host" "www.$host" "u3683615.isp.regruhosting.ru"; do
+            info=$(echo | timeout 25 openssl s_client -servername "$name" -connect "$name:443" 2>/dev/null \
+              | openssl x509 -noout -subject -issuer -dates -ext subjectAltName 2>/dev/null \
+              | tr '\n' ' ' | cut -c1-600)
+            echo "::warning::СЕРТИФИКАТ $name -> ${info:-(не получен)}"
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://$name/build.json" 2>/tmp/e.txt)
+            err=$(head -c 160 /tmp/e.txt | tr '\n' ' ')
+            echo "::warning::HTTPS $name -> код=${code:-нет} ошибка=${err:-нет}"
+          done
+
       - name: Проверить сайт после выкладки
         if: ${{ steps.guard.outputs.ready == 'true' && inputs.dry_run != true }}
         run: |
