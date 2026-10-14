@@ -201,3 +201,32 @@ export async function getServerShare<T>(id: string): Promise<T> {
   const json = await request<{ payload: T }>('share', {}, { id });
   return json.payload;
 }
+
+/* ----------------------- файлы проектов (фото, подложки эскизов) ----------------------- */
+
+/** Какие файлы (по хэшу содержимого) сервер ещё не знает. */
+export async function serverFilesMissing(hashes: string[]): Promise<string[]> {
+  if (hashes.length === 0) return [];
+  const json = await request<{ missing: string[] }>('files/missing', { method: 'POST', body: JSON.stringify({ hashes }) });
+  return json.missing ?? [];
+}
+
+/** Загрузка одного файла; имя на сервере — sha256 содержимого, повторы не дублируются. */
+export async function uploadServerFile(base64: string, mime: string): Promise<{ id: string; size: number; reused: boolean }> {
+  return request('files', { method: 'POST', body: JSON.stringify({ mime, data: base64 }) });
+}
+
+/** Прямой адрес файла: по нему работают <img>, документы и ссылки на телефоне. */
+export function serverFileUrl(id: string): string {
+  return apiUrl('files', { id });
+}
+
+/** Сколько файлов и места занято на хостинге. */
+export async function serverFilesUsage(): Promise<{ files: number; bytes: number }> {
+  return request('files/usage');
+}
+
+/** Уборка: удалить файлы, на которые больше нет ссылок (только для владельца). */
+export async function serverFilesGc(): Promise<{ removed: number; freed: number; files: number; bytes: number }> {
+  return request('files/gc', { method: 'POST' });
+}

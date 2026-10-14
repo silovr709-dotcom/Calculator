@@ -2,6 +2,7 @@ import { loadNodeRuntime, createNodeFsMountHandler } from '@php-wasm/node';
 import { PHP } from '@php-wasm/universal';
 import fs from 'node:fs';
 import zlib from 'node:zlib';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const SERVER_SRC = fileURLToPath(new URL('..', import.meta.url));
@@ -97,6 +98,41 @@ check('сжатая отправка (gzip) принимается', r.status ==
 
 r = await call('state');
 check('данные из сжатого запроса сохранились', r.json?.data?.projects?.length === 3, r.text);
+
+// --- файлы проектов (фото и подложки эскизов) ---
+const png = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
+const pngHash = createHash('sha256').update(png).digest('hex');
+
+r = await call('files/missing', { method: 'POST', body: { hashes: [pngHash] } });
+check('сервер знает, что файла ещё нет', r.json?.missing?.[0] === pngHash, r.text);
+
+r = await call('files', { method: 'POST', body: { mime: 'image/png', data: png.toString('base64') } });
+check('файл загружен', r.status === 200 && r.json?.id === pngHash, r.text);
+
+r = await call('files', { method: 'POST', body: { mime: 'image/png', data: png.toString('base64') } });
+check('одинаковые файлы не дублируются', r.json?.reused === true, r.text);
+
+r = await call('files/missing', { method: 'POST', body: { hashes: [pngHash] } });
+check('после загрузки файл считается имеющимся', Array.isArray(r.json?.missing) && r.json.missing.length === 0, r.text);
+
+r = await call('files', { query: `&id=${pngHash}` });
+check('файл отдаётся обратно', r.status === 200 && r.raw.length > 0, String(r.status));
+
+r = await call('files', { query: '&id=' + 'f'.repeat(64) });
+check('несуществующий файл даёт 404', r.status === 404, r.text);
+
+r = await call('state', { method: 'POST', body: { rev: -1, data: { projects: [{ id: 'pf', photos: [{ id: 'x', dataUrl: `recept-file:${pngHash}` }] }], clients: [], templates: [], settings: {} } } });
+check('проект со ссылкой на файл сохранён', r.json?.ok === true, r.text);
+
+r = await call('files/gc', { method: 'POST' });
+check('нужный файл при уборке не удаляется', r.json?.ok === true && r.json?.removed === 0, r.text);
+
+r = await call('state', { method: 'POST', body: { rev: r.json?.rev ?? -1, data: { projects: [], clients: [], templates: [], settings: {} } } });
+r = await call('files/gc', { method: 'POST' });
+check('ненужный файл удаляется уборкой', r.json?.removed === 1, r.text);
 
 r = await call('users', { method: 'POST', body: { login: 'zamer', password: 'Zamer12345', name: 'Замерщик', role: 'user' } });
 check('сотрудник добавлен', r.status === 200 && r.json?.user?.role === 'user', r.text);

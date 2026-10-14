@@ -5,8 +5,10 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   apiUrl,
   changeOwnPassword, deleteServerUser, listServerBackups, listServerUsers, restoreServerBackup,
-  saveServerUser, serverHealth, type ServerBackup, type ServerRole, type ServerUser,
+  saveServerUser, serverFilesGc, serverFilesUsage, serverHealth,
+  type ServerBackup, type ServerRole, type ServerUser,
 } from '../lib/serverApi';
+import { hydrate } from '../lib/photoStore';
 import { formatWorkspaceSize, normalizeWorkspace, type Workspace } from '../lib/serverWorkspace';
 import { getStorageNote } from '../lib/storage';
 import type { ServerSync } from '../lib/useServerSync';
@@ -40,10 +42,13 @@ export default function ServerPanel(props: {
 
   const [oldPassword, setOldPassword] = useState('');
   const [ownPassword, setOwnPassword] = useState('');
+  const [files, setFiles] = useState<{ files: number; bytes: number } | null>(null);
+  const [cleaning, setCleaning] = useState(false);
 
   const reload = useCallback(async () => {
     try {
       setHealth(await serverHealth());
+      setFiles(await serverFilesUsage());
       setError('');
       if (isAdmin) {
         setUsers(await listServerUsers());
@@ -74,6 +79,24 @@ export default function ServerPanel(props: {
     }
   };
 
+  const cleanFiles = async () => {
+    if (!confirm('Удалить с хостинга файлы, на которые больше нет ссылок из проектов и резервных копий?')) return;
+    setCleaning(true);
+    setMessage('');
+    setError('');
+    try {
+      const result = await serverFilesGc();
+      setFiles({ files: result.files, bytes: result.bytes });
+      setMessage(result.removed > 0
+        ? `Удалено файлов: ${result.removed}, освобождено ${formatWorkspaceSize(result.freed)}.`
+        : 'Лишних файлов не найдено — всё занятое место используется.');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setCleaning(false);
+    }
+  };
+
   const removeUser = async (login: string) => {
     if (!confirm(`Удалить доступ сотрудника «${login}»?`)) return;
     try {
@@ -88,7 +111,7 @@ export default function ServerPanel(props: {
     if (!confirm(`Вернуть базу к копии от ${file}? Текущая версия тоже останется в копиях.`)) return;
     try {
       const result = await restoreServerBackup<unknown>(file);
-      props.onRestored(normalizeWorkspace(result.data));
+      props.onRestored(await hydrate(normalizeWorkspace(result.data)));
       setMessage('База восстановлена из резервной копии.');
       await sync.refresh();
       await reload();
@@ -138,6 +161,18 @@ export default function ServerPanel(props: {
           <div className="server-card-title">Вы вошли как</div>
           <div className="server-card-value">{sync.user?.name || sync.user?.login}</div>
           <div className="server-card-note">{sync.user?.role === 'admin' ? 'Владелец (полные права)' : 'Сотрудник'} · версия базы №{sync.rev}</div>
+        </div>
+        <div className="server-card">
+          <div className="server-card-title">Фотографии на хостинге</div>
+          <div className="server-card-value">{files ? `${files.files} файлов · ${formatWorkspaceSize(files.bytes)}` : '—'}</div>
+          <div className="server-card-note">
+            Фото и подложки эскизов лежат отдельными файлами, поэтому база остаётся лёгкой.
+            {isAdmin && (
+              <> · <button type="button" className="link-button" onClick={() => void cleanFiles()} disabled={cleaning}>
+                {cleaning ? 'Убираем…' : 'убрать лишние'}
+              </button></>
+            )}
+          </div>
         </div>
         <div className="server-card">
           <div className="server-card-title">В базе</div>

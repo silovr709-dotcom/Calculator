@@ -7049,3 +7049,16 @@ input.editable-number { max-width: 120px; text-align: right; }
 .server-save-chip:hover { border-color: #16213f; }
 @keyframes server-chip-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 @media print { .server-save-chip { display: none; } }
+
+/* Текстовая кнопка внутри подписи карточки (например, «убрать лишние»). */
+.link-button {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #16213f;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.link-button:disabled { color: #9aa6c0; cursor: default; text-decoration: none; }

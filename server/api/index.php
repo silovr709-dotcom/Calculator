@@ -357,6 +357,63 @@ switch ($route . ' ' . $method) {
         recept_json(200, ['ok' => true, 'rev' => $result['rev'], 'data' => $data]);
     }
 
+    /* ---------- файлы проектов: фото и подложки эскизов ---------- */
+
+    case 'files/missing POST': {
+        recept_require_user();
+        $body = recept_body();
+        $hashes = isset($body['hashes']) && is_array($body['hashes']) ? $body['hashes'] : [];
+        recept_json(200, ['ok' => true, 'missing' => recept_files_missing($hashes)]);
+    }
+
+    case 'files POST':
+    case 'files PUT': {
+        recept_require_user();
+        $body = recept_body();
+        $mime = isset($body['mime']) ? (string) $body['mime'] : '';
+        $data = isset($body['data']) ? (string) $body['data'] : '';
+        if ($data === '') {
+            recept_fail(400, 'Пустой файл');
+        }
+        $bytes = base64_decode($data, true);
+        if ($bytes === false) {
+            recept_fail(400, 'Файл повреждён при передаче');
+        }
+        $result = recept_file_put($bytes, $mime);
+        recept_json(200, ['ok' => true] + $result);
+    }
+
+    case 'files GET': {
+        // Доступ по длинному неугадываемому имени (sha256 содержимого) — так работают
+        // ссылки в клиентских документах и переданные по QR проекты.
+        $id = isset($_GET['id']) ? strtolower((string) $_GET['id']) : '';
+        $file = recept_file_path($id);
+        if ($file === null) {
+            recept_fail(404, 'Файл не найден');
+        }
+        $ext = strtolower((string) pathinfo($file, PATHINFO_EXTENSION));
+        http_response_code(200);
+        header('Content-Type: ' . recept_file_mime($ext));
+        header('Content-Length: ' . (string) filesize($file));
+        header('Cache-Control: public, max-age=31536000, immutable');
+        header('X-Content-Type-Options: nosniff');
+        readfile($file);
+        exit;
+    }
+
+    case 'files/gc POST': {
+        recept_require_admin();
+        $result = recept_files_gc();
+        $usage = recept_files_usage();
+        recept_json(200, ['ok' => true, 'removed' => $result['removed'], 'freed' => $result['freed'], 'files' => $usage['count'], 'bytes' => $usage['bytes']]);
+    }
+
+    case 'files/usage GET': {
+        recept_require_user();
+        $usage = recept_files_usage();
+        recept_json(200, ['ok' => true, 'files' => $usage['count'], 'bytes' => $usage['bytes']]);
+    }
+
     /* ---------- передача проекта на телефон ---------- */
     case 'share POST': {
         recept_require_user();

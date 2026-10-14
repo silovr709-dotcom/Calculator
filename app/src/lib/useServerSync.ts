@@ -7,6 +7,7 @@ import {
   serverLogin, serverLogout, serverSetup, type ServerUser,
 } from './serverApi';
 import { mergeWorkspaces, normalizeWorkspace, readLocalWorkspace, workspaceSignature, writeLocalWorkspace, type Workspace } from './serverWorkspace';
+import { dehydrate, dehydrateKnown, hasInlineImages, hydrate } from './photoStore';
 
 export type ServerMode = 'checking' | 'standalone' | 'server';
 export type ServerSaveStatus = 'idle' | 'loading' | 'saving' | 'synced' | 'offline' | 'error';
@@ -56,7 +57,8 @@ export function useServerSync(onApply: (workspace: Workspace) => void): ServerSy
 
   const applyWorkspace = useCallback((workspace: Workspace) => {
     appliedSignatureRef.current = workspaceSignature(workspace);
-    writeLocalWorkspace(workspace);
+    // В браузере держим лёгкую копию: фотографии заменены ссылками на файлы сервера.
+    writeLocalWorkspace(dehydrateKnown(workspace));
     applyRef.current(workspace);
   }, []);
 
@@ -71,7 +73,9 @@ export function useServerSync(onApply: (workspace: Workspace) => void): ServerSy
     let candidate = workspace;
     try {
       for (let attempt = 0; attempt < 4; attempt += 1) {
-        const result = await saveServerState(revRef.current, candidate);
+        // Фотографии уходят отдельными файлами, в базе остаются короткие ссылки.
+        const payload = await dehydrate(candidate);
+        const result = await saveServerState(revRef.current, payload);
         if (result.ok) {
           offlineRef.current = false;
           revRef.current = result.rev;
@@ -84,7 +88,7 @@ export function useServerSync(onApply: (workspace: Workspace) => void): ServerSy
           return;
         }
         // Конфликт: на сервере более новая версия. Сливаем её с нашей и сохраняем объединённое.
-        const remote = normalizeWorkspace(result.data);
+        const remote = await hydrate(normalizeWorkspace(result.data));
         candidate = mergeWorkspaces(candidate, remote);
         revRef.current = result.rev;
         setRev(result.rev);
@@ -134,8 +138,8 @@ export function useServerSync(onApply: (workspace: Workspace) => void): ServerSy
     setStatus('loading');
     try {
       const remoteState = await fetchServerState<unknown>();
-      const remote = normalizeWorkspace(remoteState.data);
-      const local = readLocalWorkspace();
+      const remote = await hydrate(normalizeWorkspace(remoteState.data));
+      const local = await hydrate(readLocalWorkspace());
       const merged = mergeWorkspaces(local, remote);
       revRef.current = remoteState.rev;
       setRev(remoteState.rev);
@@ -146,6 +150,9 @@ export function useServerSync(onApply: (workspace: Workspace) => void): ServerSy
       setError('');
       if (workspaceSignature(merged) !== workspaceSignature(remote)) {
         await flush(merged); // в браузере были правки, которых нет на сервере — отправляем
+      } else if (hasInlineImages(remote)) {
+        // Разовый перенос: старые проекты держали фото внутри базы — выносим их в файлы.
+        await flush(merged);
       }
     } catch (e) {
       readyRef.current = false;
@@ -206,8 +213,8 @@ export function useServerSync(onApply: (workspace: Workspace) => void): ServerSy
         const session = await fetchSession();
         if (session.state.rev === revRef.current) return;
         const remoteState = await fetchServerState<unknown>();
-        const remote = normalizeWorkspace(remoteState.data);
-        const merged = mergeWorkspaces(readLocalWorkspace(), remote);
+        const remote = await hydrate(normalizeWorkspace(remoteState.data));
+        const merged = mergeWorkspaces(await hydrate(readLocalWorkspace()), remote);
         revRef.current = remoteState.rev;
         setRev(remoteState.rev);
         setSavedAt(remoteState.updatedAt);

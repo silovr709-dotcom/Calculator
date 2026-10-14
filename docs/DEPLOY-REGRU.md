@@ -131,6 +131,9 @@ api/.htaccess
 |---|---|
 | `GET api/index.php?r=health` | Проверка, что сервер жив |
 | `GET api/index.php?r=check` | Страница самопроверки установки (HTML) |
+| `POST api/index.php?r=files` | Загрузка фото/подложки эскиза (имя файла — sha256 содержимого) |
+| `GET api/index.php?r=files&id=…` | Отдача файла по ссылке из проекта |
+| `POST api/index.php?r=files/gc` | Уборка файлов без ссылок (только владелец) |
 | `GET api/index.php?r=session` | Кто вошёл и какая версия базы |
 | `POST api/index.php?r=login` | Вход |
 | `GET api/index.php?r=state` | Выгрузить всю базу |

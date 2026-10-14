@@ -2,6 +2,7 @@ import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from
 import type { ClientProfile, Project, ProjectSettings, Template } from '../types';
 import { loadClientProfiles, loadProjects, loadTemplates, loadGlobalSettings, saveClientProfiles, saveProjects, saveTemplates, saveGlobalSettings, defaultSettings } from './storage';
 import { getServerShare, putServerShare } from './serverApi';
+import { dehydrate, hydrate } from './photoStore';
 
 export const K_SYNC_CONFIG = 'recept.sync.config.v1';
 
@@ -200,7 +201,7 @@ export async function makeProjectQrShare(project: Project, baseUrl?: string): Pr
   // ссылка получается короткой, а данные не уходят на сторонние сервисы.
   if (compressed.url.length > QR_SAFE_INLINE_URL_LENGTH) {
     try {
-      const published = await putServerShare({ version: 1, project: compactProjectForShare(project) });
+      const published = await putServerShare(await dehydrate({ version: 1, project: compactProjectForShare(project) }));
       return {
         mode: 'server',
         url: published.url,
@@ -377,7 +378,7 @@ export async function loadServerProjectShare(id: string): Promise<Project> {
   if (!payload || typeof payload !== 'object' || !('project' in payload)) {
     throw new Error('Передача не содержит проекта');
   }
-  return assertProjectShape((payload as { project: unknown }).project);
+  return assertProjectShape(await hydrate((payload as { project: unknown }).project));
 }
 
 /** Умное слияние локальных и удалённых данных по дате изменения (Smart Merge) */

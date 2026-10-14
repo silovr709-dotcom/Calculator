@@ -477,6 +477,162 @@ function recept_backup_read(string $file)
 /* Передача проекта на телефон по QR                                    */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------ файлы (фото, скриншоты) ------------------------------ */
+
+/** Папка с бинарными файлами проектов: фото замера и подложки Эскиз PRO. */
+function recept_files_dir(): string
+{
+    $dir = recept_path('files');
+    if (!is_dir($dir) && !@mkdir($dir, 0770, true) && !is_dir($dir)) {
+        recept_fail(500, 'Нет доступа к папке файлов');
+    }
+    recept_protect_dir($dir);
+    return $dir;
+}
+
+/** Расширение по типу: файл лежит под именем «хэш.ext», тип восстанавливается из имени. */
+function recept_file_ext(string $mime): string
+{
+    $map = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        'image/gif' => 'gif',
+        'image/svg+xml' => 'svg',
+        'application/pdf' => 'pdf',
+    ];
+    return isset($map[$mime]) ? $map[$mime] : '';
+}
+
+function recept_file_mime(string $ext): string
+{
+    $map = [
+        'jpg' => 'image/jpeg',
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        'gif' => 'image/gif',
+        'svg' => 'image/svg+xml',
+        'pdf' => 'application/pdf',
+    ];
+    return isset($map[$ext]) ? $map[$ext] : 'application/octet-stream';
+}
+
+/** Путь к файлу по хэшу содержимого (id). Возвращает null, если файла нет. */
+function recept_file_path(string $hash): ?string
+{
+    if (!preg_match('/^[a-f0-9]{64}$/', $hash)) {
+        return null;
+    }
+    $matches = glob(recept_files_dir() . '/' . $hash . '.*');
+    if (!$matches) {
+        return null;
+    }
+    return $matches[0];
+}
+
+/** Сохраняем файл; имя — sha256 содержимого, поэтому одинаковые фото не дублируются. */
+function recept_file_put(string $bytes, string $mime): array
+{
+    $ext = recept_file_ext($mime);
+    if ($ext === '') {
+        recept_fail(400, 'Такой тип файла не поддерживается: ' . $mime);
+    }
+    if (strlen($bytes) > 40 * 1024 * 1024) {
+        recept_fail(413, 'Файл больше 40 МБ');
+    }
+    $hash = hash('sha256', $bytes);
+    $existing = recept_file_path($hash);
+    if ($existing !== null) {
+        return ['id' => $hash, 'size' => strlen($bytes), 'reused' => true];
+    }
+    $file = recept_files_dir() . '/' . $hash . '.' . $ext;
+    if (!recept_write_raw($file, $bytes)) {
+        recept_fail(500, 'Не удалось сохранить файл на сервере');
+    }
+    return ['id' => $hash, 'size' => strlen($bytes), 'reused' => false];
+}
+
+/** Какие из присланных хэшей на сервере отсутствуют. */
+function recept_files_missing(array $hashes): array
+{
+    $missing = [];
+    foreach ($hashes as $hash) {
+        $hash = is_string($hash) ? strtolower($hash) : '';
+        if (!preg_match('/^[a-f0-9]{64}$/', $hash)) {
+            continue;
+        }
+        if (recept_file_path($hash) === null) {
+            $missing[] = $hash;
+        }
+    }
+    return array_values(array_unique($missing));
+}
+
+/** Уборка: удаляем файлы, на которые больше никто не ссылается. */
+function recept_files_gc(): array
+{
+    $used = [];
+    $state = @file_get_contents(recept_state_file());
+    if (is_string($state) && $state !== '') {
+        if (preg_match_all('/recept-file:([a-f0-9]{64})/', $state, $m)) {
+            foreach ($m[1] as $hash) {
+                $used[$hash] = true;
+            }
+        }
+    }
+    foreach (glob(recept_path('backups') . '/*') ?: [] as $backup) {
+        $raw = @file_get_contents($backup);
+        if (!is_string($raw) || $raw === '') {
+            continue;
+        }
+        if (substr($backup, -3) === '.gz') {
+            $unpacked = @gzdecode($raw);
+            if (is_string($unpacked)) {
+                $raw = $unpacked;
+            }
+        }
+        if (preg_match_all('/recept-file:([a-f0-9]{64})/', $raw, $m)) {
+            foreach ($m[1] as $hash) {
+                $used[$hash] = true;
+            }
+        }
+    }
+
+    $removed = 0;
+    $freed = 0;
+    foreach (glob(recept_files_dir() . '/*.*') ?: [] as $file) {
+        $name = basename($file);
+        $hash = substr($name, 0, 64);
+        if (!preg_match('/^[a-f0-9]{64}$/', $hash)) {
+            continue;  // служебные .htaccess и index.html не трогаем
+        }
+        if (isset($used[$hash])) {
+            continue;
+        }
+        $size = (int) @filesize($file);
+        if (@unlink($file)) {
+            $removed += 1;
+            $freed += $size;
+        }
+    }
+    return ['removed' => $removed, 'freed' => $freed];
+}
+
+/** Сколько места занимают файлы проектов. */
+function recept_files_usage(): array
+{
+    $count = 0;
+    $bytes = 0;
+    foreach (glob(recept_files_dir() . '/*.*') ?: [] as $file) {
+        if (!preg_match('/^[a-f0-9]{64}\./', basename($file))) {
+            continue;
+        }
+        $count += 1;
+        $bytes += (int) @filesize($file);
+    }
+    return ['count' => $count, 'bytes' => $bytes];
+}
+
 function recept_share_dir(): string
 {
     $dir = recept_path('shares');
