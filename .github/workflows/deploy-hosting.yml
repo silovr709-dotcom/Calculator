@@ -62,21 +62,6 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
           echo "Хостинг: $FTP_USERNAME@$FTP_SERVER, папка $FTP_DIR"
 
-      - name: Диагностика FTP (временная)
-        if: steps.guard.outputs.ready == 'true'
-        env:
-          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-        run: |
-          show() {
-            out=$(curl -s --max-time 25 --list-only --user "$FTP_USERNAME:$FTP_PASSWORD" "ftp://$FTP_SERVER$1" 2>&1 | tr '\r\n' '  ' | cut -c1-500)
-            echo "::warning::FTP $1 -> ${out:-(пусто или ошибка)}"
-          }
-          show "/"
-          show "/www/"
-          show "/www/u3683615.isp.regruhosting.ru/"
-          show "/www/u3683615.isp.regruhosting.ru/public_html/"
-          show "/domains/"
-
       - uses: actions/setup-node@v4
         if: steps.guard.outputs.ready == 'true'
         with:
@@ -108,6 +93,22 @@ jobs:
             **/recept-data/**
             **/api/config.php
             **/.well-known/**
+
+      - name: Диагностика HTTP (временная)
+        if: steps.guard.outputs.ready == 'true'
+        run: |
+          probe() {
+            code=$(curl -ksS -o /tmp/body.txt -w '%{http_code}' --max-time 25 "$1" 2>/tmp/err.txt)
+            body=$(head -c 220 /tmp/body.txt | tr '\r\n' '  ')
+            err=$(head -c 120 /tmp/err.txt | tr '\r\n' '  ')
+            echo "::warning::$1 -> код=${code:-нет} тело=${body:-пусто} ошибка=${err:-нет}"
+          }
+          probe "https://u3683615.isp.regruhosting.ru/build.json?x=$GITHUB_RUN_ID"
+          probe "http://u3683615.isp.regruhosting.ru/build.json?x=$GITHUB_RUN_ID"
+          probe "http://u3683615.isp.regruhosting.ru/api/index.php?r=health"
+          headers=$(curl -ksSI --max-time 25 "http://u3683615.isp.regruhosting.ru/" 2>&1 | head -c 400 | tr '\r\n' '  ')
+          echo "::warning::Заголовки корня -> $headers"
+          echo "::warning::Ожидаемый коммит: $GITHUB_SHA"
 
       - name: Проверить сайт после выкладки
         if: ${{ steps.guard.outputs.ready == 'true' && inputs.dry_run != true }}
