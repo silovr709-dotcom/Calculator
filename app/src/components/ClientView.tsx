@@ -631,7 +631,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   }, 'Не получилось собрать пакет клиента');
 
   return (
-    <div className="client-view">
+    <div className={`client-view${publicMode ? ' client-view-public' : ''}`}>
       <div className="client-offer-workbench">
         {!publicMode && (
         <aside className="client-offer-controls no-print">

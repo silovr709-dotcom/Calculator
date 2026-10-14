@@ -7309,3 +7309,25 @@ input.editable-number { max-width: 120px; text-align: right; }
   gap: 14px;
   margin-top: 14px;
 }
+
+/* Страница КП по ссылке: панели управления нет, документ занимает всю ширину. */
+.client-view-public .client-offer-workbench {
+  display: block;
+  grid-template-columns: 1fr;
+}
+.client-view-public .client-offer-preview {
+  position: static;
+  max-height: none;
+  overflow: visible;
+  width: 100%;
+}
+.client-view-public .client-doc {
+  max-width: 980px;
+  width: 100%;
+  margin: 0 auto;
+}
+/* На узком экране телефона документ должен дышать, а не ужиматься в колонку. */
+@media (max-width: 720px) {
+  .client-view-public .client-doc { padding: 18px 14px; }
+  .public-offer { padding: 12px 10px 48px; }
+}
