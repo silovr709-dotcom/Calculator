@@ -44,7 +44,7 @@ jobs:
       FTP_SERVER: ${{ secrets.FTP_SERVER || 'u3683615.isp.regruhosting.ru' }}
       FTP_USERNAME: ${{ secrets.FTP_USERNAME || 'u3683615' }}
       FTP_DIR: ${{ secrets.FTP_DIR || '/www/u3683615.isp.regruhosting.ru/' }}
-      SITE_URL: ${{ secrets.SITE_URL || 'https://u3683615.isp.regruhosting.ru' }}
+      SITE_URL: ${{ secrets.SITE_URL || 'https://xn----itba1bdbcfp1b.xn--p1ai' }}
       # Основной домен: проверяем его отдельно, чтобы видеть, когда заработали DNS и SSL.
       PUBLIC_URL: ${{ secrets.PUBLIC_URL || 'https://xn----itba1bdbcfp1b.xn--p1ai' }}
       FTP_PROTOCOL: ${{ secrets.FTP_PROTOCOL || 'ftp' }}

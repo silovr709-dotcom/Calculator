@@ -6,6 +6,10 @@
   RewriteEngine On
   # Проверка Let's Encrypt должна проходить по http и не уезжать в редирект.
   RewriteRule ^\.well-known/acme-challenge/ - [L]
+  # Технический адрес хостинга уводим на основной домен: сертификат выпущен на него,
+  # поэтому по старой закладке браузер больше не покажет предупреждение.
+  RewriteCond %{HTTP_HOST} ^(www\.)?u3683615\.isp\.regruhosting\.ru$ [NC]
+  RewriteRule ^(.*)$ https://xn----itba1bdbcfp1b.xn--p1ai/$1 [R=301,L]
   RewriteCond %{HTTPS} !=on
   RewriteCond %{HTTP:X-Forwarded-Proto} !https
   RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
