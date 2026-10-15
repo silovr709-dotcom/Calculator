@@ -13,6 +13,7 @@ import {
   patchEvent, peopleFromAgenda, remindersFor, removeEvent, type AgendaItem,
 } from '../lib/calendar';
 import { askNotifyPermission, notifyPermission, pushReminderNotifications, type NotifyPermission } from '../lib/notify';
+import { REMINDER_OPTIONS, formatOffset } from '../lib/reminders';
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
@@ -318,6 +319,34 @@ export default function ScheduleView(props: {
             <label className="span-3">Заметка
               <input value={editEvent.note ?? ''} placeholder="этаж, домофон, что взять с собой" onChange={(event) => updateEvent(editEvent.id, { note: event.target.value })} />
             </label>
+            <div className="span-3 schedule-reminder-picker">
+              <b>Напомнить</b>
+              <div className="notify-chips">
+                <button type="button" className={(editEvent.reminders ?? []).length === 0 ? 'active' : ''}
+                  onClick={() => updateEvent(editEvent.id, { reminders: [] })}>
+                  Как в настройках
+                </button>
+                {REMINDER_OPTIONS.map((option) => {
+                  const list = editEvent.reminders ?? [];
+                  const active = list.includes(option.minutes);
+                  return (
+                    <button key={option.minutes} type="button" className={active ? 'active' : ''}
+                      onClick={() => updateEvent(editEvent.id, {
+                        reminders: active
+                          ? list.filter((item) => item !== option.minutes)
+                          : [...list, option.minutes].sort((a, b) => a - b),
+                      })}>
+                      {option.short}
+                    </button>
+                  );
+                })}
+              </div>
+              <small className="muted">
+                {(editEvent.reminders ?? []).length === 0
+                  ? 'Сработают интервалы по умолчанию из раздела «Настройки».'
+                  : `Напомним: ${(editEvent.reminders ?? []).map(formatOffset).join(', ').toLowerCase()}.`}
+              </small>
+            </div>
             <label>Связать с заказом
               <select value={editEvent.projectId ?? ''} onChange={(event) => updateEvent(editEvent.id, { projectId: event.target.value || undefined })}>
                 <option value="">без заказа</option>

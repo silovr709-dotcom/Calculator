@@ -1,6 +1,6 @@
 // Локальное хранилище: проекты, настройки, шаблоны, загруженные версии прайса.
 // Всё хранится отдельно от исходного прайса; наценки не влияют на цены Висмы.
-import type { CalendarEvent, ClientProfile, Project, ProjectSettings, Template, Pricebook, KbArticle } from '../types';
+import type { CalendarEvent, NotifySettings, ClientProfile, Project, ProjectSettings, Template, Pricebook, KbArticle } from '../types';
 
 const K_PROJECTS = 'recept.projects.v1';
 const K_SETTINGS = 'recept.settings.v1';
@@ -9,6 +9,7 @@ const K_KNOWLEDGE = 'recept-kb-articles';
 const K_CLIENTS = 'recept.clients.v1';
 const K_PRICEBOOKS = 'recept.pricebooks.v1'; // загруженные (кроме встроенного)
 const K_EVENTS = 'recept.events.v1';         // календарь: дела, не привязанные к проекту
+const K_NOTIFY = 'recept.notify.v2';         // настройки напоминаний — свои на каждом устройстве
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -123,6 +124,9 @@ export const saveStoredPricebooks = (p: Pricebook[]) => write(K_PRICEBOOKS, p);
 
 export const loadCalendarEvents = (): CalendarEvent[] => read<CalendarEvent[]>(K_EVENTS, []);
 export const saveCalendarEvents = (events: CalendarEvent[]) => write(K_EVENTS, events);
+
+export const loadNotifySettings = (): Partial<NotifySettings> | null => read<Partial<NotifySettings> | null>(K_NOTIFY, null);
+export const saveNotifySettings = (value: NotifySettings) => write(K_NOTIFY, value);
 
 export function uid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;

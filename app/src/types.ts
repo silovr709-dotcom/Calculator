@@ -276,9 +276,25 @@ export interface CalendarEvent {
   projectId?: string;
   status: ScheduleStatus;
   done?: boolean;
+  /** За сколько минут до начала напомнить. Пусто — берутся настройки по умолчанию. */
+  reminders?: number[];
   createdAt: string;
   createdBy?: string;
   updatedAt: string;
+}
+
+/** Настройки уведомлений — свои на каждом устройстве. */
+export interface NotifySettings {
+  /** За сколько минут напоминать по умолчанию. */
+  defaults: number[];
+  /** Во сколько напоминать о делах без времени (час суток). */
+  allDayHour: number;
+  /** Не беспокоить раньше этого часа. */
+  quietFrom: number;
+  /** Не беспокоить позже этого часа. */
+  quietUntil: number;
+  /** Напоминать о датах заказов (монтаж, доставка, замер из проекта). */
+  includeProjects: boolean;
 }
 
 /** Тип задачи в CRM: от него зависит значок и подсказка. */

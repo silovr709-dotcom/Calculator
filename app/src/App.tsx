@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CalendarEvent, ClientProfile, OrderWorkflow, Pricebook, Project, ProjectSettings, Template, KbArticle } from './types';
+import type { CalendarEvent, NotifySettings, ClientProfile, OrderWorkflow, Pricebook, Project, ProjectSettings, Template, KbArticle } from './types';
 import {
   loadGlobalSettings, saveGlobalSettings,
   loadProjects, saveProjects, loadTemplates, saveTemplates,
   loadClientProfiles, saveClientProfiles,
   loadStoredPricebooks, saveStoredPricebooks, uid, loadKbArticles, saveKbArticles,
-  loadCalendarEvents, saveCalendarEvents,
+  loadCalendarEvents, saveCalendarEvents, loadNotifySettings, saveNotifySettings,
   isStorageServerBacked, setStorageServerBacked } from './lib/storage';
 import {
   loadSyncConfig, saveSyncConfig, performFullSync, parseIncomingHash,
@@ -26,6 +26,9 @@ import SyncPanel from './components/SyncPanel';
 import { useAppVersion } from './lib/useAppVersion';
 import ServerSaveChip from './components/ServerSaveChip';
 import InstallAppCard from './components/InstallAppCard';
+import NotifySettingsCard from './components/NotifySettingsCard';
+import { useReminders } from './lib/useReminders';
+import { normalizeNotifySettings } from './lib/reminders';
 import PublicOfferPage from './components/PublicOfferPage';
 import AnalyticsView from './components/AnalyticsView';
 import ScheduleView from './components/ScheduleView';
@@ -67,6 +70,7 @@ export default function App() {
   const [savedFlash, setSavedFlash] = useState(false);
     const [kbArticles, setKbArticles] = useState<KbArticle[]>(() => loadKbArticles());
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(() => loadCalendarEvents());
+  const [notifySettings, setNotifySettings] = useState<NotifySettings>(() => normalizeNotifySettings(loadNotifySettings()));
 const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig());
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => (loadSyncConfig().enabled ? 'synced' : 'idle'));
   const [projectHistory] = useState(() => new ProjectHistory());
@@ -90,6 +94,8 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
   }, []);
   const server = useServerSync(applyWorkspace);
   const appVersion = useAppVersion();
+  // Служба напоминаний: показывает уведомления в нужный момент на любом экране.
+  useReminders(projects, calendarEvents, notifySettings, server.user?.name || server.user?.login || '');
   // Клиентская ссылка вида …/#offer=abc123 — определяем её до любой загрузки базы.
   // Меню «Ещё» в нижней панели: на телефоне нет наведения, поэтому открываем по нажатию.
   const [moreOpen, setMoreOpen] = useState(false);
@@ -324,6 +330,11 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
       pushToCloud(cfg, { projects: loadProjects(), clients: next, templates: loadTemplates(), settings: loadGlobalSettings() })
         .then((r) => setSyncStatus(r.ok ? 'synced' : 'offline'));
     }
+  }, []);
+
+  const persistNotifySettings = useCallback((next: NotifySettings) => {
+    setNotifySettings(next);
+    saveNotifySettings(next);
   }, []);
 
   const persistCalendarEvents = useCallback((next: CalendarEvent[]) => {
@@ -720,12 +731,15 @@ const persistTemplates = useCallback((next: Template[]) => {
           <KnowledgeView articles={kbArticles} pricebooks={pricebooks} onChange={persistKb} />
         )}
         {view.kind === 'settings' && (
-          <SettingsPanel
-            title="Настройки по умолчанию (для новых проектов)"
-            settings={globalSettings}
-            onChange={persistSettings}
-            standalone
-          />
+          <>
+            <NotifySettingsCard value={notifySettings} onChange={persistNotifySettings} />
+            <SettingsPanel
+              title="Настройки по умолчанию (для новых проектов)"
+              settings={globalSettings}
+              onChange={persistSettings}
+              standalone
+            />
+          </>
         )}
         {view.kind === 'pricebook' && (
           <PricebookView
