@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_NOTIFY_SETTINGS, dueReminders, eventStart, formatOffset, inQuietHours,
-  nextFireAt, normalizeNotifySettings, passedKeys, planReminders, remindersOf,
+  nextFireAt, normalizeNotifySettings, offsetFromInput, passedKeys, planReminders,
+  remindersOf, shortOffset,
 } from './reminders';
 import type { AgendaItem } from './calendar';
 import type { CalendarEvent } from '../types';
@@ -93,9 +94,40 @@ describe('настройка напоминаний', () => {
     expect(next?.getHours()).toBe(9);
   });
 
+  it('принимает любой свой интервал', () => {
+    expect(offsetFromInput(3, 'hour')).toBe(180);
+    expect(offsetFromInput(2, 'week')).toBe(20160);
+    expect(offsetFromInput(45, 'min')).toBe(45);
+    expect(offsetFromInput(-1, 'min')).toBeNull();
+  });
+
+  it('подписывает нестандартные интервалы', () => {
+    expect(formatOffset(90)).toBe('За 1 ч 30 мин');
+    expect(formatOffset(4320)).toBe('За 3 дн.');
+    expect(shortOffset(90)).toBe('1 ч 30 м');
+  });
+
+  it('у типа дела могут быть свои интервалы', () => {
+    const withKind = { ...settings, byKind: { install: [2880] } };
+    expect(remindersOf({}, withKind, 'install')).toEqual([2880]);
+    expect(remindersOf({}, withKind, 'call')).toEqual([10, 60]);
+    // Личные интервалы дела всё равно главнее правила для типа.
+    expect(remindersOf({ reminders: [5] }, withKind, 'install')).toEqual([5]);
+  });
+
+  it('повторяет напоминание, пока дело не отмечено', () => {
+    const repeating = { ...settings, defaults: [0], repeatEveryMin: 15, repeatCount: 2 };
+    const planned = planReminders([item({ timeStart: '10:00' })], new Map(), repeating);
+    expect(planned).toHaveLength(3);
+    expect(planned[1].fireAt.getMinutes()).toBe(15);
+    expect(planned[2].fireAt.getMinutes()).toBe(30);
+  });
+
   it('настройки чистятся от мусора', () => {
-    const normalized = normalizeNotifySettings({ defaults: [60, 60, -5, 10], allDayHour: 99 } as never);
+    const normalized = normalizeNotifySettings({ defaults: [60, 60, -5, 10], allDayHour: 99, repeatEveryMin: 9999, byKind: { call: [30, 30] } } as never);
     expect(normalized.defaults).toEqual([10, 60]);
     expect(normalized.allDayHour).toBe(9);
+    expect(normalized.repeatEveryMin).toBe(720);
+    expect(normalized.byKind?.call).toEqual([30]);
   });
 });

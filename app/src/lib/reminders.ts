@@ -1,7 +1,7 @@
 // Напоминания о делах: за сколько предупредить, когда именно сработает
 // и что уже показывали. Чистые функции — всё поведение проверяется тестами.
 
-import type { CalendarEvent, NotifySettings } from '../types';
+import type { CalendarEvent, CalendarEventKind, NotifySettings } from '../types';
 import type { AgendaItem } from './calendar';
 import { calendarKindMeta } from './calendar';
 
@@ -22,6 +22,9 @@ export const REMINDER_OPTIONS: Array<{ minutes: number; label: string; short: st
 
 export const DEFAULT_NOTIFY_SETTINGS: NotifySettings = {
   defaults: [60, 1440],
+  byKind: {},
+  repeatEveryMin: 0,
+  repeatCount: 2,
   allDayHour: 9,
   quietFrom: 8,
   quietUntil: 22,
@@ -37,8 +40,19 @@ export function normalizeNotifySettings(raw?: Partial<NotifySettings> | null): N
     const number = Number(input);
     return Number.isFinite(number) && number >= 0 && number <= 23 ? Math.round(number) : fallback;
   };
+  const byKind: Partial<Record<CalendarEventKind, number[]>> = {};
+  if (value.byKind && typeof value.byKind === 'object') {
+    for (const [kind, list] of Object.entries(value.byKind)) {
+      if (!Array.isArray(list)) continue;
+      const clean = Array.from(new Set(list.filter((item) => Number.isFinite(item) && item >= 0))).sort((a, b) => a - b);
+      byKind[kind as CalendarEventKind] = clean;
+    }
+  }
   return {
     defaults,
+    byKind,
+    repeatEveryMin: Math.max(0, Math.min(720, Math.round(Number(value.repeatEveryMin) || 0))),
+    repeatCount: Math.max(0, Math.min(10, Math.round(Number(value.repeatCount ?? DEFAULT_NOTIFY_SETTINGS.repeatCount) || 0))),
     allDayHour: hour(value.allDayHour, DEFAULT_NOTIFY_SETTINGS.allDayHour),
     quietFrom: hour(value.quietFrom, DEFAULT_NOTIFY_SETTINGS.quietFrom),
     quietUntil: hour(value.quietUntil, DEFAULT_NOTIFY_SETTINGS.quietUntil),
@@ -51,8 +65,27 @@ export function formatOffset(minutes: number): string {
   const known = REMINDER_OPTIONS.find((option) => option.minutes === minutes);
   if (known) return known.label;
   if (minutes < 60) return `За ${minutes} мин`;
-  if (minutes < 1440) return `За ${Math.round(minutes / 60)} ч`;
-  return `За ${Math.round(minutes / 1440)} дн.`;
+  if (minutes % 1440 === 0) return `За ${minutes / 1440} дн.`;
+  if (minutes % 60 === 0) return `За ${minutes / 60} ч`;
+  return `За ${Math.floor(minutes / 60)} ч ${minutes % 60} мин`;
+}
+
+/** Короткая подпись для чипа. */
+export function shortOffset(minutes: number): string {
+  const known = REMINDER_OPTIONS.find((option) => option.minutes === minutes);
+  if (known) return known.short;
+  if (minutes < 60) return `${minutes} мин`;
+  if (minutes % 1440 === 0) return `${minutes / 1440} дн`;
+  if (minutes % 60 === 0) return `${minutes / 60} ч`;
+  return `${Math.floor(minutes / 60)} ч ${minutes % 60} м`;
+}
+
+/** Перевод «число + единица» в минуты: так пользователь вводит любой свой интервал. */
+export function offsetFromInput(amount: number, unit: 'min' | 'hour' | 'day' | 'week'): number | null {
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  const factor = unit === 'min' ? 1 : unit === 'hour' ? 60 : unit === 'day' ? 1440 : 10080;
+  const minutes = Math.round(amount * factor);
+  return minutes >= 0 && minutes <= 60 * 24 * 60 ? minutes : null;
 }
 
 /** Момент начала дела: дата + время, а для дел без времени — заданный час. */
@@ -63,8 +96,15 @@ export function eventStart(item: { date: string; timeStart?: string }, allDayHou
   return new Date(`${item.date}T${time}:00`);
 }
 
-export function remindersOf(event: Pick<CalendarEvent, 'reminders'>, settings: NotifySettings): number[] {
-  const list = event.reminders && event.reminders.length > 0 ? event.reminders : settings.defaults;
+/**
+ * Какие интервалы действуют для дела: сначала личные настройки дела,
+ * затем правило для его типа, затем общие умолчания.
+ */
+export function remindersOf(event: Pick<CalendarEvent, 'reminders'>, settings: NotifySettings, kind?: CalendarEventKind): number[] {
+  const byKind = kind ? settings.byKind?.[kind] : undefined;
+  const list = event.reminders && event.reminders.length > 0
+    ? event.reminders
+    : (byKind && byKind.length > 0 ? byKind : settings.defaults);
   return Array.from(new Set(list.filter((item) => Number.isFinite(item) && item >= 0))).sort((a, b) => a - b);
 }
 
@@ -94,11 +134,18 @@ export function planReminders(items: AgendaItem[], eventsById: Map<string, Calen
     if (item.dayIndex && item.dayIndex > 1) continue;    // напоминаем один раз, в первый день
 
     const event = item.eventId ? eventsById.get(item.eventId) : undefined;
-    const offsets = remindersOf(event ?? {}, settings);
+    const offsets = remindersOf(event ?? {}, settings, item.kind);
     const start = eventStart(item, settings.allDayHour);
     if (Number.isNaN(start.getTime())) continue;
 
-    for (const offset of offsets) {
+    // Повторы после начала: напоминаем, пока дело не отмечено выполненным.
+    const repeats: number[] = [];
+    const repeatEvery = settings.repeatEveryMin ?? 0;
+    if (repeatEvery > 0) {
+      for (let index = 1; index <= (settings.repeatCount ?? 0); index += 1) repeats.push(-repeatEvery * index);
+    }
+
+    for (const offset of [...offsets, ...repeats]) {
       const fireAt = new Date(start.getTime() - offset * 60000);
       planned.push({
         key: `${item.id}|${offset}|${item.date}`,
@@ -107,7 +154,7 @@ export function planReminders(items: AgendaItem[], eventsById: Map<string, Calen
         offset,
         title: `${calendarKindMeta(item.kind).label}: ${item.client || item.title}`,
         body: [
-          offset === 0 ? 'начинается сейчас' : `${formatOffset(offset).toLowerCase()}`,
+          offset < 0 ? `напоминание ещё раз, прошло ${Math.abs(offset)} мин` : offset === 0 ? 'начинается сейчас' : `${formatOffset(offset).toLowerCase()}`,
           item.timeStart ? `в ${item.timeStart}` : null,
           item.address,
           item.assignees.join(', '),

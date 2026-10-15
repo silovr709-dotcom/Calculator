@@ -15,7 +15,7 @@ import {
 import { askNotifyPermission, notifyPermission, pushReminderNotifications, type NotifyPermission } from '../lib/notify';
 import { listWorkOrders, publishWorkOrder, serverFileUrl, workOrderUrl, type WorkOrderPayload, type WorkOrderSummary } from '../lib/serverApi';
 import { dehydrate, fileRefId, isFileRef } from '../lib/photoStore';
-import { REMINDER_OPTIONS, formatOffset } from '../lib/reminders';
+import ReminderPicker from './ReminderPicker';
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
@@ -391,31 +391,12 @@ export default function ScheduleView(props: {
             </label>
             <div className="span-3 schedule-reminder-picker">
               <b>Напомнить</b>
-              <div className="notify-chips">
-                <button type="button" className={(editEvent.reminders ?? []).length === 0 ? 'active' : ''}
-                  onClick={() => updateEvent(editEvent.id, { reminders: [] })}>
-                  Как в настройках
-                </button>
-                {REMINDER_OPTIONS.map((option) => {
-                  const list = editEvent.reminders ?? [];
-                  const active = list.includes(option.minutes);
-                  return (
-                    <button key={option.minutes} type="button" className={active ? 'active' : ''}
-                      onClick={() => updateEvent(editEvent.id, {
-                        reminders: active
-                          ? list.filter((item) => item !== option.minutes)
-                          : [...list, option.minutes].sort((a, b) => a - b),
-                      })}>
-                      {option.short}
-                    </button>
-                  );
-                })}
-              </div>
-              <small className="muted">
-                {(editEvent.reminders ?? []).length === 0
-                  ? 'Сработают интервалы по умолчанию из раздела «Настройки».'
-                  : `Напомним: ${(editEvent.reminders ?? []).map(formatOffset).join(', ').toLowerCase()}.`}
-              </small>
+              <ReminderPicker
+                compact
+                inheritLabel="Как в настройках"
+                value={editEvent.reminders ?? []}
+                onChange={(reminders) => updateEvent(editEvent.id, { reminders })}
+              />
             </div>
             <label>Связать с заказом
               <select value={editEvent.projectId ?? ''} onChange={(event) => updateEvent(editEvent.id, { projectId: event.target.value || undefined })}>

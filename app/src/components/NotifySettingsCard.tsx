@@ -3,7 +3,9 @@
 
 import { useState } from 'react';
 import type { NotifySettings } from '../types';
-import { REMINDER_OPTIONS, formatOffset } from '../lib/reminders';
+import { CALENDAR_KINDS } from '../lib/calendar';
+import ReminderPicker from './ReminderPicker';
+import type { CalendarEventKind } from '../types';
 import { askNotifyPermission, notifyPermission, type NotifyPermission } from '../lib/notify';
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
@@ -15,10 +17,11 @@ export default function NotifySettingsCard(props: {
   const [permission, setPermission] = useState<NotifyPermission>(() => notifyPermission());
   const { value } = props;
 
-  const toggleDefault = (minutes: number) => {
-    const has = value.defaults.includes(minutes);
-    const next = has ? value.defaults.filter((item) => item !== minutes) : [...value.defaults, minutes];
-    props.onChange({ ...value, defaults: next.sort((a, b) => a - b) });
+  const setKindRule = (kind: CalendarEventKind, list: number[]) => {
+    const byKind = { ...(value.byKind ?? {}) };
+    if (list.length === 0) delete byKind[kind];
+    else byKind[kind] = list;
+    props.onChange({ ...value, byKind });
   };
 
   const test = () => {
@@ -57,21 +60,47 @@ export default function NotifySettingsCard(props: {
 
       <div className="notify-block">
         <b>Когда напоминать по умолчанию</b>
-        <p className="muted small">Применяется ко всем делам, у которых не заданы свои интервалы. Можно выбрать несколько.</p>
-        <div className="notify-chips">
-          {REMINDER_OPTIONS.map((option) => (
-            <button key={option.minutes} type="button"
-              className={value.defaults.includes(option.minutes) ? 'active' : ''}
-              onClick={() => toggleDefault(option.minutes)}>
-              {option.label}
-            </button>
-          ))}
+        <p className="muted small">Сколько угодно напоминаний на одно дело: выберите готовые интервалы или задайте свой — хоть «за 45 минут», хоть «за 3 недели».</p>
+        <ReminderPicker value={value.defaults} onChange={(defaults) => props.onChange({ ...value, defaults })} />
+      </div>
+
+      <details className="notify-block notify-kinds">
+        <summary>
+          <b>Свои правила для типов дел</b>
+          <small>{Object.keys(value.byKind ?? {}).length > 0 ? `настроено: ${Object.keys(value.byKind ?? {}).length}` : 'все по умолчанию'}</small>
+        </summary>
+        <p className="muted small">Например, о монтаже предупреждать за двое суток, а о звонке — за 10 минут.</p>
+        {CALENDAR_KINDS.map((kind) => (
+          <div className="notify-kind-row" key={kind.id}>
+            <b>{kind.label}</b>
+            <ReminderPicker
+              compact
+              inheritLabel="как общие"
+              value={value.byKind?.[kind.id] ?? []}
+              onChange={(list) => setKindRule(kind.id, list)}
+            />
+          </div>
+        ))}
+      </details>
+
+      <div className="notify-block">
+        <b>Повторять, пока не отмечено</b>
+        <p className="muted small">Если дело не закрыто, приложение напомнит ещё раз после начала — удобно для звонков и оплат.</p>
+        <div className="notify-grid">
+          <label>Повтор каждые
+            <select value={value.repeatEveryMin ?? 0} onChange={(event) => props.onChange({ ...value, repeatEveryMin: Number(event.target.value) })}>
+              {[0, 5, 10, 15, 30, 60, 120].map((minutes) => (
+                <option key={minutes} value={minutes}>{minutes === 0 ? 'не повторять' : `${minutes} мин`}</option>
+              ))}
+            </select>
+          </label>
+          <label>Сколько раз
+            <select value={value.repeatCount ?? 2} disabled={!value.repeatEveryMin}
+              onChange={(event) => props.onChange({ ...value, repeatCount: Number(event.target.value) })}>
+              {[1, 2, 3, 5, 10].map((count) => <option key={count} value={count}>{count}</option>)}
+            </select>
+          </label>
         </div>
-        <p className="muted small">
-          {value.defaults.length === 0
-            ? 'Сейчас напоминания отключены — ни одно дело не побеспокоит.'
-            : `Сейчас: ${value.defaults.map(formatOffset).join(', ').toLowerCase()}.`}
-        </p>
       </div>
 
       <div className="notify-grid">
