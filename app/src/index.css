@@ -5531,10 +5531,17 @@ select option { background: #fff !important; color: #102037 !important; }
   border-radius: 18px !important;
   z-index: var(--z-dock-menu);
 }
-.mobile-dock-more:hover .mobile-dock-menu,
-.mobile-dock-more:focus-within .mobile-dock-menu {
+/* Открывается нажатием: на телефоне наведения нет, поэтому :hover ненадёжен. */
+.mobile-dock-more.open .mobile-dock-menu {
   display: grid !important;
   gap: 6px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mobile-dock-more:hover .mobile-dock-menu,
+  .mobile-dock-more:focus-within .mobile-dock-menu {
+    display: grid !important;
+    gap: 6px;
+  }
 }
 .mobile-app-dock .mobile-dock-menu button {
   display: flex !important;

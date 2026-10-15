@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClientProfile, OrderWorkflow, Pricebook, Project, ProjectSettings, Template, KbArticle } from './types';
 import {
   loadGlobalSettings, saveGlobalSettings,
@@ -87,6 +87,23 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
   const server = useServerSync(applyWorkspace);
   const appVersion = useAppVersion();
   // Клиентская ссылка вида …/#offer=abc123 — определяем её до любой загрузки базы.
+  // Меню «Ещё» в нижней панели: на телефоне нет наведения, поэтому открываем по нажатию.
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onPointer = (event: MouseEvent | TouchEvent) => {
+      if (!moreRef.current?.contains(event.target as Node)) setMoreOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setMoreOpen(false); };
+    document.addEventListener('pointerdown', onPointer);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [moreOpen]);
+
   const [publicOfferId] = useState(() => {
     const byPath = /\/kp\/([a-f0-9]{10,32})/.exec(window.location.pathname);
     if (byPath) return byPath[1];
@@ -729,17 +746,28 @@ const persistTemplates = useCallback((next: Template[]) => {
           <b>Фабрика</b>
           <small>бланк</small>
         </button>
-        <div className="mobile-dock-more dropdown">
-          <button type="button" className={(['kb', 'pricebook', 'sync', 'settings'] as string[]).includes(view.kind) ? 'active' : ''}>
+        <div className={`mobile-dock-more dropdown${moreOpen ? ' open' : ''}`} ref={moreRef}>
+          <button
+            type="button"
+            aria-expanded={moreOpen}
+            aria-haspopup="menu"
+            className={(['kb', 'pricebook', 'sync', 'settings', 'schedule', 'analytics', 'server'] as string[]).includes(view.kind) ? 'active' : ''}
+            onClick={() => setMoreOpen((open) => !open)}
+          >
             <span className="nav-icon nav-settings" aria-hidden="true" />
             <b>Ещё</b>
-            <small>{view.kind === 'kb' ? 'база' : view.kind === 'pricebook' ? 'прайс' : view.kind === 'sync' ? 'синхр.' : view.kind === 'settings' ? 'настр.' : 'меню'}</small>
+            <small>{moreOpen ? 'закрыть' : view.kind === 'kb' ? 'база' : view.kind === 'pricebook' ? 'прайс' : view.kind === 'sync' ? 'синхр.' : view.kind === 'settings' ? 'настр.' : view.kind === 'schedule' ? 'график' : view.kind === 'analytics' ? 'отчёт' : 'меню'}</small>
           </button>
-          <div className="dropdown-menu mobile-dock-menu">
-            <button type="button" className={view.kind === 'kb' ? 'active' : ''} onClick={() => setView({ kind: 'kb' })}>База знаний <span>{kbArticles.length}</span></button>
-            <button type="button" className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => setView({ kind: 'pricebook' })}>Прайс и версии <span>{activePricebook.meta.itemCount}</span></button>
-            <button type="button" className={view.kind === 'sync' ? 'active' : ''} onClick={() => setView({ kind: 'sync' })}>Синхронизация <span>{syncBadgeState === 'syncing' ? '...' : showSyncBadge ? syncBadgeState : 'off'}</span></button>
-            <button type="button" className={view.kind === 'settings' ? 'active' : ''} onClick={() => setView({ kind: 'settings' })}>Настройки <span>по умолч.</span></button>
+          <div className="dropdown-menu mobile-dock-menu" role="menu">
+            <button type="button" className={view.kind === 'schedule' ? 'active' : ''} onClick={() => { setView({ kind: 'schedule' }); setMoreOpen(false); }}>График работ <span>монтажи</span></button>
+            <button type="button" className={view.kind === 'analytics' ? 'active' : ''} onClick={() => { setView({ kind: 'analytics' }); setMoreOpen(false); }}>Аналитика <span>деньги</span></button>
+            <button type="button" className={view.kind === 'kb' ? 'active' : ''} onClick={() => { setView({ kind: 'kb' }); setMoreOpen(false); }}>База знаний <span>{kbArticles.length}</span></button>
+            <button type="button" className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => { setView({ kind: 'pricebook' }); setMoreOpen(false); }}>Прайс и версии <span>{activePricebook.meta.itemCount}</span></button>
+            <button type="button" className={view.kind === 'sync' ? 'active' : ''} onClick={() => { setView({ kind: 'sync' }); setMoreOpen(false); }}>Синхронизация <span>{syncBadgeState === 'syncing' ? '...' : showSyncBadge ? syncBadgeState : 'off'}</span></button>
+            {server.mode === 'server' && (
+              <button type="button" className={view.kind === 'server' ? 'active' : ''} onClick={() => { setView({ kind: 'server' }); setMoreOpen(false); }}>Сервер <span>{server.status === 'synced' ? 'ок' : server.status}</span></button>
+            )}
+            <button type="button" className={view.kind === 'settings' ? 'active' : ''} onClick={() => { setView({ kind: 'settings' }); setMoreOpen(false); }}>Настройки <span>по умолч.</span></button>
           </div>
         </div>
       </nav>
