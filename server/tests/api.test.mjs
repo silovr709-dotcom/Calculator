@@ -174,6 +174,9 @@ cookie = cronCookie;
 r = await call('notify/test', { method: 'POST', body: { chatId: '' } });
 check('тест без получателя отклонён', r.status === 400, r.text);
 
+r = await call('notify/contacts');
+check('поиск собеседников бота отвечает понятной ошибкой на неверный токен', r.status === 400 && String(r.json?.error).includes('токен'), r.text);
+
 // --- наряд на монтаж ---
 r = await call('workorder', { method: 'POST', body: { projectId: 'p1', payload: { client: 'Ирина', address: 'ул. Мира, 5', date: '2026-10-21', time: '10:00', team: 'Бригада 1' } } });
 const orderId = r.json?.id ?? '';

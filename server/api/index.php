@@ -460,6 +460,19 @@ switch ($route . ' ' . $method) {
         recept_json(200, ['ok' => true, 'cronKey' => $saved['cronKey'], 'tokenSet' => $saved['token'] !== '']);
     }
 
+    case 'notify/contacts GET': {
+        recept_require_admin();
+        $settings = recept_notify_settings();
+        if ($settings['token'] === '') {
+            recept_fail(400, 'Сначала сохраните токен бота');
+        }
+        $bot = recept_telegram_bot_name($settings['token']);
+        if ($bot === '') {
+            recept_fail(400, 'Телеграм не принял токен. Проверьте, что скопирован он целиком, вместе с цифрами до двоеточия.');
+        }
+        recept_json(200, ['ok' => true, 'bot' => $bot, 'contacts' => recept_telegram_contacts($settings['token'])]);
+    }
+
     case 'notify/test POST': {
         recept_require_admin();
         $settings = recept_notify_settings();

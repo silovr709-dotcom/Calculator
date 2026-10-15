@@ -517,6 +517,13 @@ export async function saveNotifyServerSettings(input: {
   return request('notify/settings', { method: 'POST', body: JSON.stringify(input) });
 }
 
+export interface TelegramContact { chatId: string; name: string; text: string; at: string }
+
+/** Кто недавно писал боту — из этого списка добавляем получателей. */
+export async function fetchTelegramContacts(): Promise<{ bot: string; contacts: TelegramContact[] }> {
+  return request('notify/contacts');
+}
+
 export async function sendNotifyTest(chatId: string): Promise<{ ok: boolean; error?: string | null }> {
   return request('notify/test', { method: 'POST', body: JSON.stringify({ chatId }) });
 }

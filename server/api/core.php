@@ -933,6 +933,76 @@ function recept_telegram_send(string $token, string $chatId, string $text): bool
     return is_string($response) && strpos($response, '"ok":true') !== false;
 }
 
+/** Простой GET к Telegram API. Возвращает массив из ответа или null. */
+function recept_telegram_get(string $token, string $method)
+{
+    if ($token === '') {
+        return null;
+    }
+    $url = 'https://api.telegram.org/bot' . $token . '/' . $method;
+    $raw = null;
+    if (function_exists('curl_init')) {
+        $curl = curl_init($url);
+        curl_setopt_array($curl, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15]);
+        $raw = curl_exec($curl);
+        curl_close($curl);
+    } else {
+        $context = stream_context_create(['http' => ['method' => 'GET', 'timeout' => 15]]);
+        $raw = @file_get_contents($url, false, $context);
+    }
+    if (!is_string($raw) || $raw === '') {
+        return null;
+    }
+    $data = json_decode($raw, true);
+    return is_array($data) ? $data : null;
+}
+
+/**
+ * Кто недавно писал боту: по этому списку менеджер добавляет получателей,
+ * не разбираясь, что такое chat id.
+ */
+function recept_telegram_contacts(string $token): array
+{
+    $data = recept_telegram_get($token, 'getUpdates?limit=100&allowed_updates=["message"]');
+    if (!is_array($data) || empty($data['ok']) || !isset($data['result']) || !is_array($data['result'])) {
+        return [];
+    }
+    $contacts = [];
+    foreach ($data['result'] as $update) {
+        $message = isset($update['message']) ? $update['message'] : (isset($update['edited_message']) ? $update['edited_message'] : null);
+        if (!is_array($message) || !isset($message['chat']['id'])) {
+            continue;
+        }
+        $chat = $message['chat'];
+        $id = (string) $chat['id'];
+        $name = trim(
+            (isset($chat['title']) ? (string) $chat['title'] : '')
+            . (isset($chat['first_name']) ? (string) $chat['first_name'] . ' ' : '')
+            . (isset($chat['last_name']) ? (string) $chat['last_name'] : '')
+        );
+        if ($name === '' && isset($chat['username'])) {
+            $name = '@' . (string) $chat['username'];
+        }
+        $contacts[$id] = [
+            'chatId' => $id,
+            'name' => $name !== '' ? $name : ('Чат ' . $id),
+            'text' => isset($message['text']) ? mb_substr((string) $message['text'], 0, 80) : '',
+            'at' => isset($message['date']) ? gmdate('c', (int) $message['date']) : '',
+        ];
+    }
+    return array_values($contacts);
+}
+
+/** Имя бота — чтобы показать менеджеру, что токен рабочий. */
+function recept_telegram_bot_name(string $token): string
+{
+    $data = recept_telegram_get($token, 'getMe');
+    if (!is_array($data) || empty($data['ok']) || !isset($data['result']['username'])) {
+        return '';
+    }
+    return '@' . (string) $data['result']['username'];
+}
+
 /** Кому слать: совпадение по имени исполнителя, иначе всем из списка. */
 function recept_notify_targets(array $settings, array $assignees): array
 {

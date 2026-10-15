@@ -3,8 +3,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-  cronNotifyUrl, fetchNotifyServerSettings, saveNotifyServerSettings, sendNotifyTest,
-  type NotifyServerSettings, type TelegramChat,
+  cronNotifyUrl, fetchNotifyServerSettings, fetchTelegramContacts, saveNotifyServerSettings, sendNotifyTest,
+  type NotifyServerSettings, type TelegramChat, type TelegramContact,
 } from '../lib/serverApi';
 
 export default function TelegramNotifyCard() {
@@ -14,6 +14,8 @@ export default function TelegramNotifyCard() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [contacts, setContacts] = useState<TelegramContact[] | null>(null);
+  const [botName, setBotName] = useState('');
 
   const reload = useCallback(async () => {
     try {
@@ -55,6 +57,25 @@ export default function TelegramNotifyCard() {
     }
   };
 
+  /** Главная кнопка помощи: сами находим, кто написал боту, и подставляем chat id. */
+  const findContacts = async () => {
+    setBusy(true);
+    setMessage('');
+    setError('');
+    try {
+      const result = await fetchTelegramContacts();
+      setBotName(result.bot);
+      setContacts(result.contacts);
+      if (result.contacts.length === 0) {
+        setMessage(`Бот ${result.bot} на связи, но ему ещё никто не писал. Откройте ${result.bot} в Telegram, нажмите «Начать» (Start) и отправьте любое сообщение — потом нажмите кнопку ещё раз.`);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const test = async (chatId: string) => {
     setBusy(true);
     setMessage('');
@@ -82,12 +103,15 @@ export default function TelegramNotifyCard() {
       </div>
 
       <ol className="notify-steps">
-        <li>В Telegram напишите <b>@BotFather</b> команду <code>/newbot</code>, придумайте имя — он выдаст токен.</li>
+        <li>В Telegram напишите <b>@BotFather</b> команду <code>/newbot</code> — он выдаст токен.</li>
         <li>Вставьте токен ниже и сохраните. {settings.tokenSet && <b>Сейчас сохранён токен {settings.tokenHint}.</b>}</li>
-        <li>Каждый сотрудник пишет боту любое сообщение, затем узнаёт свой <b>chat id</b> у бота <b>@userinfobot</b> и сообщает вам.</li>
-        <li>Впишите имя (как в делах календаря) и chat id, нажмите «Проверить».</li>
+        <li><b>Важно:</b> каждый сотрудник должен открыть вашего бота и нажать <b>«Начать» (Start)</b>, затем отправить любое сообщение. Без этого Telegram запрещает боту писать первым.</li>
+        <li>Нажмите <b>«Найти, кто написал боту»</b> — приложение само определит chat id и добавит получателя.</li>
         <li>Добавьте ссылку планировщика в панели хостинга — раздел «Планировщик CRON», раз в 5 минут.</li>
       </ol>
+      <p className="muted small">
+        Сам бот на сообщения не отвечает — это нормально: он только рассылает напоминания, принимать команды ему не нужно.
+      </p>
 
       <div className="notify-grid">
         <label className="span-2">Токен бота
@@ -106,6 +130,30 @@ export default function TelegramNotifyCard() {
             onChange={(event) => void save({ timezoneOffset: Number(event.target.value) })} />
         </label>
       </div>
+
+      <div className="notify-find">
+        <button type="button" className="btn ghost" disabled={busy || !settings.tokenSet} onClick={() => void findContacts()}>
+          {busy ? 'Спрашиваем Telegram…' : 'Найти, кто написал боту'}
+        </button>
+        {botName && <span className="muted small">Бот на связи: <b>{botName}</b></span>}
+      </div>
+
+      {contacts && contacts.length > 0 && (
+        <div className="notify-contacts">
+          <b>Написали боту</b>
+          {contacts.map((contact) => (
+            <div className="notify-contact-row" key={contact.chatId}>
+              <span><b>{contact.name}</b><small>{contact.text || 'без текста'} · id {contact.chatId}</small></span>
+              <button type="button" className="btn tiny ghost" disabled={chats.some((chat) => chat.chatId === contact.chatId)}
+                onClick={() => setChats([...chats.filter((chat) => chat.name.trim() || chat.chatId.trim()), { name: contact.name, chatId: contact.chatId }])}>
+                {chats.some((chat) => chat.chatId === contact.chatId) ? 'уже в списке' : 'Добавить'}
+              </button>
+              <button type="button" className="btn tiny ghost" disabled={busy} onClick={() => void test(contact.chatId)}>Проверить</button>
+            </div>
+          ))}
+          <small className="muted">Имя можно поменять ниже — оно должно совпадать с тем, как сотрудник записан в делах календаря.</small>
+        </div>
+      )}
 
       <div className="notify-chats">
         <b>Кому слать</b>
