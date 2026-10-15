@@ -1,11 +1,11 @@
 // Рабочая база целиком: что именно хранится на сервере и как она сливается
 // с тем, что уже лежит в браузере. Здесь только чистые функции — их легко проверить тестами.
 
-import type { ClientProfile, KbArticle, Pricebook, Project, ProjectSettings, Template } from '../types';
+import type { CalendarEvent, ClientProfile, KbArticle, Pricebook, Project, ProjectSettings, Template } from '../types';
 import {
   defaultSettings,
-  loadClientProfiles, loadGlobalSettings, loadKbArticles, loadProjects, loadStoredPricebooks, loadTemplates,
-  saveClientProfiles, saveGlobalSettings, saveKbArticles, saveProjects, saveStoredPricebooks, saveTemplates,
+  loadCalendarEvents, loadClientProfiles, loadGlobalSettings, loadKbArticles, loadProjects, loadStoredPricebooks, loadTemplates,
+  saveCalendarEvents, saveClientProfiles, saveGlobalSettings, saveKbArticles, saveProjects, saveStoredPricebooks, saveTemplates,
 } from './storage';
 import { mergeSyncData } from './sync';
 
@@ -16,10 +16,11 @@ export interface Workspace {
   settings: ProjectSettings;
   pricebooks: Pricebook[];
   knowledge: KbArticle[];
+  events: CalendarEvent[];
 }
 
 export function emptyWorkspace(): Workspace {
-  return { projects: [], clients: [], templates: [], settings: defaultSettings(), pricebooks: [], knowledge: [] };
+  return { projects: [], clients: [], templates: [], settings: defaultSettings(), pricebooks: [], knowledge: [], events: [] };
 }
 
 function asArray<T>(value: unknown): T[] {
@@ -40,6 +41,7 @@ export function normalizeWorkspace(raw: unknown): Workspace {
     settings,
     pricebooks: asArray<Pricebook>(value.pricebooks),
     knowledge: asArray<KbArticle>(value.knowledge),
+    events: asArray<CalendarEvent>(value.events).filter((item) => item && typeof item === 'object' && typeof item.id === 'string'),
   };
 }
 
@@ -52,6 +54,7 @@ export function readLocalWorkspace(): Workspace {
     settings: loadGlobalSettings(),
     pricebooks: loadStoredPricebooks(),
     knowledge: loadKbArticles(),
+    events: loadCalendarEvents(),
   };
 }
 
@@ -63,6 +66,7 @@ export function writeLocalWorkspace(workspace: Workspace): void {
   saveGlobalSettings(workspace.settings);
   saveStoredPricebooks(workspace.pricebooks);
   saveKbArticles(workspace.knowledge);
+  saveCalendarEvents(workspace.events);
 }
 
 /**
@@ -78,6 +82,7 @@ export function workspaceSignature(workspace: Workspace): string {
     workspace.templates.map((item) => item.id).join(','),
     workspace.knowledge.map((item) => `${item.id}:${item.updatedAt ?? ''}`).join(','),
     workspace.pricebooks.map((book) => book.meta?.id ?? '').join(','),
+    workspace.events.map((item) => `${item.id}:${item.updatedAt}`).join(','),
     JSON.stringify(workspace.settings ?? {}),
   ].join('|');
 }
@@ -105,7 +110,15 @@ export function mergeWorkspaces(local: Workspace, remote: Workspace): Workspace 
   for (const book of remote.pricebooks) if (book?.meta?.id) pricebooks.set(book.meta.id, book);
   for (const book of local.pricebooks) if (book?.meta?.id) pricebooks.set(book.meta.id, book);
 
+  const events = new Map<string, CalendarEvent>();
+  for (const event of remote.events) events.set(event.id, event);
+  for (const event of local.events) {
+    const existing = events.get(event.id);
+    if (!existing || (event.updatedAt ?? '') >= (existing.updatedAt ?? '')) events.set(event.id, event);
+  }
+
   return {
+    events: Array.from(events.values()),
     projects: merged.mergedProjects,
     clients: merged.mergedClients,
     templates: merged.mergedTemplates,

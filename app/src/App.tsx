@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ClientProfile, OrderWorkflow, Pricebook, Project, ProjectSettings, Template, KbArticle } from './types';
+import type { CalendarEvent, ClientProfile, OrderWorkflow, Pricebook, Project, ProjectSettings, Template, KbArticle } from './types';
 import {
   loadGlobalSettings, saveGlobalSettings,
   loadProjects, saveProjects, loadTemplates, saveTemplates,
   loadClientProfiles, saveClientProfiles,
   loadStoredPricebooks, saveStoredPricebooks, uid, loadKbArticles, saveKbArticles,
+  loadCalendarEvents, saveCalendarEvents,
   isStorageServerBacked, setStorageServerBacked } from './lib/storage';
 import {
   loadSyncConfig, saveSyncConfig, performFullSync, parseIncomingHash,
@@ -64,6 +65,7 @@ export default function App() {
   const [view, setView] = useState<View>({ kind: 'dashboard' });
   const [savedFlash, setSavedFlash] = useState(false);
     const [kbArticles, setKbArticles] = useState<KbArticle[]>(() => loadKbArticles());
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(() => loadCalendarEvents());
 const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig());
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => (loadSyncConfig().enabled ? 'synced' : 'idle'));
   const [projectHistory] = useState(() => new ProjectHistory());
@@ -83,6 +85,7 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
     setGlobalSettings(workspace.settings);
     setStored(workspace.pricebooks);
     setKbArticles(workspace.knowledge);
+    setCalendarEvents(workspace.events);
   }, []);
   const server = useServerSync(applyWorkspace);
   const appVersion = useAppVersion();
@@ -125,8 +128,8 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
   // через небольшую паузу после последнего изменения.
   useEffect(() => {
     if (!serverReady) return;
-    serverScheduleSave({ projects, clients, templates, settings: globalSettings, pricebooks: stored, knowledge: kbArticles });
-  }, [clients, globalSettings, kbArticles, projects, serverReady, serverScheduleSave, stored, templates]);
+    serverScheduleSave({ projects, clients, templates, settings: globalSettings, pricebooks: stored, knowledge: kbArticles, events: calendarEvents });
+  }, [calendarEvents, clients, globalSettings, kbArticles, projects, serverReady, serverScheduleSave, stored, templates]);
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}data/pricebook-visma-2026.json`)
@@ -320,6 +323,11 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
       pushToCloud(cfg, { projects: loadProjects(), clients: next, templates: loadTemplates(), settings: loadGlobalSettings() })
         .then((r) => setSyncStatus(r.ok ? 'synced' : 'offline'));
     }
+  }, []);
+
+  const persistCalendarEvents = useCallback((next: CalendarEvent[]) => {
+    setCalendarEvents(next);
+    saveCalendarEvents(next);
   }, []);
 
     const persistKb = useCallback((next: KbArticle[]) => {
@@ -631,6 +639,9 @@ const persistTemplates = useCallback((next: Template[]) => {
         {view.kind === 'schedule' && (
           <ScheduleView
             projects={projectsForUi}
+            events={calendarEvents}
+            me={server.user?.name || server.user?.login || ''}
+            onEventsChange={persistCalendarEvents}
             onOpen={(id) => setView({ kind: 'project', id })}
             onProjectChange={updateProject}
           />
@@ -638,7 +649,7 @@ const persistTemplates = useCallback((next: Template[]) => {
         {view.kind === 'server' && (
           <ServerPanel
             sync={server}
-            workspace={{ projects, clients, templates, settings: globalSettings, pricebooks: stored, knowledge: kbArticles }}
+            workspace={{ projects, clients, templates, settings: globalSettings, pricebooks: stored, knowledge: kbArticles, events: calendarEvents }}
             onRestored={applyWorkspace}
           />
         )}

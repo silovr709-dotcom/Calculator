@@ -255,6 +255,32 @@ export interface ProjectSchedule {
   status?: ScheduleStatus;
 }
 
+/** Своё дело в календаре: замер, выезд, встреча, монтаж — без привязки к проекту. */
+export type CalendarEventKind = 'measure' | 'delivery' | 'install' | 'meeting' | 'call' | 'service' | 'other';
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  kind: CalendarEventKind;
+  /** Дата начала, YYYY-MM-DD. */
+  date: string;
+  /** Сколько дней занимает дело, по умолчанию 1. */
+  days?: number;
+  timeStart?: string;
+  timeEnd?: string;
+  /** Кому поручено: логины или имена сотрудников. Пусто — общее дело. */
+  assignees: string[];
+  clientName?: string;
+  address?: string;
+  note?: string;
+  projectId?: string;
+  status: ScheduleStatus;
+  done?: boolean;
+  createdAt: string;
+  createdBy?: string;
+  updatedAt: string;
+}
+
 /** Тип задачи в CRM: от него зависит значок и подсказка. */
 export type CrmTaskKind = 'call' | 'meet' | 'measure' | 'docs' | 'payment' | 'delivery' | 'other';
 
