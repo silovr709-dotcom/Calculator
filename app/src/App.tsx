@@ -32,6 +32,7 @@ import { normalizeNotifySettings } from './lib/reminders';
 import PublicOfferPage from './components/PublicOfferPage';
 import AnalyticsView from './components/AnalyticsView';
 import ScheduleView from './components/ScheduleView';
+import PriceAuditView from './components/PriceAuditView';
 import { dehydrateKnown } from './lib/photoStore';
 import FactoryBlankView from './components/FactoryBlankView';
 import KnowledgeView from './components/KnowledgeView';
@@ -55,6 +56,7 @@ type View =
   | { kind: 'server' }
   | { kind: 'analytics' }
   | { kind: 'schedule' }
+  | { kind: 'audit'; id?: string }
   | { kind: 'sync' };
 
 export default function App() {
@@ -579,6 +581,9 @@ const persistTemplates = useCallback((next: Template[]) => {
             <button className={view.kind === 'analytics' ? 'active' : ''} onClick={() => setView({ kind: 'analytics' })}>
               <span className="nav-icon nav-analytics" aria-hidden="true" />Аналитика
             </button>
+            <button className={view.kind === 'audit' ? 'active' : ''} onClick={() => setView({ kind: 'audit', id: current?.id })}>
+              <span className="nav-icon nav-price" aria-hidden="true" />Проверка цен
+            </button>
             <button className={view.kind === 'sync' ? 'active' : ''} onClick={() => setView({ kind: 'sync' })}>
               <span className="nav-icon nav-sync" aria-hidden="true" />Синхронизация
               {showSyncBadge && (
@@ -649,6 +654,14 @@ const persistTemplates = useCallback((next: Template[]) => {
           />
         )}
         {view.kind === 'analytics' && <AnalyticsView projects={projectsForUi} pricebooks={pricebooks} />}
+        {view.kind === 'audit' && (
+          <PriceAuditView
+            projects={projectsForUi}
+            pricebooks={pricebooks}
+            initialProjectId={view.id ?? current?.id}
+            onOpen={(id) => setView({ kind: 'project', id })}
+          />
+        )}
         {view.kind === 'schedule' && (
           <ScheduleView
             projects={projectsForUi}
@@ -778,7 +791,7 @@ const persistTemplates = useCallback((next: Template[]) => {
             type="button"
             aria-expanded={moreOpen}
             aria-haspopup="menu"
-            className={(['kb', 'pricebook', 'sync', 'settings', 'schedule', 'analytics', 'server'] as string[]).includes(view.kind) ? 'active' : ''}
+            className={(['kb', 'pricebook', 'sync', 'settings', 'schedule', 'analytics', 'audit', 'server'] as string[]).includes(view.kind) ? 'active' : ''}
             onClick={() => setMoreOpen((open) => !open)}
           >
             <span className="nav-icon nav-settings" aria-hidden="true" />
@@ -788,6 +801,7 @@ const persistTemplates = useCallback((next: Template[]) => {
           <div className="dropdown-menu mobile-dock-menu" role="menu">
             <button type="button" className={view.kind === 'schedule' ? 'active' : ''} onClick={() => { setView({ kind: 'schedule' }); setMoreOpen(false); }}>График работ <span>монтажи</span></button>
             <button type="button" className={view.kind === 'analytics' ? 'active' : ''} onClick={() => { setView({ kind: 'analytics' }); setMoreOpen(false); }}>Аналитика <span>деньги</span></button>
+            <button type="button" className={view.kind === 'audit' ? 'active' : ''} onClick={() => { setView({ kind: 'audit' }); setMoreOpen(false); }}>Проверка цен <span>опт/розн.</span></button>
             <button type="button" className={view.kind === 'kb' ? 'active' : ''} onClick={() => { setView({ kind: 'kb' }); setMoreOpen(false); }}>База знаний <span>{kbArticles.length}</span></button>
             <button type="button" className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => { setView({ kind: 'pricebook' }); setMoreOpen(false); }}>Прайс и версии <span>{activePricebook.meta.itemCount}</span></button>
             <button type="button" className={view.kind === 'sync' ? 'active' : ''} onClick={() => { setView({ kind: 'sync' }); setMoreOpen(false); }}>Синхронизация <span>{syncBadgeState === 'syncing' ? '...' : showSyncBadge ? syncBadgeState : 'off'}</span></button>

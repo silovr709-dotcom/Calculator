@@ -7892,3 +7892,60 @@ input.editable-number { max-width: 120px; text-align: right; }
 .notify-grid .notify-check { display: flex; gap: 8px; align-items: center; }
 .notify-actions { margin-top: 12px; }
 .schedule-reminder-picker > b { font-size: 12.5px; color: #16213f; }
+
+/* ======================= Проверка цен (опт/розница) ======================= */
+.audit-head-actions { display: flex; gap: 10px; align-items: center; }
+.audit-head-actions select { padding: 8px 10px; border: 1px solid #d7deef; border-radius: 10px; font-size: 13px; max-width: 360px; }
+
+.audit-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-bottom: 10px; }
+.audit-card { display: grid; gap: 2px; padding: 12px 14px; border: 1px solid #e2e7f3; border-radius: 12px; background: #fff; }
+.audit-card span { font-size: 11.5px; color: #7c89a8; font-weight: 600; }
+.audit-card b { font-size: 19px; color: #16213f; }
+.audit-card small { font-size: 11px; color: #8a97b4; }
+.audit-card.accent { background: linear-gradient(140deg, #16213f, #27406f); border-color: #16213f; }
+.audit-card.accent span, .audit-card.accent small { color: rgba(255,255,255,.72); }
+.audit-card.accent b { color: #fff; }
+.audit-card.ok { border-color: #bfe4cd; background: #f3fbf6; }
+.audit-card.warn { border-color: #f0d8a0; background: #fff9ec; }
+.audit-card.bad { border-color: #f0bcbc; background: #fdf2f2; }
+
+.audit-balance {
+  margin-bottom: 12px; padding: 9px 14px; border-radius: 10px; font-size: 12.5px;
+  background: #eef7f1; color: #18723e; border: 1px solid #bfe4cd;
+}
+.audit-balance.bad { background: #fdf2f2; color: #b3261e; border-color: #f0bcbc; }
+
+.audit-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+.audit-toolbar > input { flex: 1; min-width: 220px; padding: 8px 12px; border: 1px solid #d7deef; border-radius: 10px; font-size: 13px; }
+.audit-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.audit-filters button {
+  padding: 6px 12px; border: 1px solid #dde4f2; border-radius: 999px;
+  background: #fff; color: #5b6b8f; font-size: 12px; cursor: pointer;
+}
+.audit-filters button.active { background: #16213f; border-color: #16213f; color: #fff; }
+.audit-export { display: flex; gap: 6px; margin-left: auto; }
+
+.audit-group { margin-bottom: 12px; }
+.audit-group-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+.audit-group-head b { font-size: 14px; color: #16213f; }
+.audit-group-head span { font-size: 12px; color: #7c89a8; }
+.audit-table-wrap { overflow-x: auto; }
+.audit-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.audit-table th {
+  text-align: right; padding: 6px 8px; border-bottom: 1px solid #e8ecf6;
+  color: #8a97b4; font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.audit-table th:first-child, .audit-table td:first-child { text-align: left; }
+.audit-table td { padding: 7px 8px; border-bottom: 1px solid #f2f5fb; text-align: right; vertical-align: top; white-space: nowrap; }
+.audit-table td:first-child { white-space: normal; min-width: 260px; }
+.audit-table td b { color: #16213f; }
+.audit-table td small { display: block; color: #8a97b4; font-size: 11px; }
+.audit-table tr.warn { background: #fffdf6; }
+.audit-table tr.bad { background: #fdf5f4; }
+.audit-table td.bad { color: #b3261e; font-weight: 700; }
+.audit-flags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.audit-flags i {
+  font-style: normal; padding: 1px 7px; border-radius: 999px;
+  background: #fff5e2; color: #8a5a00; font-size: 10.5px;
+}
+.audit-flags i.bad { background: #fdeceb; color: #b3261e; }
