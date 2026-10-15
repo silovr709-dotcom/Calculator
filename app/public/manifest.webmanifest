@@ -1,0 +1,24 @@
+{
+  "name": "РЕцепт — калькулятор кухонь",
+  "short_name": "РЕцепт",
+  "description": "Расчёт кухонь, КП, CRM и график монтажей в одном приложении",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
+  "orientation": "any",
+  "background_color": "#f4f6fb",
+  "theme_color": "#16213f",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Проекты", "url": "./", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "CRM", "url": "./#crm" },
+    { "name": "График работ", "url": "./#schedule" }
+  ]
+}

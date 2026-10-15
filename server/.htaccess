@@ -56,6 +56,11 @@
   <FilesMatch "^(index\.html)$">
     Header set Cache-Control "no-cache, must-revalidate"
   </FilesMatch>
+  # Service worker и манифест приложения всегда проверяются заново,
+  # иначе обновление «залипает» у тех, кто поставил приложение на телефон.
+  <FilesMatch "^(sw\.js|manifest\.webmanifest|build\.json)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
   Header always set X-Content-Type-Options "nosniff"
   Header always set X-Frame-Options "SAMEORIGIN"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
