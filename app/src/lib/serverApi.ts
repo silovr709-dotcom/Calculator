@@ -463,3 +463,42 @@ export async function listWorkOrders(): Promise<WorkOrderSummary[]> {
 export async function revokeWorkOrder(id: string): Promise<void> {
   await request('workorder', { method: 'DELETE' }, { id });
 }
+
+/* ----------------------- уведомления в Telegram ----------------------- */
+
+export interface TelegramChat { name: string; chatId: string }
+
+export interface NotifyServerSettings {
+  enabled: boolean;
+  tokenSet: boolean;
+  tokenHint: string;
+  chats: TelegramChat[];
+  cronKey: string;
+  leadMinutes: number;
+  dailyHour: number;
+  timezoneOffset: number;
+}
+
+export async function fetchNotifyServerSettings(): Promise<NotifyServerSettings> {
+  const json = await request<{ settings: NotifyServerSettings }>('notify/settings');
+  return json.settings;
+}
+
+export async function saveNotifyServerSettings(input: {
+  enabled: boolean;
+  token?: string;
+  chats: TelegramChat[];
+  leadMinutes: number;
+  timezoneOffset: number;
+}): Promise<{ cronKey: string; tokenSet: boolean }> {
+  return request('notify/settings', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export async function sendNotifyTest(chatId: string): Promise<{ ok: boolean; error?: string | null }> {
+  return request('notify/test', { method: 'POST', body: JSON.stringify({ chatId }) });
+}
+
+/** Ссылка для планировщика хостинга. */
+export function cronNotifyUrl(key: string): string {
+  return apiUrl('cron/notify', { key });
+}

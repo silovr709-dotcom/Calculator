@@ -27,6 +27,7 @@ import { useAppVersion } from './lib/useAppVersion';
 import ServerSaveChip from './components/ServerSaveChip';
 import InstallAppCard from './components/InstallAppCard';
 import NotifySettingsCard from './components/NotifySettingsCard';
+import TelegramNotifyCard from './components/TelegramNotifyCard';
 import { useReminders } from './lib/useReminders';
 import { normalizeNotifySettings } from './lib/reminders';
 import { capabilitiesFor } from './lib/permissions';
@@ -788,6 +789,7 @@ const persistTemplates = useCallback((next: Template[]) => {
         {view.kind === 'settings' && (
           <>
             <NotifySettingsCard value={notifySettings} onChange={persistNotifySettings} />
+            {can.manageUsers && server.mode === 'server' && <TelegramNotifyCard />}
             <SettingsPanel
               title="Настройки по умолчанию (для новых проектов)"
               settings={globalSettings}

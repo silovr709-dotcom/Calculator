@@ -150,6 +150,30 @@ check('документ можно удалить', r.json?.ok === true, r.text)
 r = await call('files/gc', { method: 'POST' });
 check('после удаления карточки файл документа убирается', r.json?.removed === 1, r.text);
 
+// --- уведомления в Telegram ---
+r = await call('notify/settings');
+check('настройки уведомлений пустые по умолчанию', r.json?.settings?.tokenSet === false, r.text);
+
+r = await call('notify/settings', { method: 'POST', body: { enabled: true, token: '123456:TESTTOKEN', chats: [{ name: 'Пётр', chatId: '555' }, { name: '', chatId: '' }], leadMinutes: 90, timezoneOffset: 3 } });
+const cronKey = r.json?.cronKey ?? '';
+check('настройки сохранены и выдан ключ планировщика', r.json?.ok === true && cronKey.length >= 16, r.text);
+
+r = await call('notify/settings');
+check('токен наружу не отдаётся целиком', r.json?.settings?.tokenSet === true && r.json?.settings?.tokenHint === '…TTOKEN', r.text);
+check('пустые получатели отфильтрованы', (r.json?.settings?.chats ?? []).length === 1, r.text);
+
+const cronCookie = cookie;
+cookie = '';
+r = await call('cron/notify', { query: '&key=неверный' });
+check('планировщик без ключа не пускает', r.status === 403, r.text);
+
+r = await call('cron/notify', { query: `&key=${cronKey}` });
+check('планировщик с ключом отрабатывает', r.json?.ok === true && typeof r.json?.sent === 'number', r.text);
+cookie = cronCookie;
+
+r = await call('notify/test', { method: 'POST', body: { chatId: '' } });
+check('тест без получателя отклонён', r.status === 400, r.text);
+
 // --- наряд на монтаж ---
 r = await call('workorder', { method: 'POST', body: { projectId: 'p1', payload: { client: 'Ирина', address: 'ул. Мира, 5', date: '2026-10-21', time: '10:00', team: 'Бригада 1' } } });
 const orderId = r.json?.id ?? '';

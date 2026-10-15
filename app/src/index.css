@@ -8046,3 +8046,18 @@ input.editable-number { max-width: 120px; text-align: right; }
   border: 1px solid #e2e7f3; border-radius: 16px; background: #fff; color: #5b6b8f; font-size: 14px;
 }
 .server-role-hint { grid-column: 1 / -1; color: #7c89a8; font-size: 11.5px; }
+
+/* Telegram-уведомления. */
+.notify-switch { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; color: #45536f; }
+.notify-steps { margin: 10px 0; padding-left: 20px; display: grid; gap: 4px; font-size: 12.5px; color: #5b6b8f; }
+.notify-steps code { padding: 1px 5px; border-radius: 5px; background: #eef2fb; font-size: 12px; }
+.notify-grid .span-2 { grid-column: span 2; }
+.notify-grid input { padding: 7px 10px; border: 1px solid #d7deef; border-radius: 9px; font-size: 13px; }
+.notify-chats { display: grid; gap: 6px; margin-top: 12px; }
+.notify-chats > b { font-size: 13px; color: #16213f; }
+.notify-chat-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto auto; gap: 6px; }
+.notify-chat-row input { padding: 7px 10px; border: 1px solid #d7deef; border-radius: 9px; font-size: 13px; }
+.notify-cron { display: grid; gap: 4px; margin-top: 12px; padding: 10px 12px; border: 1px solid #e2e7f3; border-radius: 10px; background: #fafbff; }
+.notify-cron b { font-size: 12.5px; color: #16213f; }
+.notify-cron input { padding: 7px 9px; border: 1px solid #d3dcf0; border-radius: 8px; font-size: 12px; }
+@media (max-width: 760px) { .notify-chat-row { grid-template-columns: 1fr 1fr; } }

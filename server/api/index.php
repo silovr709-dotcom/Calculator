@@ -435,6 +435,56 @@ switch ($route . ' ' . $method) {
         recept_json(200, ['ok' => true]);
     }
 
+    /* ---------- уведомления в Telegram ---------- */
+
+    case 'notify/settings GET': {
+        recept_require_admin();
+        $settings = recept_notify_settings();
+        // Токен наружу не отдаём целиком: показываем только хвост для опознания.
+        $masked = $settings['token'] === '' ? '' : ('…' . substr($settings['token'], -6));
+        recept_json(200, ['ok' => true, 'settings' => [
+            'enabled' => $settings['enabled'],
+            'tokenSet' => $settings['token'] !== '',
+            'tokenHint' => $masked,
+            'chats' => $settings['chats'],
+            'cronKey' => $settings['cronKey'],
+            'leadMinutes' => $settings['leadMinutes'],
+            'dailyHour' => $settings['dailyHour'],
+            'timezoneOffset' => $settings['timezoneOffset'],
+        ]]);
+    }
+
+    case 'notify/settings POST': {
+        recept_require_admin();
+        $saved = recept_notify_save(recept_body());
+        recept_json(200, ['ok' => true, 'cronKey' => $saved['cronKey'], 'tokenSet' => $saved['token'] !== '']);
+    }
+
+    case 'notify/test POST': {
+        recept_require_admin();
+        $settings = recept_notify_settings();
+        $body = recept_body();
+        $chatId = isset($body['chatId']) ? (string) $body['chatId'] : '';
+        if ($settings['token'] === '') {
+            recept_fail(400, 'Сначала сохраните токен бота');
+        }
+        if ($chatId === '') {
+            recept_fail(400, 'Укажите chat id получателя');
+        }
+        $ok = recept_telegram_send($settings['token'], $chatId, "РЕцепт: проверка связи.\nЕсли вы это видите — уведомления настроены.");
+        recept_json(200, ['ok' => $ok, 'error' => $ok ? null : 'Телеграм не принял сообщение: проверьте токен и chat id']);
+    }
+
+    case 'cron/notify GET': {
+        // Вызывается планировщиком хостинга по секретной ссылке, без входа.
+        $settings = recept_notify_settings();
+        $key = isset($_GET['key']) ? (string) $_GET['key'] : '';
+        if ($settings['cronKey'] === '' || !hash_equals($settings['cronKey'], $key)) {
+            recept_fail(403, 'Неверный ключ планировщика');
+        }
+        recept_json(200, recept_notify_run());
+    }
+
     /* ---------- наряд на монтаж для мастера ---------- */
 
     case 'workorder POST': {

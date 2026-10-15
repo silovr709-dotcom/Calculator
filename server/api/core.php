@@ -846,6 +846,235 @@ function recept_offers_list(): array
     return $out;
 }
 
+/* ------------------------------ уведомления (Telegram) ------------------------------ */
+
+function recept_notify_file(): string
+{
+    return recept_path('notify.json');
+}
+
+function recept_notify_settings(): array
+{
+    $data = recept_read_json(recept_notify_file(), []);
+    if (!is_array($data)) {
+        $data = [];
+    }
+    return [
+        'enabled' => isset($data['enabled']) ? (bool) $data['enabled'] : false,
+        'token' => isset($data['token']) ? (string) $data['token'] : '',
+        'chats' => isset($data['chats']) && is_array($data['chats']) ? array_values($data['chats']) : [],
+        'cronKey' => isset($data['cronKey']) && $data['cronKey'] !== '' ? (string) $data['cronKey'] : '',
+        'leadMinutes' => isset($data['leadMinutes']) ? (int) $data['leadMinutes'] : 60,
+        'dailyHour' => isset($data['dailyHour']) ? (int) $data['dailyHour'] : 8,
+        'timezoneOffset' => isset($data['timezoneOffset']) ? (int) $data['timezoneOffset'] : 3,
+    ];
+}
+
+function recept_notify_save(array $input): array
+{
+    $current = recept_notify_settings();
+    $chats = [];
+    if (isset($input['chats']) && is_array($input['chats'])) {
+        foreach ($input['chats'] as $chat) {
+            if (!is_array($chat)) {
+                continue;
+            }
+            $name = isset($chat['name']) ? trim((string) $chat['name']) : '';
+            $chatId = isset($chat['chatId']) ? trim((string) $chat['chatId']) : '';
+            if ($name === '' || $chatId === '') {
+                continue;
+            }
+            $chats[] = ['name' => mb_substr($name, 0, 120), 'chatId' => mb_substr($chatId, 0, 64)];
+        }
+    }
+    $next = [
+        'enabled' => isset($input['enabled']) ? (bool) $input['enabled'] : $current['enabled'],
+        'token' => isset($input['token']) ? trim((string) $input['token']) : $current['token'],
+        'chats' => $chats,
+        'cronKey' => $current['cronKey'] !== '' ? $current['cronKey'] : bin2hex(random_bytes(10)),
+        'leadMinutes' => isset($input['leadMinutes']) ? max(0, min(1440, (int) $input['leadMinutes'])) : $current['leadMinutes'],
+        'dailyHour' => isset($input['dailyHour']) ? max(0, min(23, (int) $input['dailyHour'])) : $current['dailyHour'],
+        'timezoneOffset' => isset($input['timezoneOffset']) ? max(-12, min(14, (int) $input['timezoneOffset'])) : $current['timezoneOffset'],
+    ];
+    recept_write_json(recept_notify_file(), $next);
+    return $next;
+}
+
+/** Отправка сообщения в Telegram. Возвращает true, если телеграм принял. */
+function recept_telegram_send(string $token, string $chatId, string $text): bool
+{
+    if ($token === '' || $chatId === '') {
+        return false;
+    }
+    $url = 'https://api.telegram.org/bot' . $token . '/sendMessage';
+    $payload = http_build_query(['chat_id' => $chatId, 'text' => $text, 'disable_web_page_preview' => 'true']);
+
+    if (function_exists('curl_init')) {
+        $curl = curl_init($url);
+        curl_setopt_array($curl, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $payload,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 15,
+        ]);
+        $response = curl_exec($curl);
+        $code = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
+        return $code === 200 && is_string($response) && strpos($response, '"ok":true') !== false;
+    }
+
+    $context = stream_context_create(['http' => [
+        'method' => 'POST',
+        'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
+        'content' => $payload,
+        'timeout' => 15,
+    ]]);
+    $response = @file_get_contents($url, false, $context);
+    return is_string($response) && strpos($response, '"ok":true') !== false;
+}
+
+/** Кому слать: совпадение по имени исполнителя, иначе всем из списка. */
+function recept_notify_targets(array $settings, array $assignees): array
+{
+    $targets = [];
+    foreach ($settings['chats'] as $chat) {
+        $name = mb_strtolower((string) $chat['name']);
+        foreach ($assignees as $assignee) {
+            if ($name !== '' && mb_strtolower(trim((string) $assignee)) === $name) {
+                $targets[$chat['chatId']] = $chat['chatId'];
+            }
+        }
+    }
+    if (count($targets) === 0 && count($assignees) === 0) {
+        foreach ($settings['chats'] as $chat) {
+            $targets[$chat['chatId']] = $chat['chatId'];
+        }
+    }
+    return array_values($targets);
+}
+
+/**
+ * Разбор базы: какие дела и монтажи подходят под окно напоминания.
+ * Время считаем по часовому поясу из настроек, чтобы «завтра в 10:00» было местным.
+ */
+function recept_notify_collect(array $settings, int $now): array
+{
+    $state = recept_load_state();
+    $data = is_object($state) ? get_object_vars($state) : (is_array($state) ? $state : []);
+    $events = isset($data['events']) && is_array($data['events']) ? $data['events'] : [];
+    $projects = isset($data['projects']) && is_array($data['projects']) ? $data['projects'] : [];
+
+    $offset = $settings['timezoneOffset'] * 3600;
+    $lead = $settings['leadMinutes'] * 60;
+    $items = [];
+
+    $push = function ($title, $date, $time, $assignees, $address, $extra) use (&$items, $offset) {
+        if (!is_string($date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return;
+        }
+        $clock = is_string($time) && preg_match('/^\d{2}:\d{2}$/', $time) ? $time : '09:00';
+        $at = strtotime($date . 'T' . $clock . ':00Z') - $offset;
+        $items[] = [
+            'at' => $at,
+            'key' => md5($title . $date . $clock),
+            'title' => $title,
+            'date' => $date,
+            'time' => $clock,
+            'assignees' => $assignees,
+            'address' => is_string($address) ? $address : '',
+            'extra' => $extra,
+        ];
+    };
+
+    foreach ($events as $event) {
+        $event = is_object($event) ? get_object_vars($event) : $event;
+        if (!is_array($event) || !empty($event['done'])) {
+            continue;
+        }
+        $assignees = isset($event['assignees']) && is_array($event['assignees']) ? $event['assignees'] : [];
+        $push(
+            (string) ($event['title'] ?? 'Дело'),
+            (string) ($event['date'] ?? ''),
+            isset($event['timeStart']) ? (string) $event['timeStart'] : '',
+            $assignees,
+            isset($event['address']) ? $event['address'] : '',
+            isset($event['clientName']) ? (string) $event['clientName'] : ''
+        );
+    }
+
+    foreach ($projects as $project) {
+        $project = is_object($project) ? get_object_vars($project) : $project;
+        if (!is_array($project)) {
+            continue;
+        }
+        $schedule = isset($project['schedule']) ? (is_object($project['schedule']) ? get_object_vars($project['schedule']) : $project['schedule']) : [];
+        if (!is_array($schedule) || empty($schedule['installAt'])) {
+            continue;
+        }
+        $team = isset($schedule['team']) && $schedule['team'] !== '' ? [(string) $schedule['team']] : [];
+        $push(
+            'Монтаж: ' . (string) ($project['client'] ?? $project['name'] ?? 'заказ'),
+            (string) $schedule['installAt'],
+            '',
+            $team,
+            isset($schedule['address']) ? $schedule['address'] : '',
+            (string) ($project['name'] ?? '')
+        );
+    }
+
+    $due = [];
+    foreach ($items as $item) {
+        $diff = $item['at'] - $now;
+        if ($diff <= $lead && $diff > -3600) {
+            $due[] = $item;
+        }
+    }
+    return $due;
+}
+
+/** Запуск рассылки планировщиком. */
+function recept_notify_run(): array
+{
+    $settings = recept_notify_settings();
+    if (!$settings['enabled'] || $settings['token'] === '' || count($settings['chats']) === 0) {
+        return ['ok' => true, 'sent' => 0, 'reason' => 'уведомления выключены или не настроены'];
+    }
+
+    $now = time();
+    $sentFile = recept_path('notify-sent.json');
+    $sent = recept_read_json($sentFile, []);
+    if (!is_array($sent)) {
+        $sent = [];
+    }
+    // Чистим отметки старше двух суток.
+    foreach ($sent as $key => $stamp) {
+        if (!is_int($stamp) || $now - $stamp > 172800) {
+            unset($sent[$key]);
+        }
+    }
+
+    $count = 0;
+    foreach (recept_notify_collect($settings, $now) as $item) {
+        if (isset($sent[$item['key']])) {
+            continue;
+        }
+        $text = $item['title'] . "\n"
+            . 'Когда: ' . $item['date'] . ' в ' . $item['time'] . "\n"
+            . ($item['address'] !== '' ? ('Адрес: ' . $item['address'] . "\n") : '')
+            . ($item['extra'] !== '' ? ($item['extra'] . "\n") : '')
+            . 'РЕцепт';
+        foreach (recept_notify_targets($settings, $item['assignees']) as $chatId) {
+            if (recept_telegram_send($settings['token'], $chatId, $text)) {
+                $count += 1;
+            }
+        }
+        $sent[$item['key']] = $now;
+    }
+
+    recept_write_json($sentFile, $sent);
+    return ['ok' => true, 'sent' => $count];
+}
+
 /* ------------------------------ наряды на монтаж ------------------------------ */
 
 function recept_orders_dir(): string
