@@ -9,6 +9,7 @@ import {
   type ServerBackup, type ServerRole, type ServerUser,
 } from '../lib/serverApi';
 import { hydrate } from '../lib/photoStore';
+import { ROLE_HINTS, ROLE_LABELS, normalizeRole } from '../lib/permissions';
 import { formatWorkspaceSize, normalizeWorkspace, type Workspace } from '../lib/serverWorkspace';
 import { getStorageNote } from '../lib/storage';
 import type { ServerSync } from '../lib/useServerSync';
@@ -38,7 +39,7 @@ export default function ServerPanel(props: {
   const [newLogin, setNewLogin] = useState('');
   const [newName, setNewName] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState<ServerRole>('user');
+  const [newRole, setNewRole] = useState<ServerRole>('manager');
 
   const [oldPassword, setOldPassword] = useState('');
   const [ownPassword, setOwnPassword] = useState('');
@@ -160,7 +161,7 @@ export default function ServerPanel(props: {
         <div className="server-card">
           <div className="server-card-title">Вы вошли как</div>
           <div className="server-card-value">{sync.user?.name || sync.user?.login}</div>
-          <div className="server-card-note">{sync.user?.role === 'admin' ? 'Владелец (полные права)' : 'Сотрудник'} · версия базы №{sync.rev}</div>
+          <div className="server-card-note">{ROLE_LABELS[normalizeRole(sync.user?.role)]} · версия базы №{sync.rev}</div>
         </div>
         <div className="server-card">
           <div className="server-card-title">Фотографии на хостинге</div>
@@ -211,7 +212,7 @@ export default function ServerPanel(props: {
                 <tr key={item.login}>
                   <td><b>{item.login}</b></td>
                   <td>{item.name}</td>
-                  <td>{item.role === 'admin' ? 'Владелец' : 'Сотрудник'}</td>
+                  <td title={ROLE_HINTS[normalizeRole(item.role)]}>{ROLE_LABELS[normalizeRole(item.role)]}</td>
                   <td className="right">
                     {item.login !== sync.user?.login && (
                       <button type="button" className="link-danger" onClick={() => void removeUser(item.login)}>Удалить</button>
@@ -226,12 +227,14 @@ export default function ServerPanel(props: {
             <label><span>Логин</span><input value={newLogin} onChange={(event) => setNewLogin(event.target.value)} placeholder="zamer" /></label>
             <label><span>Имя</span><input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Сергей, замерщик" /></label>
             <label><span>Пароль</span><input value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="минимум 8 символов" /></label>
-            <label><span>Права</span>
+            <label><span>Роль</span>
               <select value={newRole} onChange={(event) => setNewRole(event.target.value as ServerRole)}>
-                <option value="user">Сотрудник</option>
-                <option value="admin">Владелец</option>
+                {(['admin', 'manager', 'measurer', 'installer'] as const).map((role) => (
+                  <option key={role} value={role}>{ROLE_LABELS[role]}</option>
+                ))}
               </select>
             </label>
+            <span className="server-role-hint">{ROLE_HINTS[normalizeRole(newRole)]}</span>
             <button type="button" onClick={() => void addUser()} disabled={newLogin.trim().length < 3 || newPassword.length < 8}>
               Добавить / обновить
             </button>

@@ -29,6 +29,7 @@ import InstallAppCard from './components/InstallAppCard';
 import NotifySettingsCard from './components/NotifySettingsCard';
 import { useReminders } from './lib/useReminders';
 import { normalizeNotifySettings } from './lib/reminders';
+import { capabilitiesFor } from './lib/permissions';
 import PublicOfferPage from './components/PublicOfferPage';
 import WorkOrderPage from './components/WorkOrderPage';
 import AnalyticsView from './components/AnalyticsView';
@@ -134,6 +135,11 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
   useEffect(() => { setStorageServerBacked(server.mode === 'server'); }, [server.mode]);
   const serverScheduleSave = server.scheduleSave;
   const serverReady = server.mode === 'server' && Boolean(server.user);
+  // Права доступа: на своём сервере зависят от роли сотрудника, локально — полные.
+  const can = useMemo(
+    () => capabilitiesFor(server.user?.role, server.mode === 'server'),
+    [server.user?.role, server.mode],
+  );
   // Значок у пункта «Синхронизация»: на своём сервере показываем состояние сервера,
   // иначе — старое облако.
   const syncBadgeState = server.mode === 'server'
@@ -565,36 +571,50 @@ const persistTemplates = useCallback((next: Template[]) => {
             <button className={view.kind === 'dashboard' ? 'active' : ''} onClick={() => setView({ kind: 'dashboard' })}>
               <span className="nav-icon nav-projects" aria-hidden="true" />Проекты<span className="nav-count">{projects.length}</span>
             </button>
-            <button className={view.kind === 'crm' ? 'active' : ''} onClick={() => setView({ kind: 'crm' })}>
-              <span className="nav-icon nav-crm" aria-hidden="true" />CRM<span className="nav-count">{projects.length}</span>
-            </button>
-            <button className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>
-              <span className="nav-icon nav-quick" aria-hidden="true" />Быстрый расчёт
-            </button>
-            <button className={view.kind === 'factory' ? 'active' : ''} onClick={() => setView({ kind: 'factory' })}>
-              <span className="nav-icon nav-factory" aria-hidden="true" />Бланк на фабрику
-            </button>
+            {can.viewCrm && (
+              <button className={view.kind === 'crm' ? 'active' : ''} onClick={() => setView({ kind: 'crm' })}>
+                <span className="nav-icon nav-crm" aria-hidden="true" />CRM<span className="nav-count">{projects.length}</span>
+              </button>
+            )}
+            {can.viewClientPrices && (
+              <button className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>
+                <span className="nav-icon nav-quick" aria-hidden="true" />Быстрый расчёт
+              </button>
+            )}
+            {can.editProjects && (
+              <button className={view.kind === 'factory' ? 'active' : ''} onClick={() => setView({ kind: 'factory' })}>
+                <span className="nav-icon nav-factory" aria-hidden="true" />Бланк на фабрику
+              </button>
+            )}
             <button className={view.kind === 'schedule' ? 'active' : ''} onClick={() => setView({ kind: 'schedule' })}>
               <span className="nav-icon nav-schedule" aria-hidden="true" />График работ
             </button>
           </div>
-          <div className="sidebar-nav-group">
-            <div className="sidebar-nav-title">Справочники</div>
-            <button className={view.kind === 'kb' ? 'active' : ''} onClick={() => setView({ kind: 'kb' })}>
-              <span className="nav-icon nav-kb" aria-hidden="true" />База знаний<span className="nav-count">{kbArticles.length}</span>
-            </button>
-            <button className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => setView({ kind: 'pricebook' })}>
-              <span className="nav-icon nav-price" aria-hidden="true" />Прайс и версии
-            </button>
-          </div>
+          {(can.editProjects || can.viewPricebook) && (
+            <div className="sidebar-nav-group">
+              <div className="sidebar-nav-title">Справочники</div>
+              <button className={view.kind === 'kb' ? 'active' : ''} onClick={() => setView({ kind: 'kb' })}>
+                <span className="nav-icon nav-kb" aria-hidden="true" />База знаний<span className="nav-count">{kbArticles.length}</span>
+              </button>
+              {can.viewPricebook && (
+                <button className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => setView({ kind: 'pricebook' })}>
+                  <span className="nav-icon nav-price" aria-hidden="true" />Прайс и версии
+                </button>
+              )}
+            </div>
+          )}
           <div className="sidebar-nav-group">
             <div className="sidebar-nav-title">Система</div>
-            <button className={view.kind === 'analytics' ? 'active' : ''} onClick={() => setView({ kind: 'analytics' })}>
-              <span className="nav-icon nav-analytics" aria-hidden="true" />Аналитика
-            </button>
-            <button className={view.kind === 'audit' ? 'active' : ''} onClick={() => setView({ kind: 'audit', id: current?.id })}>
-              <span className="nav-icon nav-price" aria-hidden="true" />Проверка цен
-            </button>
+            {can.viewCost && (
+              <button className={view.kind === 'analytics' ? 'active' : ''} onClick={() => setView({ kind: 'analytics' })}>
+                <span className="nav-icon nav-analytics" aria-hidden="true" />Аналитика
+              </button>
+            )}
+            {can.viewCost && (
+              <button className={view.kind === 'audit' ? 'active' : ''} onClick={() => setView({ kind: 'audit', id: current?.id })}>
+                <span className="nav-icon nav-price" aria-hidden="true" />Проверка цен
+              </button>
+            )}
             <button className={view.kind === 'sync' ? 'active' : ''} onClick={() => setView({ kind: 'sync' })}>
               <span className="nav-icon nav-sync" aria-hidden="true" />Синхронизация
               {showSyncBadge && (
@@ -644,7 +664,10 @@ const persistTemplates = useCallback((next: Template[]) => {
             pricebookLabel={`${activePricebook.meta.name} · импорт ${activePricebook.meta.importedAt.slice(0, 10)}`}
           />
         )}
-        {view.kind === 'crm' && (
+        {view.kind === 'crm' && !can.viewCrm && (
+          <div className="app-no-access">CRM доступна менеджеру и владельцу.</div>
+        )}
+        {view.kind === 'crm' && can.viewCrm && (
           <CrmView
             projects={projectsForUi}
             clients={clients}
@@ -667,8 +690,13 @@ const persistTemplates = useCallback((next: Template[]) => {
             }}
           />
         )}
-        {view.kind === 'analytics' && <AnalyticsView projects={projectsForUi} pricebooks={pricebooks} />}
-        {view.kind === 'audit' && (
+        {view.kind === 'analytics' && (can.viewCost
+          ? <AnalyticsView projects={projectsForUi} pricebooks={pricebooks} />
+          : <div className="app-no-access">Аналитика доступна владельцу: в ней видны закупочные цены и маржа.</div>)}
+        {view.kind === 'audit' && !can.viewCost && (
+          <div className="app-no-access">Проверка цен доступна владельцу: в ней видна закупка и маржа.</div>
+        )}
+        {view.kind === 'audit' && can.viewCost && (
           <PriceAuditView
             projects={projectsForUi}
             pricebooks={pricebooks}

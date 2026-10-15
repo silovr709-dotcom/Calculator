@@ -4,7 +4,7 @@
 
 import { prettyUrl } from './prettyUrl';
 
-export type ServerRole = 'admin' | 'user';
+export type ServerRole = 'admin' | 'manager' | 'measurer' | 'installer' | 'user';
 
 export interface ServerUser {
   login: string;

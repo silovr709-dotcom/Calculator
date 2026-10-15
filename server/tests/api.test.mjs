@@ -245,11 +245,22 @@ r = await call('files/gc', { method: 'POST' });
 // История проекта хранит прежние версии, поэтому фото остаётся доступным для отката.
 check('файл из истории проекта уборка сохраняет', r.json?.removed === 0 && r.json?.files === 1, r.text);
 
-r = await call('users', { method: 'POST', body: { login: 'zamer', password: 'Zamer12345', name: 'Замерщик', role: 'user' } });
-check('сотрудник добавлен', r.status === 200 && r.json?.user?.role === 'user', r.text);
+r = await call('users', { method: 'POST', body: { login: 'zamer', password: 'Zamer12345', name: 'Замерщик', role: 'measurer' } });
+check('роль замерщика сохранена', r.json?.user?.role === 'measurer', r.text);
+
+r = await call('users', { method: 'POST', body: { login: 'montazh', password: 'Montazh12345', name: 'Монтажник', role: 'installer' } });
+check('монтажник добавлен', r.json?.user?.role === 'installer', r.text);
+
+r = await call('users', { method: 'POST', body: { login: 'staryi', password: 'Staryi12345', name: 'Старый', role: 'user' } });
+check('старая роль user становится менеджером', r.json?.user?.role === 'manager', r.text);
+
+r = await call('users', { method: 'POST', body: { login: 'hacker', password: 'Hacker12345', name: 'Чужой', role: 'superadmin' } });
+check('выдуманная роль не проходит', r.json?.user?.role === 'manager', r.text);
+
+check('сотрудник добавлен', r.status === 200 && r.json?.user?.role === 'manager', r.text);
 
 r = await call('users');
-check('список сотрудников: 2', r.json?.users?.length === 2, r.text);
+check('в списке все сотрудники с ролями', r.json?.users?.length === 5 && r.json.users.some((item) => item.role === 'installer'), r.text);
 check('пароли наружу не отдаются', !JSON.stringify(r.json).includes('hash'), r.text);
 
 r = await call('share', { method: 'POST', body: { payload: { project: { id: 'p1' } } } });

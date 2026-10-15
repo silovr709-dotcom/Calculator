@@ -273,7 +273,10 @@ switch ($route . ' ' . $method) {
         $login = trim((string) ($body['login'] ?? ''));
         $password = (string) ($body['password'] ?? '');
         $name = trim((string) ($body['name'] ?? $login));
-        $role = ($body['role'] ?? 'user') === 'admin' ? 'admin' : 'user';
+        // Роли: владелец, менеджер, замерщик, монтажник. Старое значение user = менеджер.
+        $requested = (string) ($body['role'] ?? 'manager');
+        $roles = ['admin', 'manager', 'measurer', 'installer'];
+        $role = in_array($requested, $roles, true) ? $requested : ($requested === 'user' ? 'manager' : 'manager');
         if (mb_strlen($login) < 3 || !preg_match('/^[\w.@\-]+$/u', $login)) {
             recept_fail(400, 'Логин: минимум 3 символа, латиница, цифры, точка или дефис');
         }
