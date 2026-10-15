@@ -150,6 +150,33 @@ check('документ можно удалить', r.json?.ok === true, r.text)
 r = await call('files/gc', { method: 'POST' });
 check('после удаления карточки файл документа убирается', r.json?.removed === 1, r.text);
 
+// --- наряд на монтаж ---
+r = await call('workorder', { method: 'POST', body: { projectId: 'p1', payload: { client: 'Ирина', address: 'ул. Мира, 5', date: '2026-10-21', time: '10:00', team: 'Бригада 1' } } });
+const orderId = r.json?.id ?? '';
+check('наряд создан', r.status === 200 && /^[a-f0-9]{16}$/.test(orderId), r.text);
+
+const managerCookie2 = cookie;
+cookie = '';
+r = await call('workorder', { query: `&id=${orderId}` });
+check('мастер открывает наряд без входа', r.status === 200 && r.json?.payload?.address === 'ул. Мира, 5', r.text);
+
+r = await call('workorder/mark', { method: 'POST', query: `&id=${orderId}`, body: { status: 'onway', who: 'Пётр' } });
+check('мастер отметил «выехал»', r.json?.status === 'onway', r.text);
+
+r = await call('workorder/mark', { method: 'POST', query: `&id=${orderId}`, body: { status: 'problem', comment: 'Нет лифта, нужен помощник', who: 'Пётр' } });
+check('мастер сообщил о проблеме с комментарием', r.json?.status === 'problem' && r.json?.log?.length === 2, r.text);
+
+r = await call('workorder/mark', { method: 'POST', query: `&id=${orderId}`, body: { status: 'что-то', who: 'Пётр' } });
+check('чужие отметки не принимаются', r.status === 400, r.text);
+
+cookie = managerCookie2;
+r = await call('workorder/list');
+const order = (r.json?.orders ?? []).find((item) => item.id === orderId);
+check('менеджер видит отметки мастера', order?.status === 'problem' && order?.lastComment.includes('лифта'), r.text);
+
+r = await call('workorder', { method: 'DELETE', query: `&id=${orderId}` });
+check('наряд можно отозвать', r.json?.ok === true, r.text);
+
 // --- КП по ссылке для клиента ---
 r = await call('offers', { method: 'POST', body: { projectId: 'p1', title: 'Кухня Ирина', client: 'Ирина', total: 238016, payload: { project: { id: 'p1', name: 'Кухня Ирина' } } } });
 const offerId = r.json?.id ?? '';

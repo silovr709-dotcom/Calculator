@@ -30,6 +30,7 @@ import NotifySettingsCard from './components/NotifySettingsCard';
 import { useReminders } from './lib/useReminders';
 import { normalizeNotifySettings } from './lib/reminders';
 import PublicOfferPage from './components/PublicOfferPage';
+import WorkOrderPage from './components/WorkOrderPage';
 import AnalyticsView from './components/AnalyticsView';
 import ScheduleView from './components/ScheduleView';
 import PriceAuditView from './components/PriceAuditView';
@@ -120,6 +121,13 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
     const byPath = /\/kp\/([a-f0-9]{10,32})/.exec(window.location.pathname);
     if (byPath) return byPath[1];
     const byHash = /[#&]offer=([a-f0-9]{10,32})/.exec(window.location.hash);
+    return byHash ? byHash[1] : '';
+  });
+  // Наряд мастеру: …/mo/abc123 — открывается без входа, как и КП клиенту.
+  const [workOrderId] = useState(() => {
+    const byPath = /\/mo\/([a-f0-9]{10,32})/.exec(window.location.pathname);
+    if (byPath) return byPath[1];
+    const byHash = /[#&]order=([a-f0-9]{10,32})/.exec(window.location.hash);
     return byHash ? byHash[1] : '';
   });
   // На своём сервере переполненный localStorage — не беда: база живёт на сервере.
@@ -502,6 +510,9 @@ const persistTemplates = useCallback((next: Template[]) => {
   // Ссылка клиенту: КП открывается без входа и без рабочего интерфейса.
   if (publicOfferId) {
     return <PublicOfferPage id={publicOfferId} />;
+  }
+  if (workOrderId) {
+    return <WorkOrderPage id={workOrderId} />;
   }
 
   if (server.mode === 'checking') {

@@ -393,3 +393,73 @@ export async function readProjectVersion<T>(projectId: string, file: string): Pr
   const json = await request<{ project: T }>('history/item', {}, { projectId, file });
   return json.project;
 }
+
+/* ----------------------- наряд на монтаж для мастера ----------------------- */
+
+export type WorkOrderStatus = 'sent' | 'onway' | 'started' | 'done' | 'problem';
+
+export interface WorkOrderLogEntry {
+  at: string;
+  status: WorkOrderStatus;
+  comment: string;
+  by: string;
+}
+
+export interface WorkOrderSummary {
+  id: string;
+  projectId: string;
+  eventId: string;
+  status: WorkOrderStatus;
+  updatedAt: string;
+  views: number;
+  lastComment: string;
+  lastBy: string;
+  log: WorkOrderLogEntry[];
+}
+
+export interface WorkOrderPayload {
+  title: string;
+  client: string;
+  phone?: string;
+  address?: string;
+  date: string;
+  time?: string;
+  team?: string;
+  note?: string;
+  manager?: string;
+  managerPhone?: string;
+  items: string[];
+}
+
+export async function publishWorkOrder(input: { id?: string; projectId?: string; eventId?: string; payload: WorkOrderPayload }):
+Promise<{ id: string; url: string; order: WorkOrderSummary }> {
+  const json = await request<{ id: string; order: WorkOrderSummary }>('workorder', { method: 'POST', body: JSON.stringify(input) });
+  return { id: json.id, url: workOrderUrl(json.id), order: json.order };
+}
+
+/** Короткая ссылка мастеру: открывается на телефоне без пароля. */
+export function workOrderUrl(id: string): string {
+  const root = appRootUrl();
+  if (root.pathname === '/') return prettyUrl(new URL(`mo/${id}`, root));
+  const url = new URL(root);
+  url.hash = `#order=${id}`;
+  return prettyUrl(url);
+}
+
+export async function fetchWorkOrder(id: string): Promise<{ payload: WorkOrderPayload; status: WorkOrderStatus; log: WorkOrderLogEntry[]; createdAt: string }> {
+  return request('workorder', {}, { id });
+}
+
+export async function markWorkOrder(id: string, input: { status: WorkOrderStatus; comment?: string; who?: string }):
+Promise<{ status: WorkOrderStatus; log: WorkOrderLogEntry[] }> {
+  return request('workorder/mark', { method: 'POST', body: JSON.stringify(input) }, { id });
+}
+
+export async function listWorkOrders(): Promise<WorkOrderSummary[]> {
+  const json = await request<{ orders: WorkOrderSummary[] }>('workorder/list');
+  return json.orders ?? [];
+}
+
+export async function revokeWorkOrder(id: string): Promise<void> {
+  await request('workorder', { method: 'DELETE' }, { id });
+}

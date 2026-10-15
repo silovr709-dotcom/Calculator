@@ -432,6 +432,64 @@ switch ($route . ' ' . $method) {
         recept_json(200, ['ok' => true]);
     }
 
+    /* ---------- наряд на монтаж для мастера ---------- */
+
+    case 'workorder POST': {
+        $user = recept_require_user();
+        $record = recept_order_put(recept_body(), $user);
+        recept_json(200, ['ok' => true, 'id' => $record['id'], 'order' => recept_order_summary($record)]);
+    }
+
+    case 'workorder GET': {
+        // Мастер открывает наряд по ссылке, без входа в систему.
+        $id = isset($_GET['id']) ? (string) $_GET['id'] : '';
+        $record = recept_order_get($id);
+        if ($record === null) {
+            recept_fail(404, 'Наряд не найден. Попросите менеджера прислать свежую ссылку.');
+        }
+        $record['views'] = (int) $record['views'] + 1;
+        recept_order_save($record);
+        recept_json(200, [
+            'ok' => true,
+            'payload' => $record['payload'],
+            'status' => $record['status'],
+            'log' => $record['log'],
+            'createdAt' => $record['createdAt'],
+        ]);
+    }
+
+    case 'workorder/mark POST': {
+        $id = isset($_GET['id']) ? (string) $_GET['id'] : '';
+        $record = recept_order_get($id);
+        if ($record === null) {
+            recept_fail(404, 'Наряд не найден');
+        }
+        $body = recept_body();
+        $record = recept_order_mark(
+            $record,
+            isset($body['status']) ? (string) $body['status'] : '',
+            isset($body['comment']) ? (string) $body['comment'] : '',
+            isset($body['who']) ? (string) $body['who'] : ''
+        );
+        recept_json(200, ['ok' => true, 'status' => $record['status'], 'log' => $record['log']]);
+    }
+
+    case 'workorder/list GET': {
+        recept_require_user();
+        recept_json(200, ['ok' => true, 'orders' => recept_orders_list()]);
+    }
+
+    case 'workorder DELETE': {
+        recept_require_user();
+        $id = isset($_GET['id']) ? (string) $_GET['id'] : '';
+        $file = recept_order_file($id);
+        if ($file === null) {
+            recept_fail(404, 'Наряд не найден');
+        }
+        @unlink($file);
+        recept_json(200, ['ok' => true]);
+    }
+
     /* ---------- КП по ссылке для клиента ---------- */
 
     case 'offers POST': {

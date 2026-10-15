@@ -13,6 +13,7 @@ import {
   patchEvent, peopleFromAgenda, remindersFor, removeEvent, type AgendaItem,
 } from '../lib/calendar';
 import { askNotifyPermission, notifyPermission, pushReminderNotifications, type NotifyPermission } from '../lib/notify';
+import { listWorkOrders, publishWorkOrder, workOrderUrl, type WorkOrderSummary } from '../lib/serverApi';
 import { REMINDER_OPTIONS, formatOffset } from '../lib/reminders';
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -34,6 +35,9 @@ export default function ScheduleView(props: {
   const [editProjectId, setEditProjectId] = useState<string | null>(null);
   const [editEventId, setEditEventId] = useState<string | null>(null);
   const [permission, setPermission] = useState<NotifyPermission>(() => notifyPermission());
+  const [orders, setOrders] = useState<WorkOrderSummary[]>([]);
+  const [orderBusy, setOrderBusy] = useState(false);
+  const [orderCopied, setOrderCopied] = useState('');
 
   const today = isoDay(new Date());
   const agendaAll = useMemo(() => buildAgenda(props.projects, props.events), [props.projects, props.events]);
@@ -58,6 +62,50 @@ export default function ScheduleView(props: {
     const interval = window.setInterval(run, 5 * 60 * 1000);
     return () => { window.clearTimeout(timer); window.clearInterval(interval); };
   }, [permission, reminders, today]);
+
+  // Наряды мастерам: статус «в пути / идёт / готово / нужна помощь» виден прямо в графике.
+  useEffect(() => {
+    let alive = true;
+    listWorkOrders().then((list) => { if (alive) setOrders(list); }).catch(() => { /* без сервера блок скрыт */ });
+    return () => { alive = false; };
+  }, []);
+
+  const ORDER_STATUS_LABELS: Record<string, string> = {
+    sent: 'наряд выдан', onway: 'мастер в пути', started: 'монтаж идёт', done: 'завершено', problem: 'нужна помощь',
+  };
+
+  const sendWorkOrder = async (project: Project) => {
+    const schedule = project.schedule ?? {};
+    if (!schedule.installAt) { alert('Сначала поставьте дату монтажа.'); return; }
+    const existing = orders.find((item) => item.projectId === project.id);
+    setOrderBusy(true);
+    try {
+      const result = await publishWorkOrder({
+        id: existing?.id,
+        projectId: project.id,
+        payload: {
+          title: project.name,
+          client: project.client || 'Клиент',
+          phone: project.clientOffer?.clientPhone,
+          address: schedule.address,
+          date: schedule.installAt,
+          time: schedule.note?.match(/\d{1,2}:\d{2}/)?.[0],
+          team: schedule.team,
+          note: schedule.note,
+          manager: project.clientOffer?.sellerName,
+          items: (project.modules ?? []).map((module) => `${module.name}${module.widthMm ? ` · ${module.widthMm}×${module.heightMm ?? '—'}${module.depthMm ? `×${module.depthMm}` : ''} мм` : ''}${module.qty > 1 ? ` · ${module.qty} шт` : ''}`),
+        },
+      });
+      setOrders((current) => [...current.filter((item) => item.id !== result.id), result.order]);
+      await navigator.clipboard.writeText(result.url).catch(() => {});
+      setOrderCopied(result.id);
+      window.setTimeout(() => setOrderCopied(''), 2500);
+    } catch (error) {
+      alert(`Не получилось выдать наряд: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setOrderBusy(false);
+    }
+  };
 
   const editProject = props.projects.find((project) => project.id === editProjectId) ?? null;
   const editEvent = props.events.find((event) => event.id === editEventId) ?? null;
@@ -401,6 +449,31 @@ export default function ScheduleView(props: {
               </select>
             </label>
             <label className="span-3">Заметка для монтажников<input value={editProject.schedule?.note ?? ''} placeholder="этаж, лифт, время, контакты на объекте" onChange={(event) => patchSchedule(editProject, { note: event.target.value })} /></label>
+            <div className="span-3 schedule-order">
+              {(() => {
+                const order = orders.find((item) => item.projectId === editProject.id);
+                return (
+                  <>
+                    <div className="schedule-order-main">
+                      <b>Наряд мастеру</b>
+                      {order
+                        ? <>
+                            <span className={`schedule-order-status status-${order.status}`}>{ORDER_STATUS_LABELS[order.status] ?? order.status}</span>
+                            {order.lastComment && <small>«{order.lastComment}»{order.lastBy ? ` — ${order.lastBy}` : ''}</small>}
+                            <input readOnly value={workOrderUrl(order.id)} onFocus={(event) => event.target.select()} />
+                          </>
+                        : <span className="muted small">Ссылка для монтажника: адрес, список модулей, маршрут и кнопки «выехал / начал / завершил / нужна помощь».</span>}
+                    </div>
+                    <div className="schedule-order-actions">
+                      <button type="button" className="btn primary" disabled={orderBusy} onClick={() => void sendWorkOrder(editProject)}>
+                        {orderBusy ? 'Готовлю…' : orderCopied === order?.id ? 'Ссылка скопирована ✓' : order ? 'Обновить наряд' : 'Выдать наряд и скопировать'}
+                      </button>
+                      {order && <a className="btn ghost" href={workOrderUrl(order.id)} target="_blank" rel="noreferrer">Открыть как мастер</a>}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
             <div className="schedule-form-actions">
               <button type="button" className="btn ghost" onClick={() => props.onOpen(editProject.id)}>Открыть проект</button>
               <button type="button" className="btn ghost" onClick={() => patchSchedule(editProject, { measureAt: undefined, readyAt: undefined, deliveryAt: undefined, installAt: undefined })}>Очистить даты</button>

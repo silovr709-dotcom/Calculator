@@ -846,6 +846,122 @@ function recept_offers_list(): array
     return $out;
 }
 
+/* ------------------------------ наряды на монтаж ------------------------------ */
+
+function recept_orders_dir(): string
+{
+    $dir = recept_path('workorders');
+    if (!is_dir($dir) && !@mkdir($dir, 0770, true) && !is_dir($dir)) {
+        recept_fail(500, 'Нет доступа к папке нарядов');
+    }
+    recept_protect_dir($dir);
+    return $dir;
+}
+
+function recept_order_file(string $id): ?string
+{
+    if (!preg_match('/^[a-f0-9]{10,32}$/', $id)) {
+        return null;
+    }
+    $file = recept_orders_dir() . '/' . $id . '.json';
+    return is_file($file) ? $file : null;
+}
+
+function recept_order_get(string $id): ?array
+{
+    $file = recept_order_file($id);
+    if ($file === null) {
+        return null;
+    }
+    $data = recept_read_json($file, null);
+    return is_array($data) ? $data : null;
+}
+
+function recept_order_save(array $record): void
+{
+    recept_write_json(recept_orders_dir() . '/' . $record['id'] . '.json', $record);
+}
+
+/** Публикация наряда: мастер открывает его по ссылке без пароля. */
+function recept_order_put(array $input, array $user): array
+{
+    $id = isset($input['id']) && is_string($input['id']) && preg_match('/^[a-f0-9]{10,32}$/', $input['id'])
+        ? $input['id']
+        : bin2hex(random_bytes(8));
+    $existing = recept_order_get($id) ?? [];
+
+    $record = [
+        'id' => $id,
+        'projectId' => isset($input['projectId']) ? (string) $input['projectId'] : '',
+        'eventId' => isset($input['eventId']) ? (string) $input['eventId'] : '',
+        'payload' => isset($input['payload']) ? $input['payload'] : null,
+        'createdAt' => isset($existing['createdAt']) ? $existing['createdAt'] : gmdate('c'),
+        'createdBy' => isset($existing['createdBy']) ? $existing['createdBy'] : $user['login'],
+        'updatedAt' => gmdate('c'),
+        'status' => isset($existing['status']) ? $existing['status'] : 'sent',
+        'log' => isset($existing['log']) && is_array($existing['log']) ? $existing['log'] : [],
+        'views' => isset($existing['views']) ? (int) $existing['views'] : 0,
+    ];
+    recept_order_save($record);
+    return $record;
+}
+
+/** Отметка мастера: выехал, начал, закончил или нужна помощь. */
+function recept_order_mark(array $record, string $status, string $comment, string $who): array
+{
+    $allowed = ['sent', 'onway', 'started', 'done', 'problem'];
+    if (!in_array($status, $allowed, true)) {
+        recept_fail(400, 'Неизвестная отметка');
+    }
+    $record['status'] = $status;
+    $record['updatedAt'] = gmdate('c');
+    $log = isset($record['log']) && is_array($record['log']) ? $record['log'] : [];
+    $log[] = [
+        'at' => gmdate('c'),
+        'status' => $status,
+        'comment' => mb_substr($comment, 0, 1000),
+        'by' => mb_substr($who, 0, 120),
+    ];
+    if (count($log) > 60) {
+        $log = array_slice($log, -60);
+    }
+    $record['log'] = $log;
+    recept_order_save($record);
+    return $record;
+}
+
+function recept_order_summary(array $record): array
+{
+    $log = isset($record['log']) && is_array($record['log']) ? $record['log'] : [];
+    $last = count($log) > 0 ? $log[count($log) - 1] : null;
+    return [
+        'id' => $record['id'],
+        'projectId' => isset($record['projectId']) ? $record['projectId'] : '',
+        'eventId' => isset($record['eventId']) ? $record['eventId'] : '',
+        'status' => isset($record['status']) ? $record['status'] : 'sent',
+        'updatedAt' => isset($record['updatedAt']) ? $record['updatedAt'] : '',
+        'views' => isset($record['views']) ? (int) $record['views'] : 0,
+        'lastComment' => $last !== null ? $last['comment'] : '',
+        'lastBy' => $last !== null ? $last['by'] : '',
+        'log' => $log,
+    ];
+}
+
+function recept_orders_list(): array
+{
+    $out = [];
+    foreach (glob(recept_orders_dir() . '/*.json') ?: [] as $file) {
+        $data = recept_read_json($file, null);
+        if (is_array($data) && isset($data['id'])) {
+            $out[] = recept_order_summary($data);
+        }
+    }
+    usort($out, function ($a, $b) {
+        return strcmp((string) $b['updatedAt'], (string) $a['updatedAt']);
+    });
+    return $out;
+}
+
 /* ------------------------------ файлы (фото, скриншоты) ------------------------------ */
 
 /** Папка с бинарными файлами проектов: фото замера и подложки Эскиз PRO. */

@@ -7981,3 +7981,61 @@ input.editable-number { max-width: 120px; text-align: right; }
   .daydesk-today { grid-template-columns: 1fr 1fr; }
   .daydesk-today-list { grid-column: 1 / -1; }
 }
+
+/* Наряд мастеру: выдача из графика и страница на телефоне. */
+.schedule-order {
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; justify-content: space-between;
+  padding: 12px 14px; border: 1px solid #d9e2f5; border-radius: 12px; background: #f7f9ff;
+}
+.schedule-order-main { display: grid; gap: 4px; min-width: 260px; flex: 1; font-size: 12.5px; }
+.schedule-order-main > b { font-size: 13px; color: #16213f; }
+.schedule-order-main input { padding: 6px 9px; border: 1px solid #d3dcf0; border-radius: 8px; font-size: 12px; }
+.schedule-order-main small { color: #5b6b8f; }
+.schedule-order-status {
+  justify-self: start; padding: 2px 10px; border-radius: 999px;
+  background: #eef2fb; color: #45536f; font-size: 11.5px; font-weight: 700;
+}
+.schedule-order-status.status-done { background: #e8f7ef; color: #18723e; }
+.schedule-order-status.status-problem { background: #fdeceb; color: #b3261e; }
+.schedule-order-status.status-started, .schedule-order-status.status-onway { background: #fff5e2; color: #8a5a00; }
+.schedule-order-actions { display: flex; gap: 8px; }
+
+.work-order { max-width: 680px; margin: 0 auto; padding: 16px 14px 60px; }
+.work-order-head {
+  padding: 18px 20px; border-radius: 18px; color: #fff;
+  background: linear-gradient(135deg, #16213f, #27406f); margin-bottom: 12px;
+}
+.work-order-head .eyebrow { color: rgba(255,255,255,.7); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.work-order-head h1 { margin: 4px 0 2px; font-size: 24px; }
+.work-order-head p { margin: 0 0 8px; color: rgba(255,255,255,.8); font-size: 13px; }
+.work-order-status {
+  display: inline-block; padding: 4px 12px; border-radius: 999px;
+  background: rgba(255,255,255,.16); font-size: 12.5px;
+}
+.work-order-head.status-done .work-order-status { background: #1d9a57; }
+.work-order-head.status-problem .work-order-status { background: #d13b3b; }
+.work-order-card {
+  padding: 14px 16px; margin-bottom: 10px;
+  border: 1px solid #e2e7f3; border-radius: 14px; background: #fff;
+}
+.work-order-card h2 { margin: 0 0 8px; font-size: 14px; color: #16213f; }
+.work-order-address { margin: 0 0 10px; font-size: 16px; font-weight: 600; color: #16213f; }
+.work-order-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.work-order-items { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; color: #45536f; }
+.work-order-field { display: grid; gap: 4px; margin-bottom: 10px; font-size: 12px; color: #45536f; }
+.work-order-field input, .work-order-field textarea {
+  padding: 10px 12px; border: 1px solid #d7deef; border-radius: 10px; font: inherit; font-size: 15px;
+}
+.work-order-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.work-order-btn {
+  padding: 14px 10px; border: 1px solid #dde4f2; border-radius: 12px;
+  background: #fff; color: #16213f; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.work-order-btn.ok { border-color: #1d9a57; color: #18723e; }
+.work-order-btn.bad { border-color: #d13b3b; color: #b3261e; }
+.work-order-btn.active { background: #16213f; border-color: #16213f; color: #fff; }
+.work-order-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.work-order-log li { display: grid; gap: 1px; padding: 8px 10px; border-radius: 10px; background: #fafbff; }
+.work-order-log b { font-size: 13px; color: #16213f; }
+.work-order-log span { font-size: 11.5px; color: #8a97b4; }
+.work-order-log small { font-size: 12.5px; color: #5b6b8f; }
