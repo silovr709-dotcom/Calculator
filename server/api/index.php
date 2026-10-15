@@ -507,6 +507,7 @@ switch ($route . ' ' . $method) {
             'payload' => $record['payload'],
             'status' => $record['status'],
             'log' => $record['log'],
+            'photos' => isset($record['photos']) ? $record['photos'] : [],
             'createdAt' => $record['createdAt'],
         ]);
     }
@@ -525,6 +526,39 @@ switch ($route . ' ' . $method) {
             isset($body['who']) ? (string) $body['who'] : ''
         );
         recept_json(200, ['ok' => true, 'status' => $record['status'], 'log' => $record['log']]);
+    }
+
+    case 'workorder/photo POST': {
+        // Фото с объекта грузит мастер — без входа, по ссылке наряда.
+        $id = isset($_GET['id']) ? (string) $_GET['id'] : '';
+        $record = recept_order_get($id);
+        if ($record === null) {
+            recept_fail(404, 'Наряд не найден');
+        }
+        $body = recept_body();
+        $data = isset($body['data']) ? (string) $body['data'] : '';
+        if ($data === '') {
+            recept_fail(400, 'Пустое фото');
+        }
+        $bytes = base64_decode($data, true);
+        if ($bytes === false) {
+            recept_fail(400, 'Фото повреждено при передаче');
+        }
+        $saved = recept_file_put($bytes, isset($body['mime']) ? (string) $body['mime'] : 'image/jpeg');
+        $photos = isset($record['photos']) && is_array($record['photos']) ? $record['photos'] : [];
+        $photos[] = [
+            'fileId' => $saved['id'],
+            'at' => gmdate('c'),
+            'by' => isset($body['who']) ? mb_substr((string) $body['who'], 0, 120) : '',
+            'comment' => isset($body['comment']) ? mb_substr((string) $body['comment'], 0, 300) : '',
+        ];
+        if (count($photos) > 40) {
+            $photos = array_slice($photos, -40);
+        }
+        $record['photos'] = $photos;
+        $record['updatedAt'] = gmdate('c');
+        recept_order_save($record);
+        recept_json(200, ['ok' => true, 'photos' => $photos]);
     }
 
     case 'workorder/list GET': {

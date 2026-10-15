@@ -193,6 +193,14 @@ check('мастер сообщил о проблеме с комментарие
 r = await call('workorder/mark', { method: 'POST', query: `&id=${orderId}`, body: { status: 'что-то', who: 'Пётр' } });
 check('чужие отметки не принимаются', r.status === 400, r.text);
 
+// Отдельное содержимое, чтобы не пересекаться с проверками хранилища файлов ниже.
+const shot = Buffer.from('фото с объекта: стена кривая', 'utf8');
+r = await call('workorder/photo', { method: 'POST', query: `&id=${orderId}`, body: { mime: 'image/png', data: shot.toString('base64'), who: 'Пётр', comment: 'Стена кривая' } });
+check('мастер приложил фото с объекта', r.json?.ok === true && r.json?.photos?.length === 1, r.text);
+
+r = await call('workorder', { query: `&id=${orderId}` });
+check('фото видно в наряде', (r.json?.photos ?? []).length === 1 && r.json.photos[0].comment === 'Стена кривая', r.text);
+
 cookie = managerCookie2;
 r = await call('workorder/list');
 const order = (r.json?.orders ?? []).find((item) => item.id === orderId);
@@ -200,6 +208,9 @@ check('менеджер видит отметки мастера', order?.status
 
 r = await call('workorder', { method: 'DELETE', query: `&id=${orderId}` });
 check('наряд можно отозвать', r.json?.ok === true, r.text);
+
+r = await call('files/gc', { method: 'POST' });
+check('фото удалённого наряда убирается уборкой', r.json?.removed === 1, r.text);
 
 // --- КП по ссылке для клиента ---
 r = await call('offers', { method: 'POST', body: { projectId: 'p1', title: 'Кухня Ирина', client: 'Ирина', total: 238016, payload: { project: { id: 'p1', name: 'Кухня Ирина' } } } });

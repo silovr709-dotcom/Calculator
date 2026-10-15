@@ -13,7 +13,8 @@ import {
   patchEvent, peopleFromAgenda, remindersFor, removeEvent, type AgendaItem,
 } from '../lib/calendar';
 import { askNotifyPermission, notifyPermission, pushReminderNotifications, type NotifyPermission } from '../lib/notify';
-import { listWorkOrders, publishWorkOrder, workOrderUrl, type WorkOrderSummary } from '../lib/serverApi';
+import { listWorkOrders, publishWorkOrder, serverFileUrl, workOrderUrl, type WorkOrderPayload, type WorkOrderSummary } from '../lib/serverApi';
+import { dehydrate, fileRefId, isFileRef } from '../lib/photoStore';
 import { REMINDER_OPTIONS, formatOffset } from '../lib/reminders';
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -38,6 +39,8 @@ export default function ScheduleView(props: {
   const [orders, setOrders] = useState<WorkOrderSummary[]>([]);
   const [orderBusy, setOrderBusy] = useState(false);
   const [orderCopied, setOrderCopied] = useState('');
+  // Черновик наряда: позиции и пометки можно править перед отправкой мастеру.
+  const [orderDraft, setOrderDraft] = useState<WorkOrderPayload | null>(null);
 
   const today = isoDay(new Date());
   const agendaAll = useMemo(() => buildAgenda(props.projects, props.events), [props.projects, props.events]);
@@ -74,28 +77,47 @@ export default function ScheduleView(props: {
     sent: 'наряд выдан', onway: 'мастер в пути', started: 'монтаж идёт', done: 'завершено', problem: 'нужна помощь',
   };
 
-  const sendWorkOrder = async (project: Project) => {
+  /** Собираем наряд из данных проекта: позиции, адрес, заметки и эскизы. */
+  const buildOrderDraft = async (project: Project): Promise<WorkOrderPayload> => {
     const schedule = project.schedule ?? {};
-    if (!schedule.installAt) { alert('Сначала поставьте дату монтажа.'); return; }
+    // Эскизы Эскиз PRO кладём в файлы сервера — мастер увидит их картинками.
+    const snapshots = (project.eskizPro?.snapshots ?? []).slice(0, 3);
+    const sketchUrls = snapshots
+      .map((snapshot) => (snapshot.project as { image?: { dataUrl?: string } } | undefined)?.image?.dataUrl)
+      .filter((value): value is string => typeof value === 'string' && value.length > 0);
+    const packed = await dehydrate(sketchUrls);
+    const images = (packed as string[]).filter(isFileRef).map(fileRefId);
+    return {
+      title: project.name,
+      client: project.client || 'Клиент',
+      phone: project.clientOffer?.clientPhone,
+      address: schedule.address,
+      date: schedule.installAt ?? '',
+      time: schedule.note?.match(/\d{1,2}:\d{2}/)?.[0],
+      team: schedule.team,
+      note: schedule.note,
+      manager: project.clientOffer?.sellerName,
+      items: (project.modules ?? []).map((module) => `${module.name}${module.widthMm ? ` · ${module.widthMm}×${module.heightMm ?? '—'}${module.depthMm ? `×${module.depthMm}` : ''} мм` : ''}${module.qty > 1 ? ` · ${module.qty} шт` : ''}`),
+      images,
+    };
+  };
+
+  const prepareOrder = async (project: Project) => {
+    setOrderBusy(true);
+    try {
+      setOrderDraft(await buildOrderDraft(project));
+    } finally {
+      setOrderBusy(false);
+    }
+  };
+
+  const sendWorkOrder = async (project: Project) => {
+    const draft = orderDraft ?? await buildOrderDraft(project);
+    if (!draft.date) { alert('Сначала поставьте дату монтажа.'); return; }
     const existing = orders.find((item) => item.projectId === project.id);
     setOrderBusy(true);
     try {
-      const result = await publishWorkOrder({
-        id: existing?.id,
-        projectId: project.id,
-        payload: {
-          title: project.name,
-          client: project.client || 'Клиент',
-          phone: project.clientOffer?.clientPhone,
-          address: schedule.address,
-          date: schedule.installAt,
-          time: schedule.note?.match(/\d{1,2}:\d{2}/)?.[0],
-          team: schedule.team,
-          note: schedule.note,
-          manager: project.clientOffer?.sellerName,
-          items: (project.modules ?? []).map((module) => `${module.name}${module.widthMm ? ` · ${module.widthMm}×${module.heightMm ?? '—'}${module.depthMm ? `×${module.depthMm}` : ''} мм` : ''}${module.qty > 1 ? ` · ${module.qty} шт` : ''}`),
-        },
-      });
+      const result = await publishWorkOrder({ id: existing?.id, projectId: project.id, payload: draft });
       setOrders((current) => [...current.filter((item) => item.id !== result.id), result.order]);
       await navigator.clipboard.writeText(result.url).catch(() => {});
       setOrderCopied(result.id);
@@ -465,11 +487,62 @@ export default function ScheduleView(props: {
                         : <span className="muted small">Ссылка для монтажника: адрес, список модулей, маршрут и кнопки «выехал / начал / завершил / нужна помощь».</span>}
                     </div>
                     <div className="schedule-order-actions">
+                      <button type="button" className="btn ghost" disabled={orderBusy} onClick={() => void prepareOrder(editProject)}>
+                        {orderDraft ? 'Пересобрать' : 'Подготовить наряд'}
+                      </button>
                       <button type="button" className="btn primary" disabled={orderBusy} onClick={() => void sendWorkOrder(editProject)}>
                         {orderBusy ? 'Готовлю…' : orderCopied === order?.id ? 'Ссылка скопирована ✓' : order ? 'Обновить наряд' : 'Выдать наряд и скопировать'}
                       </button>
                       {order && <a className="btn ghost" href={workOrderUrl(order.id)} target="_blank" rel="noreferrer">Открыть как мастер</a>}
                     </div>
+
+                    {orderDraft && (
+                      <div className="schedule-order-draft">
+                        <b>Что увидит мастер</b>
+                        <div className="schedule-order-draft-grid">
+                          <label>Дата<input type="date" value={orderDraft.date} onChange={(event) => setOrderDraft({ ...orderDraft, date: event.target.value })} /></label>
+                          <label>Время<input value={orderDraft.time ?? ''} placeholder="10:00" onChange={(event) => setOrderDraft({ ...orderDraft, time: event.target.value })} /></label>
+                          <label>Бригада<input value={orderDraft.team ?? ''} onChange={(event) => setOrderDraft({ ...orderDraft, team: event.target.value })} /></label>
+                          <label>Телефон клиента<input value={orderDraft.phone ?? ''} onChange={(event) => setOrderDraft({ ...orderDraft, phone: event.target.value })} /></label>
+                          <label className="span-2">Адрес<input value={orderDraft.address ?? ''} onChange={(event) => setOrderDraft({ ...orderDraft, address: event.target.value })} /></label>
+                          <label className="span-2">Пометки для мастера<textarea rows={2} value={orderDraft.note ?? ''} placeholder="этаж, лифт, домофон, что взять с собой" onChange={(event) => setOrderDraft({ ...orderDraft, note: event.target.value })} /></label>
+                        </div>
+
+                        <div className="schedule-order-items">
+                          <b>Позиции ({orderDraft.items.length})</b>
+                          {orderDraft.items.map((item, index) => (
+                            <div className="schedule-order-item" key={index}>
+                              <input value={item} onChange={(event) => setOrderDraft({
+                                ...orderDraft,
+                                items: orderDraft.items.map((value, position) => (position === index ? event.target.value : value)),
+                              })} />
+                              <button type="button" aria-label="Убрать позицию" onClick={() => setOrderDraft({
+                                ...orderDraft,
+                                items: orderDraft.items.filter((_, position) => position !== index),
+                              })}>✕</button>
+                            </div>
+                          ))}
+                          <button type="button" className="btn tiny ghost" onClick={() => setOrderDraft({ ...orderDraft, items: [...orderDraft.items, ''] })}>+ Добавить позицию</button>
+                        </div>
+
+                        {(orderDraft.images ?? []).length > 0 && (
+                          <div className="schedule-order-images">
+                            <b>Эскизы в наряде ({(orderDraft.images ?? []).length})</b>
+                            <div>
+                              {(orderDraft.images ?? []).map((fileId) => (
+                                <span key={fileId}>
+                                  <img src={serverFileUrl(fileId)} alt="Эскиз" />
+                                  <button type="button" aria-label="Убрать эскиз" onClick={() => setOrderDraft({
+                                    ...orderDraft,
+                                    images: (orderDraft.images ?? []).filter((value) => value !== fileId),
+                                  })}>✕</button>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </>
                 );
               })()}

@@ -417,6 +417,13 @@ export interface WorkOrderSummary {
   log: WorkOrderLogEntry[];
 }
 
+export interface WorkOrderPhoto {
+  fileId: string;
+  at: string;
+  by: string;
+  comment: string;
+}
+
 export interface WorkOrderPayload {
   title: string;
   client: string;
@@ -429,6 +436,8 @@ export interface WorkOrderPayload {
   manager?: string;
   managerPhone?: string;
   items: string[];
+  /** Эскиз и другие картинки, которые видит мастер: ссылки на файлы сервера. */
+  images?: string[];
 }
 
 export async function publishWorkOrder(input: { id?: string; projectId?: string; eventId?: string; payload: WorkOrderPayload }):
@@ -446,8 +455,22 @@ export function workOrderUrl(id: string): string {
   return prettyUrl(url);
 }
 
-export async function fetchWorkOrder(id: string): Promise<{ payload: WorkOrderPayload; status: WorkOrderStatus; log: WorkOrderLogEntry[]; createdAt: string }> {
+export async function fetchWorkOrder(id: string): Promise<{ payload: WorkOrderPayload; status: WorkOrderStatus; log: WorkOrderLogEntry[]; photos: WorkOrderPhoto[]; createdAt: string }> {
   return request('workorder', {}, { id });
+}
+
+/** Фото с объекта от мастера — без входа, по ссылке наряда. */
+export async function addWorkOrderPhoto(id: string, input: { blob: Blob; who?: string; comment?: string }): Promise<WorkOrderPhoto[]> {
+  const json = await request<{ photos: WorkOrderPhoto[] }>('workorder/photo', {
+    method: 'POST',
+    body: JSON.stringify({
+      mime: input.blob.type || 'image/jpeg',
+      data: await blobToBase64(input.blob),
+      who: input.who ?? '',
+      comment: input.comment ?? '',
+    }),
+  }, { id });
+  return json.photos ?? [];
 }
 
 export async function markWorkOrder(id: string, input: { status: WorkOrderStatus; comment?: string; who?: string }):

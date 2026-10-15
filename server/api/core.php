@@ -1313,7 +1313,7 @@ function recept_files_gc(): array
             }
         }
     }
-    foreach (array_merge(glob(recept_docs_dir() . '/*.json') ?: [], glob(recept_offers_dir() . '/*.json') ?: []) as $extra) {
+    foreach (array_merge(glob(recept_docs_dir() . '/*.json') ?: [], glob(recept_offers_dir() . '/*.json') ?: [], glob(recept_orders_dir() . '/*.json') ?: []) as $extra) {
         $raw = @file_get_contents($extra);
         if (!is_string($raw) || $raw === '') {
             continue;

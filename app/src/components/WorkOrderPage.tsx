@@ -2,7 +2,10 @@
 // Крупные кнопки: выехал, начал, закончил, нужна помощь — отметки сразу видит менеджер.
 
 import { useEffect, useState } from 'react';
-import { fetchWorkOrder, markWorkOrder, type WorkOrderLogEntry, type WorkOrderPayload, type WorkOrderStatus } from '../lib/serverApi';
+import {
+  addWorkOrderPhoto, fetchWorkOrder, markWorkOrder, serverFileUrl,
+  type WorkOrderLogEntry, type WorkOrderPayload, type WorkOrderPhoto, type WorkOrderStatus,
+} from '../lib/serverApi';
 import { fmtDateLong } from '../lib/format';
 
 const STATUS_LABELS: Record<WorkOrderStatus, string> = {
@@ -28,6 +31,8 @@ export default function WorkOrderPage(props: { id: string }) {
   const [who, setWho] = useState(() => localStorage.getItem('recept.master.name') ?? '');
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
+  const [photos, setPhotos] = useState<WorkOrderPhoto[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -37,6 +42,7 @@ export default function WorkOrderPage(props: { id: string }) {
         setPayload(data.payload);
         setStatus(data.status);
         setLog(data.log ?? []);
+        setPhotos(data.photos ?? []);
       })
       .catch((e: Error) => { if (alive) setError(e.message); });
     return () => { alive = false; };
@@ -58,6 +64,23 @@ export default function WorkOrderPage(props: { id: string }) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const uploadPhotos = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      let next = photos;
+      for (const file of Array.from(files)) {
+        next = await addWorkOrderPhoto(props.id, { blob: file, who: who.trim() || 'Мастер', comment: comment.trim() });
+      }
+      setPhotos(next);
+      setComment('');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -83,6 +106,19 @@ export default function WorkOrderPage(props: { id: string }) {
         </div>
       </section>
 
+      {(payload.images ?? []).length > 0 && (
+        <section className="work-order-card">
+          <h2>Эскиз и схемы</h2>
+          <div className="work-order-images">
+            {(payload.images ?? []).map((fileId) => (
+              <a key={fileId} href={serverFileUrl(fileId)} target="_blank" rel="noreferrer">
+                <img src={serverFileUrl(fileId)} alt="Эскиз к наряду" />
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+
       {payload.items.length > 0 && (
         <section className="work-order-card">
           <h2>Что везём и монтируем</h2>
@@ -105,6 +141,20 @@ export default function WorkOrderPage(props: { id: string }) {
         <label className="work-order-field">Комментарий (для «нужна помощь» обязателен)
           <textarea rows={2} value={comment} placeholder="что сделано, что мешает" onChange={(event) => setComment(event.target.value)} />
         </label>
+        <label className="work-order-photo-add">
+          {uploading ? 'Загружаем фото…' : '📷 Добавить фото с объекта'}
+          <input type="file" accept="image/*" capture="environment" multiple hidden disabled={uploading}
+            onChange={(event) => { void uploadPhotos(event.target.files); event.target.value = ''; }} />
+        </label>
+        {photos.length > 0 && (
+          <div className="work-order-images">
+            {photos.map((photo) => (
+              <a key={photo.fileId + photo.at} href={serverFileUrl(photo.fileId)} target="_blank" rel="noreferrer" title={`${photo.by}${photo.comment ? `: ${photo.comment}` : ''}`}>
+                <img src={serverFileUrl(photo.fileId)} alt={photo.comment || 'Фото с объекта'} />
+              </a>
+            ))}
+          </div>
+        )}
         <div className="work-order-actions">
           {ACTIONS.map((action) => (
             <button key={action.status} type="button" className={`work-order-btn ${action.tone}${status === action.status ? ' active' : ''}`}
