@@ -626,6 +626,9 @@ const persistTemplates = useCallback((next: Template[]) => {
             onImport={importProject}
             onQuick={() => setView({ kind: 'quick' })}
             onOpenCrm={() => setView({ kind: 'crm' })}
+            events={calendarEvents}
+            me={server.user?.name || server.user?.login || ''}
+            onOpenSchedule={() => setView({ kind: 'schedule' })}
             onOpenSync={() => setView({ kind: 'sync' })}
             pricebookLabel={`${activePricebook.meta.name} · импорт ${activePricebook.meta.importedAt.slice(0, 10)}`}
           />

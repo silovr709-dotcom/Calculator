@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ClientProfile, Pricebook, Project } from '../types';
+import type { CalendarEvent, ClientProfile, Pricebook, Project } from '../types';
 import { calcTotals } from '../lib/engine';
 import { moduleToLines } from '../lib/modules';
 import { fmtMoney, fmtDate, todayISO } from '../lib/format';
@@ -8,6 +8,9 @@ import { projectFinance } from '../lib/finance';
 import { filterDashboardProjects, projectReadiness, sortDashboardProjects, type DashboardReadinessFilter, type DashboardSort, type DashboardStatusFilter } from '../lib/dashboard';
 import { isClosedWorkflowStatus, nextContactTone, workflowForProject, workflowStatusMeta } from '../lib/crm';
 import { buildDayDesk } from '../lib/workflow';
+import { taskStats } from '../lib/crmTasks';
+import { buildAgenda, calendarKindMeta, filterAgenda } from '../lib/calendar';
+import { addDays } from '../lib/schedule';
 import { Overlay } from './Portal';
 
 export default function Dashboard(props: {
@@ -24,7 +27,23 @@ export default function Dashboard(props: {
   onQuick: () => void;
   onOpenCrm?: () => void;
   onOpenSync?: () => void;
+  /** Дела календаря — чтобы «Сегодня» показывал всю работу, а не только CRM. */
+  events?: CalendarEvent[];
+  me?: string;
+  onOpenSchedule?: () => void;
 }) {
+  // Сегодняшняя работа целиком: задачи CRM, дела календаря и ближайшие монтажи.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const taskSummary = useMemo(() => taskStats(props.projects), [props.projects]);
+  const agendaToday = useMemo(() => {
+    const agenda = filterAgenda(buildAgenda(props.projects, props.events ?? []), { assignee: props.me ?? '' });
+    return {
+      today: agenda.filter((item) => item.date === todayIso && !item.done),
+      overdue: agenda.filter((item) => item.date < todayIso && !item.done && item.status !== 'done'),
+      week: agenda.filter((item) => item.date > todayIso && item.date <= addDays(todayIso, 7) && !item.done),
+    };
+  }, [props.projects, props.events, props.me, todayIso]);
+
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ name: '', client: '', date: todayISO(), comment: '' });
   const fileRef = useRef<HTMLInputElement>(null);
@@ -175,6 +194,33 @@ export default function Dashboard(props: {
           <button type="button" className={metricTone(dayDesk.problems, 'danger')} onClick={() => setReadinessFilter('problem')}><b>{dayDesk.problems}</b><span>проблемы расчёта</span></button>
           <button type="button" className={metricTone(dayDesk.factoryNotExported, 'info')} onClick={props.onOpenCrm}><b>{dayDesk.factoryNotExported}</b><span>к фабрике без бланка</span></button>
         </div>
+        <div className="daydesk-today">
+          <button type="button" className={`daydesk-today-card${taskSummary.overdue > 0 ? ' danger' : taskSummary.today > 0 ? ' warn' : ''}`}
+            onClick={props.onOpenCrm}>
+            <b>{taskSummary.today + taskSummary.overdue}</b>
+            <span>задач на сегодня</span>
+            <small>{taskSummary.overdue > 0 ? `${taskSummary.overdue} просрочено · ` : ''}всего открыто {taskSummary.open}</small>
+          </button>
+          <button type="button" className={`daydesk-today-card${agendaToday.overdue.length > 0 ? ' danger' : agendaToday.today.length > 0 ? ' warn' : ''}`}
+            onClick={props.onOpenSchedule}>
+            <b>{agendaToday.today.length}</b>
+            <span>дел в календаре</span>
+            <small>{agendaToday.overdue.length > 0 ? `${agendaToday.overdue.length} просрочено · ` : ''}на неделе {agendaToday.week.length}</small>
+          </button>
+          <div className="daydesk-today-list">
+            {agendaToday.today.length === 0 && agendaToday.overdue.length === 0
+              ? <span className="muted small">На сегодня выездов и монтажей нет.</span>
+              : [...agendaToday.overdue.slice(0, 2), ...agendaToday.today].slice(0, 5).map((item) => (
+                <button type="button" key={item.id} className={`daydesk-agenda${item.date < todayIso ? ' overdue' : ''}`}
+                  onClick={() => (item.projectId ? props.onOpen(item.projectId) : props.onOpenSchedule?.())}>
+                  <b>{item.timeStart ? `${item.timeStart} ` : ''}{calendarKindMeta(item.kind).label}</b>
+                  <span>{item.client || item.title}</span>
+                  <small>{[item.date < todayIso ? `просрочено с ${fmtDate(item.date)}` : null, item.assignees.join(', '), item.address].filter(Boolean).join(' · ')}</small>
+                </button>
+              ))}
+          </div>
+        </div>
+
         <div className="daydesk-task-list">
           {dayDesk.tasks.length === 0 ? <div className="daydesk-empty">Нет срочных задач. Можно создавать новый расчёт или продолжать текущие проекты.</div> : dayDesk.tasks.slice(0, 8).map((task) => (
             <button type="button" key={`${task.projectId}-${task.id}`} className={`daydesk-task tone-${task.tone}`} onClick={() => {
