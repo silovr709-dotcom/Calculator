@@ -30,6 +30,7 @@ import { clientOfferUrl, listPublishedOffers, type PublishedOffer } from '../lib
 import { loadViewPrefs, saveViewPrefs } from '../lib/viewPrefs';
 import { Overlay } from './Portal';
 import CrmDealDialog, { type DealCard } from './CrmDealDialog';
+import CrmClientDialog from './CrmClientDialog';
 import {
   addPayment, addTask, nextTask, openTasks, paymentState, removePayment, removeTask,
   taskKindMeta, taskStats, taskTone, toggleTask,
@@ -145,6 +146,7 @@ export default function CrmView(props: {
   const [mode, setMode] = useState<'deals' | 'clients'>(savedView.mode);
   const [openClientId, setOpenClientId] = useState<string | null>(null);
   const [showNewClient, setShowNewClient] = useState(false);
+  const [cardClientId, setCardClientId] = useState<string | null>(null);
   const [newClient, setNewClient] = useState({ name: '', phone: '', email: '', address: '', source: '', comment: '' });
   // Открытая карточка сделки тоже запоминается: вернулись в CRM — она снова перед вами.
   // Длинный список сделок показываем частями.
@@ -289,11 +291,12 @@ export default function CrmView(props: {
     setNewClient({ name: '', phone: '', email: '', address: '', source: '', comment: '' });
     setShowNewClient(false);
     setMode('clients');
-    setOpenClientId(id);
+    setCardClientId(id);
     toast.ok(`Клиент «${name}» добавлен`);
   };
 
   const openRow = openProjectId ? rows.find((row) => row.project.id === openProjectId) ?? null : null;
+  const cardClient = cardClientId ? props.clients.find((item) => item.id === cardClientId) ?? null : null;
 
   const updateClient = (client: ClientProfile, patch: Partial<ClientProfile>) => props.onClientChange(mergeClientPatch(client, patch));
 
@@ -484,7 +487,8 @@ export default function CrmView(props: {
                 const open = openClientId === entry.key;
                 return (
                   <article key={entry.key} className={`crm-client${open ? ' open' : ''}`}>
-                    <button type="button" className="crm-client-main" onClick={() => setOpenClientId(open ? null : entry.key)}>
+                    <button type="button" className="crm-client-main"
+                      onClick={() => (entry.client ? setCardClientId(entry.client.id) : setOpenClientId(open ? null : entry.key))}>
                       <div>
                         <b>{entry.name}</b>
                         <span>
@@ -502,9 +506,19 @@ export default function CrmView(props: {
                         ? <a href={`tel:${entry.phone.replace(/[^+\d]/g, '')}`}>☎ {entry.phone}</a>
                         : <span className="muted small">телефон не заполнен</span>}
                       {entry.email && <a href={`mailto:${entry.email}`}>✉ {entry.email}</a>}
+                      {entry.client && (
+                        <button type="button" className="btn tiny ghost" onClick={() => setCardClientId(entry.client!.id)}>
+                          Карточка клиента
+                        </button>
+                      )}
                       {entry.deals[0] && (
                         <button type="button" className="btn tiny ghost" onClick={() => setOpenProjectId(entry.deals[0].project.id)}>
-                          Открыть карточку
+                          Открыть сделку
+                        </button>
+                      )}
+                      {entry.deals.length > 1 && (
+                        <button type="button" className="btn tiny ghost" onClick={() => setOpenClientId(open ? null : entry.key)}>
+                          {open ? 'Свернуть сделки' : `Все сделки (${entry.deals.length})`}
                         </button>
                       )}
                       <button type="button" className="btn tiny ghost" onClick={() => props.onCreateDeal(entry.name)}>+ Сделка</button>
@@ -611,6 +625,27 @@ export default function CrmView(props: {
           </div>
         )}
       </section>
+      )}
+
+      {cardClient && (
+        <CrmClientDialog
+          client={cardClient}
+          deals={rows
+            .filter((row) => row.client?.id === cardClient.id)
+            .map((row) => ({
+              projectId: row.project.id,
+              name: row.project.name,
+              statusLabel: row.statusLabel,
+              total: row.total,
+              closed: row.closed,
+              installAt: row.project.schedule?.installAt,
+            }))}
+          onClose={() => setCardClientId(null)}
+          onChange={(patch) => updateClient(cardClient, patch)}
+          onOpenDeal={(projectId) => { setCardClientId(null); setOpenProjectId(projectId); }}
+          onCreateDeal={() => { setCardClientId(null); props.onCreateDeal(cardClient.name); }}
+          onNote={(text) => props.onClientHistory(cardClient.id, { kind: 'note', title: text })}
+        />
       )}
 
       {showNewClient && (
