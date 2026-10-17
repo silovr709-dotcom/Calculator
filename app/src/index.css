@@ -8228,11 +8228,11 @@ a.crm-item-phone:hover { text-decoration: underline; }
 }
 
 /* Нижняя шторка «Ещё»: открывается тапом и живёт поверх всего. */
-/* Шторка живёт внутри нижней панели: там нажатия работают на всех телефонах. */
+/* Шторка «Ещё»: отдельный блок рядом с доком — на него не действуют стили кнопок дока. */
 .dock-sheet-shade {
   position: fixed;
   inset: 0;
-  z-index: 1;
+  z-index: 1240;
   background: rgba(10, 20, 48, .45);
 }
 .dock-sheet {
@@ -8240,7 +8240,7 @@ a.crm-item-phone:hover { text-decoration: underline; }
   left: max(8px, env(safe-area-inset-left));
   right: max(8px, env(safe-area-inset-right));
   bottom: calc(84px + max(8px, env(safe-area-inset-bottom)));
-  z-index: 2;
+  z-index: 1250;
   display: grid;
   gap: 6px;
   max-height: 70vh;
@@ -8253,10 +8253,22 @@ a.crm-item-phone:hover { text-decoration: underline; }
 }
 .dock-sheet-grip { width: 44px; height: 4px; border-radius: 999px; background: #d7deef; margin: 2px auto 8px; }
 .dock-sheet button {
-  display: flex; justify-content: space-between; align-items: center; gap: 10px;
-  width: 100%; min-height: 48px; padding: 12px 14px;
-  border: 1px solid #e8ecf6; border-radius: 14px; background: #fff;
-  color: #16213f; font-size: 15px; font-weight: 600; cursor: pointer;
+  display: flex !important;
+  grid-template-rows: none !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 10px;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 48px !important;
+  padding: 12px 14px !important;
+  border: 1px solid #e8ecf6 !important;
+  border-radius: 14px !important;
+  background: #fff !important;
+  color: #16213f !important;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
 }
 .dock-sheet button span { color: #8a97b4; font-size: 12px; font-weight: 500; }
 .dock-sheet button.active { border-color: #16213f; background: #f2f5ff; }

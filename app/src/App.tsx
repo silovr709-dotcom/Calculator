@@ -864,6 +864,29 @@ const persistTemplates = useCallback((next: Template[]) => {
           />
         )}
       </main>
+      {moreOpen && <div className="dock-sheet-shade" onClick={() => setMoreOpen(false)} aria-hidden="true" />}
+      {moreOpen && (
+        <div className="dock-sheet" role="menu">
+          <div className="dock-sheet-grip" aria-hidden="true" />
+          <button type="button" className={view.kind === 'schedule' ? 'active' : ''} onClick={() => { setView({ kind: 'schedule' }); setMoreOpen(false); }}>График работ <span>монтажи</span></button>
+          {can.viewCost && (
+            <button type="button" className={view.kind === 'analytics' ? 'active' : ''} onClick={() => { setView({ kind: 'analytics' }); setMoreOpen(false); }}>Аналитика <span>деньги</span></button>
+          )}
+          {can.viewCost && (
+            <button type="button" className={view.kind === 'audit' ? 'active' : ''} onClick={() => { setView({ kind: 'audit' }); setMoreOpen(false); }}>Проверка цен <span>опт/розн.</span></button>
+          )}
+          <button type="button" className={view.kind === 'kb' ? 'active' : ''} onClick={() => { setView({ kind: 'kb' }); setMoreOpen(false); }}>База знаний <span>{kbArticles.length}</span></button>
+          {can.viewPricebook && (
+            <button type="button" className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => { setView({ kind: 'pricebook' }); setMoreOpen(false); }}>Прайс и версии <span>{activePricebook.meta.itemCount}</span></button>
+          )}
+          <button type="button" className={view.kind === 'sync' ? 'active' : ''} onClick={() => { setView({ kind: 'sync' }); setMoreOpen(false); }}>Синхронизация <span>{syncBadgeState === 'syncing' ? '...' : showSyncBadge ? syncBadgeState : 'off'}</span></button>
+          {server.mode === 'server' && (
+            <button type="button" className={view.kind === 'server' ? 'active' : ''} onClick={() => { setView({ kind: 'server' }); setMoreOpen(false); }}>Сервер <span>{server.status === 'synced' ? 'ок' : server.status}</span></button>
+          )}
+          <button type="button" className={view.kind === 'settings' ? 'active' : ''} onClick={() => { setView({ kind: 'settings' }); setMoreOpen(false); }}>Настройки <span>по умолч.</span></button>
+          <button type="button" className="dock-sheet-close" onClick={() => setMoreOpen(false)}>Закрыть</button>
+        </div>
+      )}
       <nav className="mobile-app-dock no-print" aria-label="Быстрый переход по приложению">
         <button type="button" className={view.kind === 'dashboard' || view.kind === 'project' ? 'active' : ''} onClick={() => setView({ kind: 'dashboard' })}>
           <span className="nav-icon nav-projects" aria-hidden="true" />
@@ -885,29 +908,6 @@ const persistTemplates = useCallback((next: Template[]) => {
           <b>Фабрика</b>
           <small>бланк</small>
         </button>
-        {moreOpen && <div className="dock-sheet-shade" onClick={() => setMoreOpen(false)} aria-hidden="true" />}
-        {moreOpen && (
-          <div className="dock-sheet" role="menu">
-            <div className="dock-sheet-grip" aria-hidden="true" />
-            <button type="button" className={view.kind === 'schedule' ? 'active' : ''} onClick={() => { setView({ kind: 'schedule' }); setMoreOpen(false); }}>График работ <span>монтажи</span></button>
-            {can.viewCost && (
-              <button type="button" className={view.kind === 'analytics' ? 'active' : ''} onClick={() => { setView({ kind: 'analytics' }); setMoreOpen(false); }}>Аналитика <span>деньги</span></button>
-            )}
-            {can.viewCost && (
-              <button type="button" className={view.kind === 'audit' ? 'active' : ''} onClick={() => { setView({ kind: 'audit' }); setMoreOpen(false); }}>Проверка цен <span>опт/розн.</span></button>
-            )}
-            <button type="button" className={view.kind === 'kb' ? 'active' : ''} onClick={() => { setView({ kind: 'kb' }); setMoreOpen(false); }}>База знаний <span>{kbArticles.length}</span></button>
-            {can.viewPricebook && (
-              <button type="button" className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => { setView({ kind: 'pricebook' }); setMoreOpen(false); }}>Прайс и версии <span>{activePricebook.meta.itemCount}</span></button>
-            )}
-            <button type="button" className={view.kind === 'sync' ? 'active' : ''} onClick={() => { setView({ kind: 'sync' }); setMoreOpen(false); }}>Синхронизация <span>{syncBadgeState === 'syncing' ? '...' : showSyncBadge ? syncBadgeState : 'off'}</span></button>
-            {server.mode === 'server' && (
-              <button type="button" className={view.kind === 'server' ? 'active' : ''} onClick={() => { setView({ kind: 'server' }); setMoreOpen(false); }}>Сервер <span>{server.status === 'synced' ? 'ок' : server.status}</span></button>
-            )}
-            <button type="button" className={view.kind === 'settings' ? 'active' : ''} onClick={() => { setView({ kind: 'settings' }); setMoreOpen(false); }}>Настройки <span>по умолч.</span></button>
-            <button type="button" className="dock-sheet-close" onClick={() => setMoreOpen(false)}>Закрыть</button>
-          </div>
-        )}
         <div className="mobile-dock-more" ref={moreRef}>
           <button
             type="button"
