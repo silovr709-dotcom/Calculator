@@ -79,8 +79,11 @@ jobs:
         if: steps.guard.outputs.ready == 'true'
         working-directory: app
 
-      - name: Залить файлы на хостинг
+      # Хостинг иногда рвёт управляющее соединение FTP, поэтому пробуем до трёх раз.
+      - name: Залить файлы на хостинг (попытка 1)
+        id: ftp1
         if: steps.guard.outputs.ready == 'true'
+        continue-on-error: true
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ env.FTP_SERVER }}
@@ -90,11 +93,73 @@ jobs:
           server-dir: ${{ env.FTP_DIR }}
           local-dir: ./release/site/
           dry-run: ${{ inputs.dry_run == true }}
+          timeout: 120000
           # Данные приложения и локальные настройки на хостинге трогать нельзя.
           exclude: |
             **/recept-data/**
             **/api/config.php
             **/.well-known/**
+
+      - name: Пауза перед второй попыткой
+        if: steps.guard.outputs.ready == 'true' && steps.ftp1.outcome == 'failure'
+        run: |
+          echo "::warning::FTP оборвал соединение. Повторяем через 90 секунд."
+          sleep 90
+
+      - name: Залить файлы на хостинг (попытка 2)
+        id: ftp2
+        if: steps.guard.outputs.ready == 'true' && steps.ftp1.outcome == 'failure'
+        continue-on-error: true
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ env.FTP_SERVER }}
+          username: ${{ env.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ${{ env.FTP_PROTOCOL }}
+          server-dir: ${{ env.FTP_DIR }}
+          local-dir: ./release/site/
+          dry-run: ${{ inputs.dry_run == true }}
+          timeout: 120000
+          # Данные приложения и локальные настройки на хостинге трогать нельзя.
+          exclude: |
+            **/recept-data/**
+            **/api/config.php
+            **/.well-known/**
+
+      - name: Пауза перед третьей попыткой
+        if: steps.guard.outputs.ready == 'true' && steps.ftp1.outcome == 'failure' && steps.ftp2.outcome == 'failure'
+        run: |
+          echo "::warning::Вторая попытка тоже не прошла. Ждём 3 минуты и пробуем последний раз."
+          sleep 180
+
+      - name: Залить файлы на хостинг (попытка 3)
+        id: ftp3
+        if: steps.guard.outputs.ready == 'true' && steps.ftp1.outcome == 'failure' && steps.ftp2.outcome == 'failure'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ env.FTP_SERVER }}
+          username: ${{ env.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ${{ env.FTP_PROTOCOL }}
+          server-dir: ${{ env.FTP_DIR }}
+          local-dir: ./release/site/
+          dry-run: ${{ inputs.dry_run == true }}
+          timeout: 120000
+          # Данные приложения и локальные настройки на хостинге трогать нельзя.
+          exclude: |
+            **/recept-data/**
+            **/api/config.php
+            **/.well-known/**
+
+      - name: Итог выкладки
+        if: steps.guard.outputs.ready == 'true'
+        run: |
+          if [ "${{ steps.ftp1.outcome }}" = "success" ] || [ "${{ steps.ftp2.outcome }}" = "success" ] || [ "${{ steps.ftp3.outcome }}" = "success" ]; then
+            echo "Файлы залиты."
+          else
+            echo "::error::Хостинг не принял файлы по FTP после трёх попыток. Проверьте FTP в панели хостинга."
+            exit 1
+          fi
 
       - name: Проверить сертификат основного домена
         if: steps.guard.outputs.ready == 'true'
