@@ -110,7 +110,7 @@ export default function ScheduleView(props: {
     return {
       title: project.name,
       client: project.client || 'Клиент',
-      phone: project.clientOffer?.clientPhone,
+      phone: schedule.phone || project.clientOffer?.clientPhone,
       address: schedule.address,
       date: schedule.installAt ?? '',
       time: schedule.note?.match(/\d{1,2}:\d{2}/)?.[0],
@@ -119,6 +119,8 @@ export default function ScheduleView(props: {
       manager: project.clientOffer?.sellerName,
       items: (project.modules ?? []).map((module) => `${module.name}${module.widthMm ? ` · ${module.widthMm}×${module.heightMm ?? '—'}${module.depthMm ? `×${module.depthMm}` : ''} мм` : ''}${module.qty > 1 ? ` · ${module.qty} шт` : ''}`),
       images,
+      // Вложения монтажа (схемы, PDF) мастер открывает прямо из наряда.
+      files: (schedule.attachments ?? []).map((item) => ({ fileId: item.fileId, name: item.name })),
     };
   };
 
@@ -259,6 +261,7 @@ export default function ScheduleView(props: {
       onClick={(mouse) => { mouse.stopPropagation(); openItem(item); }}>
       <b>{calendarKindMeta(item.kind).short}</b>
       <span>{item.timeStart ? `${item.timeStart} ` : ''}{item.client || item.title}</span>
+      {item.hasFiles && <small title="Есть вложения">📎</small>}
       {item.dayCount && item.dayCount > 1 && <small>{item.dayIndex}/{item.dayCount}</small>}
     </button>
   );
@@ -429,7 +432,7 @@ export default function ScheduleView(props: {
                   {dayEvents.map((item) => (
                     <li key={item.id} className={`kind-${item.kind}${item.done ? ' done' : ''}`}>
                       <div>
-                        <b>{calendarKindMeta(item.kind).label}: {item.client || item.title}</b>
+                        <b>{calendarKindMeta(item.kind).label}: {item.client || item.title}{item.hasFiles ? ' 📎' : ''}</b>
                         <small>
                           {[item.timeStart && `${item.timeStart}${item.timeEnd ? `–${item.timeEnd}` : ''}`,
                             item.source === 'project' ? item.title : null,

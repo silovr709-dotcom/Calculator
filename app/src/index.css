@@ -8537,3 +8537,11 @@ a.crm-item-phone:hover { text-decoration: underline; }
   background: #fff; color: #45536f; font-size: 13px; cursor: pointer; text-align: center;
 }
 .schedule-attach-add:hover { border-color: #16213f; color: #16213f; }
+
+/* Документы в наряде мастера. */
+.work-order-files { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.work-order-files a {
+  display: block; padding: 12px 14px; border: 1px solid #e2e7f3; border-radius: 12px;
+  background: #fafbff; color: #16213f; font-size: 15px; font-weight: 600;
+}
+.work-order-files a:hover { border-color: #16213f; }

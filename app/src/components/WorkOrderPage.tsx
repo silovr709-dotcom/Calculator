@@ -120,6 +120,19 @@ export default function WorkOrderPage(props: { id: string }) {
         </section>
       )}
 
+      {(payload.files ?? []).length > 0 && (
+        <section className="work-order-card">
+          <h2>Документы</h2>
+          <ul className="work-order-files">
+            {(payload.files ?? []).map((file) => (
+              <li key={file.fileId}>
+                <a href={serverFileUrl(file.fileId)} target="_blank" rel="noreferrer">📎 {file.name}</a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {payload.items.length > 0 && (
         <section className="work-order-card">
           <h2>Что везём и монтируем</h2>

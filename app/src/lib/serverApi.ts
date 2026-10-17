@@ -451,6 +451,8 @@ export interface WorkOrderPayload {
   items: string[];
   /** Эскиз и другие картинки, которые видит мастер: ссылки на файлы сервера. */
   images?: string[];
+  /** Документы к монтажу: схемы, PDF, замерный лист. */
+  files?: Array<{ fileId: string; name: string }>;
 }
 
 export async function publishWorkOrder(input: { id?: string; projectId?: string; eventId?: string; payload: WorkOrderPayload }):

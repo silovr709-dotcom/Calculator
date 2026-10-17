@@ -34,6 +34,8 @@ export interface ScheduleEvent {
   address?: string;
   note?: string;
   status: ScheduleStatus;
+  /** К монтажу приложены файлы. */
+  hasFiles?: boolean;
 }
 
 export function isoDay(value: Date): string {
@@ -65,6 +67,7 @@ export function projectEvents(project: Project): ScheduleEvent[] {
     address: schedule.address,
     note: schedule.note,
     status: schedule.status ?? 'planned',
+    hasFiles: (schedule.attachments ?? []).length > 0,
   };
   const events: ScheduleEvent[] = [];
   if (schedule.measureAt) events.push({ ...base, id: `${project.id}-measure`, kind: 'measure', date: schedule.measureAt });

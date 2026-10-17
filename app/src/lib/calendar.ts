@@ -37,6 +37,8 @@ export interface AgendaItem {
   note?: string;
   status: ScheduleStatus;
   done?: boolean;
+  /** Есть ли прикреплённые файлы — показываем скрепку в календаре. */
+  hasFiles?: boolean;
 }
 
 function eventDays(event: CalendarEvent): string[] {
@@ -65,6 +67,7 @@ export function eventAgenda(events: CalendarEvent[]): AgendaItem[] {
       note: event.note,
       status: event.status ?? 'planned',
       done: event.done,
+      hasFiles: (event.attachments ?? []).length > 0,
     }));
   });
 }
@@ -85,6 +88,7 @@ function fromProjectEvent(item: ScheduleEvent): AgendaItem {
     address: item.address,
     note: item.note,
     status: item.status,
+    hasFiles: item.hasFiles,
   };
 }
 
