@@ -468,6 +468,8 @@ switch ($route . ' ' . $method) {
             'dailyHour' => $settings['dailyHour'],
             'eveningHour' => $settings['eveningHour'],
             'notifyNew' => $settings['notifyNew'],
+            'morningDigest' => $settings['morningDigest'],
+            'eveningDigest' => $settings['eveningDigest'],
             'icsAlarms' => $settings['icsAlarms'],
             'timezoneOffset' => $settings['timezoneOffset'],
         ]]);

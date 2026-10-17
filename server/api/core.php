@@ -868,6 +868,8 @@ function recept_notify_settings(): array
         'dailyHour' => isset($data['dailyHour']) ? (int) $data['dailyHour'] : 8,
         'eveningHour' => isset($data['eveningHour']) ? (int) $data['eveningHour'] : 19,
         'notifyNew' => isset($data['notifyNew']) ? (bool) $data['notifyNew'] : true,
+        'morningDigest' => isset($data['morningDigest']) ? (bool) $data['morningDigest'] : true,
+        'eveningDigest' => isset($data['eveningDigest']) ? (bool) $data['eveningDigest'] : true,
         'icsAlarms' => isset($data['icsAlarms']) && is_array($data['icsAlarms'])
             ? array_values(array_filter(array_map('intval', $data['icsAlarms']), function ($value) { return $value >= 0 && $value <= 20160; }))
             : [60, 960],
@@ -901,6 +903,8 @@ function recept_notify_save(array $input): array
         'dailyHour' => isset($input['dailyHour']) ? max(0, min(23, (int) $input['dailyHour'])) : $current['dailyHour'],
         'eveningHour' => isset($input['eveningHour']) ? max(0, min(23, (int) $input['eveningHour'])) : $current['eveningHour'],
         'notifyNew' => isset($input['notifyNew']) ? (bool) $input['notifyNew'] : $current['notifyNew'],
+        'morningDigest' => isset($input['morningDigest']) ? (bool) $input['morningDigest'] : $current['morningDigest'],
+        'eveningDigest' => isset($input['eveningDigest']) ? (bool) $input['eveningDigest'] : $current['eveningDigest'],
         'icsAlarms' => isset($input['icsAlarms']) && is_array($input['icsAlarms'])
             ? array_values(array_filter(array_map('intval', $input['icsAlarms']), function ($value) { return $value >= 0 && $value <= 20160; }))
             : $current['icsAlarms'],
@@ -1196,9 +1200,32 @@ function recept_notify_run(): array
         $sent[$item['key']] = $now;
     }
 
-    // 3. Вечерняя сводка «что завтра» — каждому исполнителю своё.
+    // 3. Утренняя сводка «что сегодня» — в день работ.
+    $morningKey = 'morning-' . $localDay;
+    if ($settings['morningDigest'] && $localHour >= $settings['dailyHour'] && !isset($digests[$morningKey])) {
+        $byChatToday = [];
+        foreach ($items as $item) {
+            if ($item['date'] !== $localDay) {
+                continue;
+            }
+            foreach (recept_notify_targets($settings, $item['assignees']) as $chatId) {
+                $line = '• ' . $item['time'] . ' — ' . $item['title'] . ($item['address'] !== '' ? (', ' . $item['address']) : '');
+                $byChatToday[$chatId] = isset($byChatToday[$chatId]) ? array_merge($byChatToday[$chatId], [$line]) : [$line];
+            }
+        }
+        foreach ($byChatToday as $chatId => $lines) {
+            sort($lines);
+            $text = "Сегодня, " . $localDay . ":\n" . implode("\n", $lines) . "\nРЕцепт";
+            if (recept_telegram_send($settings['token'], $chatId, $text)) {
+                $count += 1;
+            }
+        }
+        $digests[$morningKey] = $now;
+    }
+
+    // 4. Вечерняя сводка «что завтра» — каждому исполнителю своё.
     $digestKey = 'evening-' . $localDay;
-    if ($localHour >= $settings['eveningHour'] && !isset($digests[$digestKey])) {
+    if ($settings['eveningDigest'] && $localHour >= $settings['eveningHour'] && !isset($digests[$digestKey])) {
         $byChat = [];
         foreach ($items as $item) {
             if ($item['date'] !== $tomorrow) {

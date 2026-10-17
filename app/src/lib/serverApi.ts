@@ -503,6 +503,10 @@ export interface NotifyServerSettings {
   eveningHour: number;
   /** Сообщать сразу, когда дело появилось в графике. */
   notifyNew: boolean;
+  /** Утренняя сводка «что сегодня». */
+  morningDigest: boolean;
+  /** Вечерняя сводка «что завтра». */
+  eveningDigest: boolean;
   /** За сколько минут будильники внутри подписного календаря телефона. */
   icsAlarms: number[];
   timezoneOffset: number;
@@ -520,7 +524,10 @@ export async function saveNotifyServerSettings(input: {
   leadMinutes: number;
   timezoneOffset: number;
   eveningHour?: number;
+  dailyHour?: number;
   notifyNew?: boolean;
+  morningDigest?: boolean;
+  eveningDigest?: boolean;
   icsAlarms?: number[];
 }): Promise<{ cronKey: string; tokenSet: boolean }> {
   return request('notify/settings', { method: 'POST', body: JSON.stringify(input) });

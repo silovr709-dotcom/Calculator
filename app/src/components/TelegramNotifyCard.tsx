@@ -37,7 +37,10 @@ export default function TelegramNotifyCard() {
   if (error && !settings) return <section className="card"><div className="server-alert error">{error}</div></section>;
   if (!settings) return null;
 
-  const save = async (patch: Partial<{ enabled: boolean; leadMinutes: number; timezoneOffset: number; eveningHour: number; notifyNew: boolean; icsAlarms: number[] }> = {}) => {
+  const save = async (patch: Partial<{
+    enabled: boolean; leadMinutes: number; timezoneOffset: number; eveningHour: number; dailyHour: number;
+    notifyNew: boolean; morningDigest: boolean; eveningDigest: boolean; icsAlarms: number[];
+  }> = {}) => {
     setBusy(true);
     setMessage('');
     try {
@@ -48,7 +51,10 @@ export default function TelegramNotifyCard() {
         leadMinutes: patch.leadMinutes ?? settings.leadMinutes,
         timezoneOffset: patch.timezoneOffset ?? settings.timezoneOffset,
         eveningHour: patch.eveningHour ?? settings.eveningHour,
+        dailyHour: patch.dailyHour ?? settings.dailyHour,
         notifyNew: patch.notifyNew ?? settings.notifyNew,
+        morningDigest: patch.morningDigest ?? settings.morningDigest,
+        eveningDigest: patch.eveningDigest ?? settings.eveningDigest,
         icsAlarms: patch.icsAlarms ?? settings.icsAlarms,
       });
       setToken('');
@@ -129,7 +135,25 @@ export default function TelegramNotifyCard() {
             ))}
           </select>
         </label>
-        <label>Вечером напоминать о завтрашнем дне в
+        <label className="notify-check">
+          <input type="checkbox" checked={settings.morningDigest} disabled={busy}
+            onChange={(event) => void save({ morningDigest: event.target.checked })} />
+          Утром присылать список на сегодня
+        </label>
+        <label>Утренняя сводка в
+          <select value={settings.dailyHour} disabled={busy || !settings.morningDigest}
+            onChange={(event) => void save({ dailyHour: Number(event.target.value) })}>
+            {Array.from({ length: 24 }, (_, hour) => hour).map((hour) => (
+              <option key={hour} value={hour}>{String(hour).padStart(2, '0')}:00</option>
+            ))}
+          </select>
+        </label>
+        <label className="notify-check">
+          <input type="checkbox" checked={settings.eveningDigest} disabled={busy}
+            onChange={(event) => void save({ eveningDigest: event.target.checked })} />
+          Вечером присылать список на завтра
+        </label>
+        <label>Вечерняя сводка в
           <select value={settings.eveningHour} disabled={busy} onChange={(event) => void save({ eveningHour: Number(event.target.value) })}>
             {Array.from({ length: 24 }, (_, hour) => hour).map((hour) => (
               <option key={hour} value={hour}>{String(hour).padStart(2, '0')}:00</option>

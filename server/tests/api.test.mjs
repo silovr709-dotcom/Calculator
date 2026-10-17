@@ -163,6 +163,7 @@ check('настройки вечерней сводки и будильнико�
 
 r = await call('notify/settings');
 check('вечерняя сводка и будильники вернулись', r.json?.settings?.eveningHour === 20 && JSON.stringify(r.json?.settings?.icsAlarms) === '[30,1440]' && r.json?.settings?.notifyNew === true, r.text);
+check('утренняя и вечерняя сводки включены по умолчанию', r.json?.settings?.morningDigest === true && r.json?.settings?.eveningDigest === true, r.text);
 
 r = await call('notify/settings');
 check('токен наружу не отдаётся целиком', r.json?.settings?.tokenSet === true && r.json?.settings?.tokenHint === '…TTOKEN', r.text);
