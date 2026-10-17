@@ -3,7 +3,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-  cronNotifyUrl, fetchNotifyServerSettings, fetchTelegramContacts, saveNotifyServerSettings, sendNotifyTest,
+  calendarSubscriptionUrl, cronNotifyUrl, fetchNotifyServerSettings, fetchTelegramContacts,
+  saveNotifyServerSettings, sendNotifyTest,
   type NotifyServerSettings, type TelegramChat, type TelegramContact,
 } from '../lib/serverApi';
 
@@ -168,6 +169,18 @@ export default function TelegramNotifyCard() {
           </div>
         ))}
         <button type="button" className="btn tiny ghost" onClick={() => setChats([...chats, { name: '', chatId: '' }])}>+ Добавить получателя</button>
+      </div>
+
+      <div className="notify-cron">
+        <b>Подписка календаря на телефон</b>
+        <input readOnly value={calendarSubscriptionUrl(settings.cronKey)} onFocus={(event) => event.target.select()} />
+        <small className="muted">
+          Добавьте ссылку в Google Календарь («Другие календари → Подписаться по URL») или на iPhone
+          («Настройки → Календарь → Учётные записи → Другое → Подписной календарь») — все работы появятся
+          в системном календаре телефона и будут обновляться сами.
+          Для личного календаря сотрудника добавьте в конец <code>&amp;who=Имя</code>, например{' '}
+          <code>{`&who=${chats[0]?.name?.trim() || 'Пётр'}`}</code>.
+        </small>
       </div>
 
       <div className="notify-cron">

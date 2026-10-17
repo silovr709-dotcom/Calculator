@@ -528,6 +528,11 @@ export async function sendNotifyTest(chatId: string): Promise<{ ok: boolean; err
   return request('notify/test', { method: 'POST', body: JSON.stringify({ chatId }) });
 }
 
+/** Ссылка подписки календаря: добавляется в телефон сотрудника. */
+export function calendarSubscriptionUrl(key: string, who?: string): string {
+  return apiUrl('ics', who ? { key, who } : { key });
+}
+
 /** Ссылка для планировщика хостинга. */
 export function cronNotifyUrl(key: string): string {
   return apiUrl('cron/notify', { key });

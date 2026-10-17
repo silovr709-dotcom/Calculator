@@ -7,6 +7,7 @@ import { Overlay } from './Portal';
 import { SCHEDULE_STATUSES } from '../lib/schedule';
 import { CALENDAR_KINDS } from '../lib/calendar';
 import { fmtDateLong } from '../lib/format';
+import { mapPointUrl } from '../lib/maps';
 import ReminderPicker from './ReminderPicker';
 import { serverFileUrl, workOrderUrl, type WorkOrderPayload, type WorkOrderSummary } from '../lib/serverApi';
 
@@ -19,6 +20,7 @@ const ORDER_STATUS_LABELS: Record<string, string> = {
 };
 
 export default function ScheduleDialog(props: {
+  addresses?: string[];
   mode: 'event' | 'project';
   editEvent: CalendarEvent | null;
   editProject: Project | null;
@@ -110,8 +112,14 @@ export default function ScheduleDialog(props: {
                   onChange={(event) => props.updateEvent(editEvent.id, { clientName: event.target.value })} />
               </label>
               <label className="span-2">Адрес
-                <input value={editEvent.address ?? ''} placeholder="куда ехать"
-                  onChange={(event) => props.updateEvent(editEvent.id, { address: event.target.value })} />
+                <span className="schedule-address-field">
+                  <input list="schedule-addresses" value={editEvent.address ?? ''} placeholder="куда ехать"
+                    onChange={(event) => props.updateEvent(editEvent.id, { address: event.target.value })} />
+                  {editEvent.address && (
+                    <a className="btn tiny ghost" href={mapPointUrl(editEvent.address)} target="_blank" rel="noreferrer">На карте</a>
+                  )}
+                </span>
+                <datalist id="schedule-addresses">{(props.addresses ?? []).map((address) => <option key={address} value={address} />)}</datalist>
               </label>
               <label className="span-3">Заметка
                 <input value={editEvent.note ?? ''} placeholder="этаж, домофон, что взять с собой"
@@ -176,8 +184,14 @@ export default function ScheduleDialog(props: {
                   <datalist id="schedule-people">{people.map((name) => <option key={name} value={name} />)}</datalist>
                 </label>
                 <label className="span-2">Адрес
-                  <input value={editProject.schedule?.address ?? ''} placeholder="куда ехать"
-                    onChange={(event) => props.patchSchedule(editProject, { address: event.target.value })} />
+                  <span className="schedule-address-field">
+                    <input list="schedule-addresses" value={editProject.schedule?.address ?? ''} placeholder="куда ехать"
+                      onChange={(event) => props.patchSchedule(editProject, { address: event.target.value })} />
+                    {editProject.schedule?.address && (
+                      <a className="btn tiny ghost" href={mapPointUrl(editProject.schedule.address)} target="_blank" rel="noreferrer">На карте</a>
+                    )}
+                  </span>
+                  <datalist id="schedule-addresses">{(props.addresses ?? []).map((address) => <option key={address} value={address} />)}</datalist>
                 </label>
                 <label>Статус
                   <select value={editProject.schedule?.status ?? 'planned'}

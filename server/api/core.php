@@ -1145,6 +1145,110 @@ function recept_notify_run(): array
     return ['ok' => true, 'sent' => $count];
 }
 
+/* ------------------------------ подписка календаря (ICS) ------------------------------ */
+
+function recept_ics_escape(string $text): string
+{
+    $text = str_replace(["\\", "\n", ',', ';'], ['\\\\', '\\n', '\\,', '\\;'], $text);
+    return $text;
+}
+
+function recept_ics_stamp(string $date, string $time, int $offsetHours): string
+{
+    $clock = preg_match('/^\d{2}:\d{2}$/', $time) ? $time : '09:00';
+    $at = strtotime($date . 'T' . $clock . ':00Z');
+    if ($at === false) {
+        return '';
+    }
+    return gmdate('Ymd\THis\Z', $at - $offsetHours * 3600);
+}
+
+/**
+ * Календарь в формате ICS: его можно подписать в телефоне,
+ * и все работы появятся в системном календаре сами.
+ */
+function recept_ics_build(string $who = ''): string
+{
+    $settings = recept_notify_settings();
+    $offset = $settings['timezoneOffset'];
+    $state = recept_load_state();
+    $data = is_object($state) ? get_object_vars($state) : (is_array($state) ? $state : []);
+    $events = isset($data['events']) && is_array($data['events']) ? $data['events'] : [];
+    $projects = isset($data['projects']) && is_array($data['projects']) ? $data['projects'] : [];
+    $needle = mb_strtolower(trim($who));
+
+    $lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//RECEPT//Kitchen//RU', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:РЕцепт — график работ'];
+
+    foreach ($events as $event) {
+        $event = is_object($event) ? get_object_vars($event) : $event;
+        if (!is_array($event) || !empty($event['done'])) {
+            continue;
+        }
+        $assignees = isset($event['assignees']) && is_array($event['assignees']) ? $event['assignees'] : [];
+        if ($needle !== '') {
+            $match = false;
+            foreach ($assignees as $assignee) {
+                if (mb_strtolower(trim((string) $assignee)) === $needle) {
+                    $match = true;
+                }
+            }
+            if (!$match) {
+                continue;
+            }
+        }
+        $start = recept_ics_stamp((string) ($event['date'] ?? ''), (string) ($event['timeStart'] ?? ''), $offset);
+        if ($start === '') {
+            continue;
+        }
+        $end = recept_ics_stamp((string) ($event['date'] ?? ''), (string) ($event['timeEnd'] ?? ''), $offset);
+        $lines[] = 'BEGIN:VEVENT';
+        $lines[] = 'UID:' . (string) ($event['id'] ?? uniqid()) . '@recept';
+        $lines[] = 'DTSTAMP:' . gmdate('Ymd\THis\Z');
+        $lines[] = 'DTSTART:' . $start;
+        $lines[] = 'DTEND:' . ($end !== '' && $end > $start ? $end : gmdate('Ymd\THis\Z', strtotime($start) + 3600));
+        $lines[] = 'SUMMARY:' . recept_ics_escape((string) ($event['title'] ?? 'Дело'));
+        if (!empty($event['address'])) {
+            $lines[] = 'LOCATION:' . recept_ics_escape((string) $event['address']);
+        }
+        $description = trim((string) ($event['clientName'] ?? '') . ' ' . (string) ($event['note'] ?? ''));
+        if ($description !== '') {
+            $lines[] = 'DESCRIPTION:' . recept_ics_escape($description);
+        }
+        $lines[] = 'END:VEVENT';
+    }
+
+    foreach ($projects as $project) {
+        $project = is_object($project) ? get_object_vars($project) : $project;
+        $schedule = isset($project['schedule']) ? (is_object($project['schedule']) ? get_object_vars($project['schedule']) : $project['schedule']) : [];
+        if (!is_array($schedule) || empty($schedule['installAt'])) {
+            continue;
+        }
+        $team = isset($schedule['team']) ? (string) $schedule['team'] : '';
+        if ($needle !== '' && mb_strtolower(trim($team)) !== $needle) {
+            continue;
+        }
+        $start = recept_ics_stamp((string) $schedule['installAt'], '09:00', $offset);
+        if ($start === '') {
+            continue;
+        }
+        $days = isset($schedule['installDays']) ? max(1, (int) $schedule['installDays']) : 1;
+        $lines[] = 'BEGIN:VEVENT';
+        $lines[] = 'UID:install-' . (string) ($project['id'] ?? uniqid()) . '@recept';
+        $lines[] = 'DTSTAMP:' . gmdate('Ymd\THis\Z');
+        $lines[] = 'DTSTART:' . $start;
+        $lines[] = 'DTEND:' . gmdate('Ymd\THis\Z', strtotime($start) + $days * 8 * 3600);
+        $lines[] = 'SUMMARY:' . recept_ics_escape('Монтаж: ' . (string) ($project['client'] ?? $project['name'] ?? ''));
+        if (!empty($schedule['address'])) {
+            $lines[] = 'LOCATION:' . recept_ics_escape((string) $schedule['address']);
+        }
+        $lines[] = 'DESCRIPTION:' . recept_ics_escape((string) ($project['name'] ?? '') . ($team !== '' ? ' · ' . $team : ''));
+        $lines[] = 'END:VEVENT';
+    }
+
+    $lines[] = 'END:VCALENDAR';
+    return implode("\r\n", $lines) . "\r\n";
+}
+
 /* ------------------------------ наряды на монтаж ------------------------------ */
 
 function recept_orders_dir(): string

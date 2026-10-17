@@ -435,6 +435,22 @@ switch ($route . ' ' . $method) {
         recept_json(200, ['ok' => true]);
     }
 
+    case 'ics GET': {
+        // Подписка календаря: ссылка добавляется в телефон, доступ по секретному ключу.
+        $settings = recept_notify_settings();
+        $key = isset($_GET['key']) ? (string) $_GET['key'] : '';
+        if ($settings['cronKey'] === '' || !hash_equals($settings['cronKey'], $key)) {
+            recept_fail(403, 'Неверная ссылка подписки');
+        }
+        $who = isset($_GET['who']) ? (string) $_GET['who'] : '';
+        http_response_code(200);
+        header('Content-Type: text/calendar; charset=utf-8');
+        header('Content-Disposition: inline; filename="recept.ics"');
+        header('Cache-Control: no-cache');
+        echo recept_ics_build($who);
+        exit;
+    }
+
     /* ---------- уведомления в Telegram ---------- */
 
     case 'notify/settings GET': {

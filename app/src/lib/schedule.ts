@@ -128,6 +128,14 @@ export function weekGrid(anchor: Date): string[] {
   });
 }
 
+/** Какое поле дат заказа отвечает за событие этого типа — нужно для переноса мышью. */
+export function scheduleFieldForKind(kind: ScheduleEventKind): 'measureAt' | 'readyAt' | 'deliveryAt' | 'installAt' {
+  if (kind === 'measure') return 'measureAt';
+  if (kind === 'ready') return 'readyAt';
+  if (kind === 'delivery') return 'deliveryAt';
+  return 'installAt';
+}
+
 export interface ScheduleWarning {
   projectId: string;
   text: string;

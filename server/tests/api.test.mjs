@@ -177,6 +177,22 @@ check('тест без получателя отклонён', r.status === 400,
 r = await call('notify/contacts');
 check('поиск собеседников бота отвечает понятной ошибкой на неверный токен', r.status === 400 && String(r.json?.error).includes('токен'), r.text);
 
+// --- подписка календаря (ICS) ---
+r = await call('state', { method: 'POST', body: { rev: -1, data: { projects: [{ id: 'ics1', name: 'Кухня ICS', client: 'Ирина', schedule: { installAt: '2026-11-05', team: 'Бригада 1', address: 'ул. Мира, 5' } }], clients: [], templates: [], settings: {}, events: [{ id: 'ev1', title: 'Замер у Ирины', kind: 'measure', date: '2026-11-03', timeStart: '10:00', assignees: ['Пётр'], address: 'пр. Ленина, 10', status: 'planned', createdAt: '', updatedAt: '' }] } } });
+check('база с делами сохранена для ICS', r.json?.ok === true, r.text);
+
+cookie = '';
+r = await call('ics', { query: '&key=неверный' });
+check('подписка без ключа закрыта', r.status === 403, r.text);
+
+r = await call('ics', { query: `&key=${cronKey}` });
+check('ICS отдаётся и содержит оба события', r.status === 200 && r.raw.includes('BEGIN:VCALENDAR') && r.raw.includes('Замер у Ирины') && r.raw.includes('Монтаж: Ирина'), String(r.status));
+check('в ICS есть адрес и завершение', r.raw.includes('LOCATION:ул. Мира') && r.raw.includes('END:VCALENDAR'), String(r.status));
+
+r = await call('ics', { query: `&key=${cronKey}&who=Пётр` });
+check('подписка «только мои» фильтрует по исполнителю', r.raw.includes('Замер у Ирины') && !r.raw.includes('Монтаж: Ирина'), String(r.status));
+cookie = cronCookie;
+
 // --- наряд на монтаж ---
 r = await call('workorder', { method: 'POST', body: { projectId: 'p1', payload: { client: 'Ирина', address: 'ул. Мира, 5', date: '2026-10-21', time: '10:00', team: 'Бригада 1' } } });
 const orderId = r.json?.id ?? '';

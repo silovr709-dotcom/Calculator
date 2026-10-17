@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addDays, collectEvents, eventsByDay, monthGrid, projectEvents, scheduleWarnings,
-  teamLoad, upcomingEvents, weekGrid,
+  addDays, collectEvents, eventsByDay, monthGrid, projectEvents, scheduleFieldForKind,
+  scheduleWarnings, teamLoad, upcomingEvents, weekGrid,
 } from './schedule';
 import type { Project } from '../types';
 
@@ -76,6 +76,13 @@ describe('график работ', () => {
       project('p3', { installAt: '2026-11-09', team: 'Бригада 2' }),
     ]));
     expect(load[0]).toEqual({ team: 'Бригада 1', days: 3, projects: 2 });
+  });
+
+  it('перенос мышью знает, какую дату менять', () => {
+    expect(scheduleFieldForKind('measure')).toBe('measureAt');
+    expect(scheduleFieldForKind('delivery')).toBe('deliveryAt');
+    expect(scheduleFieldForKind('install')).toBe('installAt');
+    expect(scheduleFieldForKind('ready')).toBe('readyAt');
   });
 
   it('сдвиг дат не ломается на границе месяца', () => {

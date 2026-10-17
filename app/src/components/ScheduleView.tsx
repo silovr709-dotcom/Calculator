@@ -3,7 +3,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { CalendarEvent, Project, ProjectSchedule } from '../types';
-import { addDays, collectEvents, isoDay, monthGrid, scheduleWarnings, teamLoad, weekGrid } from '../lib/schedule';
+import { addDays, collectEvents, isoDay, monthGrid, scheduleFieldForKind, scheduleWarnings, teamLoad, weekGrid } from '../lib/schedule';
+import { addressBook, dayRoute, mapPointUrl, mapRouteUrl } from '../lib/maps';
 import { fmtDate } from '../lib/format';
 import {
   CALENDAR_KINDS, agendaByDay, buildAgenda, calendarKindMeta, filterAgenda, makeEvent,
@@ -38,6 +39,8 @@ export default function ScheduleView(props: {
   const [orderCopied, setOrderCopied] = useState('');
   // Черновик наряда: позиции и пометки можно править перед отправкой мастеру.
   const [orderDraft, setOrderDraft] = useState<WorkOrderPayload | null>(null);
+  const [dragItem, setDragItem] = useState<AgendaItem | null>(null);
+  const [dragOverDay, setDragOverDay] = useState('');
 
   const today = isoDay(new Date());
   const agendaAll = useMemo(() => buildAgenda(props.projects, props.events), [props.projects, props.events]);
@@ -123,6 +126,17 @@ export default function ScheduleView(props: {
     }
   };
 
+  // Адреса выбранного дня по времени — из них строится маршрут одной ссылкой.
+  const routeStops = useMemo(
+    () => dayRoute((byDay.get(selectedDay) ?? []).map((item) => ({
+      address: item.address ?? '',
+      title: `${calendarKindMeta(item.kind).label}: ${item.client || item.title}`,
+      time: item.timeStart,
+    }))),
+    [byDay, selectedDay],
+  );
+  const addresses = useMemo(() => addressBook(props.projects, [], props.events), [props.projects, props.events]);
+
   const editProject = props.projects.find((project) => project.id === editProjectId) ?? null;
   const editEvent = props.events.find((event) => event.id === editEventId) ?? null;
   const dayEvents = byDay.get(selectedDay) ?? [];
@@ -157,6 +171,24 @@ export default function ScheduleView(props: {
     });
   };
 
+  /** Перенос мышью: дело получает новую дату, у заказа меняется нужное поле. */
+  const moveItemTo = (item: AgendaItem, day: string) => {
+    if (!day || day === item.date) return;
+    if (item.source === 'event' && item.eventId) {
+      // У многодневного дела тянем начало, сохраняя длительность.
+      const shift = item.dayIndex ? item.dayIndex - 1 : 0;
+      updateEvent(item.eventId, { date: addDays(day, -shift) });
+      return;
+    }
+    const project = props.projects.find((candidate) => candidate.id === item.projectId);
+    if (!project) return;
+    const field = scheduleFieldForKind(
+      item.kind === 'measure' || item.kind === 'delivery' || item.kind === 'install' ? item.kind : 'ready',
+    );
+    const shift = item.dayIndex ? item.dayIndex - 1 : 0;
+    patchSchedule(project, { [field]: addDays(day, -shift) });
+  };
+
   const openItem = (item: AgendaItem) => {
     setSelectedDay(item.date);
     if (item.source === 'event' && item.eventId) { setEditEventId(item.eventId); setEditProjectId(null); }
@@ -165,7 +197,10 @@ export default function ScheduleView(props: {
 
   const eventChip = (item: AgendaItem) => (
     <button key={item.id} type="button"
-      className={`schedule-chip kind-${item.kind} status-${item.status}${item.done ? ' done' : ''}`}
+      draggable
+      onDragStart={(drag) => { drag.stopPropagation(); setDragItem(item); drag.dataTransfer.effectAllowed = 'move'; }}
+      onDragEnd={() => { setDragItem(null); setDragOverDay(''); }}
+      className={`schedule-chip kind-${item.kind} status-${item.status}${item.done ? ' done' : ''}${dragItem?.id === item.id ? ' dragging' : ''}`}
       title={`${calendarKindMeta(item.kind).label}: ${item.title}${item.assignees.length ? ` · ${item.assignees.join(', ')}` : ''}${item.address ? ` · ${item.address}` : ''}`}
       onClick={(mouse) => { mouse.stopPropagation(); openItem(item); }}>
       <b>{calendarKindMeta(item.kind).short}</b>
@@ -278,10 +313,18 @@ export default function ScheduleView(props: {
               const otherMonth = mode === 'month' && new Date(`${day}T00:00:00`).getMonth() !== anchor.getMonth();
               return (
                 <button type="button" key={day}
-                  className={`schedule-day${day === today ? ' today' : ''}${day === selectedDay ? ' selected' : ''}${otherMonth ? ' other-month' : ''}`}
-                  title="Клик — выбрать день, двойной клик — создать дело"
+                  className={`schedule-day${day === today ? ' today' : ''}${day === selectedDay ? ' selected' : ''}${otherMonth ? ' other-month' : ''}${dragOverDay === day ? ' drag-over' : ''}`}
+                  title="Клик — выбрать день, двойной клик — создать дело. Плашку можно перетащить на другой день"
                   onClick={() => setSelectedDay(day)}
-                  onDoubleClick={() => createEvent(day)}>
+                  onDoubleClick={() => createEvent(day)}
+                  onDragOver={(drag) => { if (dragItem) { drag.preventDefault(); drag.dataTransfer.dropEffect = 'move'; setDragOverDay(day); } }}
+                  onDragLeave={() => setDragOverDay((current) => (current === day ? '' : current))}
+                  onDrop={(drag) => {
+                    drag.preventDefault();
+                    if (dragItem) moveItemTo(dragItem, day);
+                    setDragItem(null);
+                    setDragOverDay('');
+                  }}>
                   <span className="schedule-day-number">
                     {Number(day.slice(8))}
                     <i className="schedule-day-add" title="Добавить дело"
@@ -298,6 +341,12 @@ export default function ScheduleView(props: {
         <aside className="schedule-side">
           <section className="card">
             <div className="section-head"><div><h3>{fmtDate(selectedDay)}</h3><p className="muted small">Что запланировано в выбранный день.</p></div><b>{dayEvents.length}</b></div>
+            {routeStops.length > 1 && (
+              <a className="btn tiny primary schedule-route-btn" href={mapRouteUrl(routeStops.map((stop) => stop.address))}
+                target="_blank" rel="noreferrer">
+                Маршрут на день · {routeStops.length} точки
+              </a>
+            )}
             {dayEvents.length === 0
               ? <div className="empty small">На этот день ничего не назначено.</div>
               : <ul className="schedule-day-list">
@@ -308,9 +357,14 @@ export default function ScheduleView(props: {
                         <small>
                           {[item.timeStart && `${item.timeStart}${item.timeEnd ? `–${item.timeEnd}` : ''}`,
                             item.source === 'project' ? item.title : null,
-                            item.assignees.join(', '),
-                            item.address].filter(Boolean).join(' · ')}
+                            item.assignees.join(', ')].filter(Boolean).join(' · ')}
                         </small>
+                        {item.address && (
+                          <a className="schedule-map-link" href={mapPointUrl(item.address)} target="_blank" rel="noreferrer"
+                            onClick={(click) => click.stopPropagation()}>
+                            📍 {item.address}
+                          </a>
+                        )}
                       </div>
                       <div className="schedule-day-list-actions">
                         {item.source === 'event' && item.eventId && (
@@ -352,6 +406,7 @@ export default function ScheduleView(props: {
           editEvent={editEvent}
           editProject={editProject}
           projects={props.projects}
+          addresses={addresses}
           people={people}
           orders={orders}
           orderDraft={orderDraft}
