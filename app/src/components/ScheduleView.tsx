@@ -2,20 +2,17 @@
 // Даты и бригада правятся прямо здесь — отдельной таблицы вести не нужно.
 
 import { useEffect, useMemo, useState } from 'react';
-import type { CalendarEvent, CalendarEventKind, Project, ProjectSchedule, ScheduleStatus } from '../types';
-import {
-  SCHEDULE_STATUSES, addDays, collectEvents, isoDay, monthGrid,
-  scheduleWarnings, teamLoad, weekGrid,
-} from '../lib/schedule';
+import type { CalendarEvent, Project, ProjectSchedule } from '../types';
+import { addDays, collectEvents, isoDay, monthGrid, scheduleWarnings, teamLoad, weekGrid } from '../lib/schedule';
 import { fmtDate } from '../lib/format';
 import {
   CALENDAR_KINDS, agendaByDay, buildAgenda, calendarKindMeta, filterAgenda, makeEvent,
   patchEvent, peopleFromAgenda, remindersFor, removeEvent, type AgendaItem,
 } from '../lib/calendar';
 import { askNotifyPermission, notifyPermission, pushReminderNotifications, type NotifyPermission } from '../lib/notify';
-import { listWorkOrders, publishWorkOrder, serverFileUrl, workOrderUrl, type WorkOrderPayload, type WorkOrderSummary } from '../lib/serverApi';
+import { listWorkOrders, publishWorkOrder, type WorkOrderPayload, type WorkOrderSummary } from '../lib/serverApi';
 import { dehydrate, fileRefId, isFileRef } from '../lib/photoStore';
-import ReminderPicker from './ReminderPicker';
+import ScheduleDialog from './ScheduleDialog';
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
@@ -73,9 +70,6 @@ export default function ScheduleView(props: {
     return () => { alive = false; };
   }, []);
 
-  const ORDER_STATUS_LABELS: Record<string, string> = {
-    sent: 'наряд выдан', onway: 'мастер в пути', started: 'монтаж идёт', done: 'завершено', problem: 'нужна помощь',
-  };
 
   /** Собираем наряд из данных проекта: позиции, адрес, заметки и эскизы. */
   const buildOrderDraft = async (project: Project): Promise<WorkOrderPayload> => {
@@ -211,6 +205,16 @@ export default function ScheduleView(props: {
             </label>
           )}
           <button type="button" className="btn primary" onClick={() => createEvent(selectedDay)}>+ Новое дело</button>
+          <label className="schedule-project-pick">Даты заказа
+            <select value="" onChange={(event) => { if (event.target.value) { setEditProjectId(event.target.value); setEditEventId(null); } }}>
+              <option value="">выбрать заказ…</option>
+              {props.projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.client ? `${project.client} · ` : ''}{project.name}{project.schedule?.installAt ? ` (монтаж ${project.schedule.installAt})` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       </header>
 
@@ -275,7 +279,9 @@ export default function ScheduleView(props: {
               return (
                 <button type="button" key={day}
                   className={`schedule-day${day === today ? ' today' : ''}${day === selectedDay ? ' selected' : ''}${otherMonth ? ' other-month' : ''}`}
-                  onClick={() => setSelectedDay(day)}>
+                  title="Клик — выбрать день, двойной клик — создать дело"
+                  onClick={() => setSelectedDay(day)}
+                  onDoubleClick={() => createEvent(day)}>
                   <span className="schedule-day-number">
                     {Number(day.slice(8))}
                     <i className="schedule-day-add" title="Добавить дело"
@@ -339,202 +345,28 @@ export default function ScheduleView(props: {
         </aside>
       </div>
 
-      {editEvent && (
-        <section className="card schedule-editor">
-          <div className="section-head">
-            <div>
-              <h3>Дело в календаре</h3>
-              <p className="muted small">Своё дело без заказа: замер, выезд, встреча, сервис. Можно поручить сотруднику.</p>
-            </div>
-            <button type="button" className="btn tiny ghost" onClick={() => setEditEventId(null)}>Свернуть</button>
-          </div>
-          <div className="schedule-form">
-            <label className="span-2">Что сделать
-              <input value={editEvent.title} onChange={(event) => updateEvent(editEvent.id, { title: event.target.value })} />
-            </label>
-            <label>Тип
-              <select value={editEvent.kind} onChange={(event) => updateEvent(editEvent.id, { kind: event.target.value as CalendarEventKind })}>
-                {CALENDAR_KINDS.map((kind) => <option key={kind.id} value={kind.id}>{kind.label}</option>)}
-              </select>
-            </label>
-            <label>Дата
-              <input type="date" value={editEvent.date} onChange={(event) => updateEvent(editEvent.id, { date: event.target.value })} />
-            </label>
-            <label>Дней
-              <input type="number" min={1} max={30} value={editEvent.days ?? 1}
-                onChange={(event) => updateEvent(editEvent.id, { days: Math.max(1, Number(event.target.value) || 1) })} />
-            </label>
-            <label>Время с
-              <input type="time" value={editEvent.timeStart ?? ''} onChange={(event) => updateEvent(editEvent.id, { timeStart: event.target.value || undefined })} />
-            </label>
-            <label>до
-              <input type="time" value={editEvent.timeEnd ?? ''} onChange={(event) => updateEvent(editEvent.id, { timeEnd: event.target.value || undefined })} />
-            </label>
-            <label>Кому поручено
-              <input list="schedule-people" value={editEvent.assignees.join(', ')} placeholder="через запятую"
-                onChange={(event) => updateEvent(editEvent.id, { assignees: event.target.value.split(',').map((name) => name.trim()).filter(Boolean) })} />
-              <datalist id="schedule-people">{people.map((name) => <option key={name} value={name} />)}</datalist>
-            </label>
-            <label>Клиент
-              <input value={editEvent.clientName ?? ''} placeholder="кто заказчик" onChange={(event) => updateEvent(editEvent.id, { clientName: event.target.value })} />
-            </label>
-            <label>Статус
-              <select value={editEvent.status} onChange={(event) => updateEvent(editEvent.id, { status: event.target.value as ScheduleStatus })}>
-                {SCHEDULE_STATUSES.map((status) => <option key={status.id} value={status.id}>{status.label}</option>)}
-              </select>
-            </label>
-            <label className="span-2">Адрес
-              <input value={editEvent.address ?? ''} placeholder="куда ехать" onChange={(event) => updateEvent(editEvent.id, { address: event.target.value })} />
-            </label>
-            <label className="span-3">Заметка
-              <input value={editEvent.note ?? ''} placeholder="этаж, домофон, что взять с собой" onChange={(event) => updateEvent(editEvent.id, { note: event.target.value })} />
-            </label>
-            <div className="span-3 schedule-reminder-picker">
-              <b>Напомнить</b>
-              <ReminderPicker
-                compact
-                inheritLabel="Как в настройках"
-                value={editEvent.reminders ?? []}
-                onChange={(reminders) => updateEvent(editEvent.id, { reminders })}
-              />
-            </div>
-            <label>Связать с заказом
-              <select value={editEvent.projectId ?? ''} onChange={(event) => updateEvent(editEvent.id, { projectId: event.target.value || undefined })}>
-                <option value="">без заказа</option>
-                {props.projects.map((project) => <option key={project.id} value={project.id}>{project.client ? `${project.client} · ` : ''}{project.name}</option>)}
-              </select>
-            </label>
-            <div className="schedule-form-actions">
-              <button type="button" className="btn ghost"
-                onClick={() => updateEvent(editEvent.id, { done: !editEvent.done, status: editEvent.done ? 'planned' : 'done' })}>
-                {editEvent.done ? 'Вернуть в работу' : 'Отметить выполненным'}
-              </button>
-              {editEvent.projectId && <button type="button" className="btn ghost" onClick={() => props.onOpen(editEvent.projectId!)}>Открыть заказ</button>}
-              <button type="button" className="btn ghost danger" onClick={() => deleteEvent(editEvent.id)}>Удалить дело</button>
-            </div>
-          </div>
-        </section>
+      {/* Правка дела и дат заказа — отдельным окном, как редактор модуля. */}
+      {(editEvent || editProject) && (
+        <ScheduleDialog
+          mode={editEvent ? 'event' : 'project'}
+          editEvent={editEvent}
+          editProject={editProject}
+          projects={props.projects}
+          people={people}
+          orders={orders}
+          orderDraft={orderDraft}
+          orderBusy={orderBusy}
+          orderCopied={orderCopied}
+          onClose={() => { setEditEventId(null); setEditProjectId(null); setOrderDraft(null); }}
+          onOpen={props.onOpen}
+          updateEvent={updateEvent}
+          deleteEvent={deleteEvent}
+          patchSchedule={patchSchedule}
+          prepareOrder={(project) => void prepareOrder(project)}
+          sendWorkOrder={(project) => void sendWorkOrder(project)}
+          setOrderDraft={setOrderDraft}
+        />
       )}
-
-      <section className="card schedule-editor">
-        <div className="section-head">
-          <div>
-            <h3>Назначить даты</h3>
-            <p className="muted small">Выберите заказ — и проставьте замер, готовность, доставку и монтаж. Монтаж длиной в несколько дней займёт их все.</p>
-          </div>
-        </div>
-        <label className="schedule-project-picker">Заказ
-          <select value={editProjectId ?? ''} onChange={(event) => setEditProjectId(event.target.value || null)}>
-            <option value="">— выберите заказ —</option>
-            {props.projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.client ? `${project.client} · ` : ''}{project.name}
-                {project.schedule?.installAt ? ` (монтаж ${project.schedule.installAt})` : ''}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {editProject && (
-          <div className="schedule-form">
-            <label>Замер<input type="date" value={editProject.schedule?.measureAt ?? ''} onChange={(event) => patchSchedule(editProject, { measureAt: event.target.value || undefined })} /></label>
-            <label>Готовность на фабрике<input type="date" value={editProject.schedule?.readyAt ?? ''} onChange={(event) => patchSchedule(editProject, { readyAt: event.target.value || undefined })} /></label>
-            <label>Доставка<input type="date" value={editProject.schedule?.deliveryAt ?? ''} onChange={(event) => patchSchedule(editProject, { deliveryAt: event.target.value || undefined })} /></label>
-            <label>Монтаж<input type="date" value={editProject.schedule?.installAt ?? ''} onChange={(event) => patchSchedule(editProject, { installAt: event.target.value || undefined })} /></label>
-            <label>Дней монтажа<input type="number" min={1} max={14} value={editProject.schedule?.installDays ?? 1} onChange={(event) => patchSchedule(editProject, { installDays: Math.max(1, Number(event.target.value) || 1) })} /></label>
-            <label>Бригада<input list="schedule-teams" value={editProject.schedule?.team ?? ''} placeholder="кто монтирует" onChange={(event) => patchSchedule(editProject, { team: event.target.value })} />
-              <datalist id="schedule-teams">{people.map((name) => <option key={name} value={name} />)}</datalist>
-            </label>
-            <label className="span-2">Адрес<input value={editProject.schedule?.address ?? ''} placeholder="куда ехать" onChange={(event) => patchSchedule(editProject, { address: event.target.value })} /></label>
-            <label>Статус
-              <select value={editProject.schedule?.status ?? 'planned'} onChange={(event) => patchSchedule(editProject, { status: event.target.value as ScheduleStatus })}>
-                {SCHEDULE_STATUSES.map((status) => <option key={status.id} value={status.id}>{status.label}</option>)}
-              </select>
-            </label>
-            <label className="span-3">Заметка для монтажников<input value={editProject.schedule?.note ?? ''} placeholder="этаж, лифт, время, контакты на объекте" onChange={(event) => patchSchedule(editProject, { note: event.target.value })} /></label>
-            <div className="span-3 schedule-order">
-              {(() => {
-                const order = orders.find((item) => item.projectId === editProject.id);
-                return (
-                  <>
-                    <div className="schedule-order-main">
-                      <b>Наряд мастеру</b>
-                      {order
-                        ? <>
-                            <span className={`schedule-order-status status-${order.status}`}>{ORDER_STATUS_LABELS[order.status] ?? order.status}</span>
-                            {order.lastComment && <small>«{order.lastComment}»{order.lastBy ? ` — ${order.lastBy}` : ''}</small>}
-                            <input readOnly value={workOrderUrl(order.id)} onFocus={(event) => event.target.select()} />
-                          </>
-                        : <span className="muted small">Ссылка для монтажника: адрес, список модулей, маршрут и кнопки «выехал / начал / завершил / нужна помощь».</span>}
-                    </div>
-                    <div className="schedule-order-actions">
-                      <button type="button" className="btn ghost" disabled={orderBusy} onClick={() => void prepareOrder(editProject)}>
-                        {orderDraft ? 'Пересобрать' : 'Подготовить наряд'}
-                      </button>
-                      <button type="button" className="btn primary" disabled={orderBusy} onClick={() => void sendWorkOrder(editProject)}>
-                        {orderBusy ? 'Готовлю…' : orderCopied === order?.id ? 'Ссылка скопирована ✓' : order ? 'Обновить наряд' : 'Выдать наряд и скопировать'}
-                      </button>
-                      {order && <a className="btn ghost" href={workOrderUrl(order.id)} target="_blank" rel="noreferrer">Открыть как мастер</a>}
-                    </div>
-
-                    {orderDraft && (
-                      <div className="schedule-order-draft">
-                        <b>Что увидит мастер</b>
-                        <div className="schedule-order-draft-grid">
-                          <label>Дата<input type="date" value={orderDraft.date} onChange={(event) => setOrderDraft({ ...orderDraft, date: event.target.value })} /></label>
-                          <label>Время<input value={orderDraft.time ?? ''} placeholder="10:00" onChange={(event) => setOrderDraft({ ...orderDraft, time: event.target.value })} /></label>
-                          <label>Бригада<input value={orderDraft.team ?? ''} onChange={(event) => setOrderDraft({ ...orderDraft, team: event.target.value })} /></label>
-                          <label>Телефон клиента<input value={orderDraft.phone ?? ''} onChange={(event) => setOrderDraft({ ...orderDraft, phone: event.target.value })} /></label>
-                          <label className="span-2">Адрес<input value={orderDraft.address ?? ''} onChange={(event) => setOrderDraft({ ...orderDraft, address: event.target.value })} /></label>
-                          <label className="span-2">Пометки для мастера<textarea rows={2} value={orderDraft.note ?? ''} placeholder="этаж, лифт, домофон, что взять с собой" onChange={(event) => setOrderDraft({ ...orderDraft, note: event.target.value })} /></label>
-                        </div>
-
-                        <div className="schedule-order-items">
-                          <b>Позиции ({orderDraft.items.length})</b>
-                          {orderDraft.items.map((item, index) => (
-                            <div className="schedule-order-item" key={index}>
-                              <input value={item} onChange={(event) => setOrderDraft({
-                                ...orderDraft,
-                                items: orderDraft.items.map((value, position) => (position === index ? event.target.value : value)),
-                              })} />
-                              <button type="button" aria-label="Убрать позицию" onClick={() => setOrderDraft({
-                                ...orderDraft,
-                                items: orderDraft.items.filter((_, position) => position !== index),
-                              })}>✕</button>
-                            </div>
-                          ))}
-                          <button type="button" className="btn tiny ghost" onClick={() => setOrderDraft({ ...orderDraft, items: [...orderDraft.items, ''] })}>+ Добавить позицию</button>
-                        </div>
-
-                        {(orderDraft.images ?? []).length > 0 && (
-                          <div className="schedule-order-images">
-                            <b>Эскизы в наряде ({(orderDraft.images ?? []).length})</b>
-                            <div>
-                              {(orderDraft.images ?? []).map((fileId) => (
-                                <span key={fileId}>
-                                  <img src={serverFileUrl(fileId)} alt="Эскиз" />
-                                  <button type="button" aria-label="Убрать эскиз" onClick={() => setOrderDraft({
-                                    ...orderDraft,
-                                    images: (orderDraft.images ?? []).filter((value) => value !== fileId),
-                                  })}>✕</button>
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-            <div className="schedule-form-actions">
-              <button type="button" className="btn ghost" onClick={() => props.onOpen(editProject.id)}>Открыть проект</button>
-              <button type="button" className="btn ghost" onClick={() => patchSchedule(editProject, { measureAt: undefined, readyAt: undefined, deliveryAt: undefined, installAt: undefined })}>Очистить даты</button>
-            </div>
-          </div>
-        )}
-      </section>
     </div>
   );
 }
