@@ -2,8 +2,10 @@ name: Deploy to hosting (FTP)
 
 # Автообновление сайта на виртуальном хостинге reg.ru.
 #
-# Запускается САМ после каждого пуша в ветки main и arena/01a0ee6f-calculator,
-# а также вручную: вкладка Actions → Deploy to hosting (FTP) → Run workflow.
+# Запускается САМ после каждого пуша в ветки main и рабочие ветки сессий,
+# перечисленные ниже (каждая новая рабочая ветка добавляется сюда, чтобы её
+# изменения сразу выкладывались на боевой сайт), а также вручную:
+# вкладка Actions → Deploy to hosting (FTP) → Run workflow.
 #
 # Обязателен только ОДИН секрет репозитория
 # (Settings → Secrets and variables → Actions → New repository secret):
