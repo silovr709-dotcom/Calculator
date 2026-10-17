@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import type { CalendarEvent, NotifySettings, ClientProfile, OrderWorkflow, Pricebook, Project, ProjectSettings, Template, KbArticle } from './types';
 import {
   loadGlobalSettings, saveGlobalSettings,
@@ -17,35 +17,23 @@ import { todayISO } from './lib/format';
 import { projectStatusForWorkflow, workflowForProject } from './lib/crm';
 import { appendClientHistory, applyClientProfileToProject, applyClientProfilesToProjects, createClientProfileFromProject, ensureClientProfiles, findClientForProject, mergeClientProfiles, mergeClientPatch } from './lib/clientProfiles';
 import Dashboard from './components/Dashboard';
-import CrmView from './components/CrmView';
 import ProjectEditor, { type ProjectTab } from './components/ProjectEditor';
 import SettingsPanel from './components/SettingsPanel';
-import PricebookView from './components/PricebookView';
 import QuickCalc from './components/QuickCalc';
-import SyncPanel from './components/SyncPanel';
 import { useAppVersion } from './lib/useAppVersion';
 import ServerSaveChip from './components/ServerSaveChip';
 import InstallAppCard from './components/InstallAppCard';
 import ToastHost from './components/ToastHost';
 import { toast } from './lib/toast';
 import NotifySettingsCard from './components/NotifySettingsCard';
-import TelegramNotifyCard from './components/TelegramNotifyCard';
 import { useReminders } from './lib/useReminders';
 import { normalizeNotifySettings } from './lib/reminders';
 import { capabilitiesFor } from './lib/permissions';
-import PublicOfferPage from './components/PublicOfferPage';
-import WorkOrderPage from './components/WorkOrderPage';
-import AnalyticsView from './components/AnalyticsView';
-import ScheduleView from './components/ScheduleView';
-import PriceAuditView from './components/PriceAuditView';
 import { dehydrateKnown } from './lib/photoStore';
-import FactoryBlankView from './components/FactoryBlankView';
-import KnowledgeView from './components/KnowledgeView';
 import NumberFieldCalculator from './components/NumberFieldCalculator';
 import CommandPalette from './components/CommandPalette';
 import { WORK_MODE_LABELS, type WorkMode } from './lib/workflow';
 import ServerLogin from './components/ServerLogin';
-import ServerPanel from './components/ServerPanel';
 import { useServerSync } from './lib/useServerSync';
 import type { Workspace } from './lib/serverWorkspace';
 
@@ -64,6 +52,21 @@ type View =
   | { kind: 'audit'; id?: string }
   | { kind: 'sync' };
 
+
+
+// Тяжёлые разделы подгружаются по мере открытия: первый экран появляется быстрее.
+const CrmView = lazy(() => import('./components/CrmView'));
+const ScheduleView = lazy(() => import('./components/ScheduleView'));
+const AnalyticsView = lazy(() => import('./components/AnalyticsView'));
+const PriceAuditView = lazy(() => import('./components/PriceAuditView'));
+const KnowledgeView = lazy(() => import('./components/KnowledgeView'));
+const PricebookView = lazy(() => import('./components/PricebookView'));
+const ServerPanel = lazy(() => import('./components/ServerPanel'));
+const SyncPanel = lazy(() => import('./components/SyncPanel'));
+const FactoryBlankView = lazy(() => import('./components/FactoryBlankView'));
+const PublicOfferPage = lazy(() => import('./components/PublicOfferPage'));
+const WorkOrderPage = lazy(() => import('./components/WorkOrderPage'));
+const TelegramNotifyCard = lazy(() => import('./components/TelegramNotifyCard'));
 
 /** Где пользователь был в прошлый раз: экран и открытый проект. */
 const VIEW_STORE = 'recept.nav.view.v1';
@@ -589,10 +592,24 @@ const persistTemplates = useCallback((next: Template[]) => {
 
   // Ссылка клиенту: КП открывается без входа и без рабочего интерфейса.
   if (publicOfferId) {
-    return <><ToastHost /><PublicOfferPage id={publicOfferId} /></>;
+    return (
+      <>
+        <ToastHost />
+        <Suspense fallback={<div className="public-offer-state"><h1>Загружаем предложение…</h1></div>}>
+          <PublicOfferPage id={publicOfferId} />
+        </Suspense>
+      </>
+    );
   }
   if (workOrderId) {
-    return <><ToastHost /><WorkOrderPage id={workOrderId} /></>;
+    return (
+      <>
+        <ToastHost />
+        <Suspense fallback={<div className="public-offer-state"><h1>Загружаем наряд…</h1></div>}>
+          <WorkOrderPage id={workOrderId} />
+        </Suspense>
+      </>
+    );
   }
 
   if (server.mode === 'checking') {
@@ -724,6 +741,7 @@ const persistTemplates = useCallback((next: Template[]) => {
         </div>
       </aside>
       <main className="main" id="main-workspace">
+        <Suspense fallback={<div className="section-loading">Загружаем раздел…</div>}>
         {view.kind === 'dashboard' && (
           <Dashboard
             pricebooks={pricebooks}
@@ -890,6 +908,7 @@ const persistTemplates = useCallback((next: Template[]) => {
             builtinId={builtin?.meta.id ?? null}
           />
         )}
+        </Suspense>
       </main>
       {moreOpen && (
         <div className="dock-sheet-layer" onClick={() => setMoreOpen(false)}>

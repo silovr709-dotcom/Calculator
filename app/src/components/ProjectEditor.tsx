@@ -1,29 +1,31 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { ClientProfile, Pricebook, Project, ProjectLine, PriceItem, LineParams, Template, KitchenModule } from '../types';
 import { SUMMARY_GROUPS } from '../types';
 import { calcTotals, lineFromItem } from '../lib/engine';
 import { fmtMoney, fmtNum, fmtDate } from '../lib/format';
 import CatalogPicker from './CatalogPicker';
 import ModulesPanel from './ModulesPanel';
-import EskizProPanel from './EskizProPanel';
-import PhotosPanel from './PhotosPanel';
 import { checkModule, moduleToLines } from '../lib/modules';
 import { validateProject } from '../lib/validation';
 import SettingsPanel from './SettingsPanel';
-import ClientView from './ClientView';
 import KitchenWizard from './KitchenWizard';
-import ProjectCheckCenter from './ProjectCheckCenter';
-import ProjectHistoryPanel from './ProjectHistoryPanel';
-import VariantsPanel from './VariantsPanel';
-import MeasurementPanel from './MeasurementPanel';
-import KitchenChecklistPanel from './KitchenChecklistPanel';
-import OrderCenterPanel from './OrderCenterPanel';
 import ProjectContextPanel from './ProjectContextPanel';
 import { exportInternalXlsx, exportClientXlsx, exportInternalCsv, exportProjectJson } from '../lib/exporters';
 import { makeClientNameResolver } from '../lib/clientNaming';
 import QRCode from 'qrcode';
 import { makeProjectQrShare } from '../lib/sync';
 import { Overlay } from './Portal';
+
+// Панели этапов грузятся при открытии вкладки: расчёт открывается мгновенно.
+const EskizProPanel = lazy(() => import('./EskizProPanel'));
+const ClientView = lazy(() => import('./ClientView'));
+const OrderCenterPanel = lazy(() => import('./OrderCenterPanel'));
+const MeasurementPanel = lazy(() => import('./MeasurementPanel'));
+const VariantsPanel = lazy(() => import('./VariantsPanel'));
+const PhotosPanel = lazy(() => import('./PhotosPanel'));
+const ProjectCheckCenter = lazy(() => import('./ProjectCheckCenter'));
+const KitchenChecklistPanel = lazy(() => import('./KitchenChecklistPanel'));
+const ProjectHistoryPanel = lazy(() => import('./ProjectHistoryPanel'));
 
 export type ProjectTab = 'modules' | 'sketch' | 'order' | 'lines' | 'photos' | 'settings' | 'client' | 'check' | 'variants' | 'measurement';
 type ProjectStage = 'composition' | 'eskiz' | 'check' | 'client' | 'order';
@@ -408,6 +410,7 @@ export default function ProjectEditor(props: {
           onOpenAdvanced={() => { setEditorMode('advanced'); props.onChange({ ...project, wizardMode: 'advanced' }); }}
         />
       ) : (
+      <Suspense fallback={<div className="section-loading">Загружаем раздел проекта…</div>}>
       <div className={`project-workspace-frame ${tab === 'modules' ? 'modules-workspace-frame' : ''} ${tab === 'sketch' ? 'sketch-workspace-frame' : ''}`}>
         <section className="project-work-area">
           <div className="project-section-head no-print">
@@ -554,7 +557,8 @@ export default function ProjectEditor(props: {
           onOpenFactory={props.onOpenFactoryBlank}
           onOpenCrm={props.onOpenCrm}
         />
-      </div>)}
+      </div>
+      </Suspense>)}
 
       {showPicker && (
         <CatalogPicker pricebook={pricebook} onAdd={addItem} onClose={() => setShowPicker(false)} />

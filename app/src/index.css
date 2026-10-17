@@ -8474,3 +8474,41 @@ a.crm-item-phone:hover { text-decoration: underline; }
   .toast-host,
   .install-card { display: none !important; }
 }
+
+/* Подсказка во время загрузки раздела. */
+.section-loading {
+  padding: 40px 20px;
+  text-align: center;
+  color: #7c89a8;
+  font-size: 13px;
+}
+
+/* Мобильная полировка: документ КП и Эскиз PRO. */
+@media (max-width: 760px) {
+  /* Документ клиента читается, а не ужимается в колонку. */
+  .client-doc { padding: 16px 14px; }
+  .cd-hero { grid-template-columns: 1fr; padding: 16px; }
+  .cd-hero-price { text-align: left; }
+  .cd-terms,
+  .cd-summary-grid,
+  .cd-composition-grid { grid-template-columns: 1fr !important; }
+  .cd-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .cd-photos { grid-template-columns: 1fr 1fr; }
+
+  /* Панели Эскиз PRO переносятся по строкам и нажимаются пальцем. */
+  .eskiz-pro-toolbar,
+  .eskiz-pro-export-actions,
+  .embedded-eskiz-toolbar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .embedded-eskiz-toolbar .btn.tiny,
+  .eskiz-pro-toolbar .btn { min-height: 38px; }
+  .eskiz-pro-workspace.fullscreen { padding: 4px; }
+
+  /* Карточки модулей и слотов: ничего не вылезает за край. */
+  .slot-row { grid-template-columns: 1fr; }
+  .slot-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .mod-editor .module-editor-hero { grid-template-columns: 1fr; gap: 8px; }
+  .module-editor-hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+}
