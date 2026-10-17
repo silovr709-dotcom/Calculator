@@ -26,6 +26,7 @@ import {
   toneLabel, type CrmFocus, type CrmRowLike,
 } from '../lib/crmBoard';
 import { clientOfferUrl, listPublishedOffers, type PublishedOffer } from '../lib/serverApi';
+import { loadViewPrefs, saveViewPrefs } from '../lib/viewPrefs';
 import CrmDealDialog, { type DealCard } from './CrmDealDialog';
 import {
   addPayment, addTask, nextTask, openTasks, paymentState, removePayment, removeTask,
@@ -127,11 +128,13 @@ export default function CrmView(props: {
 }) {
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
-  const [focus, setFocus] = useState<CrmFocus>('active');
-  const [stage, setStage] = useState<string>('');
+  // Фильтры запоминаются: экран открывается там же, где его оставили.
+  const savedView = useMemo(() => loadViewPrefs('crm', { focus: 'active' as CrmFocus, stage: '', assignee: '', sort: 'urgency' as 'urgency' | 'money' | 'updated' }), []);
+  const [focus, setFocus] = useState<CrmFocus>(savedView.focus);
+  const [stage, setStage] = useState<string>(savedView.stage);
   const [openProjectId, setOpenProjectId] = useState<string | null>(null);
-  const [assignee, setAssignee] = useState('');
-  const [sort, setSort] = useState<'urgency' | 'money' | 'updated'>('urgency');
+  const [assignee, setAssignee] = useState(savedView.assignee);
+  const [sort, setSort] = useState<'urgency' | 'money' | 'updated'>(savedView.sort);
   const [docBusy, setDocBusy] = useState<string | null>(null);
   const [offers, setOffers] = useState<PublishedOffer[]>([]);
 
@@ -176,6 +179,8 @@ export default function CrmView(props: {
       search: [project.name, project.client, client?.name, workflow.nextAction, workflow.managerComment, workflow.assignee, task?.title, phone, email, client?.source, client?.tags?.join(' ')].filter(Boolean).join(' '),
     };
   }), [props.projects, props.clients, props.pricebooks]);
+
+  useEffect(() => { saveViewPrefs('crm', { focus, stage, assignee, sort }); }, [focus, stage, assignee, sort]);
 
   const counts = useMemo(() => focusCounts(rows), [rows]);
   const stages = useMemo(() => summarizeStages(rows), [rows]);
@@ -388,7 +393,10 @@ export default function CrmView(props: {
                         </span>
                       : <span className={`crm-item-date tone-${row.tone}`}>{toneLabel(row.tone, row.workflow.nextContactAt)}</span>}
                     {row.openTasks > 1 && <span className="crm-item-taskcount">ещё задач: {row.openTasks - 1}</span>}
-                    {row.phone && <span className="crm-item-phone">{row.phone}</span>}
+                    {row.phone && (
+                      <a className="crm-item-phone" href={`tel:${row.phone.replace(/[^+\d]/g, '')}`}
+                        onClick={(click) => click.stopPropagation()}>☎ {row.phone}</a>
+                    )}
                   </div>
                 </button>
                 <div className="crm-item-money">

@@ -1,11 +1,12 @@
 // Проверка цен: опт и розница рядом, видно наценку, маржу и ошибки расчёта.
 // Отдельный модуль — чтобы перед отправкой КП можно было спокойно всё сверить.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Pricebook, Project } from '../types';
 import { calcTotals } from '../lib/engine';
 import { moduleToLines } from '../lib/modules';
 import { fmtMoney, fmtNum } from '../lib/format';
+import { loadViewPrefs, saveViewPrefs } from '../lib/viewPrefs';
 import {
   AUDIT_FLAG_LABELS, AUDIT_FLAG_TONE, auditSummary, auditToTsv, buildAuditRows, groupAuditRows,
   type AuditRow,
@@ -19,10 +20,17 @@ export default function PriceAuditView(props: {
   initialProjectId?: string;
   onOpen: (id: string) => void;
 }) {
-  const [projectId, setProjectId] = useState(props.initialProjectId ?? props.projects[0]?.id ?? '');
+  const savedView = useMemo(() => loadViewPrefs('audit', { projectId: '', filter: 'all' as Filter }), []);
+  const [projectId, setProjectId] = useState(
+    props.initialProjectId
+      ?? (props.projects.some((item) => item.id === savedView.projectId) ? savedView.projectId : '')
+      ?? '',
+  );
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter>(savedView.filter);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => { saveViewPrefs('audit', { projectId, filter }); }, [projectId, filter]);
 
   const project = props.projects.find((item) => item.id === projectId) ?? null;
   const pricebook = props.pricebooks.find((item) => item.meta.id === project?.pricebookId) ?? props.pricebooks[0];

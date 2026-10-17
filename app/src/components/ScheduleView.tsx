@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CalendarEvent, CalendarEventKind, Project, ProjectSchedule } from '../types';
 import { addDays, collectEvents, isoDay, monthGrid, scheduleFieldForKind, scheduleWarnings, teamLoad, weekGrid } from '../lib/schedule';
 import { addressBook, dayRoute, mapPointUrl, mapRouteUrl } from '../lib/maps';
+import { isWeekend } from '../lib/viewPrefs';
 import { fmtDate } from '../lib/format';
 import {
   CALENDAR_KINDS, agendaByDay, buildAgenda, calendarKindMeta, filterAgenda, makeEvent,
@@ -385,7 +386,7 @@ export default function ScheduleView(props: {
               const otherMonth = mode === 'month' && new Date(`${day}T00:00:00`).getMonth() !== anchor.getMonth();
               return (
                 <button type="button" key={day}
-                  className={`schedule-day${day === today ? ' today' : ''}${day === selectedDay ? ' selected' : ''}${otherMonth ? ' other-month' : ''}${dragOverDay === day ? ' drag-over' : ''}`}
+                  className={`schedule-day${day === today ? ' today' : ''}${day === selectedDay ? ' selected' : ''}${otherMonth ? ' other-month' : ''}${isWeekend(day) ? ' weekend' : ''}${dragOverDay === day ? ' drag-over' : ''}`}
                   title="Клик — выбрать день, двойной клик — создать дело. Плашку можно перетащить на другой день"
                   onClick={() => setSelectedDay(day)}
                   onDoubleClick={() => createEvent(day)}
@@ -403,7 +404,9 @@ export default function ScheduleView(props: {
                       onClick={(mouse) => { mouse.stopPropagation(); createEvent(day); }}>+</i>
                   </span>
                   <div className="schedule-day-events">{list.slice(0, mode === 'month' ? 3 : 8).map(eventChip)}</div>
-                  {list.length > (mode === 'month' ? 3 : 8) && <small>ещё {list.length - (mode === 'month' ? 3 : 8)}</small>}
+                  {list.length > (mode === 'month' ? 3 : 8) && (
+                    <small className="schedule-day-more">ещё {list.length - (mode === 'month' ? 3 : 8)} — открыть день</small>
+                  )}
                 </button>
               );
             })}
