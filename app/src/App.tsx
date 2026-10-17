@@ -27,6 +27,7 @@ import { useAppVersion } from './lib/useAppVersion';
 import ServerSaveChip from './components/ServerSaveChip';
 import InstallAppCard from './components/InstallAppCard';
 import ToastHost from './components/ToastHost';
+import { Overlay } from './components/Portal';
 import NotifySettingsCard from './components/NotifySettingsCard';
 import TelegramNotifyCard from './components/TelegramNotifyCard';
 import { useReminders } from './lib/useReminders';
@@ -832,7 +833,7 @@ const persistTemplates = useCallback((next: Template[]) => {
           <b>Фабрика</b>
           <small>бланк</small>
         </button>
-        <div className={`mobile-dock-more dropdown${moreOpen ? ' open' : ''}`} ref={moreRef}>
+        <div className="mobile-dock-more" ref={moreRef}>
           <button
             type="button"
             aria-expanded={moreOpen}
@@ -842,22 +843,35 @@ const persistTemplates = useCallback((next: Template[]) => {
           >
             <span className="nav-icon nav-settings" aria-hidden="true" />
             <b>Ещё</b>
-            <small>{moreOpen ? 'закрыть' : view.kind === 'kb' ? 'база' : view.kind === 'pricebook' ? 'прайс' : view.kind === 'sync' ? 'синхр.' : view.kind === 'settings' ? 'настр.' : view.kind === 'schedule' ? 'график' : view.kind === 'analytics' ? 'отчёт' : 'меню'}</small>
+            <small>{moreOpen ? 'закрыть' : 'меню'}</small>
           </button>
-          <div className="dropdown-menu mobile-dock-menu" role="menu">
+        </div>
+      </nav>
+      {moreOpen && (
+        <Overlay className="dock-sheet-backdrop" onClick={() => setMoreOpen(false)}>
+          <div className="dock-sheet" role="menu" onClick={(event) => event.stopPropagation()}>
+            <div className="dock-sheet-grip" aria-hidden="true" />
             <button type="button" className={view.kind === 'schedule' ? 'active' : ''} onClick={() => { setView({ kind: 'schedule' }); setMoreOpen(false); }}>График работ <span>монтажи</span></button>
-            <button type="button" className={view.kind === 'analytics' ? 'active' : ''} onClick={() => { setView({ kind: 'analytics' }); setMoreOpen(false); }}>Аналитика <span>деньги</span></button>
-            <button type="button" className={view.kind === 'audit' ? 'active' : ''} onClick={() => { setView({ kind: 'audit' }); setMoreOpen(false); }}>Проверка цен <span>опт/розн.</span></button>
+            {can.viewCost && (
+              <button type="button" className={view.kind === 'analytics' ? 'active' : ''} onClick={() => { setView({ kind: 'analytics' }); setMoreOpen(false); }}>Аналитика <span>деньги</span></button>
+            )}
+            {can.viewCost && (
+              <button type="button" className={view.kind === 'audit' ? 'active' : ''} onClick={() => { setView({ kind: 'audit' }); setMoreOpen(false); }}>Проверка цен <span>опт/розн.</span></button>
+            )}
             <button type="button" className={view.kind === 'kb' ? 'active' : ''} onClick={() => { setView({ kind: 'kb' }); setMoreOpen(false); }}>База знаний <span>{kbArticles.length}</span></button>
-            <button type="button" className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => { setView({ kind: 'pricebook' }); setMoreOpen(false); }}>Прайс и версии <span>{activePricebook.meta.itemCount}</span></button>
+            {can.viewPricebook && (
+              <button type="button" className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => { setView({ kind: 'pricebook' }); setMoreOpen(false); }}>Прайс и версии <span>{activePricebook.meta.itemCount}</span></button>
+            )}
             <button type="button" className={view.kind === 'sync' ? 'active' : ''} onClick={() => { setView({ kind: 'sync' }); setMoreOpen(false); }}>Синхронизация <span>{syncBadgeState === 'syncing' ? '...' : showSyncBadge ? syncBadgeState : 'off'}</span></button>
             {server.mode === 'server' && (
               <button type="button" className={view.kind === 'server' ? 'active' : ''} onClick={() => { setView({ kind: 'server' }); setMoreOpen(false); }}>Сервер <span>{server.status === 'synced' ? 'ок' : server.status}</span></button>
             )}
             <button type="button" className={view.kind === 'settings' ? 'active' : ''} onClick={() => { setView({ kind: 'settings' }); setMoreOpen(false); }}>Настройки <span>по умолч.</span></button>
+            <button type="button" className="dock-sheet-close" onClick={() => setMoreOpen(false)}>Закрыть</button>
           </div>
-        </div>
-      </nav>
+        </Overlay>
+      )}
+
       <CommandPalette
         open={commandOpen}
         onClose={() => setCommandOpen(false)}

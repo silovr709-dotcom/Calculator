@@ -8226,3 +8226,45 @@ a.crm-item-phone:hover { text-decoration: underline; }
 @media (max-width: 720px) {
   .toast-host { left: 10px; right: 10px; bottom: 96px; max-width: none; }
 }
+
+/* Нижняя шторка «Ещё»: открывается тапом и живёт поверх всего. */
+.dock-sheet-backdrop {
+  position: fixed; inset: 0; z-index: 5200;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(10, 20, 48, .45);
+  backdrop-filter: blur(2px);
+}
+.dock-sheet {
+  width: min(520px, 100%);
+  display: grid; gap: 6px;
+  padding: 10px 12px calc(16px + env(safe-area-inset-bottom));
+  border-radius: 20px 20px 0 0;
+  background: #fff;
+  box-shadow: 0 -16px 40px rgba(10, 20, 48, .3);
+  animation: dock-sheet-in .16s ease-out;
+}
+.dock-sheet-grip { width: 44px; height: 4px; border-radius: 999px; background: #d7deef; margin: 2px auto 8px; }
+.dock-sheet button {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  width: 100%; min-height: 48px; padding: 12px 14px;
+  border: 1px solid #e8ecf6; border-radius: 14px; background: #fff;
+  color: #16213f; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.dock-sheet button span { color: #8a97b4; font-size: 12px; font-weight: 500; }
+.dock-sheet button.active { border-color: #16213f; background: #f2f5ff; }
+.dock-sheet .dock-sheet-close { justify-content: center; margin-top: 4px; background: #16213f; color: #fff; border-color: #16213f; }
+@keyframes dock-sheet-in { from { transform: translateY(14px); opacity: .6; } to { transform: none; opacity: 1; } }
+
+/* Выбор позиции на телефоне: окно на весь экран, крупные строки. */
+.slot-row.tappable { cursor: pointer; }
+.slot-row.tappable:hover { background: #f7f9ff; }
+@media (max-width: 760px) {
+  .modal-back { padding: 0; }
+  .modal.wide { width: 100vw; height: 100dvh; max-height: none; border-radius: 0; }
+  .picker { grid-template-rows: minmax(0, 1fr) auto; }
+  .picker-right { max-height: 46vh; padding: 12px 14px calc(14px + env(safe-area-inset-bottom)); }
+  .picker-left .search { font-size: 16px; padding: 13px; }
+  .picker-left .list-row, .picker-left tr { min-height: 46px; }
+  .slot-row { padding: 10px 12px; border-radius: 12px; }
+  .slot-row .slot-actions .btn.tiny { min-height: 38px; padding: 8px 14px; font-size: 13px; }
+}

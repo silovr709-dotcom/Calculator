@@ -670,7 +670,12 @@ export default function ModulesPanel(props: {
               if (need <= 0 && k !== 'body') return null;
               const { item, source } = resolveSlot(sel, k, defaults, pricebook);
               return (
-                <div className="slot-row" key={k}>
+                <div className="slot-row tappable" key={k}
+                  onClick={(event) => {
+                    // Нажатие по строке открывает выбор — на телефоне не надо целиться в кнопку.
+                    if ((event.target as HTMLElement).closest('button')) return;
+                    setPick({ slot: k, moduleId: sel.id });
+                  }}>
                   <div className="slot-label">{SLOT_LABELS[k]}{k !== 'body' && <span className="muted small"> × {need * sel.qty}</span>}</div>
                   <div className={item ? 'slot-value' : 'slot-value none'}>
                     {item ? <>
