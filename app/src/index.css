@@ -8863,3 +8863,7 @@ body {
   .crm-client-main { flex-direction: column; align-items: flex-start; gap: 4px; }
   .crm-client-money { text-align: left; }
 }
+
+/* Окно добавления клиента. */
+.crm-new-client { width: min(620px, 100%); }
+.crm-new-client-actions { display: flex; gap: 8px; margin-top: 4px; }

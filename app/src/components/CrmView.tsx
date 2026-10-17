@@ -15,7 +15,7 @@ import { applyClientOfferEdits, buildClientOfferDetails, buildClientProjectSumma
 import { makeClientNameResolver } from '../lib/clientNaming';
 import { downloadClientContractDocx, downloadClientDocumentZip, downloadClientOfferDocx, downloadClientReceiptDocx, type ClientDocumentArgs } from '../lib/clientPackage';
 import {
-  applyClientProfileToProject, findDuplicateClientGroups, mergeClientPatch,
+  applyClientProfileToProject, findDuplicateClientGroups, mergeClientPatch, splitContactList,
   updateClientProjectDocuments, updateClientProjectPayment,
 } from '../lib/clientProfiles';
 import {
@@ -28,6 +28,7 @@ import {
 } from '../lib/crmBoard';
 import { clientOfferUrl, listPublishedOffers, type PublishedOffer } from '../lib/serverApi';
 import { loadViewPrefs, saveViewPrefs } from '../lib/viewPrefs';
+import { Overlay } from './Portal';
 import CrmDealDialog, { type DealCard } from './CrmDealDialog';
 import {
   addPayment, addTask, nextTask, openTasks, paymentState, removePayment, removeTask,
@@ -143,6 +144,8 @@ export default function CrmView(props: {
   const [stage, setStage] = useState<string>(savedView.stage);
   const [mode, setMode] = useState<'deals' | 'clients'>(savedView.mode);
   const [openClientId, setOpenClientId] = useState<string | null>(null);
+  const [showNewClient, setShowNewClient] = useState(false);
+  const [newClient, setNewClient] = useState({ name: '', phone: '', email: '', address: '', source: '', comment: '' });
   // Открытая карточка сделки тоже запоминается: вернулись в CRM — она снова перед вами.
   // Длинный список сделок показываем частями.
   const [visibleCount, setVisibleCount] = useState(30);
@@ -258,20 +261,36 @@ export default function CrmView(props: {
   }, [rows, props.clients, query]);
 
   const createClient = () => {
-    const name = prompt('Имя клиента:')?.trim();
-    if (!name) return;
+    const name = newClient.name.trim();
+    if (!name) {
+      toast.error('Укажите имя клиента');
+      return;
+    }
     const now = new Date().toISOString();
+    const id = `cli_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
     props.onClientChange({
-      id: `cli_${Date.now().toString(36)}`,
+      id,
       name,
-      phones: [],
-      emails: [],
+      phones: newClient.phone.trim() ? splitContactList(newClient.phone) : [],
+      emails: newClient.email.trim() ? splitContactList(newClient.email) : [],
+      objectAddress: newClient.address.trim() || undefined,
+      source: newClient.source.trim() || undefined,
+      managerComment: newClient.comment.trim() || undefined,
       tags: [],
-      history: [],
+      history: [{
+        id: `h_${Date.now().toString(36)}`,
+        createdAt: now,
+        kind: 'note',
+        title: 'Клиент заведён в CRM',
+      }],
       createdAt: now,
       updatedAt: now,
     });
+    setNewClient({ name: '', phone: '', email: '', address: '', source: '', comment: '' });
+    setShowNewClient(false);
     setMode('clients');
+    setOpenClientId(id);
+    toast.ok(`Клиент «${name}» добавлен`);
   };
 
   const openRow = openProjectId ? rows.find((row) => row.project.id === openProjectId) ?? null : null;
@@ -368,7 +387,7 @@ export default function CrmView(props: {
             <input ref={searchRef} className="crm-search-input" value={query} placeholder="Клиент, проект, телефон…" onChange={(event) => setQuery(event.target.value)} />
             {query && <button type="button" className="crm-search-clear" aria-label="Очистить поиск" onClick={() => setQuery('')}>✕</button>}
           </div>
-          <button type="button" className="btn ghost" onClick={createClient}>+ Клиент</button>
+          <button type="button" className="btn ghost" onClick={() => setShowNewClient(true)}>+ Клиент</button>
           <button type="button" className={`btn ${counts.today > 0 ? 'primary' : 'ghost'}`} onClick={() => { setFocus('today'); setStage(''); }}>
             Сегодня{counts.today > 0 ? ` · ${counts.today}` : ''}
           </button>
@@ -592,6 +611,54 @@ export default function CrmView(props: {
           </div>
         )}
       </section>
+      )}
+
+      {showNewClient && (
+        <Overlay className="crm-dialog-backdrop" onClick={() => setShowNewClient(false)}>
+          <div className="crm-dialog crm-new-client" role="dialog" aria-label="Новый клиент" onClick={(event) => event.stopPropagation()}>
+            <header className="crm-dialog-head">
+              <div>
+                <span className="eyebrow">Клиентская база</span>
+                <h2>Новый клиент</h2>
+                <p>Заполните то, что известно — остальное можно добавить позже.</p>
+              </div>
+              <button type="button" className="btn ghost" aria-label="Закрыть" onClick={() => setShowNewClient(false)}>✕</button>
+            </header>
+            <div className="crm-dialog-body">
+              <div className="crm-dialog-grid">
+                <label className="span-2">Имя или компания*
+                  <input autoFocus value={newClient.name} placeholder="Ирина Петрова"
+                    onChange={(event) => setNewClient({ ...newClient, name: event.target.value })}
+                    onKeyDown={(event) => { if (event.key === 'Enter') createClient(); }} />
+                </label>
+                <label>Телефон
+                  <input value={newClient.phone} placeholder="+7 900 000-00-00"
+                    onChange={(event) => setNewClient({ ...newClient, phone: event.target.value })} />
+                </label>
+                <label>Email
+                  <input value={newClient.email} placeholder="client@mail.ru"
+                    onChange={(event) => setNewClient({ ...newClient, email: event.target.value })} />
+                </label>
+                <label className="span-2">Адрес объекта
+                  <input value={newClient.address} placeholder="город, улица, дом, квартира"
+                    onChange={(event) => setNewClient({ ...newClient, address: event.target.value })} />
+                </label>
+                <label>Источник
+                  <input value={newClient.source} placeholder="сайт, рекомендация, дизайнер"
+                    onChange={(event) => setNewClient({ ...newClient, source: event.target.value })} />
+                </label>
+                <label>Комментарий
+                  <input value={newClient.comment} placeholder="что важно помнить"
+                    onChange={(event) => setNewClient({ ...newClient, comment: event.target.value })} />
+                </label>
+              </div>
+              <div className="crm-new-client-actions">
+                <button type="button" className="btn primary" disabled={!newClient.name.trim()} onClick={createClient}>Добавить клиента</button>
+                <button type="button" className="btn ghost" onClick={() => setShowNewClient(false)}>Отмена</button>
+              </div>
+            </div>
+          </div>
+        </Overlay>
       )}
 
       {openRow && (

@@ -776,7 +776,11 @@ const persistTemplates = useCallback((next: Template[]) => {
             onOpen={(id) => setView({ kind: 'project', id })}
             onProjectChange={updateProject}
             onWorkflowChange={updateProjectWorkflow}
-            onClientChange={(client) => persistClients(clients.map((item) => (item.id === client.id ? client : item)))}
+            onClientChange={(client) => {
+              // Новый клиент добавляется, существующий — обновляется.
+              const exists = clients.some((item) => item.id === client.id);
+              persistClients(exists ? clients.map((item) => (item.id === client.id ? client : item)) : [client, ...clients]);
+            }}
             onClientHistory={(clientId, entry) => {
               const client = clients.find((item) => item.id === clientId);
               if (client) persistClients(clients.map((item) => item.id === clientId ? appendClientHistory(client, entry, uid('hist')) : item));
