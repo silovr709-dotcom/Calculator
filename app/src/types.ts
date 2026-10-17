@@ -325,6 +325,8 @@ export type CrmTaskKind = 'call' | 'meet' | 'measure' | 'docs' | 'payment' | 'de
 
 export interface CrmTask {
   id: string;
+  /** Кто поставил задачу: 'auto:<правило>' — автоматика, пусто — человек. */
+  origin?: string;
   title: string;
   kind: CrmTaskKind;
   /** Срок в формате YYYY-MM-DD. Без срока задача считается «когда-нибудь». */

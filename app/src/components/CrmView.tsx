@@ -28,6 +28,7 @@ import {
 } from '../lib/crmBoard';
 import { clientOfferUrl, listPublishedOffers, type PublishedOffer } from '../lib/serverApi';
 import { loadViewPrefs, saveViewPrefs } from '../lib/viewPrefs';
+import { normalizeRules, planAutomation } from '../lib/crmAutomation';
 import { Overlay } from './Portal';
 import CrmDealDialog, { type DealCard } from './CrmDealDialog';
 import CrmClientDialog from './CrmClientDialog';
@@ -140,10 +141,14 @@ export default function CrmView(props: {
     assignee: '',
     sort: 'urgency' as 'urgency' | 'money' | 'updated',
     mode: 'deals' as 'deals' | 'clients',
+    board: false,
   }), []);
   const [focus, setFocus] = useState<CrmFocus>(savedView.focus);
   const [stage, setStage] = useState<string>(savedView.stage);
   const [mode, setMode] = useState<'deals' | 'clients'>(savedView.mode);
+  const [board, setBoard] = useState(Boolean(savedView.board));
+  const [dragDealId, setDragDealId] = useState<string | null>(null);
+  const [dropStage, setDropStage] = useState<string>('');
   const [openClientId, setOpenClientId] = useState<string | null>(null);
   const [showNewClient, setShowNewClient] = useState(false);
   const [cardClientId, setCardClientId] = useState<string | null>(null);
@@ -202,7 +207,42 @@ export default function CrmView(props: {
     };
   }), [props.projects, props.clients, props.pricebooks]);
 
-  useEffect(() => { saveViewPrefs('crm', { focus, stage, assignee, sort, mode }); }, [focus, stage, assignee, sort, mode]);
+  useEffect(() => { saveViewPrefs('crm', { focus, stage, assignee, sort, mode, board } ); }, [focus, stage, assignee, sort, mode, board]);
+
+  // Автоматические правила: ставим задачи и двигаем этапы без ручной рутины.
+  const rules = useMemo(() => normalizeRules(loadViewPrefs('crm-rules', { list: [] as unknown }).list), []);
+  // Свежие данные держим в ссылке: правила проверяем по составу сделок,
+  // а не на каждый перерисованный список.
+  const automationRef = useRef({ rows, offers, props });
+  useEffect(() => { automationRef.current = { rows, offers, props }; });
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const { rows: currentRows, offers: currentOffers, props: handlers } = automationRef.current;
+      for (const row of currentRows) {
+        const offer = currentOffers.find((item) => item.projectId === row.project.id);
+        const actions = planAutomation({
+          project: row.project,
+          status: row.status,
+          updatedAt: row.project.updatedAt,
+          paid: paymentState(row.client?.paymentsByProject?.[row.project.id], row.total).paid,
+          offerApprovedAt: offer?.approvedAt ?? null,
+          installDoneAt: row.project.schedule?.status === 'done' ? (row.project.schedule.installAt ?? null) : null,
+        }, rules);
+        if (actions.length === 0) continue;
+
+        let next = row.project;
+        for (const action of actions) {
+          next = addTask(next, { ...action.task, done: false });
+          if (action.nextStatus) handlers.onWorkflowChange(row.project.id, { status: action.nextStatus });
+          if (row.client) handlers.onClientHistory(row.client.id, { kind: 'contact', title: `Автоматика: ${action.task.title}`, projectId: row.project.id });
+        }
+        handlers.onProjectChange(next);
+        toast.info(`Автоматика добавила задач: ${actions.length} по сделке «${row.project.name}»`);
+      }
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [rows.length, offers.length, rules]);
   useEffect(() => { saveViewPrefs('crm-open', { id: openProjectId ?? '' }); }, [openProjectId]);
 
   const counts = useMemo(() => focusCounts(rows), [rows]);
@@ -390,6 +430,12 @@ export default function CrmView(props: {
             <input ref={searchRef} className="crm-search-input" value={query} placeholder="Клиент, проект, телефон…" onChange={(event) => setQuery(event.target.value)} />
             {query && <button type="button" className="crm-search-clear" aria-label="Очистить поиск" onClick={() => setQuery('')}>✕</button>}
           </div>
+          {mode === 'deals' && (
+            <div className="crm-mode-switch" role="tablist" aria-label="Вид списка">
+              <button type="button" role="tab" aria-selected={!board} className={board ? '' : 'active'} onClick={() => setBoard(false)}>Список</button>
+              <button type="button" role="tab" aria-selected={board} className={board ? 'active' : ''} onClick={() => setBoard(true)}>Доска</button>
+            </div>
+          )}
           <button type="button" className="btn ghost" onClick={() => setShowNewClient(true)}>+ Клиент</button>
           <button type="button" className={`btn ${counts.today > 0 ? 'primary' : 'ghost'}`} onClick={() => { setFocus('today'); setStage(''); }}>
             Сегодня{counts.today > 0 ? ` · ${counts.today}` : ''}
@@ -553,7 +599,59 @@ export default function CrmView(props: {
         </section>
       )}
 
-      {mode === 'deals' && (
+      {mode === 'deals' && board && (
+        <section className="card crm-board-card">
+          <div className="section-head">
+            <div>
+              <h3>Воронка</h3>
+              <p className="muted small">Перетащите сделку в другой столбец — этап сменится, срок контакта проставится сам.</p>
+            </div>
+            <b>{visible.length}</b>
+          </div>
+          <div className="crm-board">
+            {stages.map((column) => {
+              const columnRows = visible.filter((row) => column.statuses.includes(row.status));
+              return (
+                <div key={column.id}
+                  className={`crm-board-col${dropStage === column.id ? ' drag-over' : ''}`}
+                  onDragOver={(event) => { if (dragDealId) { event.preventDefault(); setDropStage(column.id); } }}
+                  onDragLeave={() => setDropStage((current) => (current === column.id ? '' : current))}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const row = rows.find((item) => item.project.id === dragDealId);
+                    if (row && !column.statuses.includes(row.status)) changeStatus(row, column.statuses[0]);
+                    setDragDealId(null);
+                    setDropStage('');
+                  }}>
+                  <div className="crm-board-head">
+                    <b>{column.title}</b>
+                    <span>{columnRows.length} · {fmtMoney(columnRows.reduce((sum, row) => sum + row.total, 0))}</span>
+                  </div>
+                  <div className="crm-board-cards">
+                    {columnRows.length === 0 && <div className="crm-board-empty">Пусто</div>}
+                    {columnRows.map((row) => (
+                      <article key={row.project.id} draggable
+                        className={`crm-board-card-item tone-${row.tone}${dragDealId === row.project.id ? ' dragging' : ''}`}
+                        onDragStart={() => setDragDealId(row.project.id)}
+                        onDragEnd={() => { setDragDealId(null); setDropStage(''); }}
+                        onClick={() => setOpenProjectId(row.project.id)}>
+                        <b>{row.client?.name || row.project.client || 'Без клиента'}</b>
+                        <span>{row.project.name}</span>
+                        <small>
+                          {fmtMoney(row.total)}
+                          {row.task ? ` · ${row.task.title}` : ` · ${toneLabel(row.tone, row.workflow.nextContactAt)}`}
+                        </small>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {mode === 'deals' && !board && (
       <section className="card crm-list-card">
         <div className="section-head">
           <div>
