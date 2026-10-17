@@ -2,7 +2,7 @@
 // Даты и бригада правятся прямо здесь — отдельной таблицы вести не нужно.
 
 import { useEffect, useMemo, useState } from 'react';
-import type { CalendarEvent, Project, ProjectSchedule } from '../types';
+import type { CalendarEvent, CalendarEventKind, Project, ProjectSchedule } from '../types';
 import { addDays, collectEvents, isoDay, monthGrid, scheduleFieldForKind, scheduleWarnings, teamLoad, weekGrid } from '../lib/schedule';
 import { addressBook, dayRoute, mapPointUrl, mapRouteUrl } from '../lib/maps';
 import { fmtDate } from '../lib/format';
@@ -15,6 +15,7 @@ import { listWorkOrders, publishWorkOrder, type WorkOrderPayload, type WorkOrder
 import { dehydrate, fileRefId, isFileRef } from '../lib/photoStore';
 import ScheduleDialog from './ScheduleDialog';
 
+const VIEW_KEY = 'recept.schedule.view.v1';
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
 
@@ -26,10 +27,22 @@ export default function ScheduleView(props: {
   onOpen: (id: string) => void;
   onProjectChange: (project: Project) => void;
 }) {
-  const [mode, setMode] = useState<'month' | 'week'>('month');
+  // Вид и фильтры запоминаются: при следующем заходе календарь открывается так же.
+  const saved = useMemo(() => {
+    try {
+      const raw = localStorage.getItem(VIEW_KEY);
+      return raw ? (JSON.parse(raw) as Partial<{ mode: 'month' | 'week'; person: string; onlyMine: boolean; kinds: CalendarEventKind[] }>) : {};
+    } catch {
+      return {};
+    }
+  }, []);
+
+  const [mode, setMode] = useState<'month' | 'week'>(saved.mode === 'week' ? 'week' : 'month');
   const [anchor, setAnchor] = useState(() => new Date());
-  const [person, setPerson] = useState('');
-  const [onlyMine, setOnlyMine] = useState(false);
+  const [person, setPerson] = useState(saved.person ?? '');
+  const [onlyMine, setOnlyMine] = useState(Boolean(saved.onlyMine));
+  const [kinds, setKinds] = useState<CalendarEventKind[]>(saved.kinds ?? []);
+  const [undoMove, setUndoMove] = useState<{ text: string; revert: () => void } | null>(null);
   const [selectedDay, setSelectedDay] = useState(() => isoDay(new Date()));
   const [editProjectId, setEditProjectId] = useState<string | null>(null);
   const [editEventId, setEditEventId] = useState<string | null>(null);
@@ -45,7 +58,7 @@ export default function ScheduleView(props: {
   const today = isoDay(new Date());
   const agendaAll = useMemo(() => buildAgenda(props.projects, props.events), [props.projects, props.events]);
   const activePerson = onlyMine ? props.me : person;
-  const agenda = useMemo(() => filterAgenda(agendaAll, { assignee: activePerson }), [agendaAll, activePerson]);
+  const agenda = useMemo(() => filterAgenda(agendaAll, { assignee: activePerson, kinds }), [agendaAll, activePerson, kinds]);
   const byDay = useMemo(() => agendaByDay(agenda), [agenda]);
   const days = useMemo(() => (mode === 'month' ? monthGrid(anchor) : weekGrid(anchor)), [mode, anchor]);
   const warnings = useMemo(() => scheduleWarnings(props.projects), [props.projects]);
@@ -56,6 +69,14 @@ export default function ScheduleView(props: {
     () => agenda.filter((item) => item.date >= today && item.date <= addDays(today, 14)),
     [agenda, today],
   );
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_KEY, JSON.stringify({ mode, person, onlyMine, kinds }));
+    } catch {
+      /* память браузера переполнена — не критично */
+    }
+  }, [mode, person, onlyMine, kinds]);
 
   // Пока приложение открыто, напоминаем о сегодняшних и просроченных делах.
   useEffect(() => {
@@ -141,6 +162,7 @@ export default function ScheduleView(props: {
   const editEvent = props.events.find((event) => event.id === editEventId) ?? null;
   const dayEvents = byDay.get(selectedDay) ?? [];
   const monthTitle = `${MONTHS[anchor.getMonth()]} ${anchor.getFullYear()}`;
+  const periodCount = days.reduce((sum, day) => sum + (byDay.get(day)?.length ?? 0), 0);
 
   const createEvent = (date: string) => {
     const event = makeEvent({ title: 'Новое дело', date, kind: 'measure', assignees: props.me ? [props.me] : [] }, props.me);
@@ -163,6 +185,24 @@ export default function ScheduleView(props: {
     setAnchor(next);
   };
 
+  // Стрелки листают период, «Т» возвращает на сегодня.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      if (editEventId || editProjectId) return;
+      if (event.key === 'ArrowLeft') shift(-1);
+      else if (event.key === 'ArrowRight') shift(1);
+      else if (event.key === 't' || event.key === 'е' || event.key === 'T' || event.key === 'Е') {
+        setAnchor(new Date());
+        setSelectedDay(isoDay(new Date()));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+
   const patchSchedule = (project: Project, patch: Partial<ProjectSchedule>) => {
     props.onProjectChange({
       ...project,
@@ -174,19 +214,31 @@ export default function ScheduleView(props: {
   /** Перенос мышью: дело получает новую дату, у заказа меняется нужное поле. */
   const moveItemTo = (item: AgendaItem, day: string) => {
     if (!day || day === item.date) return;
+    const back = item.dayIndex ? item.dayIndex - 1 : 0;
+    const label = `${calendarKindMeta(item.kind).label}: ${item.client || item.title}`;
+
     if (item.source === 'event' && item.eventId) {
-      // У многодневного дела тянем начало, сохраняя длительность.
-      const shift = item.dayIndex ? item.dayIndex - 1 : 0;
-      updateEvent(item.eventId, { date: addDays(day, -shift) });
+      const eventId = item.eventId;
+      const previous = props.events.find((candidate) => candidate.id === eventId)?.date;
+      updateEvent(eventId, { date: addDays(day, -back) });
+      setUndoMove({
+        text: `${label} → ${fmtDate(day)}`,
+        revert: () => { if (previous) updateEvent(eventId, { date: previous }); },
+      });
       return;
     }
+
     const project = props.projects.find((candidate) => candidate.id === item.projectId);
     if (!project) return;
     const field = scheduleFieldForKind(
       item.kind === 'measure' || item.kind === 'delivery' || item.kind === 'install' ? item.kind : 'ready',
     );
-    const shift = item.dayIndex ? item.dayIndex - 1 : 0;
-    patchSchedule(project, { [field]: addDays(day, -shift) });
+    const previous = project.schedule?.[field];
+    patchSchedule(project, { [field]: addDays(day, -back) });
+    setUndoMove({
+      text: `${label} → ${fmtDate(day)}`,
+      revert: () => patchSchedule(project, { [field]: previous }),
+    });
   };
 
   const openItem = (item: AgendaItem) => {
@@ -223,7 +275,10 @@ export default function ScheduleView(props: {
           </div>
           <div className="schedule-nav">
             <button type="button" onClick={() => shift(-1)} aria-label="Назад">←</button>
-            <b>{mode === 'month' ? monthTitle : `неделя с ${fmtDate(days[0])}`}</b>
+            <b>
+              {mode === 'month' ? monthTitle : `неделя с ${fmtDate(days[0])}`}
+              <small>{periodCount > 0 ? `${periodCount} работ` : 'пусто'}</small>
+            </b>
             <button type="button" onClick={() => shift(1)} aria-label="Вперёд">→</button>
             <button type="button" className="btn tiny ghost" onClick={() => { setAnchor(new Date()); setSelectedDay(today); }}>Сегодня</button>
           </div>
@@ -253,10 +308,27 @@ export default function ScheduleView(props: {
         </div>
       </header>
 
-      <section className="schedule-legend">
-        {CALENDAR_KINDS.map((kind) => (
-          <span key={kind.id} className={`schedule-legend-item kind-${kind.id}`}><b>{kind.short}</b>{kind.label}</span>
-        ))}
+      <section className="schedule-legend" aria-label="Фильтр по типам работ">
+        {CALENDAR_KINDS.map((kind) => {
+          const active = kinds.length === 0 || kinds.includes(kind.id);
+          const count = agendaAll.filter((item) => item.kind === kind.id).length;
+          return (
+            <button key={kind.id} type="button"
+              className={`schedule-legend-item kind-${kind.id}${active ? '' : ' off'}`}
+              title={active ? 'Скрыть этот тип' : 'Показать этот тип'}
+              onClick={() => setKinds((current) => {
+                const base = current.length === 0 ? CALENDAR_KINDS.map((item) => item.id) : current;
+                const next = base.includes(kind.id) ? base.filter((item) => item !== kind.id) : [...base, kind.id];
+                return next.length === CALENDAR_KINDS.length ? [] : next;
+              })}>
+              <b>{kind.short}</b>{kind.label}
+              {count > 0 && <i>{count}</i>}
+            </button>
+          );
+        })}
+        {kinds.length > 0 && (
+          <button type="button" className="schedule-legend-reset" onClick={() => setKinds([])}>показать все</button>
+        )}
         {load.length > 0 && (
           <span className="schedule-load">
             Загрузка бригад: {load.map((item) => `${item.team} — ${item.days} дн.`).join(' · ')}
@@ -398,6 +470,14 @@ export default function ScheduleView(props: {
           </section>
         </aside>
       </div>
+
+      {undoMove && (
+        <div className="schedule-undo" role="status">
+          <span>Перенесено: {undoMove.text}</span>
+          <button type="button" onClick={() => { undoMove.revert(); setUndoMove(null); }}>Отменить</button>
+          <button type="button" className="schedule-undo-close" aria-label="Скрыть" onClick={() => setUndoMove(null)}>✕</button>
+        </div>
+      )}
 
       {/* Правка дела и дат заказа — отдельным окном, как редактор модуля. */}
       {(editEvent || editProject) && (
