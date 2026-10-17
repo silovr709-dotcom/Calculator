@@ -1,5 +1,6 @@
 import type { KitchenModule, ModuleDefaults, Pricebook, PriceItem, ProjectLine, SlotChoice, SlotKey } from '../types';
 import { lineFromItem } from './engine';
+import { moduleLinePrefix } from './clientOffer';
 import { inferDimensionSurcharges } from './surcharges';
 import { uid } from './storage';
 
@@ -30,9 +31,16 @@ export interface ModulePreset {
   facades: number;
   drawers: number;
   shelves: number;
+  widthMm?: number;
+  heightMm?: number;
+  depthMm?: number;
 }
 
 export const MODULE_PRESETS: ModulePreset[] = [
+  { id: 'base-600', label: 'Низ 600', type: 'Нижний шкаф', name: 'Низ 600', facades: 2, drawers: 0, shelves: 1, widthMm: 600, heightMm: 720, depthMm: 560 },
+  { id: 'wall-800', label: 'Верх 800', type: 'Верхний шкаф', name: 'Верх 800', facades: 2, drawers: 0, shelves: 1, widthMm: 800, heightMm: 720, depthMm: 320 },
+  { id: 'drawers-600', label: 'Ящики 600', type: 'Нижний шкаф', name: 'Ящики 600', facades: 3, drawers: 3, shelves: 0, widthMm: 600, heightMm: 720, depthMm: 560 },
+  { id: 'tall-600', label: 'Пенал 600', type: 'Пенал', name: 'Пенал 600', facades: 2, drawers: 0, shelves: 4, widthMm: 600, heightMm: 2140, depthMm: 560 },
   { id: 'base-2-doors', label: 'Нижний шкаф · 2 двери', type: 'Нижний шкаф', name: 'Нижний шкаф · 2 двери', facades: 2, drawers: 0, shelves: 1 },
   { id: 'base-1-door-drawer', label: 'Нижний шкаф · ящик + дверь', type: 'Нижний шкаф', name: 'Нижний шкаф · ящик + дверь', facades: 2, drawers: 1, shelves: 0 },
   { id: 'base-2-drawers', label: 'Нижний шкаф · 2 ящика', type: 'Нижний шкаф', name: 'Нижний шкаф · 2 ящика', facades: 2, drawers: 2, shelves: 0 },
@@ -97,12 +105,16 @@ export function newModule(type: string): KitchenModule {
 
 /** Создаёт заготовку конструкции; корпус, фасады и фурнитура всё ещё выбираются явно. */
 export function moduleFromPreset(preset: ModulePreset): KitchenModule {
+  const base = newModule(preset.type);
   return {
-    ...newModule(preset.type),
+    ...base,
     name: preset.name,
     facades: preset.facades,
     drawers: preset.drawers,
     shelves: preset.shelves,
+    widthMm: preset.widthMm ?? base.widthMm,
+    heightMm: preset.heightMm ?? base.heightMm,
+    depthMm: preset.depthMm ?? base.depthMm,
   };
 }
 
@@ -347,7 +359,7 @@ export function checkModule(m: KitchenModule, defaults: ModuleDefaults, priceboo
 export function moduleToLines(m: KitchenModule, defaults: ModuleDefaults, pricebook: Pricebook): ProjectLine[] {
   const out: ProjectLine[] = [];
   const pbId = pricebook.meta.id;
-  const tag = `Модуль: ${m.name}`;
+  const tag = moduleLinePrefix(m.name, m.id);
   const push = (item: PriceItem | null, qty: number, params?: { widthMm: number; heightMm: number }, extra?: string) => {
     if (!item || qty <= 0 || item.priceKind !== 'fixed') return;
     const line = lineFromItem(item, pbId, qty, params ?? {});

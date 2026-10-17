@@ -1,12 +1,15 @@
 // Локальное хранилище: проекты, настройки, шаблоны, загруженные версии прайса.
 // Всё хранится отдельно от исходного прайса; наценки не влияют на цены Висмы.
-import type { Project, ProjectSettings, Template, Pricebook, KbArticle } from '../types';
+import type { CalendarEvent, NotifySettings, ClientProfile, Project, ProjectSettings, Template, Pricebook, KbArticle } from '../types';
 
 const K_PROJECTS = 'recept.projects.v1';
 const K_SETTINGS = 'recept.settings.v1';
 const K_TEMPLATES = 'recept.templates.v1';
 const K_KNOWLEDGE = 'recept-kb-articles';
+const K_CLIENTS = 'recept.clients.v1';
 const K_PRICEBOOKS = 'recept.pricebooks.v1'; // загруженные (кроме встроенного)
+const K_EVENTS = 'recept.events.v1';         // календарь: дела, не привязанные к проекту
+const K_NOTIFY = 'recept.notify.v2';         // настройки напоминаний — свои на каждом устройстве
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -18,18 +21,74 @@ function read<T>(key: string, fallback: T): T {
   }
 }
 let quotaWarned = false;
-function write(key: string, value: unknown): boolean {
+let cacheDegraded = false;
+let serverBacked = false;
+let storageNote = '';
+
+/** Приложение работает на собственном сервере: браузерная копия — только кэш. */
+export function setStorageServerBacked(on: boolean): void {
+  serverBacked = on;
+}
+
+/** Работает ли приложение на собственном сервере (там база — источник правды). */
+export function isStorageServerBacked(): boolean {
+  return serverBacked;
+}
+
+/** Пояснение для интерфейса, если пришлось урезать локальный кэш. */
+export function getStorageNote(): string {
+  return storageNote;
+}
+
+// Тяжёлые ключи: проекты с фотографиями и загруженные прайсы.
+const HEAVY_KEYS = new Set<string>([K_PROJECTS, K_PRICEBOOKS]);
+
+function tryWrite(key: string, raw: string): boolean {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    localStorage.setItem(key, raw);
     return true;
   } catch {
-    // квота localStorage исчерпана — данные этого сохранения НЕ записаны
+    return false;
+  }
+}
+
+function write(key: string, value: unknown): boolean {
+  // На своём сервере после переполнения не пытаемся снова и снова сериализовать мегабайты.
+  if (cacheDegraded && serverBacked && HEAVY_KEYS.has(key)) return false;
+
+  const raw = JSON.stringify(value);
+  if (tryWrite(key, raw)) return true;
+
+  // 1. Освобождаем место: кэш прайсов всегда можно загрузить заново.
+  if (key !== K_PRICEBOOKS) {
+    try { localStorage.removeItem(K_PRICEBOOKS); } catch { /* нечего чистить */ }
+    if (tryWrite(key, raw)) {
+      cacheDegraded = true;
+      storageNote = 'Кэш прайсов в браузере очищен, чтобы освободить место. На ваши данные это не влияет.';
+      return true;
+    }
+  }
+
+  cacheDegraded = true;
+
+  // 2. Данные уже лежат на сервере — браузерная копия не нужна и терять нечего.
+  //    Неполную копию удаляем, чтобы при следующем запуске она не перетёрла серверную версию.
+  if (serverBacked) {
+    try { localStorage.removeItem(key); } catch { /* уже нет */ }
+    storageNote = 'Память браузера переполнена (в ней помещается всего несколько мегабайт), поэтому локальная копия базы отключена. Все проекты сохраняются на сервере — работайте как обычно.';
     if (!quotaWarned) {
       quotaWarned = true;
-      alert('Хранилище браузера переполнено — последнее изменение НЕ сохранено.\n\nЧаще всего это из-за большого количества фото в проектах: удалите лишние фото или выгрузите проект в файл (.json) через Экспорт.');
+      console.warn('[recept] localStorage переполнен: работаем напрямую с сервером');
     }
     return false;
   }
+
+  // 3. Сервера нет — это действительно потеря данных, предупреждаем громко.
+  if (!quotaWarned) {
+    quotaWarned = true;
+    alert('Хранилище браузера переполнено — последнее изменение НЕ сохранено.\n\nЧаще всего это из-за большого количества фото в проектах: удалите лишние фото или выгрузите проект в файл (.json) через Экспорт.');
+  }
+  return false;
 }
 
 // ---------- настройки по умолчанию: НИЧЕГО не придумано, поля пустые ----------
@@ -51,6 +110,9 @@ export const saveGlobalSettings = (s: ProjectSettings) => write(K_SETTINGS, s);
 export const loadProjects = (): Project[] => read<Project[]>(K_PROJECTS, []);
 export const saveProjects = (p: Project[]) => write(K_PROJECTS, p);
 
+export const loadClientProfiles = (): ClientProfile[] => read<ClientProfile[]>(K_CLIENTS, []);
+export const saveClientProfiles = (p: ClientProfile[]) => write(K_CLIENTS, p);
+
 export const loadTemplates = (): Template[] => read<Template[]>(K_TEMPLATES, []);
 export const saveTemplates = (t: Template[]) => write(K_TEMPLATES, t);
 
@@ -59,6 +121,12 @@ export const saveKbArticles = (a: KbArticle[]) => write(K_KNOWLEDGE, a);
 
 export const loadStoredPricebooks = (): Pricebook[] => read<Pricebook[]>(K_PRICEBOOKS, []);
 export const saveStoredPricebooks = (p: Pricebook[]) => write(K_PRICEBOOKS, p);
+
+export const loadCalendarEvents = (): CalendarEvent[] => read<CalendarEvent[]>(K_EVENTS, []);
+export const saveCalendarEvents = (events: CalendarEvent[]) => write(K_EVENTS, events);
+
+export const loadNotifySettings = (): Partial<NotifySettings> | null => read<Partial<NotifySettings> | null>(K_NOTIFY, null);
+export const saveNotifySettings = (value: NotifySettings) => write(K_NOTIFY, value);
 
 export function uid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -81,6 +149,7 @@ export interface Backup {
   version: 1;
   exportedAt: string;
   projects: Project[];
+  clients?: ClientProfile[];
   settings: ProjectSettings;
   templates: Template[];
   pricebooks: Pricebook[]; // загруженные версии прайса (встроенный не нужен)
@@ -93,6 +162,7 @@ export function makeBackup(): Backup {
     version: 1,
     exportedAt: new Date().toISOString(),
     projects: loadProjects(),
+    clients: loadClientProfiles(),
     settings: loadGlobalSettings(),
     templates: loadTemplates(),
     pricebooks: loadStoredPricebooks(),
@@ -108,10 +178,11 @@ export function restoreBackup(raw: string): string {
     throw new Error('Это не файл резервной копии РЕцепта (ожидается kind=recept-backup).');
   }
   const okP = saveProjects(b.projects);
+  const okC = saveClientProfiles(b.clients ?? []);
   const okS = saveGlobalSettings(b.settings ?? defaultSettings());
   const okT = saveTemplates(b.templates ?? []);
   const okB = saveStoredPricebooks(b.pricebooks ?? []);
   const okK = saveKbArticles(b.kbArticles ?? []);
-  if (!okP || !okS || !okT || !okB || !okK) throw new Error('Не хватило места в хранилище браузера — данные восстановлены не полностью.');
-  return `Восстановлено: проектов ${b.projects.length}, шаблонов ${(b.templates ?? []).length}, версий прайса ${(b.pricebooks ?? []).length} (копия от ${b.exportedAt.slice(0, 10)})`;
+  if (!okP || !okC || !okS || !okT || !okB || !okK) throw new Error('Не хватило места в хранилище браузера — данные восстановлены не полностью.');
+  return `Восстановлено: проектов ${b.projects.length}, клиентов ${(b.clients ?? []).length}, шаблонов ${(b.templates ?? []).length}, версий прайса ${(b.pricebooks ?? []).length} (копия от ${b.exportedAt.slice(0, 10)})`;
 }

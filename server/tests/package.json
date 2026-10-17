@@ -1,0 +1,13 @@
+{
+  "name": "recept-server-tests",
+  "private": true,
+  "type": "module",
+  "description": "Проверка PHP-API калькулятора на настоящем PHP 8.2 (WebAssembly) — не требует PHP на компьютере",
+  "scripts": {
+    "test": "node api.test.mjs"
+  },
+  "devDependencies": {
+    "@php-wasm/node": "^3.1.54",
+    "@php-wasm/universal": "^3.1.54"
+  }
+}

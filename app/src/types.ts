@@ -128,12 +128,284 @@ export interface ProjectSettings {
 
 export type WizardStepId = 'data' | 'shape' | 'materials' | 'modules' | 'review' | 'total';
 
+export type ClientOfferPresentationMode = 'brief' | 'detailed' | 'technical';
+export type ClientOfferModuleDetailMode = 'summary' | 'compact' | 'full';
+/** Уровень детализации КП — одна ручка вместо набора флажков:
+ *  rollup   — только сводная ведомость: сколько модулей, петель, направляющих, м² фасадов и какие;
+ *  sections — сводка + смета по разделам + перечень модулей без состава;
+ *  modules  — состав по модулям, фурнитура общими строками по проекту;
+ *  full     — всё: каждая строка внутри каждого модуля (техническое приложение). */
+export type ClientOfferDetailLevel = 'rollup' | 'sections' | 'modules' | 'full';
+
+export interface ClientDocumentPackageSettings {
+  /** Включить титульное коммерческое предложение/сводку. */
+  includeOffer?: boolean;
+  /** Включить Эскиз PRO с клиентскими слоями. */
+  includeSketch?: boolean;
+  /** Включить компактную спецификацию состава. */
+  includeSpecification?: boolean;
+  /** Включить фирменный договор из шаблона клиента. */
+  includeContract?: boolean;
+  /** Включить товарный чек в Word по образцу клиента. */
+  includeReceipt?: boolean;
+  /** Компактный режим: меньше пояснений и плотнее таблицы. */
+  compact?: boolean;
+  /** Показывать поверх эскиза сводку: петли, м² фасадов, корпуса и ключевые суммы. */
+  sketchSummaryOverlay?: boolean;
+  /** Где показывать эту сводку: нигде, только на первом эскизе или на всех. */
+  sketchSummaryMode?: 'off' | 'first' | 'all';
+}
+
 export interface ClientOfferSettings {
   validUntil?: string;
   paymentTerms?: string;
   installation?: string;
   delivery?: string;
   notes?: string;
+  /** Реквизиты/название продавца для пакета документов; позже можно заменить вашим шаблоном договора. */
+  sellerName?: string;
+  sellerDetails?: string;
+  contractNumber?: string;
+  contractCity?: string;
+  /** Сумма предоплаты/задатка для фирменного договора. Если пусто — берём процент из условий оплаты или оставляем прочерк. */
+  contractPrepayment?: string;
+  /** Сумма доплаты для фирменного договора. Если пусто — считаем от итога и предоплаты, когда это возможно. */
+  contractRemainder?: string;
+  clientContacts?: string;
+  clientPassport?: string;
+  clientAddress?: string;
+  clientPhone?: string;
+  clientEmail?: string;
+  productionTerms?: string;
+  warranty?: string;
+  documentPackage?: ClientDocumentPackageSettings;
+  /** Режим детализации клиентского КП: короткое письмо, рабочая детализация или техническое приложение. */
+  presentationMode?: ClientOfferPresentationMode;
+  /** false — скрыть суммы внутри комплектации и оставить только итоги модулей/проекта. */
+  showDetailPrices?: boolean;
+  /** Насколько подробно раскрывать состав каждого модуля в КП. */
+  moduleDetailMode?: ClientOfferModuleDetailMode;
+  /** Уровень детализации КП: от короткой ведомости до полного приложения. */
+  detailLevel?: ClientOfferDetailLevel;
+  /** Ручная правка количества прямо в КП: ключ позиции → количество. Сумма пересчитывается по цене за единицу. */
+  lineQty?: Record<string, number>;
+  /** Ручная правка суммы позиции прямо в КП: ключ позиции → сумма для клиента. */
+  lineSums?: Record<string, number>;
+  /** true/undefined — петли, опоры, ящики и другую фурнитуру показывать общими строками по проекту. */
+  aggregateHardware?: boolean;
+  /** Ручные названия позиций в КП: ключ — id позиции прайса, значение — текст для клиента. */
+  lineNames?: Record<string, string>;
+  /** Вступительный абзац блока «Кратко по проекту», если менеджер переписал его прямо в КП. */
+  summaryNote?: string;
+}
+
+/** Снимок КП для истории согласований: не хранит весь проект, только контрольные цифры и контекст. */
+export interface ClientOfferSnapshot {
+  id: string;
+  createdAt: string;
+  name: string;
+  clientTotal: number;
+  costTotal: number;
+  modulesCount: number;
+  linesCount: number;
+  issuesCount: number;
+  variantId?: string | null;
+  note?: string;
+}
+
+export type OrderWorkflowStatus =
+  | 'draft'
+  | 'calculating'
+  | 'offerSent'
+  | 'clientThinking'
+  | 'approved'
+  | 'techCheck'
+  | 'factorySent'
+  | 'production'
+  | 'ready'
+  | 'delivered'
+  | 'rejected';
+
+export interface OrderWorkflow {
+  status: OrderWorkflowStatus;
+  nextAction?: string;
+  nextContactAt?: string;
+  managerComment?: string;
+  updatedAt?: string;
+  /** Кто ведёт сделку: логин или имя сотрудника. */
+  assignee?: string;
+  /** Причина отказа — нужна, чтобы считать, почему теряем заказы. */
+  lostReason?: string;
+}
+
+/** Плановые даты по заказу: замер, готовность, доставка и монтаж. */
+export type ScheduleStatus = 'planned' | 'confirmed' | 'done' | 'problem';
+
+export interface ProjectSchedule {
+  measureAt?: string;
+  readyAt?: string;
+  deliveryAt?: string;
+  installAt?: string;
+  /** Сколько дней занимает монтаж, по умолчанию 1. */
+  installDays?: number;
+  /** Бригада или монтажник. */
+  team?: string;
+  address?: string;
+  note?: string;
+  status?: ScheduleStatus;
+  /** За сколько минут напомнить про монтаж. Пусто — берутся общие настройки. */
+  reminders?: number[];
+  /** Телефон на объекте — попадает в подписку календаря и в наряд. */
+  phone?: string;
+  /** Файлы к монтажу: эскизы, схемы, фото объекта. */
+  attachments?: CalendarAttachment[];
+}
+
+/** Своё дело в календаре: замер, выезд, встреча, монтаж — без привязки к проекту. */
+export type CalendarEventKind = 'measure' | 'delivery' | 'install' | 'meeting' | 'call' | 'service' | 'other';
+
+/** Файл, прикреплённый к делу: фото, PDF, схема. Хранится на хостинге. */
+export interface CalendarAttachment {
+  fileId: string;
+  name: string;
+  size?: number;
+  mime?: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  kind: CalendarEventKind;
+  /** Дата начала, YYYY-MM-DD. */
+  date: string;
+  /** Сколько дней занимает дело, по умолчанию 1. */
+  days?: number;
+  timeStart?: string;
+  timeEnd?: string;
+  /** Кому поручено: логины или имена сотрудников. Пусто — общее дело. */
+  assignees: string[];
+  clientName?: string;
+  /** Телефон клиента: уезжает в подписку календаря, чтобы звонить одним касанием. */
+  clientPhone?: string;
+  address?: string;
+  note?: string;
+  attachments?: CalendarAttachment[];
+  projectId?: string;
+  status: ScheduleStatus;
+  done?: boolean;
+  /** За сколько минут до начала напомнить. Пусто — берутся настройки по умолчанию. */
+  reminders?: number[];
+  createdAt: string;
+  createdBy?: string;
+  updatedAt: string;
+}
+
+/** Настройки уведомлений — свои на каждом устройстве. */
+export interface NotifySettings {
+  /** За сколько минут напоминать по умолчанию. Значения любые, количество не ограничено. */
+  defaults: number[];
+  /** Свои интервалы для отдельных типов дел: замер, монтаж, звонок и т. д. */
+  byKind?: Partial<Record<CalendarEventKind, number[]>>;
+  /** Повторять напоминание каждые N минут, пока дело не отмечено (0 — не повторять). */
+  repeatEveryMin?: number;
+  /** Сколько повторов максимум. */
+  repeatCount?: number;
+  /** Во сколько напоминать о делах без времени (час суток). */
+  allDayHour: number;
+  /** Не беспокоить раньше этого часа. */
+  quietFrom: number;
+  /** Не беспокоить позже этого часа. */
+  quietUntil: number;
+  /** Напоминать о датах заказов (монтаж, доставка, замер из проекта). */
+  includeProjects: boolean;
+}
+
+/** Тип задачи в CRM: от него зависит значок и подсказка. */
+export type CrmTaskKind = 'call' | 'meet' | 'measure' | 'docs' | 'payment' | 'delivery' | 'other';
+
+export interface CrmTask {
+  id: string;
+  /** Кто поставил задачу: 'auto:<правило>' — автоматика, пусто — человек. */
+  origin?: string;
+  title: string;
+  kind: CrmTaskKind;
+  /** Срок в формате YYYY-MM-DD. Без срока задача считается «когда-нибудь». */
+  dueAt?: string;
+  done?: boolean;
+  doneAt?: string;
+  assignee?: string;
+  comment?: string;
+  createdAt: string;
+  createdBy?: string;
+}
+
+export type ClientTag = 'hot' | 'discount' | 'repeat' | 'install' | 'problem' | 'designer' | string;
+
+export type ClientHistoryKind = 'note' | 'status' | 'contact' | 'document' | 'payment' | 'project';
+
+export interface ClientHistoryEntry {
+  id: string;
+  createdAt: string;
+  kind: ClientHistoryKind;
+  title: string;
+  text?: string;
+  projectId?: string;
+}
+
+export type ClientPaymentStatus = 'none' | 'prepaid' | 'paid' | 'debt';
+
+export interface ClientProjectPayment {
+  status?: ClientPaymentStatus;
+  prepayment?: number | null;
+  paidTotal?: number | null;
+  paymentDate?: string;
+  comment?: string;
+  /** Отдельные платежи: предоплата, доплата, доп. работы. Сумма считается по ним. */
+  entries?: PaymentEntry[];
+}
+
+export type PaymentKind = 'prepay' | 'final' | 'extra' | 'refund';
+
+export interface PaymentEntry {
+  id: string;
+  /** Сумма в рублях; для возврата — отрицательная. */
+  amount: number;
+  at: string;
+  kind: PaymentKind;
+  comment?: string;
+  createdBy?: string;
+}
+
+export type ClientDocumentState = 'none' | 'created' | 'sent' | 'approved';
+
+export interface ClientProjectDocuments {
+  offer?: ClientDocumentState;
+  contract?: ClientDocumentState;
+  receipt?: ClientDocumentState;
+  package?: ClientDocumentState;
+  factoryBlank?: ClientDocumentState;
+  sketch?: ClientDocumentState;
+  updatedAt?: string;
+  comment?: string;
+}
+
+export interface ClientProfile {
+  id: string;
+  name: string;
+  phones: string[];
+  emails: string[];
+  objectAddress?: string;
+  deliveryAddress?: string;
+  passport?: string;
+  contractDetails?: string;
+  managerComment?: string;
+  source?: string;
+  tags: ClientTag[];
+  paymentsByProject?: Record<string, ClientProjectPayment>;
+  documentsByProject?: Record<string, ClientProjectDocuments>;
+  history: ClientHistoryEntry[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface MeasurementWall {
@@ -141,6 +413,13 @@ export interface MeasurementWall {
   name: string;
   lengthMm: number | null;
   note?: string;
+  /** Координаты стены на плане помещения сверху, в миллиметрах. Отсутствуют у старых проектов. */
+  x1Mm?: number | null;
+  y1Mm?: number | null;
+  x2Mm?: number | null;
+  y2Mm?: number | null;
+  /** Толщина стены на плане, мм. Только для отображения. */
+  thicknessMm?: number | null;
 }
 
 export interface MeasurementOpening {
@@ -152,6 +431,8 @@ export interface MeasurementOpening {
   widthMm: number | null;
   heightMm: number | null;
   sillHeightMm?: number | null;
+  /** Направление открывания двери на плане. Для окон/проёмов обычно не используется. */
+  swing?: 'left-in' | 'right-in' | 'left-out' | 'right-out' | 'none';
   note?: string;
 }
 
@@ -229,30 +510,153 @@ export interface ProjectPhoto {
   measurementAnnotations?: MeasurementPhotoAnnotation[];
 }
 
-/** Внешний вид и включение автоматически построенного эскиза кухни. */
-export type KitchenSketchStyleId = 'white-oak' | 'graphite-marble' | 'cashmere-stone' | 'scandi-wotan' | 'emerald-gold';
-
 /** Планировка кухни: прямая, Г-образная (левая + задняя стены), П-образная (три стены). */
 export type KitchenLayoutShape = 'straight' | 'l' | 'u';
 
 /** Стена, вдоль которой стоит модуль. */
 export type KitchenWall = 'left' | 'back' | 'right';
 
-/** Вид эскиза: фасадные развёртки стен, план сверху или объёмный 3D-вид. */
-export type KitchenSketchView = 'elevation' | 'plan' | '3d';
-
 export interface KitchenSketchSettings {
-  styleId?: KitchenSketchStyleId;
-  /** false — не выводить эскиз в клиентском КП; отсутствие поля = выводить */
-  showInClient?: boolean;
   /** Планировка кухни; отсутствие поля = прямая (совместимость со старыми проектами). */
   shape?: KitchenLayoutShape;
-  /** Вид эскиза по умолчанию; отсутствие поля = фасадные развёртки. */
-  view?: KitchenSketchView;
   /** Измеренные длины стен, мм. Используются только для подсказок и планировщика. */
   wallLengthsMm?: Partial<Record<KitchenWall, number | null>>;
   /** Измеренная высота помещения, мм. */
   roomHeightMm?: number | null;
+}
+
+export interface EskizProSnapshot {
+  id: string;
+  title: string;
+  updatedAt: string;
+  /** Полный JSON проекта внешнего инструмента Эскиз PRO. Храним как snapshot, чтобы КП/экспорт проекта не зависели от IndexedDB браузера. */
+  project: unknown;
+}
+
+export type EskizCommunicationKind =
+  | 'socket'
+  | 'socketDouble'
+  | 'socketTriple'
+  | 'switch'
+  | 'switchDouble'
+  | 'electricOutput'
+  | 'waterCold'
+  | 'waterHot'
+  | 'sewer'
+  | 'gas'
+  | 'ventilation'
+  | 'hood'
+  | 'other';
+
+export type EskizCommunicationAnchorKind = 'left' | 'right' | 'top' | 'bottom' | 'custom';
+
+export interface EskizCommunicationDistance {
+  id: string;
+  label: string;
+  anchor: EskizCommunicationAnchorKind;
+  valueMm: number | null;
+  /** Для anchor='custom' — точка на snapshot Эскиз PRO в координатах исходного изображения. */
+  anchorX?: number | null;
+  anchorY?: number | null;
+  /** Ручное положение плашки подписи линии расстояния на snapshot; если пусто — плашка по центру линии. */
+  labelX?: number | null;
+  labelY?: number | null;
+  note?: string;
+}
+
+export interface EskizCommunicationMarker {
+  id: string;
+  /** id snapshot Эскиз PRO, к которому относится отметка. */
+  eskizId: string;
+  kind: EskizCommunicationKind;
+  name: string;
+  /** Координаты на snapshot Эскиз PRO в пикселях исходного изображения. */
+  x: number;
+  y: number;
+  widthMm?: number | null;
+  heightMm?: number | null;
+  diameterMm?: number | null;
+  depthMm?: number | null;
+  /** Визуальный цвет маркера/линий коммуникации. Если пусто — используется цвет типа коммуникации. */
+  color?: string | null;
+  /** Визуальный масштаб условного значка на эскизе. 1 = стандартный размер. */
+  visualScale?: number | null;
+  /** false — не показывать рядом с маркером плашку с габаритом/высотой; линии расстояний остаются. */
+  showSizeBadge?: boolean;
+  /** Высота центра/низа коммуникации от пола, если известна. */
+  elevationMm?: number | null;
+  distances?: EskizCommunicationDistance[];
+  note?: string;
+  /** false — техническая отметка остаётся только внутри проекта и не попадает в КП. */
+  showInClient?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type EskizLayerKey = 'dimensions' | 'modules' | 'hinges' | 'communications' | 'callouts' | 'comments' | 'equipment' | 'links';
+export type EskizLayerVisibility = Record<EskizLayerKey, boolean>;
+
+export interface EskizExportViewSettings {
+  /** false — не выводить фон/скрин проекта в PNG/PDF экспорте Эскиз PRO. */
+  showImage?: boolean;
+  /** false — скрыть все рабочие пометки в PNG/PDF экспорте Эскиз PRO. */
+  showAnnotations?: boolean;
+  /** false — скрыть вспомогательные точки/направляющие в редакторе и экспорте, когда они поддерживаются. */
+  showHelpers?: boolean;
+  /** Видимость отдельных слоёв: размеры, модули, коммуникации, сноски, комментарии, техника, ссылки. */
+  layerVisibility?: Partial<EskizLayerVisibility>;
+}
+
+/**
+ * Что убрать именно при выгрузке PNG/PDF, не трогая видимость в самом редакторе.
+ * Элемент попадает в файл, только если он виден в редакторе И не выключен здесь.
+ */
+export interface EskizExportOverrides {
+  /** false — выгружать без фонового скрина. */
+  showImage?: boolean;
+  /** false у слоя — не выводить его в PNG/PDF (сноски, размеры, коммуникации и т. д.). */
+  layerVisibility?: Partial<EskizLayerVisibility>;
+  /** false — не печатать под эскизом список «Техника и ссылки». */
+  linkLegend?: boolean;
+}
+
+export interface EskizProIntegration {
+  linkedProjectIds?: string[];
+  activeProjectId?: string | null;
+  /** false — не показывать связанные эскизы в клиентском КП; отсутствие поля = показывать. */
+  showInClient?: boolean;
+  /** active — вставлять в КП только главный эскиз; all — вставлять все связанные snapshot. */
+  clientMode?: 'active' | 'all';
+  /** Как показывать маркеры модулей на выгружаемом/клиентском эскизе: полные плашки, компактные точки или скрыть. */
+  moduleMarkerMode?: 'full' | 'compact' | 'hidden';
+  /** false — скрыть плашки габаритов/высот рядом со всеми коммуникациями в редакторе, КП и экспортах. */
+  showCommunicationSizeBadges?: boolean;
+  /** Текущее состояние слоёв/фона Эскиз PRO; экспорт PNG/PDF повторяет то, что скрыто в редакторе. */
+  exportView?: EskizExportViewSettings;
+  /** Дополнительные выключатели только для выгрузки PNG/PDF: сноски, размеры, список техники. */
+  exportOverrides?: EskizExportOverrides;
+  /** Связка: ключ маркера Эскиз PRO (`eskizId:objectId`) → id KitchenModule в расчёте. */
+  moduleBindings?: Record<string, string>;
+  /** Коммуникации, нанесённые поверх snapshot: розетки, вода, канализация, газ, вентиляция и расстояния до точек. */
+  communications?: EskizCommunicationMarker[];
+  snapshots?: EskizProSnapshot[];
+}
+
+export interface FactoryBlankSketchSettings {
+  /** false — не вставлять Эскиз PRO в официальный Excel-бланк фабрики. Отсутствие поля = вставлять, если есть snapshot. */
+  enabled?: boolean;
+  /** Какой snapshot Эскиз PRO вставлять в левую область бланка; null/undefined = активный или последний. */
+  snapshotId?: string | null;
+  /** Несколько snapshot Эскиз PRO для выгрузки: в штатное поле идут коллажем, на лист Эскиз PRO — отдельными крупными картинками. */
+  snapshotIds?: string[];
+  /** Режим маркеров именно для фабричного Excel: можно сделать компактно или совсем убрать. */
+  moduleMarkerMode?: 'full' | 'compact' | 'hidden';
+  /** false — не добавлять в картинку фабричного бланка розетки/воду/газ/вентиляцию. */
+  showCommunications?: boolean;
+  /** false — скрыть плашки габаритов/высот рядом с коммуникациями именно в фабричном Excel-экспорте. */
+  showCommunicationSizeBadges?: boolean;
+  /** false — не добавлять отдельный лист с крупным эскизом, расшифровкой маркеров и проверками. Отсутствие поля = добавлять. */
+  includeTechSheet?: boolean;
 }
 
 export type KitchenChecklistKey = 'plinth' | 'baseboard' | 'worktop' | 'wallPanel';
@@ -275,6 +679,8 @@ export interface Project {
   id: string;
   name: string;
   client: string;
+  /** Связь с единой CRM-базой клиентов. Старые проекты связываются автоматически по телефону/имени. */
+  clientId?: string;
   date: string;       // ISO date
   comment: string;
   status: 'draft' | 'sent' | 'approved' | 'archived';
@@ -286,14 +692,24 @@ export interface Project {
   modules?: KitchenModule[];
   moduleDefaults?: ModuleDefaults;
   photos?: ProjectPhoto[];
-  /** Настройки эскиза. Необязательное поле сохраняет совместимость со старыми проектами. */
+  /** Технические параметры планировки/стен для проверки и планировщика. Старый автоэскиз удалён из UI. */
   sketch?: KitchenSketchSettings;
+  /** Связь с внешним инструментом Эскиз PRO: https://silovr709-dotcom.github.io/ESCIZ/ */
+  eskizPro?: EskizProIntegration;
+  /** Задачи CRM по сделке: звонки, замеры, документы, оплаты. */
+  tasks?: CrmTask[];
+  /** Плановые даты: замер, готовность, доставка, монтаж и бригада. */
+  schedule?: ProjectSchedule;
   /** Режим открытия проекта: мастер или привычные вкладки. */
   wizardMode?: 'wizard' | 'advanced';
   wizardStep?: WizardStepId;
   variants?: CalculationVariant[];
   selectedVariantId?: string;
   clientOffer?: ClientOfferSettings;
+  /** История сохранённых версий КП для сравнения и повторных согласований. */
+  clientOfferSnapshots?: ClientOfferSnapshot[];
+  /** Рабочий статус менеджера: следующий контакт, передача технологу/фабрике и комментарии. */
+  orderWorkflow?: OrderWorkflow;
   measurement?: MeasurementData;
   /** Подтверждённые пользователем «сознательные отсутствия» обязательных элементов кухни
    *  (например, кухня без стеновой панели и без плинтуса). Зафиксированное подтверждение
@@ -304,6 +720,8 @@ export interface Project {
   factoryBlankDrafts?: Record<string, Record<string, string>>;
   /** Лист 2 бланка — схема столешницы: детали и виды кромок (по инструкции фабрики). */
   worktopPlan?: WorktopPiece[];
+  /** Настройки вставки Эскиз PRO в официальный Excel-бланк фабрики. */
+  factoryBlankSketch?: FactoryBlankSketchSettings;
   createdAt: string;
   updatedAt: string;
 }
@@ -440,14 +858,29 @@ export interface Totals {
 /** Категории базы знаний. Список открытый — новые категории добавляются без миграций. */
 export type WorktopEdgeKind = 'pf' | 'pvc' | 'v' | 'eurozapil' | 'eurostyk';
 
+export interface WorktopDimensionLabelPosition {
+  /** Ручная позиция плашки размера в координатах схемы столешницы, мм. */
+  xMm: number;
+  yMm: number;
+}
+
 export interface WorktopPiece {
   id: string;
   name: string;
   lengthMm: number | null;
   widthMm: number | null;
   front: WorktopEdgeKind | null;
+  /** Задняя сторона. Пусто = фабрика применяет ПВХ 0,4 белая по умолчанию, но при необходимости сторону можно отметить явно. */
+  back?: WorktopEdgeKind | null;
   left: WorktopEdgeKind | null;
   right: WorktopEdgeKind | null;
+  /** Положение детали на схеме листа 2, в условных мм столешницы. Пусто = авто-раскладка. */
+  layoutXmm?: number | null;
+  layoutYmm?: number | null;
+  /** Повернуть деталь на 90° на визуальной схеме. Размеры в таблице остаются длина×ширина. */
+  rotated?: boolean;
+  /** Ручные позиции плашек размеров на схеме/в бланке столешницы. */
+  dimensionLabels?: Partial<Record<'horizontal' | 'vertical', WorktopDimensionLabelPosition>>;
 }
 
 export type KbCategory =

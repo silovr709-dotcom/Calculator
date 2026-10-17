@@ -1,52 +1,7 @@
-import type { KitchenLayoutShape, KitchenModule, KitchenSketchStyleId, KitchenSketchView, KitchenWall } from '../types';
+import type { KitchenLayoutShape, KitchenModule, KitchenWall } from '../types';
 
 /** Ряд в фасадной развёртке кухни. */
 export type SketchTier = 'base' | 'upper' | 'tall';
-
-export interface SketchStyle {
-  id: KitchenSketchStyleId;
-  name: string;
-  facade: string;
-  facadeDark: string;
-  body: string;
-  counter: string;
-  counterEdge: string;
-  handle: string;
-  accent: string;
-  line: string;
-  backsplash: string;
-  floor: string;
-}
-
-/** Готовые сочетания фасадов и столешницы для эскиза. */
-export const SKETCH_STYLES: SketchStyle[] = [
-  {
-    id: 'white-oak', name: 'Белый глянец / Дуб', facade: '#f8faf9', facadeDark: '#dce4df', body: '#f0f3f1',
-    counter: '#b7895d', counterEdge: '#855f3e', handle: '#52615b', accent: '#14655c', line: '#496057', backsplash: '#eaf0ed', floor: '#d6bd9d',
-  },
-  {
-    id: 'graphite-marble', name: 'Графит матовый / Чёрный мрамор', facade: '#3d4650', facadeDark: '#252c34', body: '#66717c',
-    counter: '#1f252b', counterEdge: '#080b0e', handle: '#cbd1d5', accent: '#9bb8ae', line: '#e2eaed', backsplash: '#d8dce0', floor: '#a7a09a',
-  },
-  {
-    id: 'cashmere-stone', name: 'Кашемир / Светлый камень', facade: '#cfc4b6', facadeDark: '#ac9e8c', body: '#e1dad0',
-    counter: '#ded8cd', counterEdge: '#a69a8a', handle: '#5e554d', accent: '#846d55', line: '#514941', backsplash: '#eee9e2', floor: '#c9c0b5',
-  },
-  {
-    id: 'scandi-wotan', name: 'Сканди / Дуб вотан', facade: '#edf1ed', facadeDark: '#d7dfd9', body: '#e8ece8',
-    counter: '#8d6246', counterEdge: '#5e3d29', handle: '#3e4d47', accent: '#567e6b', line: '#465a51', backsplash: '#f6f6f2', floor: '#b98c68',
-  },
-  {
-    id: 'emerald-gold', name: 'Изумруд / Золото', facade: '#17665d', facadeDark: '#0d493f', body: '#3c7a70',
-    counter: '#e8e1d5', counterEdge: '#af9f87', handle: '#bf913d', accent: '#bf913d', line: '#eaf5ef', backsplash: '#f2eee6', floor: '#bca789',
-  },
-];
-
-export const DEFAULT_SKETCH_STYLE: KitchenSketchStyleId = 'white-oak';
-
-export function getSketchStyle(id?: KitchenSketchStyleId): SketchStyle {
-  return SKETCH_STYLES.find((style) => style.id === id) ?? SKETCH_STYLES[0];
-}
 
 // ---------- Планировка и стены ----------
 
@@ -62,13 +17,6 @@ export const LAYOUT_SHAPES: LayoutShapeInfo[] = [
   { id: 'straight', name: 'Прямая', hint: 'Один ряд вдоль задней стены', walls: ['back'] },
   { id: 'l', name: 'Г-образная', hint: 'Левая и задняя стены', walls: ['left', 'back'] },
   { id: 'u', name: 'П-образная', hint: 'Левая, задняя и правая стены', walls: ['left', 'back', 'right'] },
-];
-
-/** Виды эскиза: развёртки стен, план сверху и объёмный вид. */
-export const SKETCH_VIEWS: { id: KitchenSketchView; label: string; short: string; hint: string }[] = [
-  { id: 'elevation', label: 'Развёртки стен', short: 'Фасад', hint: 'Фасадные развёртки всех активных стен' },
-  { id: 'plan', label: 'План сверху', short: 'План', hint: 'Вид сверху с расстановкой по стенам' },
-  { id: '3d', label: '3D · Объём', short: '3D', hint: 'Объёмный вид помещения' },
 ];
 
 export const DEFAULT_LAYOUT_SHAPE: KitchenLayoutShape = 'straight';

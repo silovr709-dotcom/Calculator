@@ -1,0 +1,227 @@
+name: Deploy to hosting (FTP)
+
+# Автообновление сайта на виртуальном хостинге reg.ru.
+#
+# Запускается САМ после каждого пуша в ветки main и arena/01a0ee6f-calculator,
+# а также вручную: вкладка Actions → Deploy to hosting (FTP) → Run workflow.
+#
+# Обязателен только ОДИН секрет репозитория
+# (Settings → Secrets and variables → Actions → New repository secret):
+#   FTP_PASSWORD  — пароль FTP на хостинге
+#
+# Остальное имеет готовые значения для текущего хостинга и переопределяется
+# секретами, только если что-то изменится:
+#   FTP_SERVER    — адрес FTP-сервера      (по умолчанию u3683615.isp.regruhosting.ru)
+#   FTP_USERNAME  — логин FTP              (по умолчанию u3683615)
+#   FTP_DIR       — папка сайта            (по умолчанию /www/u3683615.isp.regruhosting.ru/)
+#   SITE_URL      — адрес сайта для проверки после выкладки
+#   FTP_PROTOCOL  — ftp (по умолчанию), ftps или ftps-legacy
+
+on:
+  push:
+    branches:
+      - main
+      - arena/01a0ee6f-calculator
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Только показать, что будет залито, без изменений на хостинге'
+        type: boolean
+        default: false
+
+# Две выкладки одновременно по FTP делать нельзя — ждём завершения предыдущей.
+concurrency:
+  group: hosting-ftp
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-22.04
+    env:
+      FTP_SERVER: ${{ secrets.FTP_SERVER || 'u3683615.isp.regruhosting.ru' }}
+      FTP_USERNAME: ${{ secrets.FTP_USERNAME || 'u3683615' }}
+      FTP_DIR: ${{ secrets.FTP_DIR || '/www/u3683615.isp.regruhosting.ru/' }}
+      SITE_URL: ${{ secrets.SITE_URL || 'https://xn----itba1bdbcfp1b.xn--p1ai' }}
+      # Основной домен: проверяем его отдельно, чтобы видеть, когда заработали DNS и SSL.
+      PUBLIC_URL: ${{ secrets.PUBLIC_URL || 'https://xn----itba1bdbcfp1b.xn--p1ai' }}
+      FTP_PROTOCOL: ${{ secrets.FTP_PROTOCOL || 'ftp' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проверить, что пароль FTP задан
+        id: guard
+        env:
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          if [ -z "$FTP_PASSWORD" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Выкладка пропущена: нет секрета FTP_PASSWORD. Добавьте его в Settings → Secrets and variables → Actions → New repository secret."
+            exit 0
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+          echo "Хостинг: $FTP_USERNAME@$FTP_SERVER, папка $FTP_DIR"
+
+      - uses: actions/setup-node@v4
+        if: steps.guard.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - run: npm ci
+        if: steps.guard.outputs.ready == 'true'
+        working-directory: app
+
+      - run: npm run build:hosting
+        if: steps.guard.outputs.ready == 'true'
+        working-directory: app
+
+      # Хостинг иногда рвёт управляющее соединение FTP, поэтому пробуем до трёх раз.
+      - name: Залить файлы на хостинг (попытка 1)
+        id: ftp1
+        if: steps.guard.outputs.ready == 'true'
+        continue-on-error: true
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ env.FTP_SERVER }}
+          username: ${{ env.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ${{ env.FTP_PROTOCOL }}
+          server-dir: ${{ env.FTP_DIR }}
+          local-dir: ./release/site/
+          dry-run: ${{ inputs.dry_run == true }}
+          timeout: 120000
+          # Данные приложения и локальные настройки на хостинге трогать нельзя.
+          exclude: |
+            **/recept-data/**
+            **/api/config.php
+            **/.well-known/**
+
+      - name: Пауза перед второй попыткой
+        if: steps.guard.outputs.ready == 'true' && steps.ftp1.outcome == 'failure'
+        run: |
+          echo "::warning::FTP оборвал соединение. Повторяем через 90 секунд."
+          sleep 90
+
+      - name: Залить файлы на хостинг (попытка 2)
+        id: ftp2
+        if: steps.guard.outputs.ready == 'true' && steps.ftp1.outcome == 'failure'
+        continue-on-error: true
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ env.FTP_SERVER }}
+          username: ${{ env.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ${{ env.FTP_PROTOCOL }}
+          server-dir: ${{ env.FTP_DIR }}
+          local-dir: ./release/site/
+          dry-run: ${{ inputs.dry_run == true }}
+          timeout: 120000
+          # Данные приложения и локальные настройки на хостинге трогать нельзя.
+          exclude: |
+            **/recept-data/**
+            **/api/config.php
+            **/.well-known/**
+
+      - name: Пауза перед третьей попыткой
+        if: steps.guard.outputs.ready == 'true' && steps.ftp1.outcome == 'failure' && steps.ftp2.outcome == 'failure'
+        run: |
+          echo "::warning::Вторая попытка тоже не прошла. Ждём 3 минуты и пробуем последний раз."
+          sleep 180
+
+      - name: Залить файлы на хостинг (попытка 3)
+        id: ftp3
+        if: steps.guard.outputs.ready == 'true' && steps.ftp1.outcome == 'failure' && steps.ftp2.outcome == 'failure'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ env.FTP_SERVER }}
+          username: ${{ env.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ${{ env.FTP_PROTOCOL }}
+          server-dir: ${{ env.FTP_DIR }}
+          local-dir: ./release/site/
+          dry-run: ${{ inputs.dry_run == true }}
+          timeout: 120000
+          # Данные приложения и локальные настройки на хостинге трогать нельзя.
+          exclude: |
+            **/recept-data/**
+            **/api/config.php
+            **/.well-known/**
+
+      - name: Итог выкладки
+        if: steps.guard.outputs.ready == 'true'
+        run: |
+          if [ "${{ steps.ftp1.outcome }}" = "success" ] || [ "${{ steps.ftp2.outcome }}" = "success" ] || [ "${{ steps.ftp3.outcome }}" = "success" ]; then
+            echo "Файлы залиты."
+          else
+            echo "::error::Хостинг не принял файлы по FTP после трёх попыток. Проверьте FTP в панели хостинга."
+            exit 1
+          fi
+
+      - name: Проверить сертификат основного домена
+        if: steps.guard.outputs.ready == 'true'
+        continue-on-error: true
+        run: |
+          set +e
+          host="xn----itba1bdbcfp1b.xn--p1ai"
+          cert=$(echo | timeout 25 openssl s_client -servername "$host" -connect "$host:443" 2>/dev/null \
+            | openssl x509 -noout -subject -issuer -dates -ext subjectAltName 2>/dev/null | tr '\n' ' ')
+          echo "::notice::Сертификат домена: ${cert:-(не получен)}"
+          # Отдельно смотрим, как отвечает сайт по http и по https: так видно обрывы соединения.
+          for probe in "http://$host/build.json" "https://$host/build.json" "https://www.$host/build.json" "https://$host/kp/0123456789abcdef"; do
+            out=$(curl -sS -o /dev/null -w 'код=%{http_code} время=%{time_total}s' --max-time 20 "$probe" 2>&1 | tr '\n' ' ' | cut -c1-200)
+            echo "::notice::ОТВЕТ $probe -> $out"
+          done
+          issuer=$(printf '%s' "$cert" | grep -o 'issuer=[^ ]*.*' | cut -c1-200)
+          case "$issuer" in
+            *"Let's Encrypt"*|*"R1"*|*"R10"*|*"R11"*|*"E1"*|*"E5"*|*"E6"*)
+              echo "::notice::Сертификат домена выпущен Let's Encrypt — браузер не будет ругаться" ;;
+            *"$host"*|*u3683615*)
+              echo "::warning::На домене стоит самоподписанный сертификат ($issuer). В ispmanager: Сайты → Изменить → SSL-сертификат → выберите выпущенный Let's Encrypt" ;;
+            "")
+              echo "Сертификат получить не удалось — возможно, сайт пока не отвечает по https." ;;
+            *)
+              echo "::notice::Издатель сертификата: $issuer" ;;
+          esac
+          exit 0
+
+      - name: Проверить сайт после выкладки
+        if: ${{ steps.guard.outputs.ready == 'true' && inputs.dry_run != true }}
+        run: |
+          set +e
+          short="${GITHUB_SHA:0:7}"
+          api_ok=no
+          build_ok=no
+          for attempt in 1 2 3 4; do
+            health=$(curl -fksS --max-time 30 "$SITE_URL/api/index.php?r=health")
+            if [ $? -eq 0 ]; then
+              case "$health" in *'"ok":true'*) api_ok=yes ;; esac
+            fi
+            build=$(curl -fksS --max-time 30 "$SITE_URL/build.json?nocache=$GITHUB_RUN_ID")
+            if [ $? -eq 0 ]; then
+              echo "build.json на сайте: $build"
+              case "$build" in *"$GITHUB_SHA"*) build_ok=yes ;; esac
+            fi
+            if [ "$api_ok" = yes ] && [ "$build_ok" = yes ]; then
+              echo "::notice::Сайт обновлён до коммита $short и отвечает: $SITE_URL"
+              # Основной домен: отдельно сообщаем, виден ли он и валиден ли сертификат.
+              if curl -fsS --max-time 20 "$PUBLIC_URL/build.json?nocache=$GITHUB_RUN_ID" >/dev/null 2>&1; then
+                echo "::notice::Домен $PUBLIC_URL работает, сертификат принят браузерной проверкой"
+              elif curl -fksS --max-time 20 "$PUBLIC_URL/build.json?nocache=$GITHUB_RUN_ID" >/dev/null 2>&1; then
+                echo "::warning::Домен $PUBLIC_URL отвечает, но сертификат ещё не выпущен или не применился"
+              else
+                echo "Домен $PUBLIC_URL пока не отвечает — DNS пока не разошлись."
+              fi
+              exit 0
+            fi
+            echo "Попытка $attempt: api=$api_ok, версия=$build_ok. Ждём 15 с…"
+            sleep 15
+          done
+          if [ "$build_ok" != yes ]; then
+            echo "::error::На сайте не видно свежей версии ($short). Скорее всего, файлы уехали не в ту папку: проверьте секрет FTP_DIR (сейчас $FTP_DIR) и откройте $SITE_URL/build.json"
+            exit 1
+          fi
+          echo "::warning::Версия на сайте свежая, но $SITE_URL/api/index.php?r=health не ответил. Откройте $SITE_URL/api/index.php?r=check"

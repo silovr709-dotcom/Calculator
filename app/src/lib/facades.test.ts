@@ -30,6 +30,22 @@ describe('размеры фасадов по техничке Висмы', () =>
     ]);
   });
 
+  it('для стола 2 двери + ящик не делает все фасады полноширинными', () => {
+    const result = inferFacadeSpec(newModule('Нижний шкаф'), body('261'))!;
+    expect(result.parts.map((part) => [part.kind, part.widthMm, part.heightMm])).toEqual([
+      ['drawer', 596, 176], ['door', 296, 536], ['door', 296, 536],
+    ]);
+  });
+
+  it('уважает ручное количество фасадов в Эскиз PRO при пересчёте рекомендации', () => {
+    const module = { ...newModule('Нижний шкаф'), facades: 1, drawers: 0, facadeSpecStatus: 'manual' as const };
+    const result = inferFacadeSpec(module, body('224'))!;
+    expect(result.confidence).toBe('suggestion');
+    expect(result.parts.map((part) => [part.kind, part.widthMm, part.heightMm])).toEqual([
+      ['door', 596, 716],
+    ]);
+  });
+
   it('для стола с 3 ящиками сохраняет ширину всех фасадов и техническую разбивку 176+176+356', () => {
     const result = inferFacadeSpec(newModule('Нижний шкаф'), body('251'))!;
     expect(result.parts.map((part) => [part.widthMm, part.heightMm, part.kind])).toEqual([
@@ -49,6 +65,14 @@ describe('размеры фасадов по техничке Висмы', () =>
     const result = inferFacadeSpec({ ...newModule('Нижний шкаф'), heightMm: 800 }, body('251'))!;
     expect(result.parts.map((part) => part.heightMm)).toEqual([176, 176, 436]);
     expect(result.confidence).toBe('suggestion');
+  });
+
+  it('для пенала 4 двери не делит ширину фасада на все 4 створки подряд', () => {
+    const result = inferFacadeSpec(newModule('Пенал'), body('302'))!;
+    expect(result.confidence).toBe('suggestion');
+    expect(result.parts.map((part) => [part.widthMm, part.heightMm, part.kind])).toEqual([
+      [346, 1006, 'door'], [346, 1006, 'door'], [346, 1006, 'door'], [346, 1006, 'door'],
+    ]);
   });
 
   it('видит устаревшую техническую разбивку даже без статуса outdated', () => {

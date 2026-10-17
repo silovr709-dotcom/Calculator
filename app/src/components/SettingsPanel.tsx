@@ -107,12 +107,17 @@ export default function SettingsPanel(props: {
               </div>
             );
           })}
-          <div className="expense-presets">
-            <button className="btn ghost tiny" onClick={() => addPreset('Сборка', { percent: 10 })}>+ Сборка 10%</button>
-            <button className="btn ghost tiny" onClick={() => addPreset('Доставка', { amount: null })}>+ Доставка</button>
-            <button className="btn ghost tiny" onClick={() => addPreset('Дизайнеру', { percent: 10, toClient: false })}>+ Дизайнеру 10%</button>
-            <button className="btn ghost tiny" onClick={() => addPreset('Подъём на этаж', { amount: null })}>+ Подъём на этаж</button>
-            <button className="btn ghost" onClick={() => addPreset('')}>+ Свой расход</button>
+          <div className="expense-presets system-action-strip">
+            <button className="btn primary" onClick={() => addPreset('')}>+ Свой расход</button>
+            <div className="dropdown action-dropdown wide">
+              <button className="btn ghost" type="button">Типовые расходы ▾</button>
+              <div className="dropdown-menu">
+                <button type="button" onClick={() => addPreset('Сборка', { percent: 10 })}>Сборка 10%</button>
+                <button type="button" onClick={() => addPreset('Доставка', { amount: null })}>Доставка</button>
+                <button type="button" onClick={() => addPreset('Дизайнеру', { percent: 10, toClient: false })}>Дизайнеру 10%</button>
+                <button type="button" onClick={() => addPreset('Подъём на этаж', { amount: null })}>Подъём на этаж</button>
+              </div>
+            </div>
           </div>
         </section>
       </div>

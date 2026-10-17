@@ -18,7 +18,7 @@ const makeProject = (over: Partial<Project> = {}): Project => ({
 });
 
 const piece = (over: Partial<WorktopPiece> = {}): WorktopPiece => ({
-  id: 'w1', name: 'Столешница', lengthMm: 3000, widthMm: 600, front: 'pf', left: 'pvc', right: null, ...over,
+  id: 'w1', name: 'Столешница', lengthMm: 3000, widthMm: 600, front: 'pf', back: null, left: 'pvc', right: null, ...over,
 });
 
 describe('лист 2 — схема столешницы', () => {
@@ -33,11 +33,11 @@ describe('лист 2 — схема столешницы', () => {
     expect(suggestWorktopPlan(empty)).toEqual([]);
   });
 
-  it('проверки: обязательные размеры, передняя кромка, висячий стык', () => {
-    const bad = checkWorktopPlan([piece({ lengthMm: null, front: null, right: 'eurozapil' })], true);
+  it('проверки: обязательные размеры, передняя кромка, стык на единственной детали', () => {
+    const bad = checkWorktopPlan([piece({ lengthMm: null, front: null, back: 'eurozapil' })], true);
     expect(bad.some((i) => i.level === 'error' && i.text.includes('длина'))).toBe(true);
     expect(bad.some((i) => i.level === 'warn' && i.text.includes('передней кромки'))).toBe(true);
-    expect(bad.some((i) => i.level === 'error' && i.text.includes('стык'))).toBe(true);
+    expect(bad.some((i) => i.level === 'warn' && i.text.includes('стык'))).toBe(true);
     const ok = checkWorktopPlan([piece(), piece({ id: 'w2', right: null })], true);
     expect(ok).toHaveLength(0);
   });

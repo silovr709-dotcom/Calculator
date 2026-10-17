@@ -1,14 +1,22 @@
+import { toast } from '../lib/toast';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Pricebook, Project } from '../types';
+import type { CalendarEvent, ClientProfile, Pricebook, Project } from '../types';
 import { calcTotals } from '../lib/engine';
 import { moduleToLines } from '../lib/modules';
 import { fmtMoney, fmtDate, todayISO } from '../lib/format';
 import { downloadFile, makeBackup, restoreBackup } from '../lib/storage';
 import { projectFinance } from '../lib/finance';
 import { filterDashboardProjects, projectReadiness, sortDashboardProjects, type DashboardReadinessFilter, type DashboardSort, type DashboardStatusFilter } from '../lib/dashboard';
+import { isClosedWorkflowStatus, nextContactTone, workflowForProject, workflowStatusMeta } from '../lib/crm';
+import { buildDayDesk } from '../lib/workflow';
+import { taskStats } from '../lib/crmTasks';
+import { buildAgenda, calendarKindMeta, filterAgenda } from '../lib/calendar';
+import { addDays } from '../lib/schedule';
+import { Overlay } from './Portal';
 
 export default function Dashboard(props: {
   projects: Project[];
+  clients: ClientProfile[];
   pricebooks: Pricebook[];
   pricebookLabel: string;
   onOpen: (id: string) => void;
@@ -18,8 +26,27 @@ export default function Dashboard(props: {
   onStatusChange: (id: string, status: Project['status']) => void;
   onImport: (f: File) => void;
   onQuick: () => void;
+  onOpenCrm?: () => void;
   onOpenSync?: () => void;
+  /** Дела календаря — чтобы «Сегодня» показывал всю работу, а не только CRM. */
+  events?: CalendarEvent[];
+  me?: string;
+  onOpenSchedule?: () => void;
 }) {
+  // Сегодняшняя работа целиком: задачи CRM, дела календаря и ближайшие монтажи.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const taskSummary = useMemo(() => taskStats(props.projects), [props.projects]);
+  const agendaToday = useMemo(() => {
+    const agenda = filterAgenda(buildAgenda(props.projects, props.events ?? []), { assignee: props.me ?? '' });
+    return {
+      today: agenda.filter((item) => item.date === todayIso && !item.done),
+      overdue: agenda.filter((item) => item.date < todayIso && !item.done && item.status !== 'done'),
+      week: agenda.filter((item) => item.date > todayIso && item.date <= addDays(todayIso, 7) && !item.done),
+    };
+  }, [props.projects, props.events, props.me, todayIso]);
+
+  // Длинный список показываем частями: страница открывается быстрее.
+  const [visibleCount, setVisibleCount] = useState(25);
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ name: '', client: '', date: todayISO(), comment: '' });
   const fileRef = useRef<HTMLInputElement>(null);
@@ -59,6 +86,26 @@ export default function Dashboard(props: {
     };
   }, [filteredProjects, props.pricebooks]);
 
+  const dayDesk = useMemo(() => buildDayDesk(props.projects, props.pricebooks, props.clients), [props.projects, props.pricebooks, props.clients]);
+
+  const crmSummary = useMemo(() => {
+    const rows = props.projects.map((project) => {
+      const workflow = workflowForProject(project);
+      return { project, workflow, tone: nextContactTone(workflow.nextContactAt) };
+    });
+    const active = rows.filter((row) => !isClosedWorkflowStatus(row.workflow.status));
+    const due = active.filter((row) => row.tone === 'overdue' || row.tone === 'today');
+    const noNext = active.filter((row) => !row.workflow.nextAction?.trim() || row.tone === 'none');
+    const stuck = active.filter((row) => row.workflow.status === 'offerSent' || row.workflow.status === 'clientThinking');
+    return {
+      active: active.length,
+      due: due.length,
+      noNext: noNext.length,
+      stuck: stuck.length,
+      focus: [...due, ...noNext.filter((row) => !due.some((item) => item.project.id === row.project.id))].slice(0, 4),
+    };
+  }, [props.projects]);
+
   // Горячие клавиши списка проектов: «/» — фокус на поиск, «N» — новый расчёт.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -85,12 +132,15 @@ export default function Dashboard(props: {
     if (!confirm('Восстановление ЗАМЕНИТ все текущие проекты, шаблоны, настройки и загруженные версии прайса данными из копии. Продолжить?')) return;
     try {
       const msg = restoreBackup(await f.text());
-      alert(msg);
+      toast.ok(msg);
       location.reload();
     } catch (e) {
-      alert(`Ошибка восстановления: ${(e as Error).message}`);
+      toast.error(`Ошибка восстановления: ${(e as Error).message}`);
     }
   };
+
+  // Цвет плитки показателя = статус: ноль спокойный, проблема окрашена.
+  const metricTone = (value: number, tone: 'danger' | 'warn' | 'info') => (value > 0 ? `tone-${tone}` : 'tone-calm');
 
   return (
     <div className="page">
@@ -99,25 +149,98 @@ export default function Dashboard(props: {
           <h1>Проекты</h1>
           <div className="muted">Активный прайс: {props.pricebookLabel}</div>
         </div>
-        <div className="actions">
-          <div className="dropdown">
-            <button className="btn ghost">Данные ▾</button>
-            <div className="dropdown-menu">
-              <button onClick={doBackup}>⭳ Резервная копия всего (файл .json)</button>
-              <button onClick={() => backupRef.current?.click()}>⭱ Восстановить из копии…</button>
-              <button onClick={() => fileRef.current?.click()}>Импорт одного проекта…</button>
-            </div>
-          </div>
-          <input ref={backupRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) doRestore(f); e.target.value = ''; }} />
-          <input ref={fileRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) props.onImport(f); e.target.value = ''; }} />
-          {props.onOpenSync && <button className="btn ghost" title="Синхронизация с телефоном и другими устройствами" onClick={props.onOpenSync}>📱 Синхронизация</button>}
-          <button className="btn ghost" onClick={props.onQuick}>Быстрый расчёт</button>
-          <button className="btn primary" onClick={() => setShowNew(true)}>+ Новый расчёт</button>
-        </div>
       </header>
 
+      <section className="dashboard-command-center card no-print" aria-label="Единый центр действий">
+        <div className="dashboard-command-copy">
+          <span className="eyebrow">Действия</span>
+          <h2>Проекты, CRM и обмен — рядом</h2>
+          <p>Основные операции вынесены в одну панель: создать расчёт, открыть CRM, сделать быстрый расчёт, импортировать или сохранить данные.</p>
+        </div>
+        <div className="dashboard-command-actions system-action-strip">
+          <button className="btn primary" onClick={() => setShowNew(true)}>+ Новый расчёт</button>
+          <div className="dropdown action-dropdown wide">
+            <button className="btn ghost" type="button">Перейти ▾</button>
+            <div className="dropdown-menu">
+              {props.onOpenCrm && <button type="button" onClick={props.onOpenCrm}>CRM клиентов</button>}
+              <button type="button" onClick={props.onQuick}>Быстрый расчёт</button>
+              {props.onOpenSync && <button type="button" title="Синхронизация с телефоном и другими устройствами" onClick={props.onOpenSync}>Синхронизация и телефон</button>}
+            </div>
+          </div>
+          <div className="dropdown action-dropdown wide">
+            <button className="btn ghost" type="button">Данные ▾</button>
+            <div className="dropdown-menu">
+              <button type="button" onClick={doBackup}>⭳ Резервная копия всего (файл .json)</button>
+              <button type="button" onClick={() => backupRef.current?.click()}>⭱ Восстановить из копии…</button>
+              <button type="button" onClick={() => fileRef.current?.click()}>Импорт одного проекта…</button>
+            </div>
+          </div>
+        </div>
+        <input ref={backupRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) doRestore(f); e.target.value = ''; }} />
+        <input ref={fileRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) props.onImport(f); e.target.value = ''; }} />
+      </section>
+
+      <section className="dashboard-daydesk card" aria-label="Рабочий стол дня">
+        <div className="daydesk-head">
+          <div>
+            <span className="eyebrow">Сегодня</span>
+            <h2>{dayDesk.overdueContacts + dayDesk.contactsToday > 0 ? `Контакты требуют внимания: ${dayDesk.overdueContacts + dayDesk.contactsToday}` : 'День под контролем'}</h2>
+            <p>Приложение само собирает рабочий список: контакты, КП без ответа, оплаты, фабрику, пустые клиенты и проверки.</p>
+          </div>
+          <button type="button" className="btn primary" onClick={props.onOpenCrm}>Открыть задачи CRM</button>
+        </div>
+        <div className="daydesk-metrics">
+          <button type="button" className={metricTone(dayDesk.overdueContacts, 'danger')} onClick={props.onOpenCrm}><b>{dayDesk.overdueContacts}</b><span>просрочено</span></button>
+          <button type="button" className={metricTone(dayDesk.contactsToday, 'warn')} onClick={props.onOpenCrm}><b>{dayDesk.contactsToday}</b><span>контакт сегодня</span></button>
+          <button type="button" className={metricTone(dayDesk.offersWaiting, 'info')} onClick={props.onOpenCrm}><b>{dayDesk.offersWaiting}</b><span>КП ждут ответа</span></button>
+          <button type="button" className={metricTone(dayDesk.missingPayment, 'warn')} onClick={props.onOpenCrm}><b>{dayDesk.missingPayment}</b><span>нет предоплаты</span></button>
+          <button type="button" className={metricTone(dayDesk.problems, 'danger')} onClick={() => setReadinessFilter('problem')}><b>{dayDesk.problems}</b><span>проблемы расчёта</span></button>
+          <button type="button" className={metricTone(dayDesk.factoryNotExported, 'info')} onClick={props.onOpenCrm}><b>{dayDesk.factoryNotExported}</b><span>к фабрике без бланка</span></button>
+        </div>
+        <div className="daydesk-today">
+          <button type="button" className={`daydesk-today-card${taskSummary.overdue > 0 ? ' danger' : taskSummary.today > 0 ? ' warn' : ''}`}
+            onClick={props.onOpenCrm}>
+            <b>{taskSummary.today + taskSummary.overdue}</b>
+            <span>задач на сегодня</span>
+            <small>{taskSummary.overdue > 0 ? `${taskSummary.overdue} просрочено · ` : ''}всего открыто {taskSummary.open}</small>
+          </button>
+          <button type="button" className={`daydesk-today-card${agendaToday.overdue.length > 0 ? ' danger' : agendaToday.today.length > 0 ? ' warn' : ''}`}
+            onClick={props.onOpenSchedule}>
+            <b>{agendaToday.today.length}</b>
+            <span>дел в календаре</span>
+            <small>{agendaToday.overdue.length > 0 ? `${agendaToday.overdue.length} просрочено · ` : ''}на неделе {agendaToday.week.length}</small>
+          </button>
+          <div className="daydesk-today-list">
+            {agendaToday.today.length === 0 && agendaToday.overdue.length === 0
+              ? <span className="muted small">На сегодня выездов и монтажей нет.</span>
+              : [...agendaToday.overdue.slice(0, 2), ...agendaToday.today].slice(0, 5).map((item) => (
+                <button type="button" key={item.id} className={`daydesk-agenda${item.date < todayIso ? ' overdue' : ''}`}
+                  onClick={() => (item.projectId ? props.onOpen(item.projectId) : props.onOpenSchedule?.())}>
+                  <b>{item.timeStart ? `${item.timeStart} ` : ''}{calendarKindMeta(item.kind).label}</b>
+                  <span>{item.client || item.title}</span>
+                  <small>{[item.date < todayIso ? `просрочено с ${fmtDate(item.date)}` : null, item.assignees.join(', '), item.address].filter(Boolean).join(' · ')}</small>
+                </button>
+              ))}
+          </div>
+        </div>
+
+        <div className="daydesk-task-list">
+          {dayDesk.tasks.length === 0 ? <div className="daydesk-empty">Нет срочных задач. Можно создавать новый расчёт или продолжать текущие проекты.</div> : dayDesk.tasks.slice(0, 8).map((task) => (
+            <button type="button" key={`${task.projectId}-${task.id}`} className={`daydesk-task tone-${task.tone}`} onClick={() => {
+              if (task.target === 'factory') props.onOpen(task.projectId);
+              else if (task.target === 'crm' || task.target === 'payment') props.onOpenCrm?.();
+              else props.onOpen(task.projectId);
+            }}>
+              <span>{task.clientName}</span>
+              <b>{task.title}</b>
+              <small>{task.projectName} · {task.detail}</small>
+            </button>
+          ))}
+        </div>
+      </section>
+
       {showNew && (
-        <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowNew(false); }}>
+        <Overlay className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowNew(false); }}>
           <div className="modal narrow">
             <h2>Новый проект</h2>
             <label>Название проекта
@@ -139,7 +262,7 @@ export default function Dashboard(props: {
               <button className="btn primary" onClick={() => { props.onCreate(form); setShowNew(false); }}>Создать</button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {props.projects.length === 0 ? (
@@ -148,6 +271,30 @@ export default function Dashboard(props: {
         </div>
       ) : (
         <>
+          <section className="dashboard-crm-card card">
+            <div className="dashboard-crm-copy">
+              <span className="eyebrow">CRM в работе</span>
+              <h2>{crmSummary.due > 0 ? `Есть контакты на сегодня: ${crmSummary.due}` : 'Клиентская работа под контролем'}</h2>
+              <p>Быстрый обзор клиентских задач прямо на главном экране. Полная воронка, база клиентов и редактирование следующих шагов — в отдельном разделе CRM.</p>
+              <div className="dashboard-crm-metrics">
+                <button type="button" className="tone-info" onClick={props.onOpenCrm}><b>{crmSummary.active}</b><span>активных заказов</span></button>
+                <button type="button" className={metricTone(crmSummary.due, 'warn')} onClick={props.onOpenCrm}><b>{crmSummary.due}</b><span>контакт сегодня</span></button>
+                <button type="button" className={metricTone(crmSummary.noNext, 'warn')} onClick={props.onOpenCrm}><b>{crmSummary.noNext}</b><span>без шага/даты</span></button>
+                <button type="button" className={metricTone(crmSummary.stuck, 'danger')} onClick={props.onOpenCrm}><b>{crmSummary.stuck}</b><span>КП ждёт решения</span></button>
+              </div>
+            </div>
+            <div className="dashboard-crm-focus">
+              <b>Фокус менеджера</b>
+              {crmSummary.focus.length === 0 ? <span className="muted small">Нет срочных CRM-задач. Добавляйте дату контакта в карточках заказов или в CRM.</span> : crmSummary.focus.map(({ project, workflow, tone }) => (
+                <button type="button" key={project.id} onClick={() => props.onOpen(project.id)} className={`tone-${tone}`}>
+                  <span>{project.client || 'Без клиента'}</span>
+                  <small>{workflowStatusMeta(workflow.status).label} · {workflow.nextAction || 'нет следующего шага'}</small>
+                </button>
+              ))}
+              {props.onOpenCrm && <button type="button" className="btn tiny primary" onClick={props.onOpenCrm}>Открыть CRM</button>}
+            </div>
+          </section>
+
           <div className="dashboard-filters card">
             <label className="dashboard-search">Поиск проекта или клиента
               <input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Название, клиент, комментарий…" />
@@ -187,12 +334,12 @@ export default function Dashboard(props: {
             <div className="fin-item"><span>Маржинальность</span><b>{portfolio.marginPct === null ? '—' : `${portfolio.marginPct.toFixed(1)} %`}</b></div>
             {portfolio.unpricedProjects > 0 && <div className="fin-item warn" title="В этих проектах есть позиции без цены — проверьте расчёт">⚠ без цен: {portfolio.unpricedProjects}</div>}
           </div>
-          {filteredProjects.length === 0 ? <div className="empty">По выбранным фильтрам проекты не найдены.</div> : <table className="table">
+          {filteredProjects.length === 0 ? <div className="empty">По выбранным фильтрам проекты не найдены.</div> : <table className="table dashboard-table">
             <thead>
               <tr><th>Название</th><th>Клиент</th><th>Дата</th><th>Позиций</th><th>Себестоимость</th><th>Цена клиента</th><th>Готовность</th><th>Статус</th><th /></tr>
             </thead>
             <tbody>
-              {filteredProjects.map((p) => {
+              {filteredProjects.slice(0, visibleCount).map((p) => {
                 // строки из модулей («Позиции кухни») входят в итог наравне с ручными строками
                 const pb = props.pricebooks.find((x) => x.meta.id === p.pricebookId) ?? props.pricebooks[0];
                 const modLines = pb ? (p.modules ?? []).flatMap((m) => moduleToLines(m, p.moduleDefaults ?? {}, pb)) : [];
@@ -200,14 +347,14 @@ export default function Dashboard(props: {
                 const readiness = projectReadiness(p, pb ?? null);
                 return (
                   <tr key={p.id} className="row-click" onClick={() => props.onOpen(p.id)}>
-                    <td><b>{p.name}</b>{p.comment && <div className="muted small">{p.comment}</div>}</td>
-                    <td>{p.client || '—'}</td>
-                    <td>{fmtDate(p.date)}</td>
-                    <td>{(p.modules?.length ?? 0) > 0 ? `${p.modules!.length} мод. + ${p.lines.length}` : p.lines.length}</td>
-                    <td>{fmtMoney(totals.cost)}</td>
-                    <td><b>{fmtMoney(totals.client)}</b></td>
-                    <td><span className={`readiness-pill ${readiness.tone}`} title={readiness.detail}>{readiness.label}</span></td>
-                    <td onClick={(event) => event.stopPropagation()}>
+                    <td data-label="Проект"><b>{p.name}</b>{p.comment && <div className="muted small">{p.comment}</div>}</td>
+                    <td data-label="Клиент">{p.client || '—'}</td>
+                    <td data-label="Дата">{fmtDate(p.date)}</td>
+                    <td data-label="Состав">{(p.modules?.length ?? 0) > 0 ? `${p.modules!.length} мод. + ${p.lines.length}` : p.lines.length}</td>
+                    <td data-label="Себестоимость">{fmtMoney(totals.cost)}</td>
+                    <td data-label="Цена клиента"><b>{fmtMoney(totals.client)}</b></td>
+                    <td data-label="Готовность"><span className={`readiness-pill ${readiness.tone}`} title={readiness.detail}>{readiness.label}</span></td>
+                    <td data-label="Статус" onClick={(event) => event.stopPropagation()}>
                       <select className={`status-inline s-${p.status}`} value={p.status} aria-label={`Статус проекта «${p.name}»`} onChange={(event) => props.onStatusChange(p.id, event.target.value as Project['status'])}>
                         <option value="draft">Черновик</option>
                         <option value="sent">Отправлен</option>
@@ -215,7 +362,7 @@ export default function Dashboard(props: {
                         <option value="archived">Архив</option>
                       </select>
                     </td>
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td data-label="Действия" onClick={(e) => e.stopPropagation()}>
                       <button className="btn tiny ghost" title="Дублировать" onClick={() => props.onDuplicate(p.id)}>⧉</button>
                       <button className="btn tiny danger" title="Удалить" onClick={() => props.onDelete(p.id)}>✕</button>
                     </td>
@@ -224,6 +371,13 @@ export default function Dashboard(props: {
               })}
             </tbody>
           </table>}
+          {filteredProjects.length > visibleCount && (
+            <div className="dashboard-more">
+              <button type="button" className="btn ghost" onClick={() => setVisibleCount((count) => count + 25)}>
+                Показать ещё {Math.min(25, filteredProjects.length - visibleCount)} из {filteredProjects.length - visibleCount}
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

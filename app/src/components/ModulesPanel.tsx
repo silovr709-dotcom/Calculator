@@ -7,11 +7,12 @@ import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surch
 import { fmtMoney, fmtNum } from '../lib/format';
 import { LAYOUT_SHAPES, WALL_LABELS, WALL_SHORT_LABELS, layoutWalls, moduleWall, normalizeLayoutShape } from '../lib/kitchenSketch';
 import CatalogPicker from './CatalogPicker';
-import KitchenSketch from './KitchenSketch';
 import WallPlanner from './WallPlanner';
 import BulkEditPanel from './BulkEditPanel';
 import { fillFromAbove } from '../lib/bulkEdit';
 import { KITCHEN_SETS, modulesFromKitchenSet } from '../lib/kitchenSets';
+import { stripModuleNote } from '../lib/clientOffer';
+import { Overlay } from './Portal';
 
 const DEFAULT_SLOTS: SlotKey[] = ['facade', 'frame', 'hinge', 'drawerSys', 'lift', 'handle', 'shelf', 'legs'];
 /** Предупреждение → слот, который можно сразу открыть кнопкой-действием. */
@@ -36,10 +37,9 @@ export default function ModulesPanel(props: {
   const { project, pricebook } = props;
   const mods = project.modules ?? EMPTY_MODULES;
   const defaults: ModuleDefaults = project.moduleDefaults ?? EMPTY_DEFAULTS;
-  // Панель монтируется при переходе с вкладки эскиза, поэтому значение focusModuleId
+  // Панель монтируется при переходе из Эскиз PRO, поэтому значение focusModuleId
   // можно безопасно использовать как начальное состояние без каскадного эффекта.
   const [selId, setSelId] = useState<string | null>(() => props.focusModuleId ?? null);
-  const [showSketch, setShowSketch] = useState(() => Boolean(props.focusModuleId));
   const [addOpen, setAddOpen] = useState(false);
   // выбор в каталоге: для настроек проекта или для слота конкретного модуля
   const [pick, setPick] = useState<{ slot: SlotKey; moduleId: string | null } | null>(null);
@@ -60,6 +60,14 @@ export default function ModulesPanel(props: {
     const timer = setTimeout(() => setToast(null), 7000);
     return () => clearTimeout(timer);
   }, [toast]);
+  useEffect(() => {
+    if (!selId || pick || pickSurcharge) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelId(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selId, pick, pickSurcharge]);
   const showToast = (text: string, undo: (() => void) | null = null) => setToast({ text, undo });
 
   const shape = normalizeLayoutShape(project.sketch?.shape);
@@ -296,53 +304,114 @@ export default function ModulesPanel(props: {
             </div>
           )}
         </div>
-        <button className="btn ghost" onClick={() => setShowSketch((value) => !value)}>🎨 {showSketch ? 'Скрыть эскиз ▲' : 'Показать эскиз ▼'}</button>
-        <button className="btn ghost" onClick={() => setShowPlanner((value) => !value)}>▦ Разложить по стене</button>
-        <button className="btn ghost" disabled={selectedIds.length === 0} onClick={() => setShowBulkEdit((value) => !value)}>✎ Массовое редактирование ({selectedIds.length})</button>
-        {(pendingDimensionModuleCount + pendingFacadeModuleCount + pendingHingeModuleCount) > 0 && (
-          <button
-            className="btn ghost"
-            title="Надбавки за нестандартные габариты + фасады и петли по техничке — для всех позиций сразу"
-            onClick={() => {
-              const next = mods.map((module) => {
-                const body = resolveSlot(module, 'body', defaults, pricebook).item;
-                if (!body) return module;
-                let m = applyDimensionSurcharges(module, body, pricebook);
-                m = applyTechnicalFacadeSpec(m, body, m.facadeSpecStatus === 'outdated' || isTechnicalFacadeSpecOutdated(m, body));
-                if (m.hingeSpecStatus !== 'manual') {
-                  const inference = inferHingeSpec(m, body);
-                  if (inference) m = { ...m, hinges: inference.hinges, hingeSpecStatus: 'applied' as const };
-                }
-                return m;
-              });
-              setMods(next);
-              showToast('Рекомендации применены ко всем позициям');
-            }}
-          >✨ Применить все рекомендации ({pendingDimensionModuleCount + pendingFacadeModuleCount + pendingHingeModuleCount})</button>
-        )}
-        <button className="btn ghost" disabled={selectedIds.length === 0} title="Скопировать высоту, глубину, опоры и материалы позиции, стоящей НАД первой выбранной" onClick={applyFillFromAbove}>⤓ Заполнить с верхней (Ctrl+D)</button>
+        <div className="dropdown action-dropdown wide module-tools-menu">
+          <button className="btn ghost" type="button">Инструменты ▾</button>
+          <div className="dropdown-menu">
+            <button type="button" onClick={() => setShowPlanner((value) => !value)}>{showPlanner ? 'Скрыть раскладку по стене' : '▦ Разложить по стене'}</button>
+            <button type="button" disabled={selectedIds.length === 0} onClick={() => setShowBulkEdit((value) => !value)}>✎ Массовое редактирование ({selectedIds.length})</button>
+            {(pendingDimensionModuleCount + pendingFacadeModuleCount + pendingHingeModuleCount) > 0 ? (
+              <button
+                type="button"
+                title="Надбавки за нестандартные габариты + фасады и петли по техничке — для всех позиций сразу"
+                onClick={() => {
+                  const next = mods.map((module) => {
+                    const body = resolveSlot(module, 'body', defaults, pricebook).item;
+                    if (!body) return module;
+                    let m = applyDimensionSurcharges(module, body, pricebook);
+                    m = applyTechnicalFacadeSpec(m, body, m.facadeSpecStatus === 'outdated' || isTechnicalFacadeSpecOutdated(m, body));
+                    if (m.hingeSpecStatus !== 'manual') {
+                      const inference = inferHingeSpec(m, body);
+                      if (inference) m = { ...m, hinges: inference.hinges, hingeSpecStatus: 'applied' as const };
+                    }
+                    return m;
+                  });
+                  setMods(next);
+                  showToast('Рекомендации применены ко всем позициям');
+                }}
+              >✨ Применить все рекомендации ({pendingDimensionModuleCount + pendingFacadeModuleCount + pendingHingeModuleCount})</button>
+            ) : <button type="button" disabled>Рекомендаций сейчас нет</button>}
+            <button type="button" disabled={selectedIds.length === 0} title="Скопировать высоту, глубину, опоры и материалы позиции, стоящей НАД первой выбранной" onClick={applyFillFromAbove}>⤓ Заполнить с верхней (Ctrl+D)</button>
+          </div>
+        </div>
+        {selectedIds.length > 0 && <span className="module-toolbar-state">Выбрано: {selectedIds.length}</span>}
         {allProblems.some((p) => p.critical) && <span className="warn">⛔ есть позиции с неполными данными — см. проверку внизу</span>}
       </div>
+
+      <section className="module-workbench-panel no-print" aria-label="Рабочее место модулей кухни">
+        <div className="module-workbench-main">
+          <span className="eyebrow">Состав кухни</span>
+          <h3>{mods.length > 0 ? 'Список модулей + окно редактирования' : 'Добавьте первый модуль кухни'}</h3>
+          <p>Основной экран — это список модулей. Нажмите любую карточку: откроется отдельное большое окно со всеми параметрами выбранного модуля.</p>
+        </div>
+        <div className="module-workbench-steps">
+          <span className={mods.length > 0 ? 'ready' : ''}><b>{mods.length || '—'}</b><small>модулей</small></span>
+          <span className={sel ? 'ready' : ''}><b>{sel ? sel.name.slice(0, 18) : 'выберите'}</b><small>редактор позиции</small></span>
+          <span className={summary.facades > 0 ? 'ready' : ''}><b>{summary.facades}</b><small>фасадов</small></span>
+          <span className={allProblems.length === 0 ? 'ready' : allProblems.some((p) => p.critical) ? 'bad' : 'warn'}><b>{allProblems.length || 'ок'}</b><small>проверка</small></span>
+        </div>
+        <aside className="module-workbench-current">
+          {sel ? <>
+            <b>{sel.name}</b>
+            <span>{sel.widthMm || '—'}×{sel.heightMm || '—'}×{sel.depthMm || '—'} мм · {sel.qty} шт</span>
+            <span>{selectedBody ? selectedBody.name.slice(0, 48) : 'корпус не выбран'}</span>
+            <strong>{selectedModuleCalculation ? fmtMoney(selectedModuleCalculation.totals.cost) : '—'}</strong>
+          </> : <><b>Нет выбранной позиции</b><span>Кликните по карточке или строке — откроется окно редактирования.</span></>}
+        </aside>
+      </section>
 
       {showPlanner && <WallPlanner project={project} onChange={props.onChange} onClose={() => setShowPlanner(false)} />}
       {showBulkEdit && <BulkEditPanel modules={mods} selectedIds={selectedIds} pricebook={pricebook} onApply={(next) => props.onChange({ ...project, modules: next })} onClose={() => setShowBulkEdit(false)} />}
 
-      {showSketch && (
-        <KitchenSketch
-          mode="compact"
-          modules={mods}
-          settings={project.sketch}
-          onSettingsChange={(sketch) => props.onChange({ ...project, sketch })}
-          onSelectModule={setSelId}
-          onReorder={(id, direction) => reorder(id, direction)}
-        />
-      )}
-
-      {/* Таблица позиций */}
+      {/* Рабочая область: список модулей + всплывающий редактор выбранной позиции */}
       {mods.length === 0 ? (
         <div className="empty">Позиций пока нет. Нажмите «+ Добавить позицию», выберите тип (нижний шкаф, пенал…), затем задайте размеры и комплектацию.</div>
       ) : (
-        <>
+        <div className="module-master-detail">
+          <section className="card module-list-card">
+            <div className="module-list-head">
+              <div>
+                <span className="eyebrow">Модули проекта</span>
+                <h3>Кликните позицию — откроется окно редактора</h3>
+              </div>
+              <span className="module-list-count">{mods.length} поз.</span>
+            </div>
+            <div className="module-card-list module-card-list-comfort" aria-label="Список модулей для редактирования">
+              {mods.map((m, idx) => {
+                const c = checks.get(m.id)!;
+                const body = resolveSlot(m, 'body', defaults, pricebook).item;
+                const filled = ALL_SLOTS.filter((k) => slotNeed(m, k) > 0 || k === 'body');
+                const chosen = filled.filter((k) => resolveSlot(m, k, defaults, pricebook).item);
+                return (
+                  <article
+                    key={m.id}
+                    className={`module-mini-card module-list-item ${selId === m.id ? 'active' : ''} ${c.level !== 'ok' ? c.level : ''}`}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Открыть редактирование ${m.name}`}
+                    onClick={() => setSelId(m.id)}
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget) return;
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setSelId(m.id);
+                      }
+                    }}
+                  >
+                    <span className="module-mini-line top"><b>{idx + 1}. {m.name}</b><em>{fmtMoney(costs.get(m.id) ?? 0)}</em></span>
+                    <span className="module-mini-line"><small>{m.type}</small><small>{m.widthMm || '—'}×{m.heightMm || '—'}×{m.depthMm || '—'} мм · {m.qty} шт</small></span>
+                    <span className="module-mini-line"><small>{body ? body.name.slice(0, 44) : 'корпус не выбран'}</small><small>{chosen.length}/{filled.length} слотов {statusDot(c.level)}</small></span>
+                    <span className="module-mini-hint">Кликните карточку, чтобы открыть все параметры модуля</span>
+                    <span className="module-mini-actions" onClick={(event) => event.stopPropagation()}>
+                      <button type="button" className="btn tiny primary" onClick={() => setSelId(m.id)}>Редактировать</button>
+                      <button type="button" className="btn tiny ghost" title="Дублировать" onClick={() => { const cp = { ...JSON.parse(JSON.stringify(m)), id: newModule(m.type).id, name: `${m.name} (копия)` }; setMods([...mods, cp]); setSelId(cp.id); }}>⧉</button>
+                      <button type="button" className="btn tiny danger" title="Удалить" onClick={() => deleteModuleWithUndo(m, idx)}>✕</button>
+                    </span>
+                  </article>
+                );
+              })}
+            </div>
+            <details className="module-spreadsheet-panel">
+              <summary>Дополнительно: табличный ввод размеров и количества</summary>
           <div className="module-order-hint">↕ Порядок позиций задаёт порядок модулей в эскизе · ⌨ Enter/Tab — следующее поле · ↑↓ — между строк · Ctrl+D — заполнить с верхней позиции</div>
           <table className="table modules" ref={tableRef} onKeyDown={onTableKeyDown}>
             <thead>
@@ -361,7 +430,7 @@ export default function ModulesPanel(props: {
                   <tr
                     key={m.id}
                     className={`${selId === m.id ? 'sel-row' : ''} ${c.level !== 'ok' ? 'has-warn' : ''} ${isDropTarget ? (dropTarget.after ? 'drop-after' : 'drop-before') : ''}`}
-                    onClick={() => setSelId(m.id === selId ? null : m.id)}
+                    onClick={() => setSelId(m.id)}
                     onDragOver={(e) => {
                       if (!dragId || dragId === m.id) return;
                       e.preventDefault();
@@ -405,23 +474,23 @@ export default function ModulesPanel(props: {
                     </span>
                   </td>
                   <td><b>{m.name}</b><div className="muted small">{m.type}{walls.length > 1 ? ` · ${WALL_SHORT_LABELS[moduleWall(m, shape)].toLocaleLowerCase('ru')} стена` : ''}</div>{facadeStatusLabel(m, body) && <span className={`module-facade-status ${facadeOutdated ? 'outdated' : m.facadeSpecStatus ?? 'set'}`}>{facadeStatusLabel(m, body)}</span>}{hingeStatusLabel(m, body) && <span className={`module-facade-status ${hingeOutdated ? 'outdated' : m.hingeSpecStatus ?? 'set'}`}>{hingeStatusLabel(m, body)}</span>}</td>
-                  <td className="small dims" onClick={(e) => e.stopPropagation()}>
+                  <td className="small dims" data-label="Размер, мм" onClick={(e) => e.stopPropagation()}>
                     <input className="dim" type="number" placeholder="Ш" data-grid-r={idx} data-grid-c={0} onFocus={(e) => e.currentTarget.select()} value={m.widthMm ?? ''} onChange={(e) => updMod(m.id, { widthMm: Number(e.target.value) || null, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />×
                     <input className="dim" type="number" placeholder="В" data-grid-r={idx} data-grid-c={1} onFocus={(e) => e.currentTarget.select()} value={m.heightMm ?? ''} onChange={(e) => updMod(m.id, { heightMm: Number(e.target.value) || null, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />×
                     <input className="dim" type="number" placeholder="Г" data-grid-r={idx} data-grid-c={2} onFocus={(e) => e.currentTarget.select()} value={m.depthMm ?? ''} onChange={(e) => updMod(m.id, { depthMm: Number(e.target.value) || null })} />
                   </td>
-                  <td className="num" onClick={(e) => e.stopPropagation()}>
+                  <td className="num" data-label="Количество" onClick={(e) => e.stopPropagation()}>
                     <input className="qty cell" type="number" min={0} data-grid-r={idx} data-grid-c={3} onFocus={(e) => e.currentTarget.select()} value={m.qty} onChange={(e) => updMod(m.id, { qty: Number(e.target.value) || 0 })} />
                   </td>
-                  <td className="num" onClick={(e) => e.stopPropagation()}>
+                  <td className="num" data-label="Фасадов" onClick={(e) => e.stopPropagation()}>
                     <input className="qty cell" type="number" min={0} data-grid-r={idx} data-grid-c={4} onFocus={(e) => e.currentTarget.select()} value={m.facades} onChange={(e) => updMod(m.id, { facades: Number(e.target.value) || 0, facadeParts: undefined, facadeSpecStatus: 'manual', hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />
                   </td>
-                  <td className="num" onClick={(e) => e.stopPropagation()}>
+                  <td className="num" data-label="Ящиков" onClick={(e) => e.stopPropagation()}>
                     <input className="qty cell" type="number" min={0} data-grid-r={idx} data-grid-c={5} onFocus={(e) => e.currentTarget.select()} value={m.drawers} onChange={(e) => updMod(m.id, { drawers: Number(e.target.value) || 0, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />
                   </td>
-                  <td className="small">{chosen.length}/{filled.length} выбрано{c.level === 'error' ? <span className="warn"> · не хватает данных</span> : c.level === 'warn' ? ' · подтвердите' : ''}</td>
-                  <td className="num">{fmtMoney(costs.get(m.id) ?? 0)}</td>
-                  <td>{statusDot(c.level)}</td>
+                  <td className="small" data-label="Комплектация">{chosen.length}/{filled.length} выбрано{c.level === 'error' ? <span className="warn"> · не хватает данных</span> : c.level === 'warn' ? ' · подтвердите' : ''}</td>
+                  <td className="num" data-label="Себестоимость">{fmtMoney(costs.get(m.id) ?? 0)}</td>
+                  <td data-label="Статус">{statusDot(c.level)}</td>
                   <td>
                     <button className="btn tiny ghost" title="Дублировать" onClick={(e) => { e.stopPropagation(); const cp = { ...JSON.parse(JSON.stringify(m)), id: newModule(m.type).id, name: `${m.name} (копия)` }; setMods([...mods, cp]); setSelId(cp.id); }}>⧉</button>
                     <button className="btn tiny danger" title="Удалить" onClick={(e) => { e.stopPropagation(); deleteModuleWithUndo(m, idx); }}>✕</button>
@@ -431,14 +500,26 @@ export default function ModulesPanel(props: {
             })}
             </tbody>
           </table>
-        </>
-      )}
 
-      {/* Редактор выбранной позиции */}
-      {sel && (
-        <section className="card mod-editor">
-          <h3>Позиция: {sel.name} {statusDot(checks.get(sel.id)!.level)}</h3>
-          <div className="grid4">
+            </details>
+          </section>
+          {sel && (
+            <Overlay className="module-editor-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelId(null); }}>
+              <section className="card mod-editor module-editor-panel module-editor-modal" role="dialog" aria-modal="true" aria-labelledby="module-editor-title">
+          <div className="module-editor-hero">
+            <div>
+              <span className="eyebrow">Редактор модуля</span>
+              <h3 id="module-editor-title">{sel.name} {statusDot(checks.get(sel.id)!.level)}</h3>
+              <p>{sel.type} · {sel.widthMm || '—'}×{sel.heightMm || '—'}×{sel.depthMm || '—'} мм · {sel.qty} шт</p>
+            </div>
+            <div className="module-editor-hero-stats">
+              <span><b>{selectedModuleCalculation ? fmtMoney(selectedModuleCalculation.totals.cost) : '—'}</b><small>себестоимость</small></span>
+              <span><b>{selectedBody ? 'выбран' : 'нет'}</b><small>корпус</small></span>
+              <span><b>{checks.get(sel.id)!.level === 'ok' ? 'OK' : checks.get(sel.id)!.level === 'error' ? 'ошибка' : 'проверить'}</b><small>статус</small></span>
+            </div>
+            <button className="module-editor-close" type="button" onClick={() => setSelId(null)}>Закрыть ✕</button>
+          </div>
+          <div className="grid4 module-editor-main-fields">
             <label>Название<input value={sel.name} onChange={(e) => updMod(sel.id, { name: e.target.value })} /></label>
             <label>Тип<input list="mod-types" value={sel.type} onChange={(e) => updMod(sel.id, { type: e.target.value })} />
               <datalist id="mod-types">{MODULE_TYPES.map((t) => <option key={t} value={t} />)}</datalist></label>
@@ -466,7 +547,7 @@ export default function ModulesPanel(props: {
                 {selectedModuleLines.map((line) => {
                   const calculation = selectedModuleCalculation.lineCalcs.get(line.id);
                   return <div className="module-formula-row" key={line.id}>
-                    <span>{line.name.slice(0, 55)}<small>{line.note?.replace(`Модуль: ${sel.name} — `, '')}</small></span>
+                    <span>{line.name.slice(0, 55)}<small>{stripModuleNote(line.note)}</small></span>
                     <b>{calculation?.sum != null ? `${fmtNum(calculation.qtyEffective)} × ${fmtMoney(line.price)} = ${fmtMoney(calculation.sum)}` : 'нет цены'}</b>
                   </div>;
                 })}
@@ -589,7 +670,12 @@ export default function ModulesPanel(props: {
               if (need <= 0 && k !== 'body') return null;
               const { item, source } = resolveSlot(sel, k, defaults, pricebook);
               return (
-                <div className="slot-row" key={k}>
+                <div className="slot-row tappable" key={k}
+                  onClick={(event) => {
+                    // Нажатие по строке открывает выбор — на телефоне не надо целиться в кнопку.
+                    if ((event.target as HTMLElement).closest('button')) return;
+                    setPick({ slot: k, moduleId: sel.id });
+                  }}>
                   <div className="slot-label">{SLOT_LABELS[k]}{k !== 'body' && <span className="muted small"> × {need * sel.qty}</span>}</div>
                   <div className={item ? 'slot-value' : 'slot-value none'}>
                     {item ? <>
@@ -703,7 +789,18 @@ export default function ModulesPanel(props: {
               )}
             </div>
           )}
+          <div className="module-editor-footer">
+            <span>Все изменения сохраняются сразу в проекте.</span>
+            <div>
+              <button className="btn ghost" type="button" onClick={() => { const cp = { ...JSON.parse(JSON.stringify(sel)), id: newModule(sel.type).id, name: `${sel.name} (копия)` }; setMods([...mods, cp]); setSelId(cp.id); }}>⧉ Дублировать</button>
+              <button className="btn danger" type="button" onClick={() => { const index = mods.findIndex((module) => module.id === sel.id); if (index >= 0) deleteModuleWithUndo(sel, index); }}>Удалить</button>
+              <button className="btn primary" type="button" onClick={() => setSelId(null)}>Готово</button>
+            </div>
+          </div>
         </section>
+            </Overlay>
+          )}
+        </div>
       )}
 
       {/* Проверка перед расчётом */}

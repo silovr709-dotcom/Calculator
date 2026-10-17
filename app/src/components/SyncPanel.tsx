@@ -1,27 +1,59 @@
-import { useEffect, useState } from 'react';
-import type { Project, ProjectSettings, Template } from '../types';
+import { toast } from '../lib/toast';
+import { useEffect, useMemo, useState } from 'react';
+import type { ClientProfile, Project, ProjectSettings, Template } from '../types';
 import QRCode from 'qrcode';
 import {
   defaultSyncConfig,
   generateSyncRoom,
   loadSyncConfig,
-  makeProjectShareUrl,
+  makeProjectQrShare,
   makeSyncShareUrl,
   performFullSync,
   saveSyncConfig,
 } from '../lib/sync';
 import type { SyncConfig, SyncStatus } from '../lib/sync';
+import type { ServerSync } from '../lib/useServerSync';
 import { fmtDate } from '../lib/format';
+
+const SERVER_STATE_TITLE: Record<string, string> = {
+  idle: '🟢 Сервер подключён',
+  loading: '🔄 Загрузка базы с сервера…',
+  saving: '🔄 Сохранение на сервере…',
+  synced: '🟢 Сервер подключён',
+  offline: '🟡 Нет связи с сервером',
+  error: '🔴 Ошибка сервера',
+};
+
+const SERVER_STATUS_TEXT: Record<string, string> = {
+  idle: 'Готово',
+  loading: 'Загрузка базы…',
+  saving: 'Сохранение…',
+  synced: 'Всё сохранено на сервере',
+  offline: 'Нет связи — правки ждут в браузере',
+  error: 'Ошибка',
+};
 
 export default function SyncPanel(props: {
   projects: Project[];
+  clients?: ClientProfile[];
   templates: Template[];
   settings: ProjectSettings;
-  onSyncUpdated: (data: { projects: Project[]; templates: Template[]; settings: ProjectSettings }) => void;
+  onSyncUpdated: (data: { projects: Project[]; clients?: ClientProfile[]; templates: Template[]; settings: ProjectSettings }) => void;
   syncStatus: SyncStatus;
   onSetSyncStatus: (st: SyncStatus) => void;
+  server?: ServerSync;
 }) {
   const [config, setConfig] = useState<SyncConfig>(() => loadSyncConfig());
+  const serverMode = props.server?.mode === 'server';
+  const [siteQr, setSiteQr] = useState('');
+  const [siteCopied, setSiteCopied] = useState(false);
+  const siteUrl = useMemo(() => {
+    try {
+      return new URL(import.meta.env.BASE_URL || '/', window.location.origin).toString();
+    } catch {
+      return window.location.origin;
+    }
+  }, []);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [pinInput, setPinInput] = useState<string>('');
   const [statusMsg, setStatusMsg] = useState<string>('');
@@ -29,27 +61,77 @@ export default function SyncPanel(props: {
   const [copied, setCopied] = useState(false);
   const [selProjectForQr, setSelProjectForQr] = useState<string>(props.projects[0]?.id ?? '');
   const [projectQrDataUrl, setProjectQrDataUrl] = useState<string>('');
+  const [projectShareUrl, setProjectShareUrl] = useState<string>('');
+  const [projectQrStatus, setProjectQrStatus] = useState<string>('');
+  const [projectQrError, setProjectQrError] = useState<string>('');
+  const activeProjectForQr = props.projects.some((project) => project.id === selProjectForQr) ? selProjectForQr : props.projects[0]?.id ?? '';
 
   // Обновление QR-кода комнаты синхронизации
   useEffect(() => {
     if (config.enabled && config.roomCode && config.secretKey) {
       const url = makeSyncShareUrl(config.roomCode, config.secretKey);
-      QRCode.toDataURL(url, { width: 260, margin: 2, color: { dark: '#10231f', light: '#ffffff' } })
+      QRCode.toDataURL(url, { width: 300, margin: 4, errorCorrectionLevel: 'M', color: { dark: '#092a55', light: '#ffffff' } })
         .then((url) => setQrDataUrl(url))
         .catch(() => {});
     }
   }, [config.enabled, config.roomCode, config.secretKey]);
 
-  // Обновление QR-кода отдельного выбранного проекта
+  // QR с адресом сервера: телефон открывает тот же сайт и входит под своим логином.
   useEffect(() => {
-    const p = props.projects.find((x) => x.id === selProjectForQr);
-    if (p) {
-      const url = makeProjectShareUrl(p);
-      QRCode.toDataURL(url, { width: 240, margin: 2, color: { dark: '#10231f', light: '#ffffff' } })
-        .then((url) => setProjectQrDataUrl(url))
-        .catch(() => {});
+    if (!serverMode) return;
+    let alive = true;
+    QRCode.toDataURL(siteUrl, { width: 300, margin: 4, errorCorrectionLevel: 'M', color: { dark: '#092a55', light: '#ffffff' } })
+      .then((url) => { if (alive) setSiteQr(url); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [serverMode, siteUrl]);
+
+  // Обновление QR-кода отдельного выбранного проекта.
+  // В QR кладём сжатый проект напрямую или короткую #share-ссылку для крупных проектов.
+  // Так передача остаётся рабочей даже при недоступном облаке для небольших и средних проектов.
+  useEffect(() => {
+    let alive = true;
+    const p = props.projects.find((x) => x.id === activeProjectForQr);
+    if (!p) {
+      Promise.resolve().then(() => {
+        if (!alive) return;
+        setProjectQrDataUrl('');
+        setProjectShareUrl('');
+        setProjectQrError('');
+        setProjectQrStatus('');
+      });
+      return () => { alive = false; };
     }
-  }, [selProjectForQr, props.projects]);
+
+    const generate = async () => {
+      await Promise.resolve();
+      if (!alive) return;
+      setProjectQrDataUrl('');
+      setProjectShareUrl('');
+      setProjectQrError('');
+      setProjectQrStatus('Готовим QR-ссылку проекта…');
+      try {
+        const share = await makeProjectQrShare(p);
+        if (!alive) return;
+        const qr = await QRCode.toDataURL(share.url, {
+          width: 320,
+          margin: 4,
+          errorCorrectionLevel: share.urlLength > 1800 ? 'L' : 'M',
+          color: { dark: '#092a55', light: '#ffffff' },
+        });
+        if (!alive) return;
+        setProjectShareUrl(share.url);
+        setProjectQrDataUrl(qr);
+        setProjectQrStatus(share.note);
+      } catch (error) {
+        if (!alive) return;
+        setProjectQrError(`${(error as Error).message}. Попробуйте интернет-соединение, удалите тяжёлые вложения или включите облачную синхронизацию.`);
+        setProjectQrStatus('');
+      }
+    };
+    generate();
+    return () => { alive = false; };
+  }, [activeProjectForQr, props.projects]);
 
   const handleCreateRoom = async () => {
     const { roomCode, secretKey } = generateSyncRoom();
@@ -74,7 +156,7 @@ export default function SyncPanel(props: {
   const handleJoinByPin = async () => {
     const pin = pinInput.trim();
     if (!pin) {
-      alert('Введите 4-значный PIN-код или ключ комнаты');
+      toast.error('Введите 4-значный PIN-код или ключ комнаты');
       return;
     }
     // Если пользователь ввёл полный ключ или только PIN
@@ -142,8 +224,69 @@ export default function SyncPanel(props: {
         </div>
       </header>
 
-      {/* Основной блок облачной синхронизации */}
+      {/* Основной блок синхронизации */}
       <div className="grid2" style={{ alignItems: 'start' }}>
+        {serverMode ? (
+        <section className="card">
+          <h3>{SERVER_STATE_TITLE[props.server?.status ?? 'idle'] ?? '🟢 Сервер подключён'}</h3>
+          <div className="muted small" style={{ marginBottom: 16 }}>
+            Все проекты, клиенты и настройки хранятся на вашем сервере и сами синхронизируются между
+            всеми устройствами, где выполнен вход. Отдельные «комнаты» и PIN-коды больше не нужны.
+          </div>
+
+          <div className="sync-active-box">
+            {siteQr && (
+              <div className="qr-container">
+                <img src={siteQr} alt="QR-код с адресом сервера" className="qr-image" />
+                <div className="qr-hint">
+                  📱 <b>Наведите камеру телефона</b> на QR-код — откроется этот же калькулятор.
+                  Войдите своим логином, и вы увидите ту же общую базу.
+                </div>
+              </div>
+            )}
+
+            <div className="sync-url-box">
+              <input readOnly value={siteUrl} className="sync-url-input" />
+              <button
+                className="btn small ghost"
+                onClick={() => {
+                  navigator.clipboard.writeText(siteUrl).then(() => {
+                    setSiteCopied(true);
+                    setTimeout(() => setSiteCopied(false), 2000);
+                  }).catch(() => {});
+                }}
+              >
+                {siteCopied ? 'Скопировано! ✓' : 'Копировать адрес'}
+              </button>
+            </div>
+
+            <div className="sync-status-row">
+              <div>
+                Статус: <b>{SERVER_STATUS_TEXT[props.server?.status ?? 'idle'] ?? 'Готово'}</b>
+                {props.server?.savedAt && (
+                  <div className="muted small">Последнее сохранение: {fmtDate(props.server.savedAt)}</div>
+                )}
+                <div className="muted small">
+                  Вы вошли как {props.server?.user?.name || props.server?.user?.login || '—'} · версия базы №{props.server?.rev ?? 0}
+                  {props.server?.pendingChanges ? ' · есть несохранённые правки' : ''}
+                </div>
+                {props.server?.error && (
+                  <div className="small" style={{ marginTop: 4, color: 'var(--danger, #b3261e)' }}>{props.server.error}</div>
+                )}
+              </div>
+              <div className="actions system-action-strip">
+                <button
+                  className="btn primary small"
+                  onClick={() => { void props.server?.refresh(); }}
+                  disabled={props.server?.status === 'loading' || props.server?.status === 'saving'}
+                >
+                  ↻ Обновить с сервера
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+        ) : (
         <section className="card">
           <h3>
             {config.enabled ? '🟢 Облако подключено' : '⚪ Облачная синхронизация выключена'}
@@ -181,13 +324,16 @@ export default function SyncPanel(props: {
                   {config.lastSyncedAt && <div className="muted small">Посл. синхронизация: {fmtDate(config.lastSyncedAt)}</div>}
                   {statusMsg && <div className="small" style={{ marginTop: 4, color: 'var(--accent)' }}>{statusMsg}</div>}
                 </div>
-                <div className="actions">
+                <div className="actions system-action-strip">
                   <button className="btn primary small" onClick={handleManualSync} disabled={syncing}>
                     {syncing ? 'Обновление…' : '↻ Синхронизировать сейчас'}
                   </button>
-                  <button className="btn danger small" onClick={handleDisconnect}>
-                    Отключить
-                  </button>
+                  <div className="dropdown action-dropdown wide">
+                    <button className="btn ghost small" type="button">Настройки ▾</button>
+                    <div className="dropdown-menu">
+                      <button type="button" className="danger-menu-item" onClick={handleDisconnect}>Отключить синхронизацию</button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -225,12 +371,13 @@ export default function SyncPanel(props: {
             </div>
           )}
         </section>
+        )}
 
         {/* Быстрая передача отдельного проекта по QR (Direct Share) */}
         <section className="card">
-          <h3>📱 Прямая передача проекта по QR-коду (без облака)</h3>
+          <h3>📱 Передача проекта по QR-коду на телефон</h3>
           <div className="muted small" style={{ marginBottom: 14 }}>
-            Позволяет мгновенно открыть конкретную кухню на телефоне коллеги или клиента, даже без интернета и облака.
+            Позволяет открыть конкретную кухню на телефоне коллеги или клиента. QR теперь использует сжатую ссылку проекта или короткую облачную ссылку для крупных проектов, поэтому код нормально сканируется камерой телефона.
           </div>
 
           {props.projects.length === 0 ? (
@@ -240,7 +387,7 @@ export default function SyncPanel(props: {
               <label>
                 Выберите проект для передачи:
                 <select
-                  value={selProjectForQr}
+                  value={activeProjectForQr}
                   onChange={(e) => setSelProjectForQr(e.target.value)}
                   style={{ width: '100%', marginTop: 6 }}
                 >
@@ -252,12 +399,20 @@ export default function SyncPanel(props: {
                 </select>
               </label>
 
-              {props.projects.some((project) => project.id === selProjectForQr) && projectQrDataUrl && (
+              {projectQrStatus && <div className="muted small" style={{ marginTop: 10 }}>{projectQrStatus}</div>}
+              {projectQrError && <div className="warn-box" style={{ marginTop: 10 }}>{projectQrError}</div>}
+              {props.projects.some((project) => project.id === activeProjectForQr) && projectQrDataUrl && (
                 <div className="qr-container" style={{ marginTop: 16 }}>
-                  <img src={projectQrDataUrl} alt="QR-код проекта" className="qr-image" style={{ width: 200, height: 200 }} />
+                  <img src={projectQrDataUrl} alt="QR-код проекта" className="qr-image" width={300} height={300} />
                   <div className="qr-hint">
-                    Отсканируйте камерой смартфона — проект откроется прямо в браузере телефона.
+                    <b>Проверено для сканирования:</b> откройте камеру телефона, наведите на весь белый квадрат и перейдите по ссылке — проект импортируется автоматически.
                   </div>
+                  {projectShareUrl && (
+                    <div className="sync-url-box" style={{ marginTop: 10 }}>
+                      <input readOnly value={projectShareUrl} className="sync-url-input" />
+                      <button className="btn small ghost" type="button" onClick={() => navigator.clipboard.writeText(projectShareUrl)}>Копировать</button>
+                    </div>
+                  )}
                 </div>
               )}
             </>

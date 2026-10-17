@@ -1,0 +1,496 @@
+import type { EskizCommunicationMarker, EskizProSnapshot, KitchenModule, Project } from '../types';
+import { newModule } from './modules';
+
+export type EskizPoint = { x: number; y: number };
+export type EskizEquipmentType = 'Холодильник' | 'Духовой шкаф' | 'СВЧ' | 'ПММ' | 'Варочная панель' | 'Вытяжка' | 'Стиральная машина' | 'Мойка' | 'Другое';
+
+export type EskizBaseObject = {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+  color: string;
+  fontSize: number;
+  width?: number;
+  height?: number;
+  fill?: string;
+  fillOpacity?: number;
+  borderRadius?: number;
+  hidden?: boolean;
+  locked?: boolean;
+};
+
+export type EskizDimensionObject = EskizBaseObject & {
+  type: 'dimension';
+  orientation: 'horizontal' | 'vertical' | 'free';
+  textOrientation?: 'parallel' | 'horizontal';
+  offset?: number;
+  x2: number;
+  y2: number;
+  value: string;
+  lineWidth: number;
+  arrowStyle?: 'open' | 'closed' | 'tick';
+  chainId?: string;
+  prefix?: string;
+  suffix?: string;
+  tolerance?: string;
+  showUnit?: boolean;
+  textPosition?: 'center' | 'above' | 'below';
+};
+
+export type EskizModuleObject = EskizBaseObject & { type: 'module'; number: string; description: string };
+export type EskizHingeObject = EskizBaseObject & { type: 'hinge'; label: string; side?: 'left' | 'right' | 'top' | 'bottom' | 'auto' };
+export type EskizTextObject = EskizBaseObject & { type: 'comment' | 'link' | 'equipment'; text: string; url?: string; equipmentType?: EskizEquipmentType };
+export type EskizCalloutObject = EskizBaseObject & { type: 'callout'; targetX: number; targetY: number; text: string; url?: string };
+export type EskizAnchorObject = EskizBaseObject & { type: 'anchor'; label: string };
+export type EskizGuideObject = EskizBaseObject & { type: 'guide'; orientation: 'horizontal' | 'vertical' };
+export type EskizObject = EskizDimensionObject | EskizModuleObject | EskizHingeObject | EskizTextObject | EskizCalloutObject | EskizAnchorObject | EskizGuideObject;
+
+export interface EskizProject {
+  version: 1;
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  image: { dataUrl: string; width: number; height: number; name: string };
+  imageDisplay?: { opacity: number; brightness: number; contrast: number; saturation: number; grayscale: boolean };
+  objects: EskizObject[];
+  header: { enabled: boolean; project: string; room: string; date: string; variant: string };
+  integration: { projectId?: string; clientId?: string };
+}
+
+export interface EskizFileBundle {
+  project: EskizProject;
+  communications: EskizCommunicationMarker[];
+}
+
+export interface EskizFilePayload {
+  format: 'recept-eskiz';
+  version: 1;
+  exportedAt: string;
+  project: EskizProject;
+  communications?: EskizCommunicationMarker[];
+}
+
+export interface EskizModuleMarker {
+  key: string;
+  eskizId: string;
+  eskizTitle: string;
+  objectId: string;
+  number: string;
+  description: string;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+}
+
+interface ParsedEskizModule {
+  type: string;
+  name: string;
+  qty?: number;
+  widthMm?: number | null;
+  heightMm?: number | null;
+  depthMm?: number | null;
+  facades?: number;
+  drawers?: number;
+  shelves?: number;
+  hinges?: number;
+  handles?: number;
+  lifts?: number;
+  note: string;
+}
+
+export const SUPPORTED_ESKIZ_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+function eskizUid(prefix = 'eskiz') {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return `${prefix}-${crypto.randomUUID()}`;
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Читает картинку из файла или буфера обмена в формат изображения Эскиз PRO. */
+export function readEskizImageFile(file: File | Blob, fallbackName = 'Снимок из буфера.png'): Promise<EskizProject['image']> {
+  return new Promise((resolve, reject) => {
+    if (!SUPPORTED_ESKIZ_IMAGE_TYPES.includes(file.type)) {
+      reject(new Error('Поддерживаются JPG, PNG и WEBP'));
+      return;
+    }
+    const name = (file as File).name || fallbackName;
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('Файл не является корректным изображением'));
+      image.onload = () => resolve({ dataUrl: String(reader.result), width: image.naturalWidth, height: image.naturalHeight, name });
+      image.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Новый эскиз на основе загруженного изображения. */
+export function createEskizProjectFromImage(image: EskizProject['image'], projectName: string, clientName?: string, title?: string): EskizProject {
+  const now = new Date().toISOString();
+  const today = new Intl.DateTimeFormat('ru-RU').format(new Date());
+  return {
+    version: 1,
+    id: eskizUid('eskiz'),
+    title: title || (projectName ? `Эскиз ${projectName}` : `Эскиз ${today}`),
+    createdAt: now,
+    updatedAt: now,
+    image,
+    imageDisplay: { opacity: 1, brightness: 1, contrast: 1, saturation: 1, grayscale: false },
+    objects: [],
+    header: { enabled: true, project: clientName || projectName || '', room: 'Кухня', date: today, variant: '01' },
+    integration: {},
+  };
+}
+
+/** Картинка из перетаскивания или буфера обмена. */
+export function imageFileFromTransfer(data: DataTransfer | null): File | null {
+  if (!data) return null;
+  const fromFiles = Array.from(data.files ?? []).find((file) => SUPPORTED_ESKIZ_IMAGE_TYPES.includes(file.type));
+  if (fromFiles) return fromFiles;
+  const item = Array.from(data.items ?? []).find((entry) => entry.kind === 'file' && SUPPORTED_ESKIZ_IMAGE_TYPES.includes(entry.type));
+  return item?.getAsFile() ?? null;
+}
+
+/** Файл .eskiz из перетаскивания. */
+export function eskizFileFromTransfer(data: DataTransfer | null): File | null {
+  if (!data) return null;
+  return Array.from(data.files ?? []).find((file) => file.name.toLowerCase().endsWith('.eskiz')) ?? null;
+}
+
+export function snapshotFromEskizProject(project: EskizProject): EskizProSnapshot {
+  return {
+    id: project.id,
+    title: project.title,
+    updatedAt: project.updatedAt,
+    project,
+  };
+}
+
+export function snapshotProject(snapshot?: EskizProSnapshot | null): EskizProject | null {
+  return isEskizProject(snapshot?.project) ? snapshot.project : null;
+}
+
+export function upsertEskizSnapshot(snapshots: EskizProSnapshot[] | undefined, project: EskizProject): EskizProSnapshot[] {
+  const next = (snapshots ?? []).filter((item) => item.id !== project.id);
+  return [snapshotFromEskizProject(project), ...next].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export function eskizFilePayload(project: EskizProject, communications: EskizCommunicationMarker[] = []): EskizFilePayload {
+  const projectCommunications = communications.filter((marker) => marker.eskizId === project.id);
+  return {
+    format: 'recept-eskiz',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    project,
+    ...(projectCommunications.length > 0 ? { communications: projectCommunications } : {}),
+  };
+}
+
+/** Как поступить с существующей разметкой при замене фото эскиза. */
+export type EskizImageReplaceMode = 'scale' | 'keep';
+
+export interface EskizImageReplaceScale {
+  x: number;
+  y: number;
+}
+
+/** Коэффициенты пересчёта координат разметки со старого изображения на новое. */
+export function eskizImageReplaceScale(
+  previous: { width: number; height: number },
+  next: { width: number; height: number },
+  mode: EskizImageReplaceMode = 'scale',
+): EskizImageReplaceScale {
+  if (mode === 'keep') return { x: 1, y: 1 };
+  const x = previous.width > 0 && next.width > 0 ? next.width / previous.width : 1;
+  const y = previous.height > 0 && next.height > 0 ? next.height / previous.height : 1;
+  return { x: Number.isFinite(x) && x > 0 ? x : 1, y: Number.isFinite(y) && y > 0 ? y : 1 };
+}
+
+function scaleNumber(value: number, factor: number): number {
+  return Math.round(value * factor * 100) / 100;
+}
+
+function scaleOptional(value: number | null | undefined, factor: number): number | null | undefined {
+  if (value == null) return value;
+  return scaleNumber(value, factor);
+}
+
+/** Пересчитывает объект разметки под новое изображение. */
+export function scaleEskizObject(object: EskizObject, scale: EskizImageReplaceScale): EskizObject {
+  const next = { ...object, x: scaleNumber(object.x, scale.x), y: scaleNumber(object.y, scale.y) } as EskizObject;
+  if (next.width != null) next.width = scaleNumber(next.width, scale.x);
+  if (next.height != null) next.height = scaleNumber(next.height, scale.y);
+  if (next.type === 'dimension') {
+    next.x2 = scaleNumber(next.x2, scale.x);
+    next.y2 = scaleNumber(next.y2, scale.y);
+  }
+  if (next.type === 'callout') {
+    next.targetX = scaleNumber(next.targetX, scale.x);
+    next.targetY = scaleNumber(next.targetY, scale.y);
+  }
+  return next;
+}
+
+/** Пересчитывает коммуникацию (маркер и линии расстояний) под новое изображение. */
+export function scaleEskizCommunication(marker: EskizCommunicationMarker, scale: EskizImageReplaceScale): EskizCommunicationMarker {
+  return {
+    ...marker,
+    x: scaleNumber(marker.x, scale.x),
+    y: scaleNumber(marker.y, scale.y),
+    distances: (marker.distances ?? []).map((distance) => ({
+      ...distance,
+      anchorX: scaleOptional(distance.anchorX, scale.x),
+      anchorY: scaleOptional(distance.anchorY, scale.y),
+      labelX: scaleOptional(distance.labelX, scale.x),
+      labelY: scaleOptional(distance.labelY, scale.y),
+    })),
+  };
+}
+
+/**
+ * Меняет фото эскиза, сохраняя все сноски, размеры, модули и настройки документа.
+ * При mode='scale' координаты разметки пересчитываются под новый размер изображения.
+ */
+export function replaceEskizProjectImage(
+  project: EskizProject,
+  image: EskizProject['image'],
+  mode: EskizImageReplaceMode = 'scale',
+  now: string = new Date().toISOString(),
+): EskizProject {
+  const scale = eskizImageReplaceScale(project.image, image, mode);
+  const sameScale = scale.x === 1 && scale.y === 1;
+  return {
+    ...project,
+    image,
+    updatedAt: now,
+    objects: sameScale ? project.objects : project.objects.map((object) => scaleEskizObject(object, scale)),
+  };
+}
+
+function safeFilePart(value: string): string {
+  return (value || 'eskiz')
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80) || 'eskiz';
+}
+
+export function eskizFileName(project: EskizProject): string {
+  return `${safeFilePart(project.title || project.image.name)}.eskiz`;
+}
+
+export function downloadEskizFile(project: EskizProject, communications: EskizCommunicationMarker[] = []): void {
+  const payload = JSON.stringify(eskizFilePayload(project, communications), null, 2);
+  const blob = new Blob([payload], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = eskizFileName(project);
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+export async function readEskizFileBundle(file: File): Promise<EskizFileBundle> {
+  if (!file.name.toLowerCase().endsWith('.eskiz') && file.type && !file.type.includes('json')) throw new Error('Выберите файл проекта .eskiz');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch {
+    throw new Error('Файл .eskiz повреждён или имеет неверный формат');
+  }
+  const payload = parsed as { format?: string; project?: unknown; communications?: unknown };
+  const importedProject = payload.project;
+  if (payload.format !== 'recept-eskiz' || !isEskizProject(importedProject)) throw new Error('Это не проект Эскиз PRO или его версия не поддерживается');
+  const communications = Array.isArray(payload.communications)
+    ? payload.communications.filter((marker): marker is EskizCommunicationMarker => isEskizCommunicationMarker(marker, importedProject.id))
+    : [];
+  return { project: importedProject, communications };
+}
+
+export async function readEskizFile(file: File): Promise<EskizProject> {
+  return (await readEskizFileBundle(file)).project;
+}
+
+export function isEskizProject(value: unknown): value is EskizProject {
+  if (!value || typeof value !== 'object') return false;
+  const project = value as Partial<EskizProject>;
+  return project.version === 1
+    && typeof project.id === 'string'
+    && typeof project.title === 'string'
+    && typeof project.createdAt === 'string'
+    && typeof project.updatedAt === 'string'
+    && Boolean(project.image)
+    && typeof project.image?.dataUrl === 'string'
+    && typeof project.image?.width === 'number'
+    && typeof project.image?.height === 'number'
+    && Array.isArray(project.objects)
+    && Boolean(project.header);
+}
+
+export function isEskizCommunicationMarker(value: unknown, eskizId?: string): value is EskizCommunicationMarker {
+  if (!value || typeof value !== 'object') return false;
+  const marker = value as Partial<EskizCommunicationMarker>;
+  return typeof marker.id === 'string'
+    && typeof marker.eskizId === 'string'
+    && (!eskizId || marker.eskizId === eskizId)
+    && typeof marker.kind === 'string'
+    && typeof marker.name === 'string'
+    && typeof marker.x === 'number'
+    && typeof marker.y === 'number'
+    && typeof marker.createdAt === 'string';
+}
+
+const normalizeText = (value: string) => value.toLocaleLowerCase('ru').replace(/ё/g, 'е');
+
+function firstLine(value: string): string {
+  return value.split('\n').map((line) => line.trim()).find(Boolean) ?? '';
+}
+
+function numberFrom(text: string, patterns: RegExp[]): number | undefined {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const raw = match[1] ?? match[2];
+    const value = Number(raw);
+    if (Number.isFinite(value)) return value;
+  }
+  return undefined;
+}
+
+function inferModuleType(text: string): string {
+  const normalized = normalizeText(text);
+  if (/мойк|раковин/.test(normalized)) return 'Шкаф под мойку';
+  if (/духов|\bдш\b|oven/.test(normalized)) return 'Шкаф под духовой шкаф';
+  if (/холод|х-?к|fridge/.test(normalized)) return 'Шкаф под холодильник';
+  if (/пенал|колон|высок/.test(normalized)) return 'Пенал';
+  if (/верх|навес|антресол/.test(normalized)) return 'Верхний шкаф';
+  if (/открыт|полк|стеллаж/.test(normalized)) return 'Открытая секция';
+  if (/панел|боковин|наклад/.test(normalized)) return 'Декоративная панель';
+  return 'Нижний шкаф';
+}
+
+function defaultDimensions(type: string) {
+  if (type === 'Верхний шкаф') return { widthMm: 600, heightMm: 720, depthMm: 320 };
+  if (type === 'Пенал' || type === 'Шкаф под холодильник') return { widthMm: 600, heightMm: 2140, depthMm: 560 };
+  if (type === 'Декоративная панель') return { widthMm: 600, heightMm: 720, depthMm: 18 };
+  return { widthMm: 600, heightMm: 720, depthMm: 560 };
+}
+
+function parseDimensions(text: string): Pick<ParsedEskizModule, 'widthMm' | 'heightMm' | 'depthMm'> {
+  const match = text.match(/(\d{2,4})\s*(?:x|х|×|\*)\s*(\d{2,4})(?:\s*(?:x|х|×|\*)\s*(\d{2,4}))?/i);
+  if (match) {
+    return { widthMm: Number(match[1]), heightMm: Number(match[2]), depthMm: match[3] ? Number(match[3]) : undefined };
+  }
+  const width = numberFrom(text, [/(?:ширина|ш)\s*[:=-]?\s*(\d{2,4})/i, /(?:^|\D)(\d{3,4})\s*мм(?:\D|$)/i]);
+  const height = numberFrom(text, [/(?:высота|в)\s*[:=-]?\s*(\d{2,4})/i]);
+  const depth = numberFrom(text, [/(?:глубина|г)\s*[:=-]?\s*(\d{2,4})/i]);
+  return { widthMm: width, heightMm: height, depthMm: depth };
+}
+
+export function collectEskizModuleMarkers(projects: EskizProject[]): EskizModuleMarker[] {
+  return projects.flatMap((project) => project.objects
+    .filter((object): object is EskizModuleObject => object.type === 'module' && !object.hidden)
+    .map((object) => ({
+      key: `${project.id}:${object.id}`,
+      eskizId: project.id,
+      eskizTitle: project.title,
+      objectId: object.id,
+      number: object.number.trim() || 'Модуль',
+      description: object.description.trim(),
+      x: object.x,
+      y: object.y,
+      width: object.width,
+      height: object.height,
+    })));
+}
+
+export function parseEskizModuleMarker(marker: EskizModuleMarker, existing?: KitchenModule | null): ParsedEskizModule {
+  const text = [marker.number, marker.description].filter(Boolean).join('\n');
+  const normalized = normalizeText(text);
+  const type = inferModuleType(text);
+  const dims = parseDimensions(text);
+  const defaults = defaultDimensions(type);
+  const qty = numberFrom(normalized, [/(?:кол-?во|количество|qty)\s*[:=-]?\s*(\d+)/i, /(\d+)\s*шт/i]);
+  const drawers = numberFrom(normalized, [/(?:ящик|ящики|ящиков)\s*[:=-]?\s*(\d+)/i, /(\d+)\s*(?:ящик|ящика|ящиков)/i]);
+  const facades = numberFrom(normalized, [/(?:фасад|фасады|двери|дверей)\s*[:=-]?\s*(\d+)/i, /(\d+)\s*(?:фасад|фасада|фасадов|двери|дверей)/i]);
+  const shelves = numberFrom(normalized, [/(?:полк|полки|полок)\s*[:=-]?\s*(\d+)/i, /(\d+)\s*(?:полк|полки|полок)/i]);
+  const hinges = numberFrom(normalized, [/(?:петл|петли|петель)\s*[:=-]?\s*(\d+)/i, /(\d+)\s*(?:петл|петли|петель)/i]);
+  const handles = numberFrom(normalized, [/(?:ручк|ручки|ручек)\s*[:=-]?\s*(\d+)/i, /(\d+)\s*(?:ручк|ручки|ручек)/i]);
+  const lifts = numberFrom(normalized, [/(?:подъем|подъём|лифт|aventos)\D*(\d+)/i]);
+  const nameBase = firstLine(marker.description) || type;
+  const name = `${marker.number ? `${marker.number} — ` : ''}${nameBase}`.trim();
+  const resolvedDrawers = drawers ?? (existing ? undefined : (type === 'Шкаф под духовой шкаф' ? 1 : 0));
+  const resolvedFacades = facades ?? (existing ? undefined : (resolvedDrawers && resolvedDrawers > 0 ? resolvedDrawers : (type === 'Открытая секция' ? 0 : ((dims.widthMm ?? defaults.widthMm) >= 700 ? 2 : 1))));
+  return {
+    type,
+    name,
+    qty: qty ?? (existing ? undefined : 1),
+    widthMm: dims.widthMm ?? (existing ? undefined : defaults.widthMm),
+    heightMm: dims.heightMm ?? (existing ? undefined : defaults.heightMm),
+    depthMm: dims.depthMm ?? (existing ? undefined : defaults.depthMm),
+    facades: resolvedFacades,
+    drawers: resolvedDrawers,
+    shelves: shelves ?? (existing ? undefined : (type === 'Пенал' ? 4 : type === 'Открытая секция' ? 2 : type === 'Шкаф под мойку' ? 0 : 1)),
+    hinges: hinges ?? (existing ? undefined : (resolvedFacades && (!resolvedDrawers || resolvedDrawers === 0) ? resolvedFacades * 2 : 0)),
+    handles: handles ?? (existing ? undefined : Math.max(resolvedFacades ?? 0, resolvedDrawers ?? 0)),
+    lifts: lifts ?? (existing ? undefined : 0),
+    note: `Из Эскиз PRO: ${marker.eskizTitle}; маркер ${marker.number}${marker.description ? ` — ${marker.description.replace(/\s+/g, ' ').slice(0, 120)}` : ''}`,
+  };
+}
+
+function applyDefined<T extends object>(target: T, patch: Partial<T>): T {
+  const next = { ...target };
+  for (const [key, value] of Object.entries(patch) as [keyof T, T[keyof T]][]) {
+    if (value !== undefined) next[key] = value;
+  }
+  return next;
+}
+
+function moduleFromMarker(marker: EskizModuleMarker): KitchenModule {
+  const parsed = parseEskizModuleMarker(marker, null);
+  return applyDefined({ ...newModule(parsed.type), type: parsed.type, name: parsed.name }, parsed);
+}
+
+export function syncEskizModulesToCalculation(project: Project, eskizProjects: EskizProject[]): { project: Project; created: number; updated: number; markers: EskizModuleMarker[] } {
+  const markers = collectEskizModuleMarkers(eskizProjects);
+  const bindings = { ...(project.eskizPro?.moduleBindings ?? {}) };
+  const modules = [...(project.modules ?? [])];
+  let created = 0;
+  let updated = 0;
+
+  for (const marker of markers) {
+    const boundId = bindings[marker.key];
+    const foundIndex = boundId ? modules.findIndex((module) => module.id === boundId) : -1;
+    if (foundIndex >= 0) {
+      const parsed = parseEskizModuleMarker(marker, modules[foundIndex]);
+      modules[foundIndex] = applyDefined(modules[foundIndex], parsed);
+      updated += 1;
+    } else {
+      const module = moduleFromMarker(marker);
+      bindings[marker.key] = module.id;
+      modules.push(module);
+      created += 1;
+    }
+  }
+
+  return {
+    project: {
+      ...project,
+      modules,
+      eskizPro: {
+        ...(project.eskizPro ?? {}),
+        moduleBindings: bindings,
+      },
+    },
+    created,
+    updated,
+    markers,
+  };
+}

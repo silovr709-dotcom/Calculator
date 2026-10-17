@@ -1,0 +1,19 @@
+# Все запросы внутри api/ обрабатывает index.php
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /api/
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^(.*)$ index.php?r=$1 [QSA,L]
+</IfModule>
+
+<IfModule mod_env.c>
+  SetEnv RECEPT_API_HTACCESS 1
+</IfModule>
+
+<FilesMatch "\.(json|lock|log)$">
+  Require all denied
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>

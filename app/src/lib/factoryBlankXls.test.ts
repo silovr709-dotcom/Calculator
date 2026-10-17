@@ -7,12 +7,16 @@ import type { BlankDraftField } from './factoryBlank';
 import { FACTORY_BLANK_SPECS, VISMA_CORPUS_BLANK, VISMA_KITCHEN_BLANK } from './factoryBlank';
 import type { BlankSheetMap } from './factoryBlankXls';
 import {
+  blankCellRefLabel,
   blankFileName,
+  blankSketchRangeLabel,
   buildBlankCellWrites,
+  buildSketchImagePlacements,
   buildWorktopWrites,
   CORPUS_SHEET_MAP,
   getBlankSheetMap,
   KITCHEN_SHEET_MAP,
+  worktopAreaCells,
   worktopSummary,
 } from './factoryBlankXls';
 import type { Project, WorktopPiece } from '../types';
@@ -67,6 +71,7 @@ describe('карта ячеек бланка сверена с настоящи�
     expect(text(ws.getCell('A4').value)).toBe('h пеналов общ:');
     expect(text(ws.getCell('H4').value)).toBe('h столов общ:');
     expect(text(ws.getCell('J48').value)).toBe('Прочее');
+    expect(blankSketchRangeLabel(KITCHEN_SHEET_MAP)).toBe('A14:I47');
   });
 
   it('все целевые клетки кухни существуют и попадают в лист бланка', async () => {
@@ -133,9 +138,23 @@ describe('сборка значений для шаблона', () => {
     const writes = buildBlankCellWrites(KITCHEN_SHEET_MAP, draft);
     const byCell = new Map(writes.map((w) => [w.cell, w.value]));
     expect(byCell.get('K5')).toBe('U1655 Белый');
+    expect(byCell.get('L5')).toBe('U1655 Белый');
     expect(byCell.get('K33')).toBe('Boyard 110° — 12 шт');
     expect(byCell.has('K34')).toBe(false); // пустое поле не пишем
     expect(byCell.get('C3')).toBe('Наименование изделия:'); // подпись остаётся даже без значения
+  });
+
+  it('раскладывает официальную таблицу верх/низ и не оставляет нижнюю колонку пустой', () => {
+    const draft = draftOf(VISMA_KITCHEN_BLANK, {
+      ldspColor: 'Верх — U1655 Белый, низ — U1104 Венге',
+      facadeColor: 'Однотонный белый',
+    });
+    const byCell = new Map(buildBlankCellWrites(KITCHEN_SHEET_MAP, draft).map((w) => [w.cell, w.value]));
+    expect(byCell.get('K5')).toBe('U1655 Белый');
+    expect(byCell.get('L5')).toBe('U1104 Венге');
+    expect(byCell.get('K9')).toBe('Однотонный белый');
+    expect(byCell.get('L9')).toBe('Однотонный белый');
+    expect(blankCellRefLabel(KITCHEN_SHEET_MAP, 'ldspColor')).toBe('K5 / L5');
   });
 
   it('дублирует реквизиты на лист 2', () => {
@@ -154,12 +173,14 @@ describe('сборка значений для шаблона', () => {
     expect(byCell.get('B6')).toBe('U1147 Дуб табачный');
     expect(byCell.get('B26')).toBe('Titus 110 — 4 шт');
     expect(CORPUS_SHEET_MAP.worktop).toBeUndefined();
+    expect(CORPUS_SHEET_MAP.sketch).toBeUndefined();
+    expect(blankSketchRangeLabel(CORPUS_SHEET_MAP)).toBe('');
     expect(buildWorktopWrites(CORPUS_SHEET_MAP, [], 'что-то')).toEqual([]);
   });
 
   it('схема столешницы уходит на лист 2 таблицей с кромками', () => {
     const pieces: WorktopPiece[] = [
-      { id: 'a', name: 'Левая', lengthMm: 2400, widthMm: 600, front: 'pf', left: 'pvc', right: 'eurozapil' },
+      { id: 'a', name: 'Левая', lengthMm: 2400, widthMm: 600, front: 'pf', back: 'v', left: 'pvc', right: 'eurozapil' },
       { id: 'b', name: 'Правая', lengthMm: 1200, widthMm: 600, front: 'pf', left: null, right: null },
     ];
     const writes = buildWorktopWrites(KITCHEN_SHEET_MAP, pieces, '38мм СОЮЗ. Белый 1111Q');
@@ -170,6 +191,9 @@ describe('сборка значений для шаблона', () => {
     expect(byCell.get('C59')).toBe('2400');
     expect(byCell.get('A60')).toBe('Правая');
     expect(byCell.get('D60')).toBe('600');
+    expect(byCell.get('F59')).toContain('V');
+    expect(byCell.get('F60')).toBe('ПВХ 0,4 белая');
+    expect(byCell.get('H59')).toContain('Еврозапил');
   });
 
   it('длинный список деталей обрезается по лимиту строк шаблона', () => {
@@ -183,10 +207,42 @@ describe('сборка значений для шаблона', () => {
     expect(maxRow).toBeLessThanOrEqual(KITCHEN_SHEET_MAP.worktop!.firstRow + KITCHEN_SHEET_MAP.worktop!.maxRows);
   });
 
-  it('сводка по столешнице склеивает тип и цвет', () => {
+  it('сводка по столешнице склеивает тип и цвет без дублей', () => {
     expect(worktopSummary(draftOf(VISMA_KITCHEN_BLANK, { worktopType: '38мм СОЮЗ', worktopColor: 'Белый 1111Q' })))
       .toBe('38мм СОЮЗ. Белый 1111Q');
+    expect(worktopSummary(draftOf(VISMA_KITCHEN_BLANK, { worktopType: '38мм СОЮЗ', worktopColor: '38мм СОЮЗ' })))
+      .toBe('38мм СОЮЗ');
     expect(worktopSummary(draftOf(VISMA_KITCHEN_BLANK, {}))).toBe('');
+  });
+
+  it('раскладывает несколько эскизов отдельными картинками внутри штатного поля бланка', () => {
+    const image = { base64: 'data:image/png;base64,AA==', extension: 'png' as const, width: 800, height: 500 };
+    const placements = buildSketchImagePlacements(KITCHEN_SHEET_MAP.sketch!, [
+      { title: '1', image },
+      { title: '2', image },
+      { title: '3', image },
+    ]);
+    expect(placements).toHaveLength(3);
+    expect(new Set(placements.map((placement) => `${placement.tl.col}:${placement.tl.row}`)).size).toBe(3);
+    for (const placement of placements) {
+      expect(placement.tl.col).toBeGreaterThanOrEqual(KITCHEN_SHEET_MAP.sketch!.tl.col);
+      expect(placement.tl.row).toBeGreaterThanOrEqual(KITCHEN_SHEET_MAP.sketch!.tl.row);
+      expect(placement.tl.col).toBeLessThan(KITCHEN_SHEET_MAP.sketch!.br.col);
+      expect(placement.tl.row).toBeLessThan(KITCHEN_SHEET_MAP.sketch!.br.row);
+      expect(placement.ext.width).toBeGreaterThan(0);
+      expect(placement.ext.height).toBeGreaterThan(0);
+    }
+  });
+
+  it('подсказывает адреса ячеек и очищает весь блок листа 2 перед записью', () => {
+    expect(blankCellRefLabel(KITCHEN_SHEET_MAP, 'orderNo')).toBe('L2 / L52');
+    expect(blankCellRefLabel(KITCHEN_SHEET_MAP, 'productName')).toBe('C3');
+    expect(blankCellRefLabel(CORPUS_SHEET_MAP, 'orderNo')).toBe('C2');
+    const cells = worktopAreaCells(KITCHEN_SHEET_MAP);
+    expect(cells).toContain('I56');
+    expect(cells).toContain('A58');
+    expect(cells).toContain('H72');
+    expect(worktopAreaCells(CORPUS_SHEET_MAP)).toEqual([]);
   });
 });
 

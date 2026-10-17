@@ -10,11 +10,83 @@
 // Разбор шаблонов по ячейкам сделан вручную: подписи полей лежат в колонке J
 // (кухня) и в колонке A (корпус), значения — в соседних объединённых клетках.
 
+import type ExcelJS from 'exceljs';
 import type { Project, WorktopPiece } from '../types';
 import type { BlankDraftField, FactoryBlankSpec } from './factoryBlank';
 import { edgeKindLabel } from './worktopPlan';
 
 /** Куда писать значения одного бланка. */
+export interface BlankSketchSlot {
+  /** Человекочитаемый диапазон официального бланка, куда ложится картинка. */
+  rangeLabel: string;
+  /** Координаты ExcelJS: нумерация колонок/строк с нуля, br — правый нижний край области. */
+  tl: { col: number; row: number };
+  br: { col: number; row: number };
+  /** Максимальный размер штатного поля в px; картинка вписывается в него без искажения пропорций. */
+  targetPx: { width: number; height: number };
+}
+
+export interface BlankSketchImage {
+  base64: string;
+  extension: 'png' | 'jpeg';
+  width?: number;
+  height?: number;
+}
+
+export interface BlankSketchEntry {
+  title: string;
+  image: BlankSketchImage | null;
+}
+
+export interface BlankSketchPlacement {
+  title: string;
+  image: BlankSketchImage;
+  tl: { col: number; row: number };
+  ext: { width: number; height: number };
+}
+
+export interface FactoryTechModuleRow {
+  marker: string;
+  status: string;
+  module: string;
+  type: string;
+  size: string;
+  qty: string;
+  body: string;
+  facadeMaterial: string;
+  facadeDetails: string;
+  hardware: string;
+  note: string;
+}
+
+export interface FactoryTechCommunicationRow {
+  kind: string;
+  name: string;
+  size: string;
+  location: string;
+  distances: string;
+  note: string;
+}
+
+export interface FactoryTechReadinessRow {
+  level: 'error' | 'warn' | 'ok';
+  area: string;
+  text: string;
+}
+
+export interface FactoryTechPack {
+  projectName: string;
+  client?: string;
+  generatedAt: string;
+  sketchTitle?: string;
+  sketchImage?: BlankSketchImage | null;
+  /** Все выбранные snapshot Эскиз PRO для отдельного техлиста; первый дублируется в sketchImage для обратной совместимости. */
+  sketchImages?: BlankSketchEntry[];
+  moduleRows: FactoryTechModuleRow[];
+  communicationRows: FactoryTechCommunicationRow[];
+  readinessRows: FactoryTechReadinessRow[];
+}
+
 export interface BlankSheetMap {
   /** Файл шаблона в public/templates. */
   template: string;
@@ -31,10 +103,16 @@ export interface BlankSheetMap {
   prefixed?: Record<string, { cell: string; prefix: string }>;
   /** Дубли реквизитов на листе 2 (та же величина в другой клетке). */
   mirrors?: Record<string, string>;
+  /** Поля официальной таблицы «Верх / Низ»: одно поле UI заполняет обе клетки, а текст «Верх — …; низ — …» раскладывается раздельно. */
+  splitColumns?: Record<string, { upper: string; lower: string }>;
   /** Клетки шаблона с примерами заполнения — их нужно очистить. */
   clear: string[];
+  /** Левая область официального бланка, предназначенная под эскиз/схему. */
+  sketch?: BlankSketchSlot;
   /** Блок «Лист 2»: схема столешницы. */
   worktop?: {
+    /** Область официального листа 2 под визуальную схему столешницы. */
+    sketch?: BlankSketchSlot;
     /** Клетка с описанием столешницы (тип + цвет). */
     summaryCell: string;
     /** Заголовок таблицы деталей. */
@@ -43,7 +121,7 @@ export interface BlankSheetMap {
     firstRow: number;
     /** Сколько строк максимум можно занять, не залезая в подписи шаблона. */
     maxRows: number;
-    columns: { name: string; length: string; width: string; front: string; left: string; right: string };
+    columns: { name: string; length: string; width: string; front: string; back: string; left: string; right: string };
   };
 }
 
@@ -86,13 +164,35 @@ export const KITCHEN_SHEET_MAP: BlankSheetMap = {
     productName: { cell: 'C3', prefix: 'Наименование изделия:' },
   },
   mirrors: { startDate: 'J51', shipDate: 'L51', orderNo: 'L52', manager: 'L53', worktopScraps: 'L54' },
+  splitColumns: {
+    ldspColor: { upper: 'K5', lower: 'L5' },
+    bodyEdging: { upper: 'K6', lower: 'L6' },
+    backPanel: { upper: 'K7', lower: 'L7' },
+    facadeType: { upper: 'K8', lower: 'L8' },
+    facadeColor: { upper: 'K9', lower: 'L9' },
+    facadeMilling: { upper: 'K10', lower: 'L10' },
+    facadeFrame: { upper: 'K11', lower: 'L11' },
+    facadeEdging: { upper: 'K12', lower: 'L12' },
+  },
   clear: KITCHEN_VALUE_CELLS,
+  sketch: {
+    rangeLabel: 'A14:I47',
+    tl: { col: 0, row: 13 },
+    br: { col: 9, row: 47 },
+    targetPx: { width: 842, height: 997 },
+  },
   worktop: {
+    sketch: {
+      rangeLabel: 'A56:H77',
+      tl: { col: 0, row: 55 },
+      br: { col: 8, row: 77 },
+      targetPx: { width: 650, height: 420 },
+    },
     summaryCell: 'I56',
     titleCell: 'A57',
     firstRow: 58,
     maxRows: 14,
-    columns: { name: 'A', length: 'C', width: 'D', front: 'E', left: 'F', right: 'G' },
+    columns: { name: 'A', length: 'C', width: 'D', front: 'E', back: 'F', left: 'G', right: 'H' },
   },
 };
 
@@ -129,8 +229,57 @@ const SHEET_MAPS: Record<string, BlankSheetMap> = {
 
 export const getBlankSheetMap = (specId: string): BlankSheetMap | undefined => SHEET_MAPS[specId];
 
+/** Все клетки шаблона, куда попадёт конкретное поле (основная + дубли на листе 2). */
+export function blankCellRefsForField(map: BlankSheetMap, key: string): string[] {
+  const split = map.splitColumns?.[key];
+  if (split) return [split.upper, split.lower];
+  return [map.cells[key], map.prefixed?.[key]?.cell, map.mirrors?.[key]].filter((cell): cell is string => Boolean(cell));
+}
+
+/** Короткая подпись для UI: пользователь сразу видит, куда попадёт значение в шаблоне. */
+export function blankCellRefLabel(map: BlankSheetMap, key: string): string {
+  const refs = blankCellRefsForField(map, key);
+  return refs.length ? refs.join(' / ') : '';
+}
+
+/** Куда в официальном шаблоне попадёт картинка Эскиз PRO. */
+export function blankSketchRangeLabel(map: BlankSheetMap): string {
+  return map.sketch?.rangeLabel ?? '';
+}
+
+/** Клетки таблицы столешницы, которые нужно очистить перед новой записью. */
+export function worktopAreaCells(map: BlankSheetMap): string[] {
+  const wt = map.worktop;
+  if (!wt) return [];
+  const cells = [wt.titleCell, wt.summaryCell];
+  const cols = Object.values(wt.columns);
+  for (let row = wt.firstRow; row <= wt.firstRow + wt.maxRows; row += 1) {
+    for (const col of cols) cells.push(`${col}${row}`);
+  }
+  return cells;
+}
+
 /** Одна запись «в клетку X положить значение Y». */
 export interface BlankCellWrite { cell: string; value: string }
+
+function splitUpperLowerValue(value: string): { upper: string; lower: string } {
+  const cleaned = value.trim();
+  const markers = /(верх|верхние|верхних|навесные|навесных|низ|нижние|нижних|столы|столов|тумбы|тумб)\s*[:—-]\s*/gi;
+  const matches = Array.from(cleaned.matchAll(markers));
+  if (matches.length === 0) return { upper: cleaned, lower: cleaned };
+  let upper = '';
+  let lower = '';
+  for (const [index, match] of matches.entries()) {
+    const start = (match.index ?? 0) + match[0].length;
+    const end = index + 1 < matches.length ? matches[index + 1].index ?? cleaned.length : cleaned.length;
+    const chunk = cleaned.slice(start, end).replace(/^[\s,;—-]+|[\s,;]+$/g, '').trim();
+    if (!chunk) continue;
+    const label = match[1].toLocaleLowerCase('ru-RU');
+    if (/^(верх|навес)/.test(label)) upper = chunk;
+    else lower = chunk;
+  }
+  return { upper: upper || cleaned, lower: lower || cleaned };
+}
 
 /**
  * Готовит список записей в клетки шаблона. Чистая функция — её и проверяют тесты,
@@ -142,7 +291,14 @@ export function buildBlankCellWrites(map: BlankSheetMap, draft: BlankDraftField[
 
   for (const [key, cell] of Object.entries(map.cells)) {
     const value = byKey.get(key);
-    if (value) writes.push({ cell, value });
+    if (!value) continue;
+    const split = map.splitColumns?.[key];
+    if (split) {
+      const splitValue = splitUpperLowerValue(value);
+      writes.push({ cell: split.upper, value: splitValue.upper }, { cell: split.lower, value: splitValue.lower });
+      continue;
+    }
+    writes.push({ cell, value });
   }
   for (const [key, { cell, prefix }] of Object.entries(map.prefixed ?? {})) {
     const value = byKey.get(key);
@@ -164,12 +320,13 @@ export function buildWorktopWrites(map: BlankSheetMap, pieces: WorktopPiece[], s
   if (summary.trim()) writes.push({ cell: wt.summaryCell, value: summary.trim() });
   if (pieces.length === 0) return writes;
 
-  writes.push({ cell: wt.titleCell, value: 'Детали столешницы: длина × ширина, обработка видимых кромок' });
+  writes.push({ cell: wt.titleCell, value: 'Детали столешницы: длина × ширина, обработка сторон (перед/зад/лево/право)' });
   const head = wt.firstRow;
   writes.push({ cell: `${wt.columns.name}${head}`, value: 'Деталь' });
   writes.push({ cell: `${wt.columns.length}${head}`, value: 'Длина' });
   writes.push({ cell: `${wt.columns.width}${head}`, value: 'Ширина' });
   writes.push({ cell: `${wt.columns.front}${head}`, value: 'Перед' });
+  writes.push({ cell: `${wt.columns.back}${head}`, value: 'Зад' });
   writes.push({ cell: `${wt.columns.left}${head}`, value: 'Лево' });
   writes.push({ cell: `${wt.columns.right}${head}`, value: 'Право' });
 
@@ -179,6 +336,7 @@ export function buildWorktopWrites(map: BlankSheetMap, pieces: WorktopPiece[], s
     writes.push({ cell: `${wt.columns.length}${row}`, value: p.lengthMm == null ? '' : String(p.lengthMm) });
     writes.push({ cell: `${wt.columns.width}${row}`, value: p.widthMm == null ? '' : String(p.widthMm) });
     writes.push({ cell: `${wt.columns.front}${row}`, value: edgeKindLabel(p.front) });
+    writes.push({ cell: `${wt.columns.back}${row}`, value: p.back ? edgeKindLabel(p.back) : 'ПВХ 0,4 белая' });
     writes.push({ cell: `${wt.columns.left}${row}`, value: edgeKindLabel(p.left) });
     writes.push({ cell: `${wt.columns.right}${row}`, value: edgeKindLabel(p.right) });
   }
@@ -188,7 +346,8 @@ export function buildWorktopWrites(map: BlankSheetMap, pieces: WorktopPiece[], s
 /** Текстовая сводка по столешнице для клетки шаблона. */
 export function worktopSummary(draft: BlankDraftField[]): string {
   const get = (key: string) => draft.find((d) => d.field.key === key)?.value.trim() ?? '';
-  return [get('worktopType'), get('worktopColor')].filter(Boolean).join('. ');
+  const parts = [get('worktopType'), get('worktopColor')].filter(Boolean);
+  return [...new Set(parts)].join('. ');
 }
 
 /** Безопасное имя файла: без служебных символов, с датой. */
@@ -196,6 +355,188 @@ export function blankFileName(project: Project, spec: FactoryBlankSpec): string 
   const safe = project.name.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Проект';
   const date = new Date().toISOString().slice(0, 10);
   return `${spec.blankName} — ${safe} — ${date}.xlsx`;
+}
+
+function uniqueSheetName(wb: ExcelJS.Workbook, requested: string): string {
+  const existing = new Set(wb.worksheets.map((sheet) => sheet.name));
+  const base = requested.slice(0, 31);
+  if (!existing.has(base)) return base;
+  for (let index = 2; index < 100; index += 1) {
+    const suffix = ` (${index})`;
+    const candidate = `${requested.slice(0, 31 - suffix.length)}${suffix}`;
+    if (!existing.has(candidate)) return candidate;
+  }
+  return `Эскиз ${Date.now()}`.slice(0, 31);
+}
+
+function styleHeaderRow(row: ExcelJS.Row, fill = 'FF24382F') {
+  row.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+  row.alignment = { vertical: 'middle', wrapText: true };
+  row.eachCell((cell) => {
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FFD8E5DF' } },
+      left: { style: 'thin', color: { argb: 'FFD8E5DF' } },
+      bottom: { style: 'thin', color: { argb: 'FFD8E5DF' } },
+      right: { style: 'thin', color: { argb: 'FFD8E5DF' } },
+    };
+  });
+}
+
+function styleDataRow(row: ExcelJS.Row, fill?: string) {
+  row.alignment = { vertical: 'top', wrapText: true };
+  if (fill) row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+  row.eachCell((cell) => {
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FFE7EFEA' } },
+      left: { style: 'thin', color: { argb: 'FFE7EFEA' } },
+      bottom: { style: 'thin', color: { argb: 'FFE7EFEA' } },
+      right: { style: 'thin', color: { argb: 'FFE7EFEA' } },
+    };
+  });
+}
+
+function addTitle(ws: ExcelJS.Worksheet, techPack: FactoryTechPack) {
+  ws.mergeCells('A1:K1');
+  const title = ws.getCell('A1');
+  title.value = 'Эскиз PRO — технический лист для фабрики';
+  title.font = { bold: true, size: 18, color: { argb: 'FF24382F' } };
+  title.alignment = { vertical: 'middle' };
+  ws.getRow(1).height = 25;
+
+  ws.mergeCells('A2:K2');
+  const meta = ws.getCell('A2');
+  meta.value = [
+    `Проект: ${techPack.projectName}`,
+    techPack.client ? `Клиент: ${techPack.client}` : null,
+    techPack.sketchTitle ? `Эскиз: ${techPack.sketchTitle}` : null,
+    `Сформировано: ${techPack.generatedAt}`,
+  ].filter(Boolean).join(' · ');
+  meta.font = { size: 11, color: { argb: 'FF55685D' } };
+  meta.alignment = { wrapText: true, vertical: 'middle' };
+}
+
+function addSectionTitle(ws: ExcelJS.Worksheet, rowIndex: number, title: string, subtitle?: string) {
+  ws.mergeCells(rowIndex, 1, rowIndex, 11);
+  const cell = ws.getCell(rowIndex, 1);
+  cell.value = subtitle ? `${title}\n${subtitle}` : title;
+  cell.font = { bold: true, size: 13, color: { argb: 'FF332255' } };
+  cell.alignment = { wrapText: true, vertical: 'middle' };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F0FF' } };
+  ws.getRow(rowIndex).height = subtitle ? 34 : 22;
+}
+
+function imageSizeWithinBox(image: BlankSketchImage, box: { width: number; height: number }): { width: number; height: number } {
+  const sourceWidth = Math.max(1, image.width ?? box.width);
+  const sourceHeight = Math.max(1, image.height ?? box.height);
+  const scale = Math.min(box.width / sourceWidth, box.height / sourceHeight);
+  return {
+    width: Math.max(1, Math.round(sourceWidth * scale)),
+    height: Math.max(1, Math.round(sourceHeight * scale)),
+  };
+}
+
+/**
+ * Раскладывает несколько эскизов в штатном поле официального бланка отдельными Excel-картинками.
+ * Не склеиваем их в один canvas: технолог сможет выделить каждый эскиз, увеличить и переставить вручную.
+ */
+export function buildSketchImagePlacements(slot: BlankSketchSlot, entries: BlankSketchEntry[]): BlankSketchPlacement[] {
+  const images = entries.flatMap((entry) => entry.image ? [{ title: entry.title, image: entry.image }] : []);
+  if (images.length === 0) return [];
+  const colSpan = Math.max(1, slot.br.col - slot.tl.col);
+  const rowSpan = Math.max(1, slot.br.row - slot.tl.row);
+  const cols = images.length === 1 ? 1 : 2;
+  const rows = Math.ceil(images.length / cols);
+  const gap = images.length === 1 ? 0 : 14;
+  const tileWidth = Math.max(40, (slot.targetPx.width - gap * (cols - 1)) / cols);
+  const tileHeight = Math.max(40, (slot.targetPx.height - gap * (rows - 1)) / rows);
+
+  return images.map((entry, index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const tileX = col * (tileWidth + gap);
+    const tileY = row * (tileHeight + gap);
+    const size = imageSizeWithinBox(entry.image, { width: tileWidth, height: tileHeight });
+    const x = tileX + Math.max(0, (tileWidth - size.width) / 2);
+    const y = tileY + Math.max(0, (tileHeight - size.height) / 2);
+    return {
+      title: entry.title,
+      image: entry.image,
+      tl: {
+        col: slot.tl.col + (x / slot.targetPx.width) * colSpan,
+        row: slot.tl.row + (y / slot.targetPx.height) * rowSpan,
+      },
+      ext: size,
+    };
+  });
+}
+
+function addTable(ws: ExcelJS.Worksheet, startRow: number, headers: string[], rows: string[][]): number {
+  const header = ws.getRow(startRow);
+  header.values = ['', ...headers];
+  styleHeaderRow(header);
+  let rowIndex = startRow + 1;
+  if (rows.length === 0) {
+    const empty = ws.getRow(rowIndex);
+    empty.values = ['', '—'];
+    ws.mergeCells(rowIndex, 1, rowIndex, headers.length);
+    styleDataRow(empty, 'FFFBFDFC');
+    return rowIndex + 2;
+  }
+  for (const values of rows) {
+    const row = ws.getRow(rowIndex);
+    row.values = ['', ...values];
+    row.height = Math.min(96, Math.max(24, 18 + values.join('\n').length / 26));
+    styleDataRow(row, rowIndex % 2 === 0 ? 'FFF8FBF9' : undefined);
+    rowIndex += 1;
+  }
+  return rowIndex + 2;
+}
+
+function addFactoryTechSheet(wb: ExcelJS.Workbook, techPack: FactoryTechPack) {
+  const ws = wb.addWorksheet(uniqueSheetName(wb, 'Эскиз PRO'), {
+    properties: { tabColor: { argb: 'FF7C3AED' } },
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
+  ws.views = [{ state: 'frozen', ySplit: 2 }];
+  ws.columns = [
+    { width: 12 }, { width: 18 }, { width: 26 }, { width: 16 }, { width: 18 }, { width: 8 },
+    { width: 32 }, { width: 30 }, { width: 32 }, { width: 34 }, { width: 34 },
+  ];
+  addTitle(ws, techPack);
+
+  let rowIndex = 4;
+  const sketchImages = techPack.sketchImages
+    ? techPack.sketchImages.flatMap((item) => item.image ? [{ title: item.title, image: item.image }] : [])
+    : techPack.sketchImage ? [{ title: techPack.sketchTitle || 'Эскиз PRO', image: techPack.sketchImage }] : [];
+  for (const [index, item] of sketchImages.entries()) {
+    ws.mergeCells(rowIndex, 1, rowIndex, 11);
+    const imageTitle = ws.getCell(rowIndex, 1);
+    imageTitle.value = sketchImages.length > 1 ? `Крупный эскиз из Эскиз PRO — ${index + 1}. ${item.title}` : 'Крупный эскиз из Эскиз PRO';
+    imageTitle.font = { bold: true, size: 12, color: { argb: 'FF24382F' } };
+    imageTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF7FBF9' } };
+    const imageId = wb.addImage({ base64: item.image.base64, extension: item.image.extension });
+    const imageSize = imageSizeWithinBox(item.image, { width: 1500, height: 680 });
+    (ws as unknown as { addImage: (imageId: number, range: unknown) => void }).addImage(imageId, { tl: { col: 0, row: rowIndex }, ext: imageSize, editAs: 'oneCell' });
+    const imageRows = Math.max(8, Math.ceil((imageSize.height + 12) / 20));
+    for (let row = rowIndex + 1; row < rowIndex + 1 + imageRows; row += 1) ws.getRow(row).height = 15;
+    rowIndex = rowIndex + 1 + imageRows + 2;
+  }
+
+  const errors = techPack.readinessRows.filter((row) => row.level === 'error').length;
+  const warnings = techPack.readinessRows.filter((row) => row.level === 'warn').length;
+  addSectionTitle(ws, rowIndex, 'Проверка перед фабрикой', errors > 0 ? `Критичных ошибок: ${errors} · предупреждений: ${warnings}` : warnings > 0 ? `Предупреждений: ${warnings}` : 'Критичных ошибок и предупреждений нет');
+  rowIndex = addTable(ws, rowIndex + 1, ['Уровень', 'Зона', 'Что проверить'], techPack.readinessRows.map((row) => [row.level === 'error' ? 'Ошибка' : row.level === 'warn' ? 'Предупреждение' : 'OK', row.area, row.text]));
+
+  addSectionTitle(ws, rowIndex, 'Расшифровка маркеров и модулей', 'Связка картинки с расчётом, корпусами, фасадами и фурнитурой');
+  rowIndex = addTable(ws, rowIndex + 1,
+    ['Маркер', 'Статус', 'Модуль', 'Тип', 'Размер', 'Кол.', 'Корпус', 'Материал фасада', 'Фасадные детали', 'Фурнитура', 'Комментарий'],
+    techPack.moduleRows.map((row) => [row.marker, row.status, row.module, row.type, row.size, row.qty, row.body, row.facadeMaterial, row.facadeDetails, row.hardware, row.note]));
+
+  addSectionTitle(ws, rowIndex, 'Коммуникации', 'Розетки, вода, канализация, газ, вентиляция и привязочные расстояния');
+  addTable(ws, rowIndex + 1,
+    ['Тип', 'Название', 'Размер', 'Координаты', 'Привязки', 'Примечание'],
+    techPack.communicationRows.map((row) => [row.kind, row.name, row.size, row.location, row.distances, row.note]));
 }
 
 /**
@@ -207,6 +548,10 @@ export async function buildFactoryBlankWorkbook(
   baseUrl: string,
   map: BlankSheetMap,
   writes: BlankCellWrite[],
+  sketchImage?: BlankSketchImage | null,
+  techPack?: FactoryTechPack | null,
+  worktopSketchImage?: BlankSketchImage | null,
+  sketchImages?: BlankSketchEntry[] | null,
 ): Promise<ArrayBuffer> {
   const ExcelJS = (await import('exceljs')).default;
   const url = `${baseUrl}templates/${map.template}`;
@@ -219,10 +564,46 @@ export async function buildFactoryBlankWorkbook(
   const ws = wb.getWorksheet(map.sheet);
   if (!ws) throw new Error(`В шаблоне нет листа «${map.sheet}»`);
 
-  // 1) убираем примеры заполнения, которые лежат в шаблоне
-  for (const cell of map.clear) ws.getCell(cell).value = null;
-  // 2) пишем свои значения
-  for (const w of writes) ws.getCell(w.cell).value = w.value === '' ? null : w.value;
+  // 1) убираем примеры заполнения, которые лежат в шаблоне, включая старые строки листа 2
+  for (const cell of [...map.clear, ...worktopAreaCells(map)]) ws.getCell(cell).value = null;
+  // 2) пишем свои значения; длинные тексты сразу включаем с переносом строк,
+  // чтобы технолог видел весь состав без ручного растягивания ячеек.
+  for (const w of writes) {
+    const cell = ws.getCell(w.cell);
+    cell.value = w.value === '' ? null : w.value;
+    if (w.value !== '') {
+      const lineCount = Math.max(w.value.split('\n').length, Math.ceil(w.value.length / 46));
+      cell.alignment = { ...(cell.alignment ?? {}), wrapText: true, vertical: 'top' };
+      if (lineCount > 1) {
+        const row = ws.getRow(Number(cell.row));
+        row.height = Math.max(row.height ?? 15, Math.min(90, 15 + (lineCount - 1) * 12));
+      }
+    }
+  }
+
+  // 3) Эскиз PRO кладём в штатное левое поле бланка отдельными картинками.
+  // Не склеиваем несколько snapshot в один коллаж: в Excel каждую картинку можно выделить,
+  // увеличить и переставить по месту вручную.
+  if (map.sketch) {
+    const officialSketches: BlankSketchEntry[] = sketchImages?.length
+      ? sketchImages
+      : sketchImage ? [{ title: 'Эскиз PRO', image: sketchImage }] : [];
+    for (const placement of buildSketchImagePlacements(map.sketch, officialSketches)) {
+      const imageId = wb.addImage({ base64: placement.image.base64, extension: placement.image.extension });
+      (ws as unknown as { addImage: (imageId: number, range: unknown) => void }).addImage(imageId, { tl: placement.tl, ext: placement.ext, editAs: 'oneCell' });
+    }
+  }
+
+  // 4) Визуальная схема столешницы — в штатное поле листа 2, рядом с фабричной легендой V/Х/ПФ.
+  if (worktopSketchImage && map.worktop?.sketch) {
+    const imageId = wb.addImage({ base64: worktopSketchImage.base64, extension: worktopSketchImage.extension });
+    const imageSize = imageSizeWithinBox(worktopSketchImage, map.worktop.sketch.targetPx);
+    (ws as unknown as { addImage: (imageId: number, range: unknown) => void }).addImage(imageId, { tl: map.worktop.sketch.tl, ext: imageSize, editAs: 'oneCell' });
+  }
+
+  // 5) Дополнительный техлист не меняет официальный бланк, но даёт фабрике крупный эскиз,
+  // расшифровку маркеров и список проблем в той же книге.
+  if (techPack) addFactoryTechSheet(wb, techPack);
 
   return wb.xlsx.writeBuffer() as Promise<ArrayBuffer>;
 }
@@ -247,6 +628,11 @@ export async function exportFactoryBlankXlsx(args: {
   spec: FactoryBlankSpec;
   draft: BlankDraftField[];
   pieces: WorktopPiece[];
+  sketchImage?: BlankSketchImage | null;
+  /** Несколько выбранных Эскиз PRO для официального листа: вставляются отдельными картинками, не коллажем. */
+  sketchImages?: BlankSketchEntry[] | null;
+  worktopSketchImage?: BlankSketchImage | null;
+  techPack?: FactoryTechPack | null;
 }): Promise<void> {
   const map = getBlankSheetMap(args.spec.id);
   if (!map) throw new Error(`Для бланка «${args.spec.blankName}» нет карты шаблона`);
@@ -254,6 +640,6 @@ export async function exportFactoryBlankXlsx(args: {
     ...buildBlankCellWrites(map, args.draft),
     ...buildWorktopWrites(map, args.pieces, worktopSummary(args.draft)),
   ];
-  const data = await buildFactoryBlankWorkbook(args.baseUrl, map, writes);
+  const data = await buildFactoryBlankWorkbook(args.baseUrl, map, writes, args.sketchImage ?? null, args.techPack ?? null, args.worktopSketchImage ?? null, args.sketchImages ?? null);
   downloadWorkbook(data, blankFileName(args.project, args.spec));
 }
