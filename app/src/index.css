@@ -8518,3 +8518,22 @@ a.crm-item-phone:hover { text-decoration: underline; }
 .notify-leads > b { font-size: 12.5px; color: #16213f; }
 .notify-grid .span-2 { grid-column: span 2; }
 @media (max-width: 760px) { .notify-grid .span-2 { grid-column: 1 / -1; } }
+
+/* Вложения в делах графика. */
+.schedule-attachments { display: grid; gap: 6px; }
+.schedule-attachments > b { font-size: 12.5px; color: #16213f; }
+.schedule-attachments > p { margin: 0; }
+.schedule-attachments ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.schedule-attachments li {
+  display: flex; gap: 8px; align-items: center;
+  padding: 7px 10px; border: 1px solid #e8ecf6; border-radius: 10px; background: #fafbff; font-size: 12.5px;
+}
+.schedule-attachments li a { color: #16213f; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-attachments li small { color: #8a97b4; margin-left: auto; }
+.schedule-attachments li button { border: 0; background: none; color: #b3b9c9; cursor: pointer; }
+.schedule-attachments li button:hover { color: #b3261e; }
+.schedule-attach-add {
+  display: inline-block; padding: 9px 14px; border: 1px dashed #c3cde6; border-radius: 10px;
+  background: #fff; color: #45536f; font-size: 13px; cursor: pointer; text-align: center;
+}
+.schedule-attach-add:hover { border-color: #16213f; color: #16213f; }

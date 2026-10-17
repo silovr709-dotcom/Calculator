@@ -1273,6 +1273,31 @@ function recept_notify_run(): array
 
 /* ------------------------------ подписка календаря (ICS) ------------------------------ */
 
+/** Полный адрес сайта — нужен для ссылок на файлы внутри календаря. */
+function recept_site_base(): string
+{
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['SERVER_PORT'] ?? '') === '443');
+    $host = isset($_SERVER['HTTP_HOST']) ? (string) $_SERVER['HTTP_HOST'] : 'localhost';
+    $script = isset($_SERVER['SCRIPT_NAME']) ? (string) $_SERVER['SCRIPT_NAME'] : '/api/index.php';
+    $dir = rtrim(str_replace('\\', '/', dirname($script)), '/');
+    return ($https ? 'https://' : 'http://') . $host . $dir;
+}
+
+/** Описание события: клиент, телефон, заметка и ссылки на вложения. */
+function recept_ics_description(array $parts, array $attachments, string $base): string
+{
+    $lines = array_values(array_filter($parts, function ($value) { return is_string($value) && trim($value) !== ''; }));
+    foreach ($attachments as $attachment) {
+        $attachment = is_object($attachment) ? get_object_vars($attachment) : $attachment;
+        if (!is_array($attachment) || empty($attachment['fileId'])) {
+            continue;
+        }
+        $name = isset($attachment['name']) ? (string) $attachment['name'] : 'файл';
+        $lines[] = $name . ': ' . $base . '/index.php?r=files&id=' . (string) $attachment['fileId'];
+    }
+    return implode("\n", $lines);
+}
+
 function recept_ics_escape(string $text): string
 {
     $text = str_replace(["\\", "\n", ',', ';'], ['\\\\', '\\n', '\\,', '\\;'], $text);
@@ -1302,6 +1327,7 @@ function recept_ics_build(string $who = ''): string
     $events = isset($data['events']) && is_array($data['events']) ? $data['events'] : [];
     $projects = isset($data['projects']) && is_array($data['projects']) ? $data['projects'] : [];
     $needle = mb_strtolower(trim($who));
+    $base = recept_site_base();
 
     $lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//RECEPT//Kitchen//RU', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:РЕцепт — график работ'];
 
@@ -1343,9 +1369,23 @@ function recept_ics_build(string $who = ''): string
         if (!empty($event['address'])) {
             $lines[] = 'LOCATION:' . recept_ics_escape((string) $event['address']);
         }
-        $description = trim((string) ($event['clientName'] ?? '') . ' ' . (string) ($event['note'] ?? ''));
+        $attachments = isset($event['attachments']) && is_array($event['attachments']) ? $event['attachments'] : [];
+        $description = recept_ics_description([
+            isset($event['clientName']) ? ('Клиент: ' . (string) $event['clientName']) : '',
+            isset($event['clientPhone']) && $event['clientPhone'] !== '' ? ('Телефон: ' . (string) $event['clientPhone']) : '',
+            isset($event['address']) && $event['address'] !== '' ? ('Адрес: ' . (string) $event['address']) : '',
+            isset($event['note']) ? (string) $event['note'] : '',
+        ], $attachments, $base);
         if ($description !== '') {
             $lines[] = 'DESCRIPTION:' . recept_ics_escape($description);
+        }
+        foreach ($attachments as $attachment) {
+            $attachment = is_object($attachment) ? get_object_vars($attachment) : $attachment;
+            if (!is_array($attachment) || empty($attachment['fileId'])) {
+                continue;
+            }
+            $lines[] = 'ATTACH;FILENAME=' . recept_ics_escape((string) ($attachment['name'] ?? 'файл'))
+                . ':' . $base . '/index.php?r=files&id=' . (string) $attachment['fileId'];
         }
         $lines[] = 'END:VEVENT';
     }
@@ -1381,7 +1421,26 @@ function recept_ics_build(string $who = ''): string
         if (!empty($schedule['address'])) {
             $lines[] = 'LOCATION:' . recept_ics_escape((string) $schedule['address']);
         }
-        $lines[] = 'DESCRIPTION:' . recept_ics_escape((string) ($project['name'] ?? '') . ($team !== '' ? ' · ' . $team : ''));
+        $offer = isset($project['clientOffer']) ? (is_object($project['clientOffer']) ? get_object_vars($project['clientOffer']) : $project['clientOffer']) : [];
+        $phone = isset($schedule['phone']) && $schedule['phone'] !== ''
+            ? (string) $schedule['phone']
+            : (is_array($offer) && isset($offer['clientPhone']) ? (string) $offer['clientPhone'] : '');
+        $attachments = isset($schedule['attachments']) && is_array($schedule['attachments']) ? $schedule['attachments'] : [];
+        $lines[] = 'DESCRIPTION:' . recept_ics_escape(recept_ics_description([
+            (string) ($project['name'] ?? ''),
+            $team !== '' ? ('Бригада: ' . $team) : '',
+            $phone !== '' ? ('Телефон: ' . $phone) : '',
+            isset($schedule['address']) && $schedule['address'] !== '' ? ('Адрес: ' . (string) $schedule['address']) : '',
+            isset($schedule['note']) ? (string) $schedule['note'] : '',
+        ], $attachments, $base));
+        foreach ($attachments as $attachment) {
+            $attachment = is_object($attachment) ? get_object_vars($attachment) : $attachment;
+            if (!is_array($attachment) || empty($attachment['fileId'])) {
+                continue;
+            }
+            $lines[] = 'ATTACH;FILENAME=' . recept_ics_escape((string) ($attachment['name'] ?? 'файл'))
+                . ':' . $base . '/index.php?r=files&id=' . (string) $attachment['fileId'];
+        }
         $lines[] = 'END:VEVENT';
     }
 

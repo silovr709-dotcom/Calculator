@@ -1,7 +1,7 @@
 // Окно правки дела и дат заказа. Экран графика остаётся календарём,
 // а все подробности открываются отдельным окном — как редактор модуля.
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { CalendarEvent, CalendarEventKind, Project, ProjectSchedule, ScheduleStatus } from '../types';
 import { Overlay } from './Portal';
 import { SCHEDULE_STATUSES } from '../lib/schedule';
@@ -9,7 +9,9 @@ import { CALENDAR_KINDS } from '../lib/calendar';
 import { fmtDateLong } from '../lib/format';
 import { mapPointUrl } from '../lib/maps';
 import ReminderPicker from './ReminderPicker';
-import { serverFileUrl, workOrderUrl, type WorkOrderPayload, type WorkOrderSummary } from '../lib/serverApi';
+import { serverFileUrl, uploadAttachment, workOrderUrl, type WorkOrderPayload, type WorkOrderSummary } from '../lib/serverApi';
+import { toast } from '../lib/toast';
+import type { CalendarAttachment } from '../types';
 
 const ORDER_STATUS_LABELS: Record<string, string> = {
   sent: 'наряд выдан',
@@ -40,6 +42,47 @@ export default function ScheduleDialog(props: {
   setOrderDraft: (draft: WorkOrderPayload | null) => void;
 }) {
   const { editEvent, editProject, people, orders, orderDraft, orderBusy, orderCopied } = props;
+  const [uploading, setUploading] = useState(false);
+
+  /** Вложения уходят в общее хранилище и попадают в подписку календаря. */
+  const addFiles = async (files: FileList | null, current: CalendarAttachment[], apply: (next: CalendarAttachment[]) => void) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const added: CalendarAttachment[] = [];
+      for (const file of Array.from(files)) added.push(await uploadAttachment(file));
+      apply([...current, ...added]);
+      toast.ok(added.length === 1 ? 'Файл прикреплён' : `Прикреплено файлов: ${added.length}`);
+    } catch (error) {
+      toast.error(`Не получилось прикрепить файл: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const attachmentsBlock = (list: CalendarAttachment[], apply: (next: CalendarAttachment[]) => void) => (
+    <div className="span-3 schedule-attachments">
+      <b>Вложения</b>
+      <p className="muted small">Фото объекта, схема, PDF. Файлы видны в подписке календаря на телефоне и в наряде мастера.</p>
+      {list.length > 0 && (
+        <ul>
+          {list.map((item) => (
+            <li key={item.fileId}>
+              <a href={serverFileUrl(item.fileId)} target="_blank" rel="noreferrer">{item.name}</a>
+              {item.size ? <small>{Math.max(1, Math.round(item.size / 1024))} КБ</small> : null}
+              <button type="button" aria-label="Убрать файл"
+                onClick={() => apply(list.filter((file) => file.fileId !== item.fileId))}>✕</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <label className="schedule-attach-add">
+        {uploading ? 'Загружаем…' : '📎 Прикрепить файл'}
+        <input type="file" multiple hidden disabled={uploading}
+          onChange={(event) => { void addFiles(event.target.files, list, apply); event.target.value = ''; }} />
+      </label>
+    </div>
+  );
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') props.onClose(); };
@@ -133,6 +176,11 @@ export default function ScheduleDialog(props: {
                   ))}
                 </select>
               </label>
+              <label>Телефон клиента
+                <input value={editEvent.clientPhone ?? ''} placeholder="+7…"
+                  onChange={(event) => props.updateEvent(editEvent.id, { clientPhone: event.target.value })} />
+              </label>
+              {attachmentsBlock(editEvent.attachments ?? [], (attachments) => props.updateEvent(editEvent.id, { attachments }))}
               <div className="span-3 schedule-reminder-picker">
                 <b>Напомнить</b>
                 <ReminderPicker
@@ -199,6 +247,11 @@ export default function ScheduleDialog(props: {
                     {SCHEDULE_STATUSES.map((status) => <option key={status.id} value={status.id}>{status.label}</option>)}
                   </select>
                 </label>
+                <label>Телефон на объекте
+                  <input value={editProject.schedule?.phone ?? ''} placeholder="+7…"
+                    onChange={(event) => props.patchSchedule(editProject, { phone: event.target.value })} />
+                </label>
+                {attachmentsBlock(editProject.schedule?.attachments ?? [], (attachments) => props.patchSchedule(editProject, { attachments }))}
                 <div className="span-3 schedule-reminder-picker">
                   <b>Напомнить про этот монтаж</b>
                   <ReminderPicker

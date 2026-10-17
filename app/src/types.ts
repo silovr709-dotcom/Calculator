@@ -255,10 +255,22 @@ export interface ProjectSchedule {
   status?: ScheduleStatus;
   /** За сколько минут напомнить про монтаж. Пусто — берутся общие настройки. */
   reminders?: number[];
+  /** Телефон на объекте — попадает в подписку календаря и в наряд. */
+  phone?: string;
+  /** Файлы к монтажу: эскизы, схемы, фото объекта. */
+  attachments?: CalendarAttachment[];
 }
 
 /** Своё дело в календаре: замер, выезд, встреча, монтаж — без привязки к проекту. */
 export type CalendarEventKind = 'measure' | 'delivery' | 'install' | 'meeting' | 'call' | 'service' | 'other';
+
+/** Файл, прикреплённый к делу: фото, PDF, схема. Хранится на хостинге. */
+export interface CalendarAttachment {
+  fileId: string;
+  name: string;
+  size?: number;
+  mime?: string;
+}
 
 export interface CalendarEvent {
   id: string;
@@ -273,8 +285,11 @@ export interface CalendarEvent {
   /** Кому поручено: логины или имена сотрудников. Пусто — общее дело. */
   assignees: string[];
   clientName?: string;
+  /** Телефон клиента: уезжает в подписку календаря, чтобы звонить одним касанием. */
+  clientPhone?: string;
   address?: string;
   note?: string;
+  attachments?: CalendarAttachment[];
   projectId?: string;
   status: ScheduleStatus;
   done?: boolean;

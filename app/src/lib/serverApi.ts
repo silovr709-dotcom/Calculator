@@ -228,6 +228,19 @@ export function serverFileUrl(id: string): string {
   return apiUrl('files', { id });
 }
 
+/** Загрузка вложения к делу календаря: файл ложится в общее хранилище. */
+export async function uploadAttachment(file: File): Promise<{ fileId: string; name: string; size: number; mime: string }> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
+    reader.readAsDataURL(file);
+  });
+  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  const saved = await uploadServerFile(base64, file.type || 'application/octet-stream');
+  return { fileId: saved.id, name: file.name, size: saved.size, mime: file.type || '' };
+}
+
 /** Сколько файлов и места занято на хостинге. */
 export async function serverFilesUsage(): Promise<{ files: number; bytes: number }> {
   return request('files/usage');

@@ -190,7 +190,7 @@ r = await call('notify/contacts');
 check('поиск собеседников бота отвечает понятной ошибкой на неверный токен', r.status === 400 && String(r.json?.error).includes('токен'), r.text);
 
 // --- подписка календаря (ICS) ---
-r = await call('state', { method: 'POST', body: { rev: -1, data: { projects: [{ id: 'ics1', name: 'Кухня ICS', client: 'Ирина', schedule: { installAt: '2026-11-05', team: 'Бригада 1', address: 'ул. Мира, 5' } }], clients: [], templates: [], settings: {}, events: [{ id: 'ev1', title: 'Замер у Ирины', kind: 'measure', date: '2026-11-03', timeStart: '10:00', assignees: ['Пётр'], address: 'пр. Ленина, 10', status: 'planned', createdAt: '', updatedAt: '' }] } } });
+r = await call('state', { method: 'POST', body: { rev: -1, data: { projects: [{ id: 'ics1', name: 'Кухня ICS', client: 'Ирина', clientOffer: { clientPhone: '+7 900 111-22-33' }, schedule: { installAt: '2026-11-05', team: 'Бригада 1', address: 'ул. Мира, 5', attachments: [{ fileId: 'a'.repeat(64), name: 'Схема.pdf' }] } }], clients: [], templates: [], settings: {}, events: [{ id: 'ev1', title: 'Замер у Ирины', kind: 'measure', date: '2026-11-03', timeStart: '10:00', assignees: ['Пётр'], address: 'пр. Ленина, 10', clientPhone: '+7 900 222-33-44', status: 'planned', attachments: [{ fileId: 'b'.repeat(64), name: 'Фото объекта.jpg' }], createdAt: '', updatedAt: '' }] } } });
 check('база с делами сохранена для ICS', r.json?.ok === true, r.text);
 
 cookie = '';
@@ -200,6 +200,10 @@ check('подписка без ключа закрыта', r.status === 403, r.t
 r = await call('ics', { query: `&key=${cronKey}` });
 check('ICS отдаётся и содержит оба события', r.status === 200 && r.raw.includes('BEGIN:VCALENDAR') && r.raw.includes('Замер у Ирины') && r.raw.includes('Монтаж: Ирина'), String(r.status));
 check('в ICS есть адрес и завершение', r.raw.includes('LOCATION:ул. Мира') && r.raw.includes('END:VCALENDAR'), String(r.status));
+check('в ICS есть телефон клиента', r.raw.includes('Телефон: +7 900 222-33-44') && r.raw.includes('Телефон: +7 900 111-22-33'), String(r.status));
+if (!r.raw.includes('ATTACH')) console.log('ДИАГНОСТИКА ICS:', r.raw.split('\r\n').filter((line) => line.startsWith('DESCRIPTION') || line.startsWith('ATTACH') || line.startsWith('SUMMARY')).join(' | ').slice(0, 600));
+check('в ICS есть вложения ссылками', r.raw.includes('ATTACH;FILENAME=Схема.pdf') && r.raw.includes('Фото объекта.jpg') && r.raw.includes('r=files&id='), String(r.status));
+check('в ICS есть адрес в описании', r.raw.includes('Адрес: пр. Ленина') , String(r.status));
 check('в ICS есть будильники для телефона', r.raw.includes('BEGIN:VALARM') && r.raw.includes('TRIGGER:-PT30M') && r.raw.includes('TRIGGER:-PT1440M'), String(r.status));
 
 r = await call('ics', { query: `&key=${cronKey}&who=Пётр` });
