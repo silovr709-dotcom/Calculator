@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { Pricebook, ModuleDefaults } from '../types';
 import { MODULE_PRESETS, newModule, moduleFromPreset, moduleToLines, checkModule, moveModule, resolveSlot, parseBodyDrawers, parseBodyDoors, setWarningConfirmed, isWarningConfirmed } from './modules';
-import { calcTotals } from './engine';
+import { calcLinesCost, calcTotals } from './engine';
 import { defaultSettings } from './storage';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -242,6 +242,45 @@ describe('процентные надбавки модуля', () => {
     m.surcharges = [pct.id];
     expect(moduleToLines(m, {}, pb)).toHaveLength(0);
     expect(checkModule(m, {}, pb).errors.join(' ')).toMatch(/корпус/i);
+  });
+});
+
+describe('себестоимость модуля = сумма строк расшифровки', () => {
+  it('расшифровка модуля сходится с итогом; сборка/доставка/доп. расходы проекта в модуль не входят', () => {
+    // Сценарий с экрана модуля: стол с 2-мя ящиками + 2 системы выдвижения + 4 опоры
+    const m = newModule('Нижний шкаф');
+    m.drawers = 2; m.legs = 4;
+    m.slots.body = { mode: 'manual', itemId: corpus238.id };
+    m.slots.drawerSys = { mode: 'manual', itemId: drawerSys.id };
+    m.slots.legs = { mode: 'manual', itemId: oporaLeg.id };
+    const lines = moduleToLines(m, {}, pb);
+    expect(lines).toHaveLength(3); // корпус + системы выдвижения + опоры
+
+    const { cost, lineCalcs } = calcLinesCost(lines);
+    // итог расшифровки = сумма всех её строк
+    const rowsSum = [...lineCalcs.values()].reduce((sum, c) => sum + (c.sum ?? 0), 0);
+    expect(cost).toBeCloseTo(rowsSum, 2);
+    // руками: корпус 3200 + 2 × система выдвижения + 4 × 25
+    expect(cost).toBeCloseTo(3200 + 2 * drawerSys.price! + 100, 2);
+
+    // проектные расходы (сборка/доставка/%) остаются уровня проекта…
+    const settings = defaultSettings();
+    settings.assemblyCost = 30000;
+    settings.deliveryCost = 8000;
+    settings.extraExpenses = [{ id: 'e1', name: 'Дизайнеру', amount: null, percent: 5, toClient: false }];
+    const project = calcTotals(lines, settings).totals;
+    // …и добавляются в итог проекта один раз, а не к стоимости каждого модуля
+    expect(project.extraTotal).toBeGreaterThan(38000);
+    expect(project.cost).toBeCloseTo(project.costLines + project.extraTotal, 2);
+  });
+
+  it('процентная надбавка модуля входит в сумму строк расшифровки', () => {
+    const pct = pb.items.find((i) => i.priceKind === 'percent' && i.price === 10)!;
+    const m = newModule('Нижний шкаф');
+    m.slots.body = { mode: 'manual', itemId: corpus224.id };
+    m.surcharges = [pct.id];
+    const lines = moduleToLines(m, {}, pb);
+    expect(calcLinesCost(lines).cost).toBeCloseTo(3300 + 330, 2); // руками: 3300 × 10% = 330
   });
 });
 

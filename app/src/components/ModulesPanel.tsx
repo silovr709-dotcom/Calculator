@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ExtraFacadePart, KitchenModule, KitchenWall, ModuleDefaults, Pricebook, PriceItem, Project, SlotKey, Template } from '../types';
 import { MODULE_PRESETS, MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moduleFromPreset, moveModule, modulesSummary, moduleToLines, newModule, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
-import { calcTotals } from '../lib/engine';
+import { calcLinesCost } from '../lib/engine';
 import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalFacadeSpecOutdated, isTechnicalHingeSpecOutdated } from '../lib/facades';
 import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surcharges';
 import { fmtMoney, fmtNum } from '../lib/format';
@@ -102,10 +102,12 @@ export default function ModulesPanel(props: {
   const pendingDimensionSurcharges = dimensionSurchargeRecommendations.filter((item) => !(sel?.surcharges ?? []).includes(item.itemId));
 
   const checks = useMemo(() => new Map(mods.map((m) => [m.id, checkModule(m, defaults, pricebook)])), [mods, defaults, pricebook]);
+  // Себестоимость модуля = сумма его строк. Сборка/доставка и доп. расходы проекта
+  // считаются один раз в итогах проекта (calcTotals), а не в каждом модуле.
   const costs = useMemo(() => new Map(mods.map((m) => {
     const lines = moduleToLines(m, defaults, pricebook);
-    return [m.id, calcTotals(lines, project.settings).totals.cost];
-  })), [mods, defaults, pricebook, project.settings]);
+    return [m.id, calcLinesCost(lines).cost];
+  })), [mods, defaults, pricebook]);
   const summary = useMemo(() => modulesSummary(mods), [mods]);
   const pendingDimensionModuleCount = useMemo(() => mods.filter((module) => {
     const body = resolveSlot(module, 'body', defaults, pricebook).item;
@@ -114,7 +116,7 @@ export default function ModulesPanel(props: {
     return recommendations.some((item) => !(module.surcharges ?? []).includes(item.itemId));
   }).length, [mods, defaults, pricebook]);
   const selectedModuleLines = sel ? moduleToLines(sel, defaults, pricebook) : [];
-  const selectedModuleCalculation = sel ? calcTotals(selectedModuleLines, project.settings) : null;
+  const selectedModuleCalculation = sel ? calcLinesCost(selectedModuleLines) : null;
   const pendingFacadeModuleCount = useMemo(() => mods.filter((module) => {
     const body = resolveSlot(module, 'body', defaults, pricebook).item;
     const inference = body ? inferFacadeSpec(module, body) : null;
@@ -354,7 +356,7 @@ export default function ModulesPanel(props: {
             <b>{sel.name}</b>
             <span>{sel.widthMm || '—'}×{sel.heightMm || '—'}×{sel.depthMm || '—'} мм · {sel.qty} шт</span>
             <span>{selectedBody ? selectedBody.name.slice(0, 48) : 'корпус не выбран'}</span>
-            <strong>{selectedModuleCalculation ? fmtMoney(selectedModuleCalculation.totals.cost) : '—'}</strong>
+            <strong>{selectedModuleCalculation ? fmtMoney(selectedModuleCalculation.cost) : '—'}</strong>
           </> : <><b>Нет выбранной позиции</b><span>Кликните по карточке или строке — откроется окно редактирования.</span></>}
         </aside>
       </section>
@@ -513,7 +515,7 @@ export default function ModulesPanel(props: {
               <p>{sel.type} · {sel.widthMm || '—'}×{sel.heightMm || '—'}×{sel.depthMm || '—'} мм · {sel.qty} шт</p>
             </div>
             <div className="module-editor-hero-stats">
-              <span><b>{selectedModuleCalculation ? fmtMoney(selectedModuleCalculation.totals.cost) : '—'}</b><small>себестоимость</small></span>
+              <span><b>{selectedModuleCalculation ? fmtMoney(selectedModuleCalculation.cost) : '—'}</b><small>себестоимость</small></span>
               <span><b>{selectedBody ? 'выбран' : 'нет'}</b><small>корпус</small></span>
               <span><b>{checks.get(sel.id)!.level === 'ok' ? 'OK' : checks.get(sel.id)!.level === 'error' ? 'ошибка' : 'проверить'}</b><small>статус</small></span>
             </div>
@@ -541,14 +543,18 @@ export default function ModulesPanel(props: {
           </div>
           {selectedModuleCalculation && selectedModuleLines.length > 0 && (
             <section className="module-formula-card">
-              <div className="facade-tech-head"><h4>Расшифровка расчёта модуля</h4><b>{fmtMoney(selectedModuleCalculation.totals.cost)}</b></div>
-              <div className="muted small">Каждая строка считается отдельно; процентные надбавки привязаны только к строке корпуса.</div>
+              <div className="facade-tech-head"><h4>Расшифровка расчёта модуля</h4><b>{fmtMoney(selectedModuleCalculation.cost)}</b></div>
+              <div className="muted small">Каждая строка считается отдельно; процентные надбавки привязаны только к строке корпуса. Сборка, доставка и доп. расходы проекта в расчёт модуля не входят — они считаются один раз в итогах проекта.</div>
               <div className="module-formula-list">
                 {selectedModuleLines.map((line) => {
                   const calculation = selectedModuleCalculation.lineCalcs.get(line.id);
                   return <div className="module-formula-row" key={line.id}>
                     <span>{line.name.slice(0, 55)}<small>{stripModuleNote(line.note)}</small></span>
-                    <b>{calculation?.sum != null ? `${fmtNum(calculation.qtyEffective)} × ${fmtMoney(line.price)} = ${fmtMoney(calculation.sum)}` : 'нет цены'}</b>
+                    <b>{calculation?.sum != null
+                      ? (line.priceKind === 'percent'
+                        ? `+${fmtNum(line.price, 2)}% = ${fmtMoney(calculation.sum)}`
+                        : `${fmtNum(calculation.qtyEffective)} × ${fmtMoney(line.price)} = ${fmtMoney(calculation.sum)}`)
+                      : 'нет цены'}</b>
                   </div>;
                 })}
               </div>

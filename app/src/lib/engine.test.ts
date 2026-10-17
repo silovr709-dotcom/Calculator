@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { Pricebook, PriceItem, ProjectLine } from '../types';
-import { calcTotals, lineFromItem, effectiveQty, sheetsFromLength, summaryGroupFor } from './engine';
+import { calcLinesCost, calcTotals, lineFromItem, effectiveQty, sheetsFromLength, summaryGroupFor } from './engine';
 import { defaultSettings } from './storage';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -207,6 +207,37 @@ describe('итоги, наценка, цена клиента, маржа', () =
     const { totals } = calcTotals([lineFromItem(it34, 'visma-2026', 1)], defaultSettings());
     expect(totals.client).toBe(totals.cost);
     expect(totals.markupRub).toBe(0);
+  });
+});
+
+describe('calcLinesCost: расшифровка строк без правил уровня проекта', () => {
+  it('не добавляет к строкам сборку/доставку и правило эмали < 1 м² — они считаются в calcTotals на проект', () => {
+    const emalItem = find((i) => i.group === 'emal' && i.priceBasis === 'm2' && i.price === 13500);
+    const line = lineFromItem(emalItem, 'visma-2026', 1, { areaM2: 0.5 }); // 0.5 м² < 1 м²
+    const settings = defaultSettings();
+    settings.assemblyCost = 1000;
+    settings.deliveryCost = 500;
+
+    // проектный расчёт: строка +30% за эмаль + расходы
+    const { totals } = calcTotals([line], settings);
+    expect(totals.emalAdjustment?.applied).toBe(true);
+    expect(totals.costLines).toBeCloseTo(6750 + 2025, 2);
+    expect(totals.cost).toBeCloseTo(8775 + 1500, 2);
+
+    // расшифровка строки показывает только саму строку — итог сходится с её суммой
+    const { cost, lineCalcs } = calcLinesCost([line]);
+    expect(lineCalcs.get(line.id)!.sum).toBe(6750);
+    expect(cost).toBe(6750);
+  });
+
+  it('процентная строка считается от базовой и входит в сумму расшифровки', () => {
+    const it34 = find((i) => i.article === '34' && i.source.sheet === 'каркас шк'); // 2100
+    const pct = find((i) => i.priceKind === 'percent' && i.price === 10);
+    const base = lineFromItem(it34, 'visma-2026', 2); // 4200
+    const surcharge = lineFromItem(pct, 'visma-2026', 1);
+    surcharge.baseLineId = base.id;
+    const { cost } = calcLinesCost([base, surcharge]);
+    expect(cost).toBeCloseTo(4200 + 420, 2); // руками: 4200 × 10% = 420
   });
 });
 

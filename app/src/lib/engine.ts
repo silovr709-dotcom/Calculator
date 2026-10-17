@@ -134,6 +134,19 @@ export function calcLines(lines: ProjectLine[]): Map<string, LineCalc> {
   return res;
 }
 
+/**
+ * Стоимость набора строк ТОЛЬКО по их суммам: то, что видно в расшифровке строк.
+ * Правила уровня проекта (эмаль < 1 м², сборка/доставка, доп. расходы) сюда НЕ входят —
+ * они считаются один раз в calcTotals на весь проект. Поэтому итог этой функции
+ * всегда совпадает с суммой строк расшифровки модуля.
+ */
+export function calcLinesCost(lines: ProjectLine[]): { lineCalcs: Map<string, LineCalc>; cost: number } {
+  const lineCalcs = calcLines(lines);
+  let cost = 0;
+  for (const c of lineCalcs.values()) if (c.sum != null) cost = round2(cost + c.sum);
+  return { lineCalcs, cost };
+}
+
 // ---------- Наценка ----------
 
 export function markupPctForGroup(settings: ProjectSettings, group: SummaryGroup): number | null {

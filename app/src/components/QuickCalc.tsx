@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Pricebook, PriceItem, ProjectLine, ProjectSettings, Template } from '../types';
-import { lineFromItem, calcTotals, sheetsFromLength, sheetLengthOf, unitIsHalfSheetAllowed } from '../lib/engine';
+import { lineFromItem, calcLinesCost, calcTotals, sheetsFromLength, sheetLengthOf, unitIsHalfSheetAllowed } from '../lib/engine';
 import { defaultSettings, uid } from '../lib/storage';
 import { fmtMoney, fmtNum, todayISO } from '../lib/format';
 import { buildQuickEstimate, quickEstimateRange, type QuickEstimateInput } from '../lib/quickEstimate';
@@ -540,7 +540,7 @@ export default function QuickCalc(props: {
                   {!hasClientMarkup && <div className="warn small">В настройках не задана наценка — клиентская цена сейчас почти равна себестоимости. Для реальной цены задайте наценки в «Настройки».</div>}
                   <div className="quick-line-list">
                     {expressEstimate.lines.slice(0, 10).map((line) => {
-                      const c = calcTotals([line], defaultSettings()).totals.cost;
+                      const c = calcLinesCost([line]).cost;
                       return <div className="t-row small" key={line.id}><span>{line.name.slice(0, 38)}… × {fmtNum(line.qty)}</span><span>{fmtMoney(c)}</span></div>;
                     })}
                     {expressEstimate.lines.length > 10 && <div className="muted small">+ ещё {expressEstimate.lines.length - 10} строк</div>}
@@ -676,7 +676,7 @@ export default function QuickCalc(props: {
               {lines.length === 0 ? <div className="muted small">Добавьте позиции слева.</div> : (
                 <>
                   {lines.map((l) => {
-                    const c = calcTotals([l], defaultSettings()).totals.cost;
+                    const c = calcLinesCost([l]).cost;
                     return <div className="t-row small" key={l.id}><span>{l.name.slice(0, 44)}… × {fmtNum(l.qty)}</span><span>{fmtMoney(c)}</span></div>;
                   })}
                   <div className="t-row total"><span>Себестоимость</span><span>{fmtMoney(totals.cost)}</span></div>

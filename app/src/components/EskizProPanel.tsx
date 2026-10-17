@@ -23,7 +23,7 @@ import EskizPhotoDialog from './EskizPhotoDialog';
 import { MODULE_PRESETS, MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moduleStandsOnFloor, moduleToLines, newModule, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
 import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalFacadeSpecOutdated, isTechnicalHingeSpecOutdated } from '../lib/facades';
 import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surcharges';
-import { calcLines } from '../lib/engine';
+import { calcLinesCost } from '../lib/engine';
 import { fmtMoney, fmtNum } from '../lib/format';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, defaultCommunicationDimensions } from '../lib/eskizCommunications';
 import { collectEskizSketchLinks, downloadEskizSketchPdf, downloadEskizSketchPng } from '../lib/eskizSketchExport';
@@ -192,8 +192,7 @@ function EskizMarkerModuleEditor(props: {
   const [moduleTab, setModuleTab] = useState<'basics' | 'price' | 'tech' | 'check'>('basics');
   const check = useMemo(() => checkModule(module, defaults, pricebook), [module, defaults, pricebook]);
   const lines = useMemo(() => moduleToLines(module, defaults, pricebook), [module, defaults, pricebook]);
-  const lineCalcs = useMemo(() => calcLines(lines), [lines]);
-  const cost = lines.reduce((sum, line) => sum + (lineCalcs.get(line.id)?.sum ?? 0), 0);
+  const { lineCalcs, cost } = useMemo(() => calcLinesCost(lines), [lines]);
   const selectedBody = resolveSlot(module, 'body', defaults, pricebook).item;
   const facadeInference = selectedBody ? inferFacadeSpec(module, selectedBody) : null;
   const hingeInference = selectedBody ? inferHingeSpec(module, selectedBody) : null;
@@ -578,8 +577,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     const checked = checkModule(linkedModule, project.moduleDefaults ?? {}, pricebook);
     const body = resolveSlot(linkedModule, 'body', project.moduleDefaults ?? {}, pricebook).item;
     const lines = moduleToLines(linkedModule, project.moduleDefaults ?? {}, pricebook);
-    const sums = calcLines(lines);
-    const cost = lines.reduce((sum, line) => sum + (sums.get(line.id)?.sum ?? 0), 0);
+    const { cost } = calcLinesCost(lines);
     return [marker.key, { status: checked.level, label: linkedModule.name, body: body ? shortLine(body.name, 54) : 'Корпус не выбран', cost: fmtMoney(cost), lines: lines.length }];
   })) as Record<string, { status: 'ok' | 'warn' | 'error' | 'new'; label: string; body?: string; cost?: string; lines?: number }>, [moduleMarkers, moduleBindings, project.modules, project.moduleDefaults, pricebook]);
 
