@@ -27,7 +27,6 @@ import { useAppVersion } from './lib/useAppVersion';
 import ServerSaveChip from './components/ServerSaveChip';
 import InstallAppCard from './components/InstallAppCard';
 import ToastHost from './components/ToastHost';
-import { Overlay } from './components/Portal';
 import NotifySettingsCard from './components/NotifySettingsCard';
 import TelegramNotifyCard from './components/TelegramNotifyCard';
 import { useReminders } from './lib/useReminders';
@@ -64,6 +63,35 @@ type View =
   | { kind: 'audit'; id?: string }
   | { kind: 'sync' };
 
+
+/** Где пользователь был в прошлый раз: экран и открытый проект. */
+const VIEW_STORE = 'recept.nav.view.v1';
+const WORK_STORE = 'recept.nav.work.v1';
+
+function restoreView(): View {
+  try {
+    const raw = localStorage.getItem(VIEW_STORE);
+    if (!raw) return { kind: 'dashboard' };
+    const parsed = JSON.parse(raw) as View;
+    const known = ['dashboard', 'crm', 'project', 'quick', 'factory', 'kb', 'settings', 'pricebook', 'server', 'analytics', 'schedule', 'audit', 'sync'];
+    if (parsed && typeof parsed === 'object' && known.includes(parsed.kind)) return parsed;
+  } catch {
+    /* испорченные настройки — просто начинаем с проектов */
+  }
+  return { kind: 'dashboard' };
+}
+
+function loadLastWork(): { id: string; tab?: ProjectTab } | null {
+  try {
+    const raw = localStorage.getItem(WORK_STORE);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { id?: string; tab?: ProjectTab };
+    return parsed?.id ? { id: parsed.id, tab: parsed.tab } : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function App() {
   const [builtin, setBuiltin] = useState<Pricebook | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -73,7 +101,9 @@ export default function App() {
   const [templates, setTemplates] = useState<Template[]>(() => loadTemplates());
   const [globalSettings, setGlobalSettings] = useState<ProjectSettings>(() => loadGlobalSettings());
   const [activePricebookId, setActivePricebookId] = useState<string>(() => localStorage.getItem('recept.activePb') ?? 'visma-2026');
-  const [view, setView] = useState<View>({ kind: 'dashboard' });
+  const [view, setView] = useState<View>(() => restoreView());
+  // Куда вернуться: последний открытый проект и вкладка внутри него.
+  const [lastWork, setLastWork] = useState<{ id: string; tab?: ProjectTab } | null>(() => loadLastWork());
   const [savedFlash, setSavedFlash] = useState(false);
     const [kbArticles, setKbArticles] = useState<KbArticle[]>(() => loadKbArticles());
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(() => loadCalendarEvents());
@@ -101,6 +131,20 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
   }, []);
   const server = useServerSync(applyWorkspace);
   const appVersion = useAppVersion();
+  // Экран и открытый проект запоминаются: после настроек возвращаемся туда же.
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_STORE, JSON.stringify(view));
+      if (view.kind === 'project') {
+        const work = { id: view.id, tab: view.tab };
+        localStorage.setItem(WORK_STORE, JSON.stringify(work));
+        // Обновляем состояние отдельным тиком: иначе React ругается на лишний рендер.
+        window.setTimeout(() => setLastWork(work), 0);
+      }
+    } catch {
+      /* память браузера переполнена — просто не запомним */
+    }
+  }, [view]);
   // Служба напоминаний: показывает уведомления в нужный момент на любом экране.
   useReminders(projects, calendarEvents, notifySettings, server.user?.name || server.user?.login || '');
   // Клиентская ссылка вида …/#offer=abc123 — определяем её до любой загрузки базы.
@@ -550,6 +594,14 @@ const persistTemplates = useCallback((next: Template[]) => {
   return (
     <div className={`app work-mode-${workMode}`}>
       <ToastHost />
+      {lastWork && view.kind !== 'project' && projects.some((item) => item.id === lastWork.id) && (
+        <button type="button" className="resume-work no-print"
+          title="Вернуться к последнему проекту"
+          onClick={() => setView({ kind: 'project', id: lastWork.id, tab: lastWork.tab })}>
+          <span>Продолжить</span>
+          <b>{projects.find((item) => item.id === lastWork.id)?.name ?? 'проект'}</b>
+        </button>
+      )}
       <ServerSaveChip sync={server} onOpenServer={() => setView({ kind: 'server' })} />
       <InstallAppCard />
       {appVersion.hasUpdate && (
@@ -833,23 +885,9 @@ const persistTemplates = useCallback((next: Template[]) => {
           <b>Фабрика</b>
           <small>бланк</small>
         </button>
-        <div className="mobile-dock-more" ref={moreRef}>
-          <button
-            type="button"
-            aria-expanded={moreOpen}
-            aria-haspopup="menu"
-            className={(['kb', 'pricebook', 'sync', 'settings', 'schedule', 'analytics', 'audit', 'server'] as string[]).includes(view.kind) ? 'active' : ''}
-            onClick={() => setMoreOpen((open) => !open)}
-          >
-            <span className="nav-icon nav-settings" aria-hidden="true" />
-            <b>Ещё</b>
-            <small>{moreOpen ? 'закрыть' : 'меню'}</small>
-          </button>
-        </div>
-      </nav>
-      {moreOpen && (
-        <Overlay className="dock-sheet-backdrop" onClick={() => setMoreOpen(false)}>
-          <div className="dock-sheet" role="menu" onClick={(event) => event.stopPropagation()}>
+        {moreOpen && <div className="dock-sheet-shade" onClick={() => setMoreOpen(false)} aria-hidden="true" />}
+        {moreOpen && (
+          <div className="dock-sheet" role="menu">
             <div className="dock-sheet-grip" aria-hidden="true" />
             <button type="button" className={view.kind === 'schedule' ? 'active' : ''} onClick={() => { setView({ kind: 'schedule' }); setMoreOpen(false); }}>График работ <span>монтажи</span></button>
             {can.viewCost && (
@@ -869,9 +907,21 @@ const persistTemplates = useCallback((next: Template[]) => {
             <button type="button" className={view.kind === 'settings' ? 'active' : ''} onClick={() => { setView({ kind: 'settings' }); setMoreOpen(false); }}>Настройки <span>по умолч.</span></button>
             <button type="button" className="dock-sheet-close" onClick={() => setMoreOpen(false)}>Закрыть</button>
           </div>
-        </Overlay>
-      )}
-
+        )}
+        <div className="mobile-dock-more" ref={moreRef}>
+          <button
+            type="button"
+            aria-expanded={moreOpen}
+            aria-haspopup="menu"
+            className={(['kb', 'pricebook', 'sync', 'settings', 'schedule', 'analytics', 'audit', 'server'] as string[]).includes(view.kind) ? 'active' : ''}
+            onClick={() => setMoreOpen((open) => !open)}
+          >
+            <span className="nav-icon nav-settings" aria-hidden="true" />
+            <b>Ещё</b>
+            <small>{moreOpen ? 'закрыть' : 'меню'}</small>
+          </button>
+        </div>
+      </nav>
       <CommandPalette
         open={commandOpen}
         onClose={() => setCommandOpen(false)}

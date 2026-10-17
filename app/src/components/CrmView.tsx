@@ -133,7 +133,11 @@ export default function CrmView(props: {
   const savedView = useMemo(() => loadViewPrefs('crm', { focus: 'active' as CrmFocus, stage: '', assignee: '', sort: 'urgency' as 'urgency' | 'money' | 'updated' }), []);
   const [focus, setFocus] = useState<CrmFocus>(savedView.focus);
   const [stage, setStage] = useState<string>(savedView.stage);
-  const [openProjectId, setOpenProjectId] = useState<string | null>(null);
+  // Открытая карточка сделки тоже запоминается: вернулись в CRM — она снова перед вами.
+  const [openProjectId, setOpenProjectId] = useState<string | null>(() => {
+    const id = loadViewPrefs('crm-open', { id: '' }).id;
+    return id || null;
+  });
   const [assignee, setAssignee] = useState(savedView.assignee);
   const [sort, setSort] = useState<'urgency' | 'money' | 'updated'>(savedView.sort);
   const [docBusy, setDocBusy] = useState<string | null>(null);
@@ -182,6 +186,7 @@ export default function CrmView(props: {
   }), [props.projects, props.clients, props.pricebooks]);
 
   useEffect(() => { saveViewPrefs('crm', { focus, stage, assignee, sort }); }, [focus, stage, assignee, sort]);
+  useEffect(() => { saveViewPrefs('crm-open', { id: openProjectId ?? '' }); }, [openProjectId]);
 
   const counts = useMemo(() => focusCounts(rows), [rows]);
   const stages = useMemo(() => summarizeStages(rows), [rows]);

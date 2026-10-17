@@ -8228,17 +8228,25 @@ a.crm-item-phone:hover { text-decoration: underline; }
 }
 
 /* Нижняя шторка «Ещё»: открывается тапом и живёт поверх всего. */
-.dock-sheet-backdrop {
-  position: fixed; inset: 0; z-index: 5200;
-  display: flex; align-items: flex-end; justify-content: center;
+/* Шторка живёт внутри нижней панели: там нажатия работают на всех телефонах. */
+.dock-sheet-shade {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
   background: rgba(10, 20, 48, .45);
-  backdrop-filter: blur(2px);
 }
 .dock-sheet {
-  width: min(520px, 100%);
-  display: grid; gap: 6px;
-  padding: 10px 12px calc(16px + env(safe-area-inset-bottom));
-  border-radius: 20px 20px 0 0;
+  position: fixed;
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  bottom: calc(84px + max(8px, env(safe-area-inset-bottom)));
+  z-index: 2;
+  display: grid;
+  gap: 6px;
+  max-height: 70vh;
+  overflow: auto;
+  padding: 10px 12px 14px;
+  border-radius: 20px;
   background: #fff;
   box-shadow: 0 -16px 40px rgba(10, 20, 48, .3);
   animation: dock-sheet-in .16s ease-out;
@@ -8267,4 +8275,29 @@ a.crm-item-phone:hover { text-decoration: underline; }
   .picker-left .list-row, .picker-left tr { min-height: 46px; }
   .slot-row { padding: 10px 12px; border-radius: 12px; }
   .slot-row .slot-actions .btn.tiny { min-height: 38px; padding: 8px 14px; font-size: 13px; }
+}
+
+/* Плашка «Продолжить»: быстрый возврат к проекту, над которым работали. */
+.resume-work {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 3700;
+  display: inline-flex;
+  gap: 8px;
+  align-items: baseline;
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 9px 16px;
+  border: 1px solid #d7deef;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 10px 26px rgba(10, 20, 48, .16);
+  cursor: pointer;
+}
+.resume-work span { color: #7c89a8; font-size: 12px; }
+.resume-work b { color: #16213f; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.resume-work:hover { border-color: #16213f; }
+@media (max-width: 760px) {
+  .resume-work { bottom: 92px; }
 }
