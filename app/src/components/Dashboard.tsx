@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CalendarEvent, ClientProfile, Pricebook, Project } from '../types';
 import { calcTotals } from '../lib/engine';
@@ -129,10 +130,10 @@ export default function Dashboard(props: {
     if (!confirm('Восстановление ЗАМЕНИТ все текущие проекты, шаблоны, настройки и загруженные версии прайса данными из копии. Продолжить?')) return;
     try {
       const msg = restoreBackup(await f.text());
-      alert(msg);
+      toast.ok(msg);
       location.reload();
     } catch (e) {
-      alert(`Ошибка восстановления: ${(e as Error).message}`);
+      toast.error(`Ошибка восстановления: ${(e as Error).message}`);
     }
   };
 

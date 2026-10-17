@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast';
 import { useEffect, useMemo, useState } from 'react';
 import type { ClientProfile, Project, ProjectSettings, Template } from '../types';
 import QRCode from 'qrcode';
@@ -155,7 +156,7 @@ export default function SyncPanel(props: {
   const handleJoinByPin = async () => {
     const pin = pinInput.trim();
     if (!pin) {
-      alert('Введите 4-значный PIN-код или ключ комнаты');
+      toast.error('Введите 4-значный PIN-код или ключ комнаты');
       return;
     }
     // Если пользователь ввёл полный ключ или только PIN

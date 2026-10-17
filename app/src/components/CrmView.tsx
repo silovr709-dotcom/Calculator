@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast';
 // CRM: один список сделок, воронка строкой и карточка клиента во всплывающем окне.
 // Принцип: на экране — только то, что помогает выбрать, с кем работать сейчас;
 // всё подробное (деньги, документы, история, контакты) открывается по клику.
@@ -219,7 +220,7 @@ export default function CrmView(props: {
   };
 
   const addDealPayment = (row: CrmRow, entry: { amount: number; at: string; kind: PaymentKind; comment?: string }) => {
-    if (!row.client) { alert('Чтобы вести оплаты, привяжите проект к карточке клиента.'); return; }
+    if (!row.client) { toast.info('Чтобы вести оплаты, привяжите проект к карточке клиента.'); return; }
     const payment = addPayment(row.client.paymentsByProject?.[row.project.id], entry);
     props.onClientChange(updateClientProjectPayment(row.client, row.project.id, payment));
     props.onClientHistory(row.client.id, { kind: 'payment', title: `Платёж ${fmtMoney(entry.amount)}`, text: entry.comment, projectId: row.project.id });
@@ -244,7 +245,7 @@ export default function CrmView(props: {
 
   const exportDocument = async (row: CrmRow, kind: 'offer' | 'contract' | 'receipt' | 'package') => {
     const args = buildClientArgs(row.project, row.pricebook);
-    if (!args) { alert('Нет прайса для выгрузки документов.'); return; }
+    if (!args) { toast.error('Нет прайса для выгрузки документов.'); return; }
     setDocBusy(`${row.project.id}-${kind}`);
     try {
       if (kind === 'offer') await downloadClientOfferDocx(args);
@@ -257,7 +258,7 @@ export default function CrmView(props: {
         props.onClientHistory(row.client.id, { kind: 'document', title: `Документ сформирован: ${kind === 'offer' ? 'КП' : kind === 'contract' ? 'договор' : kind === 'receipt' ? 'товарный чек' : 'пакет клиента'}`, projectId: row.project.id });
       }
     } catch (error) {
-      alert(`Не получилось сформировать документ: ${(error as Error).message}`);
+      toast.error(`Не получилось сформировать документ: ${(error as Error).message}`);
     } finally {
       setDocBusy(null);
     }

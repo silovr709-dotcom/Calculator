@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast';
 import { useEffect, useMemo, useState } from 'react';
 import type { KbArticle, KbCategory, Pricebook, PriceItem } from '../types';
 import { createKbArticle, filterKbArticles, KB_CATEGORIES, kbCategoryLabel, removeKbArticle, seedKbArticles, upsertKbArticle } from '../lib/knowledge';
@@ -362,7 +363,7 @@ function DocsTab(props: { articles: KbArticle[]; onChange: (a: KbArticle[]) => v
   const openNew = () => { setEditing(createKbArticle({ category: category ?? 'instructions' })); setIsNew(true); };
   const saveEditing = () => {
     if (!editing) return;
-    if (!editing.title.trim()) { alert('У статьи должен быть заголовок.'); return; }
+    if (!editing.title.trim()) { toast.info('У статьи должен быть заголовок.'); return; }
     props.onChange(upsertKbArticle(props.articles, editing));
     setEditing(null);
   };

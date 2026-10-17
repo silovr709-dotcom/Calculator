@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast';
 import { useRef, useState } from 'react';
 import type { Pricebook } from '../types';
 import { fmtNum } from '../lib/format';
@@ -25,8 +26,8 @@ export default function PricebookView(props: {
         }
         props.onUpload(next);
         setSel(next.meta.id);
-        alert(`Прайс «${next.meta.name}» загружен: ${next.items.length} позиций.\nСтарые проекты сохранят свои цены — они хранят снимок цен на момент расчёта.`);
-      } catch (e) { alert(`Ошибка загрузки: ${e}`); }
+        toast.info(`Прайс «${next.meta.name}» загружен: ${next.items.length} позиций.\nСтарые проекты сохранят свои цены — они хранят снимок цен на момент расчёта.`);
+      } catch (e) { toast.error(`Ошибка загрузки: ${e}`); }
     });
   };
 

@@ -8193,3 +8193,36 @@ input.editable-number { max-width: 120px; text-align: right; }
 
 a.crm-item-phone { color: #2f6bd8; text-decoration: none; }
 a.crm-item-phone:hover { text-decoration: underline; }
+
+/* Всплывающие сообщения вместо системных окон. */
+.toast-host {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 6000;
+  display: grid;
+  gap: 8px;
+  max-width: min(420px, calc(100vw - 24px));
+}
+.toast {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: #16213f;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: 0 12px 30px rgba(10, 20, 48, .28);
+  animation: toast-in .16s ease-out;
+}
+.toast span { flex: 1; }
+.toast button { border: 0; background: none; color: rgba(255, 255, 255, .7); cursor: pointer; font-size: 13px; }
+.toast button:hover { color: #fff; }
+.toast-ok { background: #18723e; }
+.toast-error { background: #a3271f; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (max-width: 720px) {
+  .toast-host { left: 10px; right: 10px; bottom: 96px; max-width: none; }
+}

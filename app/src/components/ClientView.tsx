@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast';
 import { useEffect, useMemo, useState } from 'react';
 import type { ClientDocumentPackageSettings, ClientOfferDetailLevel, ClientOfferModuleDetailMode, ClientOfferPresentationMode, ClientOfferSettings, EskizExportViewSettings, EskizLayerKey, EskizProIntegration, Pricebook, Project, ProjectLine } from '../types';
 import type { ClientOfferDetail, ClientOfferDetailKind } from '../lib/clientOffer';
@@ -521,13 +522,13 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
     try {
       await task();
     } catch (error) {
-      alert(`${errorTitle}: ${error instanceof Error ? error.message : String(error)}`);
+      toast.info(`${errorTitle}: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setPackageExporting(false);
     }
   };
   const exportSketchPdf = () => runClientDownload(async () => {
-    if (!clientSketchVisible || linkedEskizProjects.length === 0) { alert('Нет привязанного Эскиз PRO для выгрузки.'); return; }
+    if (!clientSketchVisible || linkedEskizProjects.length === 0) { toast.error('Нет привязанного Эскиз PRO для выгрузки.'); return; }
     for (const [index, eskiz] of linkedEskizProjects.entries()) {
       const pdf = await downloadEskizSketchPdf(eskiz, { ...sketchPdfOptions, title: eskiz.title, fileName: `Эскиз ${index + 1} — ${eskiz.title}.pdf` });
       if (index === 0) await keepDocument('sketch', `${project.name} — эскиз.pdf`, pdf.blob);
@@ -571,7 +572,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
       const saved = await setProjectDocumentStatus(project.id, id, status);
       setDocuments((current) => current.map((item) => (item.id === saved.id ? saved : item)));
     } catch (error) {
-      alert(`Не получилось изменить статус: ${error instanceof Error ? error.message : String(error)}`);
+      toast.error(`Не получилось изменить статус: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -581,7 +582,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
       await deleteProjectDocument(project.id, id);
       setDocuments((current) => current.filter((item) => item.id !== id));
     } catch (error) {
-      alert(`Не получилось удалить документ: ${error instanceof Error ? error.message : String(error)}`);
+      toast.error(`Не получилось удалить документ: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -603,7 +604,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
       setOfferCopied(true);
       window.setTimeout(() => setOfferCopied(false), 2500);
     } catch (error) {
-      alert(`Не получилось опубликовать КП: ${error instanceof Error ? error.message : String(error)}`);
+      toast.error(`Не получилось опубликовать КП: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setOfferBusy(false);
     }
@@ -617,7 +618,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
       setOfferLink(null);
       setOfferStatus(null);
     } catch (error) {
-      alert(`Не получилось отозвать ссылку: ${error instanceof Error ? error.message : String(error)}`);
+      toast.error(`Не получилось отозвать ссылку: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setOfferBusy(false);
     }

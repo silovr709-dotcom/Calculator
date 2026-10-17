@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast';
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { Pricebook, Project } from '../types';
 import { checkFactoryBlank, draftFactoryBlank, FACTORY_BLANK_SPECS, factoryBlankProgress, type BlankIssue } from '../lib/factoryBlank';
@@ -552,7 +553,7 @@ export default function FactoryBlankView(props: {
   const fillPlanFromProject = () => {
     if (!project) return;
     const suggested = suggestWorktopPlan(project);
-    if (suggested.length === 0) { alert('В чек-листе проекта нет столешницы — добавьте её там или нарисуйте деталь вручную.'); return; }
+    if (suggested.length === 0) { toast.error('В чек-листе проекта нет столешницы — добавьте её там или нарисуйте деталь вручную.'); return; }
     if (pieces.length > 0 && !confirm('Заменить текущую схему автоподстановкой из проекта?')) return;
     replacePieces(autoArrangeWorktopPieces(suggested, 'line'));
   };
@@ -715,7 +716,7 @@ export default function FactoryBlankView(props: {
         techPack,
       });
     } catch (e) {
-      alert(`Не получилось собрать файл бланка: ${e instanceof Error ? e.message : String(e)}`);
+      toast.error(`Не получилось собрать файл бланка: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setExporting(false);
     }

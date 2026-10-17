@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast';
 // Наряд на монтаж глазами мастера: открывается по ссылке на телефоне без пароля.
 // Крупные кнопки: выехал, начал, закончил, нужна помощь — отметки сразу видит менеджер.
 
@@ -50,7 +51,7 @@ export default function WorkOrderPage(props: { id: string }) {
 
   const mark = async (next: WorkOrderStatus, needComment?: boolean) => {
     if (needComment && !comment.trim()) {
-      alert('Коротко опишите, что случилось, — менеджер сразу это увидит.');
+      toast.info('Коротко опишите, что случилось, — менеджер сразу это увидит.');
       return;
     }
     setBusy(true);

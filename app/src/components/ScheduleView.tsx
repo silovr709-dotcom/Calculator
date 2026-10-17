@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast';
 // График работ: замеры, доставки и монтажи по всем заказам в одном календаре.
 // Даты и бригада правятся прямо здесь — отдельной таблицы вести не нужно.
 
@@ -132,7 +133,7 @@ export default function ScheduleView(props: {
 
   const sendWorkOrder = async (project: Project) => {
     const draft = orderDraft ?? await buildOrderDraft(project);
-    if (!draft.date) { alert('Сначала поставьте дату монтажа.'); return; }
+    if (!draft.date) { toast.error('Сначала поставьте дату монтажа.'); return; }
     const existing = orders.find((item) => item.projectId === project.id);
     setOrderBusy(true);
     try {
@@ -142,7 +143,7 @@ export default function ScheduleView(props: {
       setOrderCopied(result.id);
       window.setTimeout(() => setOrderCopied(''), 2500);
     } catch (error) {
-      alert(`Не получилось выдать наряд: ${error instanceof Error ? error.message : String(error)}`);
+      toast.error(`Не получилось выдать наряд: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setOrderBusy(false);
     }

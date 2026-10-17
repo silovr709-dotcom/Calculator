@@ -26,6 +26,7 @@ import SyncPanel from './components/SyncPanel';
 import { useAppVersion } from './lib/useAppVersion';
 import ServerSaveChip from './components/ServerSaveChip';
 import InstallAppCard from './components/InstallAppCard';
+import ToastHost from './components/ToastHost';
 import NotifySettingsCard from './components/NotifySettingsCard';
 import TelegramNotifyCard from './components/TelegramNotifyCard';
 import { useReminders } from './lib/useReminders';
@@ -516,10 +517,10 @@ const persistTemplates = useCallback((next: Template[]) => {
 
   // Ссылка клиенту: КП открывается без входа и без рабочего интерфейса.
   if (publicOfferId) {
-    return <PublicOfferPage id={publicOfferId} />;
+    return <><ToastHost /><PublicOfferPage id={publicOfferId} /></>;
   }
   if (workOrderId) {
-    return <WorkOrderPage id={workOrderId} />;
+    return <><ToastHost /><WorkOrderPage id={workOrderId} /></>;
   }
 
   if (server.mode === 'checking') {
@@ -547,6 +548,7 @@ const persistTemplates = useCallback((next: Template[]) => {
 
   return (
     <div className={`app work-mode-${workMode}`}>
+      <ToastHost />
       <ServerSaveChip sync={server} onOpenServer={() => setView({ kind: 'server' })} />
       <InstallAppCard />
       {appVersion.hasUpdate && (

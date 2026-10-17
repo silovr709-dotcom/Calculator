@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast';
 import { useMemo, useState } from 'react';
 import type { ClientOfferSnapshot, OrderWorkflowStatus, Pricebook, Project, ProjectLine, SummaryGroup } from '../types';
 import { SUMMARY_GROUPS } from '../types';
@@ -180,7 +181,7 @@ export default function OrderCenterPanel(props: {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2500);
     } catch {
-      alert(text);
+      toast.info(text);
     }
   };
 
@@ -209,7 +210,7 @@ export default function OrderCenterPanel(props: {
       window.setTimeout(() => setCopied(false), 2500);
     } catch {
       setCopied(false);
-      alert(text);
+      toast.info(text);
     }
   };
 
