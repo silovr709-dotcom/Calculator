@@ -127,13 +127,22 @@ export default function CrmView(props: {
   onClientHistory: (clientId: string, entry: Omit<ClientHistoryEntry, 'id' | 'createdAt'>) => void;
   onMergeClients: (targetId: string, sourceId: string) => void;
   onOpenSchedule: () => void;
+  onCreateDeal: (clientName: string) => void;
 }) {
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   // Фильтры запоминаются: экран открывается там же, где его оставили.
-  const savedView = useMemo(() => loadViewPrefs('crm', { focus: 'active' as CrmFocus, stage: '', assignee: '', sort: 'urgency' as 'urgency' | 'money' | 'updated' }), []);
+  const savedView = useMemo(() => loadViewPrefs('crm', {
+    focus: 'active' as CrmFocus,
+    stage: '',
+    assignee: '',
+    sort: 'urgency' as 'urgency' | 'money' | 'updated',
+    mode: 'deals' as 'deals' | 'clients',
+  }), []);
   const [focus, setFocus] = useState<CrmFocus>(savedView.focus);
   const [stage, setStage] = useState<string>(savedView.stage);
+  const [mode, setMode] = useState<'deals' | 'clients'>(savedView.mode);
+  const [openClientId, setOpenClientId] = useState<string | null>(null);
   // Открытая карточка сделки тоже запоминается: вернулись в CRM — она снова перед вами.
   // Длинный список сделок показываем частями.
   const [visibleCount, setVisibleCount] = useState(30);
@@ -188,7 +197,7 @@ export default function CrmView(props: {
     };
   }), [props.projects, props.clients, props.pricebooks]);
 
-  useEffect(() => { saveViewPrefs('crm', { focus, stage, assignee, sort }); }, [focus, stage, assignee, sort]);
+  useEffect(() => { saveViewPrefs('crm', { focus, stage, assignee, sort, mode }); }, [focus, stage, assignee, sort, mode]);
   useEffect(() => { saveViewPrefs('crm-open', { id: openProjectId ?? '' }); }, [openProjectId]);
 
   const counts = useMemo(() => focusCounts(rows), [rows]);
@@ -213,6 +222,57 @@ export default function CrmView(props: {
     if (sort === 'updated') return [...list].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
     return [...list].sort(compareCrmRows);
   }, [rows, focus, query, stage, stages, assignee, sort]);
+
+  /** Клиентская база: одна строка на клиента со сводкой по его сделкам. */
+  const clientRows = useMemo(() => {
+    const byClient = new Map<string, { client: ClientProfile | null; name: string; deals: CrmRow[] }>();
+    for (const row of rows) {
+      const key = row.client?.id ?? `name:${(row.project.client || 'без клиента').toLocaleLowerCase('ru-RU')}`;
+      const entry = byClient.get(key) ?? { client: row.client, name: row.client?.name || row.project.client || 'Без клиента', deals: [] };
+      entry.deals.push(row);
+      byClient.set(key, entry);
+    }
+    for (const client of props.clients) {
+      if (!byClient.has(client.id)) byClient.set(client.id, { client, name: client.name || 'Без имени', deals: [] });
+    }
+    const needle = query.trim().toLocaleLowerCase('ru-RU');
+    return Array.from(byClient.entries())
+      .map(([key, entry]) => {
+        const active = entry.deals.filter((deal) => !deal.closed);
+        return {
+          key,
+          client: entry.client,
+          name: entry.name,
+          deals: entry.deals,
+          activeCount: active.length,
+          total: entry.deals.reduce((sum, deal) => sum + deal.total, 0),
+          openSum: active.reduce((sum, deal) => sum + deal.total, 0),
+          phone: entry.client?.phones?.[0] ?? entry.deals.find((deal) => deal.phone)?.phone ?? '',
+          email: entry.client?.emails?.[0] ?? '',
+          tags: entry.client?.tags ?? [],
+          lastTouch: entry.deals.reduce((latest, deal) => (deal.updatedAt > latest ? deal.updatedAt : latest), entry.client?.updatedAt ?? ''),
+        };
+      })
+      .filter((entry) => !needle || [entry.name, entry.phone, entry.email, entry.tags.join(' ')].join(' ').toLocaleLowerCase('ru-RU').includes(needle))
+      .sort((left, right) => right.openSum - left.openSum || right.lastTouch.localeCompare(left.lastTouch));
+  }, [rows, props.clients, query]);
+
+  const createClient = () => {
+    const name = prompt('Имя клиента:')?.trim();
+    if (!name) return;
+    const now = new Date().toISOString();
+    props.onClientChange({
+      id: `cli_${Date.now().toString(36)}`,
+      name,
+      phones: [],
+      emails: [],
+      tags: [],
+      history: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+    setMode('clients');
+  };
 
   const openRow = openProjectId ? rows.find((row) => row.project.id === openProjectId) ?? null : null;
 
@@ -300,13 +360,22 @@ export default function CrmView(props: {
           <div className="muted">Клиенты, сделки, деньги и документы. Кликните строку — откроется карточка со всем остальным.</div>
         </div>
         <div className="actions">
-          <input ref={searchRef} className="crm-search-input" value={query} placeholder="Клиент, проект, телефон…" onChange={(event) => setQuery(event.target.value)} />
+          <div className="crm-mode-switch" role="tablist" aria-label="Что показывать">
+            <button type="button" role="tab" aria-selected={mode === 'deals'} className={mode === 'deals' ? 'active' : ''} onClick={() => setMode('deals')}>Сделки</button>
+            <button type="button" role="tab" aria-selected={mode === 'clients'} className={mode === 'clients' ? 'active' : ''} onClick={() => setMode('clients')}>Клиенты</button>
+          </div>
+          <div className="crm-search-wrap">
+            <input ref={searchRef} className="crm-search-input" value={query} placeholder="Клиент, проект, телефон…" onChange={(event) => setQuery(event.target.value)} />
+            {query && <button type="button" className="crm-search-clear" aria-label="Очистить поиск" onClick={() => setQuery('')}>✕</button>}
+          </div>
+          <button type="button" className="btn ghost" onClick={createClient}>+ Клиент</button>
           <button type="button" className={`btn ${counts.today > 0 ? 'primary' : 'ghost'}`} onClick={() => { setFocus('today'); setStage(''); }}>
             Сегодня{counts.today > 0 ? ` · ${counts.today}` : ''}
           </button>
         </div>
       </header>
 
+      {mode === 'deals' && (
       <section className="crm-focus-bar" aria-label="Фокус списка">
         {(['today', 'week', 'no-next', 'active', 'closed', 'all'] as CrmFocus[]).map((value) => {
           const count = value === 'today' ? counts.today
@@ -324,7 +393,9 @@ export default function CrmView(props: {
         })}
         <span className="crm-focus-money">Активный портфель: <b>{fmtMoney(counts.pipeline)}</b></span>
       </section>
+      )}
 
+      {mode === 'deals' && (
       <section className="crm-toolbar">
         <span className={`crm-task-summary${tasksSummary.overdue > 0 ? ' alert' : ''}`}>
           Задачи: <b>{tasksSummary.open}</b> открыто
@@ -345,7 +416,9 @@ export default function CrmView(props: {
           </select>
         </label>
       </section>
+      )}
 
+      {mode === 'deals' && (
       <section className="crm-funnel" aria-label="Воронка">
         {stages.map((item) => (
           <button key={item.id} type="button" className={stage === item.id ? 'active' : ''}
@@ -356,6 +429,7 @@ export default function CrmView(props: {
           </button>
         ))}
       </section>
+      )}
 
       {duplicates.length > 0 && (
         <div className="crm-duplicate-note">
@@ -373,6 +447,80 @@ export default function CrmView(props: {
         </div>
       )}
 
+      {mode === 'clients' && (
+        <section className="card crm-list-card">
+          <div className="section-head">
+            <div>
+              <h3>Клиенты</h3>
+              <p className="muted small">Вся база: контакты, сделки и деньги по каждому. Нажмите клиента — раскроется список его сделок.</p>
+            </div>
+            <b>{clientRows.length}</b>
+          </div>
+
+          {clientRows.length === 0 ? (
+            <div className="empty small">Клиентов пока нет. Добавьте первого кнопкой «+ Клиент» или создайте проект.</div>
+          ) : (
+            <div className="crm-clients">
+              {clientRows.slice(0, visibleCount).map((entry) => {
+                const open = openClientId === entry.key;
+                return (
+                  <article key={entry.key} className={`crm-client${open ? ' open' : ''}`}>
+                    <button type="button" className="crm-client-main" onClick={() => setOpenClientId(open ? null : entry.key)}>
+                      <div>
+                        <b>{entry.name}</b>
+                        <span>
+                          {entry.deals.length} сделк(и) · активных {entry.activeCount}
+                          {entry.tags.length > 0 && ` · ${entry.tags.join(', ')}`}
+                        </span>
+                      </div>
+                      <div className="crm-client-money">
+                        <b>{fmtMoney(entry.openSum)}</b>
+                        <small>в работе · всего {fmtMoney(entry.total)}</small>
+                      </div>
+                    </button>
+                    <div className="crm-client-contacts">
+                      {entry.phone
+                        ? <a href={`tel:${entry.phone.replace(/[^+\d]/g, '')}`}>☎ {entry.phone}</a>
+                        : <span className="muted small">телефон не заполнен</span>}
+                      {entry.email && <a href={`mailto:${entry.email}`}>✉ {entry.email}</a>}
+                      {entry.deals[0] && (
+                        <button type="button" className="btn tiny ghost" onClick={() => setOpenProjectId(entry.deals[0].project.id)}>
+                          Открыть карточку
+                        </button>
+                      )}
+                      <button type="button" className="btn tiny ghost" onClick={() => props.onCreateDeal(entry.name)}>+ Сделка</button>
+                    </div>
+                    {open && (
+                      <ul className="crm-client-deals">
+                        {entry.deals.length === 0 && <li className="muted small">Сделок пока нет.</li>}
+                        {entry.deals.map((deal) => (
+                          <li key={deal.project.id}>
+                            <button type="button" onClick={() => setOpenProjectId(deal.project.id)}>
+                              <b>{deal.project.name}</b>
+                              <span>{deal.statusLabel} · {toneLabel(deal.tone, deal.workflow.nextContactAt)}</span>
+                            </button>
+                            <span className="crm-client-deal-sum">{fmtMoney(deal.total)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          )}
+
+          {clientRows.length > visibleCount && (
+            <div className="dashboard-more">
+              <button type="button" className="btn ghost" onClick={() => setVisibleCount((count) => count + 30)}>
+                Показать ещё {Math.min(30, clientRows.length - visibleCount)} из {clientRows.length - visibleCount}
+              </button>
+            </div>
+          )}
+        </section>
+      )}
+
+      {mode === 'deals' && (
       <section className="card crm-list-card">
         <div className="section-head">
           <div>
@@ -444,6 +592,7 @@ export default function CrmView(props: {
           </div>
         )}
       </section>
+      )}
 
       {openRow && (
         <CrmDealDialog

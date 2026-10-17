@@ -781,6 +781,13 @@ const persistTemplates = useCallback((next: Template[]) => {
               const client = clients.find((item) => item.id === clientId);
               if (client) persistClients(clients.map((item) => item.id === clientId ? appendClientHistory(client, entry, uid('hist')) : item));
             }}
+            onCreateDeal={(clientName) => {
+              const name = prompt('Название нового расчёта:', `Кухня ${clientName}`)?.trim();
+              if (!name) return;
+              createProject({ name, client: clientName, date: todayISO(), comment: '' });
+              toast.ok('Сделка создана — открываю список проектов');
+              setView({ kind: 'dashboard' });
+            }}
             onOpenSchedule={() => setView({ kind: 'schedule' })}
             onMergeClients={(targetId, sourceId) => {
               const target = clients.find((item) => item.id === targetId);

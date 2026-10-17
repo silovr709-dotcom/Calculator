@@ -8815,3 +8815,51 @@ body {
   background: #eef7f1; color: var(--ok); font-weight: 600;
 }
 @media (max-width: 760px) { .crm-works-grid { grid-template-columns: 1fr; } }
+
+/* CRM: переключатель режимов, поиск и клиентская база. */
+.crm-mode-switch { display: inline-flex; border: 1px solid var(--line-2); border-radius: 999px; overflow: hidden; }
+.crm-mode-switch button {
+  padding: 7px 16px; border: 0; background: #fff; color: var(--ink-2);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.crm-mode-switch button.active { background: var(--brand); color: #fff; }
+.crm-search-wrap { position: relative; display: inline-flex; align-items: center; }
+.crm-search-clear {
+  position: absolute; right: 8px; border: 0; background: none;
+  color: var(--ink-3); cursor: pointer; font-size: 13px;
+}
+.crm-search-clear:hover { color: var(--ink); }
+
+.crm-clients { display: grid; gap: 8px; }
+.crm-client {
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-md);
+  background: #fff;
+  padding: 10px 14px;
+}
+.crm-client.open { border-color: var(--line-2); box-shadow: var(--shadow-2); }
+.crm-client-main {
+  display: flex; gap: 14px; align-items: center; justify-content: space-between;
+  width: 100%; padding: 0; border: 0; background: none; text-align: left; cursor: pointer;
+}
+.crm-client-main b { font-size: 14.5px; color: var(--ink); }
+.crm-client-main span { display: block; margin-top: 2px; color: var(--ink-3); font-size: 12px; }
+.crm-client-money { text-align: right; white-space: nowrap; }
+.crm-client-money b { font-size: 14px; color: var(--ink); }
+.crm-client-money small { display: block; color: var(--ink-3); font-size: 11px; }
+.crm-client-contacts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; font-size: 12.5px; }
+.crm-client-contacts a { color: #2f6bd8; }
+.crm-client-deals { list-style: none; margin: 10px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line-1); display: grid; gap: 6px; }
+.crm-client-deals li { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+.crm-client-deals li button {
+  flex: 1; display: grid; gap: 1px; padding: 8px 10px; text-align: left;
+  border: 1px solid var(--line-1); border-radius: var(--r-sm); background: var(--surface-2); cursor: pointer;
+}
+.crm-client-deals li button:hover { border-color: var(--brand); }
+.crm-client-deals li b { font-size: 13px; color: var(--ink); }
+.crm-client-deals li span { font-size: 11.5px; color: var(--ink-3); }
+.crm-client-deal-sum { color: var(--ink); font-size: 13px; white-space: nowrap; }
+@media (max-width: 760px) {
+  .crm-client-main { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .crm-client-money { text-align: left; }
+}
