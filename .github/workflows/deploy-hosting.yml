@@ -24,6 +24,7 @@ on:
     branches:
       - main
       - arena/01a0ee6f-calculator
+      - arena/78834e40-calculator
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
