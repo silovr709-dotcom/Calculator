@@ -8324,3 +8324,111 @@ a.crm-item-phone:hover { text-decoration: underline; }
 /* Будильники подписного календаря. */
 .notify-alarms { display: grid; gap: 4px; margin: 10px 0; }
 .notify-alarms > b { font-size: 12.5px; color: #16213f; }
+
+/* =====================================================================
+   Полировка мобильной версии: поля нормального размера, меню в экране,
+   отступ под строку состояния телефона.
+   ===================================================================== */
+@media (max-width: 760px) {
+  /* 1. Контент не должен заезжать под часы и вырез экрана. */
+  .page,
+  .view {
+    padding-top: calc(14px + env(safe-area-inset-top));
+  }
+  .module-editor-modal,
+  .crm-dialog,
+  .modal.wide {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* 2. Любое поле — крупное и нажимаемое; 16px не даёт iPhone «зумить» страницу. */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 0;
+    width: 22px;
+    height: 22px;
+  }
+  .btn.tiny { min-height: 36px; padding: 7px 12px; font-size: 13px; }
+
+  /* 3. Выпадающие меню кнопок не уезжают за край экрана. */
+  .dropdown-menu {
+    position: fixed !important;
+    left: 10px !important;
+    right: 10px !important;
+    top: auto !important;
+    bottom: calc(96px + env(safe-area-inset-bottom)) !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-height: 60vh;
+    overflow: auto;
+    border-radius: 16px;
+    padding: 8px !important;
+    box-shadow: 0 -12px 34px rgba(10, 20, 48, .26);
+  }
+  .dropdown-menu button {
+    min-height: 46px;
+    font-size: 14px;
+    white-space: normal;
+  }
+
+  /* 4. Дополнительные расходы: строка в столбик, поля во всю ширину. */
+  .expense-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 10px;
+    border: 1px solid #e8ecf6;
+    border-radius: 12px;
+    background: #fff;
+  }
+  .expense-row .chk {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    white-space: normal;
+  }
+  .expense-row .btn.tiny.danger { justify-self: start; }
+  .expense-computed { color: #7c89a8; }
+
+  /* 5. Адрес в графике: поле на всю ширину, ссылка «На карте» снизу. */
+  .schedule-address-field { flex-wrap: wrap; }
+  .schedule-address-field input { flex: 1 1 100%; }
+  .schedule-address-field .btn { flex: 0 0 auto; }
+
+  /* 6. Формы в окнах — одна колонка, подписи сверху. */
+  .schedule-dialog .schedule-form,
+  .schedule-form,
+  .crm-dialog-grid,
+  .notify-grid,
+  .audit-head-actions { grid-template-columns: 1fr !important; }
+  .schedule-form label.span-2,
+  .schedule-form label.span-3,
+  .crm-dialog-grid label.span-2 { grid-column: 1 / -1; }
+  .crm-task-form,
+  .crm-pay-form { grid-template-columns: 1fr; }
+  .reminder-custom { display: grid; grid-template-columns: 1fr 1fr; }
+  .reminder-custom span { grid-column: 1 / -1; }
+  .reminder-custom input { width: 100%; }
+  .reminder-custom .btn { grid-column: 1 / -1; }
+
+  /* 7. Таблицы с мелкими ячейками прокручиваются, а не сжимаются. */
+  .table-wrap,
+  .audit-table-wrap,
+  .modules-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  input.dim,
+  input.qty.cell { min-width: 64px; }
+
+  /* 8. Заголовки экранов не наезжают на кнопки. */
+  .page-head,
+  .view-head { gap: 10px; }
+  .page-head .actions,
+  .view-head .actions { width: 100%; }
+  .page-head .actions > *,
+  .view-head .actions > * { flex: 1 1 auto; }
+}
