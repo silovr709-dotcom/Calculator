@@ -8545,3 +8545,42 @@ a.crm-item-phone:hover { text-decoration: underline; }
   background: #fafbff; color: #16213f; font-size: 15px; font-weight: 600;
 }
 .work-order-files a:hover { border-color: #16213f; }
+
+/* Модули на телефоне: таблица превращается в карточки, ничего не обрезается. */
+@media (max-width: 760px) {
+  .table.modules thead { display: none; }
+  .table.modules,
+  .table.modules tbody,
+  .table.modules tr,
+  .table.modules td { display: block; width: auto; }
+  .table.modules tr {
+    position: relative;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    border: 1px solid #e2e7f3;
+    border-radius: 14px;
+    background: #fff;
+  }
+  .table.modules tr.sel-row { border-color: #16213f; box-shadow: 0 0 0 2px rgba(22, 33, 63, .12); }
+  .table.modules td {
+    border: 0;
+    padding: 4px 0;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    text-align: left !important;
+  }
+  .table.modules td[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    color: #8a97b4;
+    font-size: 11.5px;
+    font-weight: 700;
+  }
+  .table.modules td.dims { flex-wrap: wrap; }
+  .table.modules td.dims input { flex: 1 1 60px; min-width: 60px; }
+  .table.modules td .qty.cell { max-width: 120px; }
+  .table.modules td:first-child,
+  .table.modules td.bulk-check { position: absolute; top: 10px; right: 10px; padding: 0; }
+}

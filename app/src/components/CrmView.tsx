@@ -134,6 +134,8 @@ export default function CrmView(props: {
   const [focus, setFocus] = useState<CrmFocus>(savedView.focus);
   const [stage, setStage] = useState<string>(savedView.stage);
   // Открытая карточка сделки тоже запоминается: вернулись в CRM — она снова перед вами.
+  // Длинный список сделок показываем частями.
+  const [visibleCount, setVisibleCount] = useState(30);
   const [openProjectId, setOpenProjectId] = useState<string | null>(() => {
     const id = loadViewPrefs('crm-open', { id: '' }).id;
     return id || null;
@@ -313,7 +315,8 @@ export default function CrmView(props: {
             : value === 'closed' ? counts.closed
             : rows.length;
           return (
-            <button key={value} type="button" className={focus === value ? 'active' : ''} onClick={() => setFocus(value)}>
+            <button key={value} type="button" className={focus === value ? 'active' : ''}
+              onClick={() => { setFocus(value); setVisibleCount(30); }}>
               {CRM_FOCUS_LABELS[value]}<b>{count}</b>
             </button>
           );
@@ -345,7 +348,7 @@ export default function CrmView(props: {
       <section className="crm-funnel" aria-label="Воронка">
         {stages.map((item) => (
           <button key={item.id} type="button" className={stage === item.id ? 'active' : ''}
-            onClick={() => { setStage(stage === item.id ? '' : item.id); setFocus('all'); }}>
+            onClick={() => { setStage(stage === item.id ? '' : item.id); setFocus('all'); setVisibleCount(30); }}>
             <b>{item.count}</b>
             <span>{item.title}</span>
             <small>{fmtMoney(item.total)}</small>
@@ -382,7 +385,7 @@ export default function CrmView(props: {
           <div className="empty small">Здесь пусто. Попробуйте другой фокус или сбросьте поиск.</div>
         ) : (
           <div className="crm-list">
-            {visible.map((row) => (
+            {visible.slice(0, visibleCount).map((row) => (
               <article key={row.project.id} className={`crm-item tone-${row.tone}`}>
                 <button type="button" className="crm-item-main" onClick={() => setOpenProjectId(row.project.id)}>
                   <div className="crm-item-title">
@@ -425,6 +428,13 @@ export default function CrmView(props: {
                 </div>
               </article>
             ))}
+          </div>
+        )}
+        {visible.length > visibleCount && (
+          <div className="dashboard-more">
+            <button type="button" className="btn ghost" onClick={() => setVisibleCount((count) => count + 30)}>
+              Показать ещё {Math.min(30, visible.length - visibleCount)} из {visible.length - visibleCount}
+            </button>
           </div>
         )}
       </section>

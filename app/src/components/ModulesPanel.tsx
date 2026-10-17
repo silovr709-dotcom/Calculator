@@ -474,23 +474,23 @@ export default function ModulesPanel(props: {
                     </span>
                   </td>
                   <td><b>{m.name}</b><div className="muted small">{m.type}{walls.length > 1 ? ` · ${WALL_SHORT_LABELS[moduleWall(m, shape)].toLocaleLowerCase('ru')} стена` : ''}</div>{facadeStatusLabel(m, body) && <span className={`module-facade-status ${facadeOutdated ? 'outdated' : m.facadeSpecStatus ?? 'set'}`}>{facadeStatusLabel(m, body)}</span>}{hingeStatusLabel(m, body) && <span className={`module-facade-status ${hingeOutdated ? 'outdated' : m.hingeSpecStatus ?? 'set'}`}>{hingeStatusLabel(m, body)}</span>}</td>
-                  <td className="small dims" onClick={(e) => e.stopPropagation()}>
+                  <td className="small dims" data-label="Размер, мм" onClick={(e) => e.stopPropagation()}>
                     <input className="dim" type="number" placeholder="Ш" data-grid-r={idx} data-grid-c={0} onFocus={(e) => e.currentTarget.select()} value={m.widthMm ?? ''} onChange={(e) => updMod(m.id, { widthMm: Number(e.target.value) || null, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />×
                     <input className="dim" type="number" placeholder="В" data-grid-r={idx} data-grid-c={1} onFocus={(e) => e.currentTarget.select()} value={m.heightMm ?? ''} onChange={(e) => updMod(m.id, { heightMm: Number(e.target.value) || null, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />×
                     <input className="dim" type="number" placeholder="Г" data-grid-r={idx} data-grid-c={2} onFocus={(e) => e.currentTarget.select()} value={m.depthMm ?? ''} onChange={(e) => updMod(m.id, { depthMm: Number(e.target.value) || null })} />
                   </td>
-                  <td className="num" onClick={(e) => e.stopPropagation()}>
+                  <td className="num" data-label="Количество" onClick={(e) => e.stopPropagation()}>
                     <input className="qty cell" type="number" min={0} data-grid-r={idx} data-grid-c={3} onFocus={(e) => e.currentTarget.select()} value={m.qty} onChange={(e) => updMod(m.id, { qty: Number(e.target.value) || 0 })} />
                   </td>
-                  <td className="num" onClick={(e) => e.stopPropagation()}>
+                  <td className="num" data-label="Фасадов" onClick={(e) => e.stopPropagation()}>
                     <input className="qty cell" type="number" min={0} data-grid-r={idx} data-grid-c={4} onFocus={(e) => e.currentTarget.select()} value={m.facades} onChange={(e) => updMod(m.id, { facades: Number(e.target.value) || 0, facadeParts: undefined, facadeSpecStatus: 'manual', hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />
                   </td>
-                  <td className="num" onClick={(e) => e.stopPropagation()}>
+                  <td className="num" data-label="Ящиков" onClick={(e) => e.stopPropagation()}>
                     <input className="qty cell" type="number" min={0} data-grid-r={idx} data-grid-c={5} onFocus={(e) => e.currentTarget.select()} value={m.drawers} onChange={(e) => updMod(m.id, { drawers: Number(e.target.value) || 0, facadeSpecStatus: m.facadeSpecStatus === 'applied' ? 'outdated' : m.facadeSpecStatus, hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus })} />
                   </td>
-                  <td className="small">{chosen.length}/{filled.length} выбрано{c.level === 'error' ? <span className="warn"> · не хватает данных</span> : c.level === 'warn' ? ' · подтвердите' : ''}</td>
-                  <td className="num">{fmtMoney(costs.get(m.id) ?? 0)}</td>
-                  <td>{statusDot(c.level)}</td>
+                  <td className="small" data-label="Комплектация">{chosen.length}/{filled.length} выбрано{c.level === 'error' ? <span className="warn"> · не хватает данных</span> : c.level === 'warn' ? ' · подтвердите' : ''}</td>
+                  <td className="num" data-label="Себестоимость">{fmtMoney(costs.get(m.id) ?? 0)}</td>
+                  <td data-label="Статус">{statusDot(c.level)}</td>
                   <td>
                     <button className="btn tiny ghost" title="Дублировать" onClick={(e) => { e.stopPropagation(); const cp = { ...JSON.parse(JSON.stringify(m)), id: newModule(m.type).id, name: `${m.name} (копия)` }; setMods([...mods, cp]); setSelId(cp.id); }}>⧉</button>
                     <button className="btn tiny danger" title="Удалить" onClick={(e) => { e.stopPropagation(); deleteModuleWithUndo(m, idx); }}>✕</button>
