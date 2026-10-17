@@ -27,6 +27,7 @@ import { useAppVersion } from './lib/useAppVersion';
 import ServerSaveChip from './components/ServerSaveChip';
 import InstallAppCard from './components/InstallAppCard';
 import ToastHost from './components/ToastHost';
+import { toast } from './lib/toast';
 import NotifySettingsCard from './components/NotifySettingsCard';
 import TelegramNotifyCard from './components/TelegramNotifyCard';
 import { useReminders } from './lib/useReminders';
@@ -183,6 +184,36 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
     () => capabilitiesFor(server.user?.role, server.mode === 'server'),
     [server.user?.role, server.mode],
   );
+
+  // Пункты нижнего меню: один список и для шторки, и для проверки прав.
+  const dockMenuItems = useMemo(() => {
+    const go = (next: View) => () => {
+      setView(next);
+      setMoreOpen(false);
+      toast.info(`Открываю: ${next.kind === 'schedule' ? 'График работ'
+        : next.kind === 'analytics' ? 'Аналитика'
+        : next.kind === 'audit' ? 'Проверка цен'
+        : next.kind === 'kb' ? 'База знаний'
+        : next.kind === 'pricebook' ? 'Прайс и версии'
+        : next.kind === 'sync' ? 'Синхронизация'
+        : next.kind === 'server' ? 'Сервер'
+        : 'Настройки'}`);
+    };
+    const items: Array<{ key: View['kind']; label: string; hint: string; open: () => void }> = [
+      { key: 'schedule', label: 'График работ', hint: 'монтажи', open: go({ kind: 'schedule' }) },
+    ];
+    if (can.viewCost) {
+      items.push({ key: 'analytics', label: 'Аналитика', hint: 'деньги', open: go({ kind: 'analytics' }) });
+      items.push({ key: 'audit', label: 'Проверка цен', hint: 'опт/розн.', open: go({ kind: 'audit' }) });
+    }
+    items.push({ key: 'kb', label: 'База знаний', hint: String(kbArticles.length), open: go({ kind: 'kb' }) });
+    if (can.viewPricebook) items.push({ key: 'pricebook', label: 'Прайс и версии', hint: 'версии', open: go({ kind: 'pricebook' }) });
+    items.push({ key: 'sync', label: 'Синхронизация', hint: 'устройства', open: go({ kind: 'sync' }) });
+    if (server.mode === 'server') items.push({ key: 'server', label: 'Сервер', hint: 'база', open: go({ kind: 'server' }) });
+    items.push({ key: 'settings', label: 'Настройки', hint: 'по умолч.', open: go({ kind: 'settings' }) });
+    return items;
+  }, [can.viewCost, can.viewPricebook, kbArticles.length, server.mode]);
+
   // Значок у пункта «Синхронизация»: на своём сервере показываем состояние сервера,
   // иначе — старое облако.
   const syncBadgeState = server.mode === 'server'
@@ -860,29 +891,36 @@ const persistTemplates = useCallback((next: Template[]) => {
           />
         )}
       </main>
-      {moreOpen && <div className="dock-sheet-shade" onClick={() => setMoreOpen(false)} aria-hidden="true" />}
       {moreOpen && (
-        <div className="dock-sheet" role="menu">
-          <div className="dock-sheet-grip" aria-hidden="true" />
-          <button type="button" className={view.kind === 'schedule' ? 'active' : ''} onClick={() => { setView({ kind: 'schedule' }); setMoreOpen(false); }}>График работ <span>монтажи</span></button>
-          {can.viewCost && (
-            <button type="button" className={view.kind === 'analytics' ? 'active' : ''} onClick={() => { setView({ kind: 'analytics' }); setMoreOpen(false); }}>Аналитика <span>деньги</span></button>
-          )}
-          {can.viewCost && (
-            <button type="button" className={view.kind === 'audit' ? 'active' : ''} onClick={() => { setView({ kind: 'audit' }); setMoreOpen(false); }}>Проверка цен <span>опт/розн.</span></button>
-          )}
-          <button type="button" className={view.kind === 'kb' ? 'active' : ''} onClick={() => { setView({ kind: 'kb' }); setMoreOpen(false); }}>База знаний <span>{kbArticles.length}</span></button>
-          {can.viewPricebook && (
-            <button type="button" className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => { setView({ kind: 'pricebook' }); setMoreOpen(false); }}>Прайс и версии <span>{activePricebook.meta.itemCount}</span></button>
-          )}
-          <button type="button" className={view.kind === 'sync' ? 'active' : ''} onClick={() => { setView({ kind: 'sync' }); setMoreOpen(false); }}>Синхронизация <span>{syncBadgeState === 'syncing' ? '...' : showSyncBadge ? syncBadgeState : 'off'}</span></button>
-          {server.mode === 'server' && (
-            <button type="button" className={view.kind === 'server' ? 'active' : ''} onClick={() => { setView({ kind: 'server' }); setMoreOpen(false); }}>Сервер <span>{server.status === 'synced' ? 'ок' : server.status}</span></button>
-          )}
-          <button type="button" className={view.kind === 'settings' ? 'active' : ''} onClick={() => { setView({ kind: 'settings' }); setMoreOpen(false); }}>Настройки <span>по умолч.</span></button>
-          <button type="button" className="dock-sheet-close" onClick={() => setMoreOpen(false)}>Закрыть</button>
+        <div className="dock-sheet-layer" onClick={() => setMoreOpen(false)}>
+          <div
+            className="dock-sheet"
+            role="menu"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="dock-sheet-grip" aria-hidden="true" />
+            {dockMenuItems.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={view.kind === item.key ? 'active' : ''}
+                // Срабатывает и по pointerup, и по click: на части телефонов
+                // click до кнопки не доходит, если палец чуть сместился.
+                onPointerUp={(event) => { event.stopPropagation(); item.open(); }}
+                onClick={(event) => { event.stopPropagation(); item.open(); }}
+              >
+                {item.label} <span>{item.hint}</span>
+              </button>
+            ))}
+            <button type="button" className="dock-sheet-close"
+              onPointerUp={(event) => { event.stopPropagation(); setMoreOpen(false); }}
+              onClick={(event) => { event.stopPropagation(); setMoreOpen(false); }}>
+              Закрыть
+            </button>
+          </div>
         </div>
       )}
+
       <nav className="mobile-app-dock no-print" aria-label="Быстрый переход по приложению">
         <button type="button" className={view.kind === 'dashboard' || view.kind === 'project' ? 'active' : ''} onClick={() => setView({ kind: 'dashboard' })}>
           <span className="nav-icon nav-projects" aria-hidden="true" />
