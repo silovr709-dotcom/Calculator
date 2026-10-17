@@ -59,7 +59,7 @@ const DOC_STATES: Array<{ value: ClientDocumentState; label: string }> = [
 
 const LOST_REASONS = ['Дорого', 'Выбрал другого подрядчика', 'Передумал / отложил', 'Не устроили сроки', 'Не вышли на связь', 'Другое'];
 
-type Tab = 'deal' | 'tasks' | 'money' | 'client' | 'timeline';
+type Tab = 'deal' | 'tasks' | 'works' | 'money' | 'client' | 'timeline';
 
 function todayInput(): string {
   return new Date().toISOString().slice(0, 10);
@@ -81,6 +81,7 @@ export default function CrmDealDialog(props: {
   onTaskToggle: (taskId: string) => void;
   onTaskRemove: (taskId: string) => void;
   onSchedulePatch: (patch: Partial<ProjectSchedule>) => void;
+  onOpenSchedule: () => void;
   onNote: (text: string) => void;
   onSchedule: (days: number) => void;
   onDocumentExport: (kind: 'offer' | 'contract' | 'receipt' | 'package') => void;
@@ -188,6 +189,7 @@ export default function CrmDealDialog(props: {
           {([
             ['deal', 'Сделка'],
             ['tasks', openCount > 0 ? `Задачи · ${openCount}` : 'Задачи'],
+            ['works', card.project.schedule?.installAt ? 'Работы · назначено' : 'Работы'],
             ['money', 'Деньги и документы'],
             ['client', 'Клиент'],
             ['timeline', 'Лента'],
@@ -279,6 +281,67 @@ export default function CrmDealDialog(props: {
               {tasks.length === 0
                 ? <div className="empty small">Задач нет. Добавьте звонок, замер или напоминание об оплате — они появятся в списке «Сегодня».</div>
                 : <ul className="crm-task-list">{tasks.map(taskRow)}</ul>}
+            </>
+          )}
+
+          {tab === 'works' && (
+            <>
+              <div className="crm-works-grid">
+                <label>Замер
+                  <input type="date" value={card.project.schedule?.measureAt ?? ''}
+                    onChange={(event) => props.onSchedulePatch({ measureAt: event.target.value || undefined })} />
+                </label>
+                <label>Готовность на фабрике
+                  <input type="date" value={card.project.schedule?.readyAt ?? ''}
+                    onChange={(event) => props.onSchedulePatch({ readyAt: event.target.value || undefined })} />
+                </label>
+                <label>Доставка
+                  <input type="date" value={card.project.schedule?.deliveryAt ?? ''}
+                    onChange={(event) => props.onSchedulePatch({ deliveryAt: event.target.value || undefined })} />
+                </label>
+                <label>Монтаж
+                  <input type="date" value={card.project.schedule?.installAt ?? ''}
+                    onChange={(event) => props.onSchedulePatch({ installAt: event.target.value || undefined })} />
+                </label>
+                <label>Дней монтажа
+                  <input type="number" min={1} max={14} value={card.project.schedule?.installDays ?? 1}
+                    onChange={(event) => props.onSchedulePatch({ installDays: Math.max(1, Number(event.target.value) || 1) })} />
+                </label>
+                <label>Бригада
+                  <input value={card.project.schedule?.team ?? ''} placeholder="кто монтирует"
+                    onChange={(event) => props.onSchedulePatch({ team: event.target.value })} />
+                </label>
+                <label className="span-2">Адрес объекта
+                  <input value={card.project.schedule?.address ?? ''} placeholder="куда ехать"
+                    onChange={(event) => props.onSchedulePatch({ address: event.target.value })} />
+                </label>
+              </div>
+
+              <div className="crm-works-actions">
+                <button type="button" className="btn ghost" onClick={props.onOpenSchedule}>Открыть график работ</button>
+                {!card.project.schedule?.address && card.client?.objectAddress && (
+                  <button type="button" className="btn ghost"
+                    onClick={() => props.onSchedulePatch({ address: card.client?.objectAddress })}>
+                    Подставить адрес клиента
+                  </button>
+                )}
+              </div>
+
+              <div className="crm-works-summary">
+                {['measureAt', 'readyAt', 'deliveryAt', 'installAt'].every((field) => !card.project.schedule?.[field as 'installAt'])
+                  ? <span className="muted small">Даты ещё не назначены. Поставьте замер или монтаж — они сразу появятся в графике работ, в подписке календаря и в напоминаниях.</span>
+                  : <ul>
+                      {card.project.schedule?.measureAt && <li><b>Замер</b><span>{fmtDate(card.project.schedule.measureAt)}</span></li>}
+                      {card.project.schedule?.readyAt && <li><b>Готовность</b><span>{fmtDate(card.project.schedule.readyAt)}</span></li>}
+                      {card.project.schedule?.deliveryAt && <li><b>Доставка</b><span>{fmtDate(card.project.schedule.deliveryAt)}</span></li>}
+                      {card.project.schedule?.installAt && (
+                        <li className="accent">
+                          <b>Монтаж</b>
+                          <span>{fmtDate(card.project.schedule.installAt)}{card.project.schedule.team ? ` · ${card.project.schedule.team}` : ''}</span>
+                        </li>
+                      )}
+                    </ul>}
+              </div>
             </>
           )}
 

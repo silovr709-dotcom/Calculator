@@ -781,6 +781,7 @@ const persistTemplates = useCallback((next: Template[]) => {
               const client = clients.find((item) => item.id === clientId);
               if (client) persistClients(clients.map((item) => item.id === clientId ? appendClientHistory(client, entry, uid('hist')) : item));
             }}
+            onOpenSchedule={() => setView({ kind: 'schedule' })}
             onMergeClients={(targetId, sourceId) => {
               const target = clients.find((item) => item.id === targetId);
               const source = clients.find((item) => item.id === sourceId);

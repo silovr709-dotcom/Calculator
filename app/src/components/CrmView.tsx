@@ -126,6 +126,7 @@ export default function CrmView(props: {
   onClientChange: (client: ClientProfile) => void;
   onClientHistory: (clientId: string, entry: Omit<ClientHistoryEntry, 'id' | 'createdAt'>) => void;
   onMergeClients: (targetId: string, sourceId: string) => void;
+  onOpenSchedule: () => void;
 }) {
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
@@ -402,6 +403,11 @@ export default function CrmView(props: {
                         </span>
                       : <span className={`crm-item-date tone-${row.tone}`}>{toneLabel(row.tone, row.workflow.nextContactAt)}</span>}
                     {row.openTasks > 1 && <span className="crm-item-taskcount">ещё задач: {row.openTasks - 1}</span>}
+                    {row.project.schedule?.installAt && (
+                      <span className="crm-item-install" title="Монтаж назначен">
+                        🛠 {new Date(row.project.schedule.installAt).toLocaleDateString('ru-RU')}
+                      </span>
+                    )}
                     {row.phone && (
                       <a className="crm-item-phone" href={`tel:${row.phone.replace(/[^+\d]/g, '')}`}
                         onClick={(click) => click.stopPropagation()}>☎ {row.phone}</a>
@@ -465,6 +471,7 @@ export default function CrmView(props: {
             }
           }}
           onTaskRemove={(taskId) => props.onProjectChange(removeTask(openRow.project, taskId))}
+          onOpenSchedule={props.onOpenSchedule}
           onSchedulePatch={(patch) => props.onProjectChange({
             ...openRow.project,
             schedule: { ...(openRow.project.schedule ?? {}), ...patch },

@@ -8584,3 +8584,234 @@ a.crm-item-phone:hover { text-decoration: underline; }
   .table.modules td:first-child,
   .table.modules td.bulk-check { position: absolute; top: 10px; right: 10px; padding: 0; }
 }
+
+/* =====================================================================
+   ВИЗУАЛЬНЫЙ СЛОЙ: единые поверхности, типографика и ритм.
+   Пишется последним и аккуратно перекрывает накопившиеся стили,
+   чтобы система выглядела цельно: спокойный фон, белые карточки,
+   тёмно-синие акценты, чёткие заголовки и воздух между блоками.
+   ===================================================================== */
+:root {
+  --ink: #16213f;
+  --ink-2: #45536f;
+  --ink-3: #7c89a8;
+  --line-1: #e7ebf4;
+  --line-2: #d7deef;
+  --surface: #ffffff;
+  --surface-2: #f7f9fd;
+  --brand: #16213f;
+  --brand-2: #27406f;
+  --brand-soft: #eef2fb;
+  --ok: #18723e;
+  --warn: #8a5a00;
+  --bad: #b3261e;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, .04);
+  --shadow-2: 0 10px 28px -14px rgba(16, 24, 40, .28);
+}
+
+body {
+  background: #f1f4fa !important;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* --- Боковое меню: спокойный тёмно-синий, без «неонового» фиолета --- */
+.sidebar {
+  background: linear-gradient(180deg, #16213f 0%, #101a33 100%);
+  color: #e8edf8;
+  padding: 22px 14px;
+  gap: 20px;
+}
+.sidebar .brand-name { letter-spacing: .2px; }
+.sidebar .brand-sub { opacity: .55; letter-spacing: .4px; }
+.sidebar-nav-title {
+  padding: 0 10px;
+  margin: 14px 0 6px;
+  color: rgba(232, 237, 248, .45);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.sidebar nav button {
+  color: #cdd7ea;
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  font-size: 13.5px;
+}
+.sidebar nav button:hover { background: rgba(255, 255, 255, .07); color: #fff; }
+.sidebar nav button.active {
+  background: rgba(255, 255, 255, .12);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 #f5b833;
+}
+.sidebar .nav-count { background: rgba(255, 255, 255, .12); font-weight: 600; }
+
+/* --- Рабочая область: больше воздуха и ровный ритм --- */
+.page, .view { padding: 26px 30px 90px; max-width: 1480px; }
+.page-head, .view-head {
+  align-items: flex-start;
+  gap: 18px;
+  margin-bottom: 22px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line-1);
+}
+.page-head h1, .view-head h1 {
+  margin: 0 0 4px;
+  font-size: 23px;
+  font-weight: 650;
+  letter-spacing: -.015em;
+  color: var(--ink);
+}
+.view-sub, .page-head .muted { color: var(--ink-3); font-size: 13px; }
+.eyebrow {
+  display: inline-block;
+  margin-bottom: 2px;
+  color: var(--ink-3);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+/* --- Карточки: одна форма на всё приложение --- */
+.app .card,
+.app .totals-card,
+.app .empty,
+.app .dashboard-filters {
+  background: var(--surface) !important;
+  border: 1px solid var(--line-1) !important;
+  border-radius: var(--r-md) !important;
+  box-shadow: var(--shadow-1) !important;
+  padding: 18px 20px;
+  margin-bottom: 14px;
+  backdrop-filter: none !important;
+}
+.app .card h3 { margin: 0 0 2px; font-size: 15px; font-weight: 650; color: var(--ink); }
+.section-head {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-1);
+}
+.section-head p { margin: 2px 0 0; color: var(--ink-3); font-size: 12.5px; }
+
+/* --- Кнопки: тёмно-синяя основная, аккуратная второстепенная --- */
+.app .btn {
+  border-radius: var(--r-sm);
+  font-weight: 600;
+  font-size: 13.5px;
+  min-height: 38px;
+  box-shadow: none;
+  transition: background-color .14s, border-color .14s, color .14s;
+}
+.app .btn.primary, .app .btn:not(.ghost):not(.danger):not(.tiny) {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.app .btn.primary:hover, .app .btn:not(.ghost):not(.danger):hover { background: var(--brand-2); border-color: var(--brand-2); }
+.app .btn.ghost {
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  color: var(--ink);
+  font-weight: 500;
+}
+.app .btn.ghost:hover { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
+.app .btn.tiny { min-height: 30px; border-radius: 8px; font-size: 12px; }
+.app .btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* --- Поля ввода --- */
+.app input,
+.app select,
+.app textarea {
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: #fff;
+  color: var(--ink);
+  font-size: 13.5px;
+  transition: border-color .14s, box-shadow .14s;
+}
+.app input:focus,
+.app select:focus,
+.app textarea:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(22, 33, 63, .10);
+}
+.app label { color: var(--ink-2); font-size: 12px; }
+
+/* --- Таблицы: спокойные, читаемые --- */
+.app .table {
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+  background: #fff;
+  overflow: hidden;
+}
+.app .table th {
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  border-bottom: 1px solid var(--line-1);
+  padding: 11px 14px;
+}
+.app .table td { padding: 12px 14px; border-bottom: 1px solid #f1f4fa; color: var(--ink); }
+.app .table tr:last-child td { border-bottom: 0; }
+.app .table tr.row-click:hover td { background: var(--brand-soft); }
+
+/* --- Значки и статусы в одном стиле --- */
+.app .readiness-pill,
+.app .status-inline,
+.app .badge {
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .01em;
+  padding: 4px 10px;
+}
+
+/* --- Пустые состояния --- */
+.app .empty {
+  border: 1px dashed var(--line-2) !important;
+  background: var(--surface-2) !important;
+  color: var(--ink-3);
+  padding: 34px 20px;
+}
+
+@media (max-width: 760px) {
+  .page, .view { padding: calc(14px + env(safe-area-inset-top)) 14px 120px; }
+  .app .card { padding: 14px; border-radius: 12px !important; }
+  .page-head, .view-head { margin-bottom: 14px; padding-bottom: 12px; }
+  .page-head h1, .view-head h1 { font-size: 20px; }
+}
+
+/* CRM ↔ график: вкладка «Работы» в карточке сделки. */
+.crm-works-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.crm-works-grid label { display: grid; gap: 4px; font-size: 12px; color: var(--ink-2); }
+.crm-works-grid label.span-2 { grid-column: 1 / -1; }
+.crm-works-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.crm-works-summary ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.crm-works-summary li {
+  display: flex; gap: 12px; align-items: baseline; justify-content: space-between;
+  padding: 9px 12px; border: 1px solid var(--line-1); border-left: 3px solid var(--line-2);
+  border-radius: var(--r-sm); background: var(--surface-2); font-size: 13px;
+}
+.crm-works-summary li.accent { border-left-color: var(--ok); background: #f3fbf6; }
+.crm-works-summary li b { color: var(--ink); }
+.crm-works-summary li span { color: var(--ink-2); }
+.crm-item-install {
+  padding: 1px 8px; border-radius: 999px;
+  background: #eef7f1; color: var(--ok); font-weight: 600;
+}
+@media (max-width: 760px) { .crm-works-grid { grid-template-columns: 1fr; } }
