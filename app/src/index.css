@@ -8432,3 +8432,45 @@ a.crm-item-phone:hover { text-decoration: underline; }
   .page-head .actions > *,
   .view-head .actions > * { flex: 1 1 auto; }
 }
+
+/* Длинные списки: кнопка «показать ещё» вместо бесконечной таблицы. */
+.dashboard-more { display: flex; justify-content: center; margin: 12px 0 4px; }
+.dashboard-more .btn { min-width: 240px; }
+
+/* Шапка проекта на телефоне: кнопки в ряд, вкладки прокручиваются. */
+@media (max-width: 760px) {
+  .project-topbar-row.project-stage-nav,
+  .project-topbar-row.project-subtab-row {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    gap: 6px;
+    padding-bottom: 4px;
+    margin-bottom: 10px;
+  }
+  .project-topbar-row.project-stage-nav::-webkit-scrollbar,
+  .project-topbar-row.project-subtab-row::-webkit-scrollbar { height: 0; }
+  .project-stage-nav button,
+  .project-subtab { flex: 0 0 auto; scroll-snap-align: start; }
+  .project-head-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 100%; }
+  .project-head-actions > *:first-child { grid-column: 1 / -1; }
+  .project-head-actions .btn,
+  .project-head-actions select,
+  .project-head-actions .dropdown > .btn { width: 100%; }
+}
+
+/* Единый вид пустых экранов. */
+.empty { line-height: 1.5; }
+.empty b { display: block; margin-bottom: 4px; color: #16213f; font-size: 14px; }
+
+/* Ничего лишнего в печати. */
+@media print {
+  .schedule-undo,
+  .dock-sheet,
+  .dock-sheet-layer,
+  .resume-work,
+  .toast-host,
+  .install-card { display: none !important; }
+}

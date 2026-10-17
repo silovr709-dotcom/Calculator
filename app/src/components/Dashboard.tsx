@@ -45,6 +45,8 @@ export default function Dashboard(props: {
     };
   }, [props.projects, props.events, props.me, todayIso]);
 
+  // Длинный список показываем частями: страница открывается быстрее.
+  const [visibleCount, setVisibleCount] = useState(25);
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ name: '', client: '', date: todayISO(), comment: '' });
   const fileRef = useRef<HTMLInputElement>(null);
@@ -337,7 +339,7 @@ export default function Dashboard(props: {
               <tr><th>Название</th><th>Клиент</th><th>Дата</th><th>Позиций</th><th>Себестоимость</th><th>Цена клиента</th><th>Готовность</th><th>Статус</th><th /></tr>
             </thead>
             <tbody>
-              {filteredProjects.map((p) => {
+              {filteredProjects.slice(0, visibleCount).map((p) => {
                 // строки из модулей («Позиции кухни») входят в итог наравне с ручными строками
                 const pb = props.pricebooks.find((x) => x.meta.id === p.pricebookId) ?? props.pricebooks[0];
                 const modLines = pb ? (p.modules ?? []).flatMap((m) => moduleToLines(m, p.moduleDefaults ?? {}, pb)) : [];
@@ -369,6 +371,13 @@ export default function Dashboard(props: {
               })}
             </tbody>
           </table>}
+          {filteredProjects.length > visibleCount && (
+            <div className="dashboard-more">
+              <button type="button" className="btn ghost" onClick={() => setVisibleCount((count) => count + 25)}>
+                Показать ещё {Math.min(25, filteredProjects.length - visibleCount)} из {filteredProjects.length - visibleCount}
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
