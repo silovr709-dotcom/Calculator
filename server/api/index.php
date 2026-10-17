@@ -465,6 +465,7 @@ switch ($route . ' ' . $method) {
             'chats' => $settings['chats'],
             'cronKey' => $settings['cronKey'],
             'leadMinutes' => $settings['leadMinutes'],
+            'defaultLeads' => $settings['defaultLeads'],
             'dailyHour' => $settings['dailyHour'],
             'eveningHour' => $settings['eveningHour'],
             'notifyNew' => $settings['notifyNew'],

@@ -38,7 +38,7 @@ export default function TelegramNotifyCard() {
   if (!settings) return null;
 
   const save = async (patch: Partial<{
-    enabled: boolean; leadMinutes: number; timezoneOffset: number; eveningHour: number; dailyHour: number;
+    enabled: boolean; leadMinutes: number; defaultLeads: number[]; timezoneOffset: number; eveningHour: number; dailyHour: number;
     notifyNew: boolean; morningDigest: boolean; eveningDigest: boolean; icsAlarms: number[];
   }> = {}) => {
     setBusy(true);
@@ -49,6 +49,7 @@ export default function TelegramNotifyCard() {
         token: token.trim() || undefined,
         chats: chats.filter((chat) => chat.name.trim() && chat.chatId.trim()),
         leadMinutes: patch.leadMinutes ?? settings.leadMinutes,
+        defaultLeads: patch.defaultLeads ?? settings.defaultLeads,
         timezoneOffset: patch.timezoneOffset ?? settings.timezoneOffset,
         eveningHour: patch.eveningHour ?? settings.eveningHour,
         dailyHour: patch.dailyHour ?? settings.dailyHour,
@@ -128,13 +129,28 @@ export default function TelegramNotifyCard() {
           <input value={token} placeholder={settings.tokenSet ? 'оставьте пустым, чтобы не менять' : '1234567890:AA...'}
             onChange={(event) => setToken(event.target.value)} />
         </label>
-        <label>Предупреждать за
-          <select value={settings.leadMinutes} disabled={busy} onChange={(event) => void save({ leadMinutes: Number(event.target.value) })}>
-            {[15, 30, 60, 120, 240, 720, 1440].map((minutes) => (
-              <option key={minutes} value={minutes}>{minutes < 60 ? `${minutes} мин` : minutes < 1440 ? `${minutes / 60} ч` : 'сутки'}</option>
-            ))}
-          </select>
-        </label>
+        <div className="notify-leads span-2">
+          <b>Когда напоминать, если у дела не заданы свои интервалы</b>
+          <div className="notify-chips">
+            {[0, 15, 30, 60, 120, 240, 480, 1440, 2880].map((minutes) => {
+              const active = settings.defaultLeads.includes(minutes);
+              return (
+                <button key={minutes} type="button" className={active ? 'active' : ''} disabled={busy}
+                  onClick={() => void save({
+                    defaultLeads: active
+                      ? settings.defaultLeads.filter((item) => item !== minutes)
+                      : [...settings.defaultLeads, minutes].sort((a, b) => a - b),
+                  })}>
+                  {minutes === 0 ? 'в момент' : minutes < 60 ? `${minutes} мин` : minutes < 1440 ? `${minutes / 60} ч` : `${minutes / 1440} дн`}
+                </button>
+              );
+            })}
+          </div>
+          <small className="muted">
+            У каждого дела и монтажа можно задать свои интервалы — в графике работ,
+            блок «Напомнить». Эти общие значения применяются только там, где своих нет.
+          </small>
+        </div>
         <label className="notify-check">
           <input type="checkbox" checked={settings.morningDigest} disabled={busy}
             onChange={(event) => void save({ morningDigest: event.target.checked })} />

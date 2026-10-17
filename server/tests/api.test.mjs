@@ -165,6 +165,11 @@ r = await call('notify/settings');
 check('вечерняя сводка и будильники вернулись', r.json?.settings?.eveningHour === 20 && JSON.stringify(r.json?.settings?.icsAlarms) === '[30,1440]' && r.json?.settings?.notifyNew === true, r.text);
 check('утренняя и вечерняя сводки включены по умолчанию', r.json?.settings?.morningDigest === true && r.json?.settings?.eveningDigest === true, r.text);
 
+r = await call('notify/settings', { method: 'POST', body: { enabled: true, chats: [{ name: 'Пётр', chatId: '555' }], defaultLeads: [30, 1440, 30] } });
+check('общие интервалы сохраняются списком', r.json?.ok === true, r.text);
+r = await call('notify/settings');
+check('повторы в списке интервалов схлопываются', JSON.stringify(r.json?.settings?.defaultLeads) === '[30,1440]', r.text);
+
 r = await call('notify/settings');
 check('токен наружу не отдаётся целиком', r.json?.settings?.tokenSet === true && r.json?.settings?.tokenHint === '…TTOKEN', r.text);
 check('пустые получатели отфильтрованы', (r.json?.settings?.chats ?? []).length === 1, r.text);

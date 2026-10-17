@@ -199,6 +199,15 @@ export default function ScheduleDialog(props: {
                     {SCHEDULE_STATUSES.map((status) => <option key={status.id} value={status.id}>{status.label}</option>)}
                   </select>
                 </label>
+                <div className="span-3 schedule-reminder-picker">
+                  <b>Напомнить про этот монтаж</b>
+                  <ReminderPicker
+                    compact
+                    inheritLabel="Как в настройках"
+                    value={editProject.schedule?.reminders ?? []}
+                    onChange={(reminders) => props.patchSchedule(editProject, { reminders })}
+                  />
+                </div>
                 <label className="span-3">Заметка для монтажников
                   <input value={editProject.schedule?.note ?? ''} placeholder="этаж, лифт, время, контакты на объекте"
                     onChange={(event) => props.patchSchedule(editProject, { note: event.target.value })} />

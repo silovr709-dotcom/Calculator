@@ -253,6 +253,8 @@ export interface ProjectSchedule {
   address?: string;
   note?: string;
   status?: ScheduleStatus;
+  /** За сколько минут напомнить про монтаж. Пусто — берутся общие настройки. */
+  reminders?: number[];
 }
 
 /** Своё дело в календаре: замер, выезд, встреча, монтаж — без привязки к проекту. */

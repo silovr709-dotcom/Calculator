@@ -498,6 +498,8 @@ export interface NotifyServerSettings {
   chats: TelegramChat[];
   cronKey: string;
   leadMinutes: number;
+  /** Общие интервалы, если у дела не заданы свои. */
+  defaultLeads: number[];
   dailyHour: number;
   /** Час вечерней сводки «что завтра». */
   eveningHour: number;
@@ -522,6 +524,7 @@ export async function saveNotifyServerSettings(input: {
   token?: string;
   chats: TelegramChat[];
   leadMinutes: number;
+  defaultLeads?: number[];
   timezoneOffset: number;
   eveningHour?: number;
   dailyHour?: number;

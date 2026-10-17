@@ -865,6 +865,9 @@ function recept_notify_settings(): array
         'chats' => isset($data['chats']) && is_array($data['chats']) ? array_values($data['chats']) : [],
         'cronKey' => isset($data['cronKey']) && $data['cronKey'] !== '' ? (string) $data['cronKey'] : '',
         'leadMinutes' => isset($data['leadMinutes']) ? (int) $data['leadMinutes'] : 60,
+        'defaultLeads' => isset($data['defaultLeads']) && is_array($data['defaultLeads'])
+            ? array_values(array_unique(array_filter(array_map('intval', $data['defaultLeads']), function ($value) { return $value >= 0 && $value <= 20160; })))
+            : [isset($data['leadMinutes']) ? (int) $data['leadMinutes'] : 60],
         'dailyHour' => isset($data['dailyHour']) ? (int) $data['dailyHour'] : 8,
         'eveningHour' => isset($data['eveningHour']) ? (int) $data['eveningHour'] : 19,
         'notifyNew' => isset($data['notifyNew']) ? (bool) $data['notifyNew'] : true,
@@ -900,6 +903,9 @@ function recept_notify_save(array $input): array
         'chats' => $chats,
         'cronKey' => $current['cronKey'] !== '' ? $current['cronKey'] : bin2hex(random_bytes(10)),
         'leadMinutes' => isset($input['leadMinutes']) ? max(0, min(1440, (int) $input['leadMinutes'])) : $current['leadMinutes'],
+        'defaultLeads' => isset($input['defaultLeads']) && is_array($input['defaultLeads'])
+            ? array_values(array_unique(array_filter(array_map('intval', $input['defaultLeads']), function ($value) { return $value >= 0 && $value <= 20160; })))
+            : $current['defaultLeads'],
         'dailyHour' => isset($input['dailyHour']) ? max(0, min(23, (int) $input['dailyHour'])) : $current['dailyHour'],
         'eveningHour' => isset($input['eveningHour']) ? max(0, min(23, (int) $input['eveningHour'])) : $current['eveningHour'],
         'notifyNew' => isset($input['notifyNew']) ? (bool) $input['notifyNew'] : $current['notifyNew'],
@@ -1052,7 +1058,7 @@ function recept_notify_collect(array $settings, int $now, bool $all = false): ar
     $lead = $settings['leadMinutes'] * 60;
     $items = [];
 
-    $push = function ($title, $date, $time, $assignees, $address, $extra) use (&$items, $offset) {
+    $push = function ($title, $date, $time, $assignees, $address, $extra, $leads = null) use (&$items, $offset) {
         if (!is_string($date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             return;
         }
@@ -1060,6 +1066,7 @@ function recept_notify_collect(array $settings, int $now, bool $all = false): ar
         $at = strtotime($date . 'T' . $clock . ':00Z') - $offset;
         $items[] = [
             'at' => $at,
+            'leads' => is_array($leads) ? array_values(array_filter(array_map('intval', $leads), function ($value) { return $value >= 0 && $value <= 20160; })) : null,
             'key' => md5($title . $date . $clock),
             'title' => $title,
             'date' => $date,
@@ -1082,7 +1089,8 @@ function recept_notify_collect(array $settings, int $now, bool $all = false): ar
             isset($event['timeStart']) ? (string) $event['timeStart'] : '',
             $assignees,
             isset($event['address']) ? $event['address'] : '',
-            isset($event['clientName']) ? (string) $event['clientName'] : ''
+            isset($event['clientName']) ? (string) $event['clientName'] : '',
+            isset($event['reminders']) && is_array($event['reminders']) ? $event['reminders'] : null
         );
     }
 
@@ -1102,7 +1110,8 @@ function recept_notify_collect(array $settings, int $now, bool $all = false): ar
             '',
             $team,
             isset($schedule['address']) ? $schedule['address'] : '',
-            (string) ($project['name'] ?? '')
+            (string) ($project['name'] ?? ''),
+            isset($schedule['reminders']) && is_array($schedule['reminders']) ? $schedule['reminders'] : null
         );
     }
 
@@ -1180,24 +1189,31 @@ function recept_notify_run(): array
         }
     }
 
-    // 2. Напоминание за выбранное время до начала.
-    $lead = $settings['leadMinutes'] * 60;
+    // 2. Напоминания: у дела свои интервалы, если заданы, иначе общие из настроек.
     foreach ($items as $item) {
-        $diff = $item['at'] - $now;
-        if ($diff > $lead || $diff < -3600 || isset($sent[$item['key']])) {
-            continue;
-        }
-        $text = $item['title'] . "\n"
-            . 'Когда: ' . $item['date'] . ' в ' . $item['time'] . "\n"
-            . ($item['address'] !== '' ? ('Адрес: ' . $item['address'] . "\n") : '')
-            . ($item['extra'] !== '' ? ($item['extra'] . "\n") : '')
-            . 'РЕцепт';
-        foreach (recept_notify_targets($settings, $item['assignees']) as $chatId) {
-            if (recept_telegram_send($settings['token'], $chatId, $text)) {
-                $count += 1;
+        $leads = is_array($item['leads']) && count($item['leads']) > 0 ? $item['leads'] : $settings['defaultLeads'];
+        foreach ($leads as $leadMinutes) {
+            $fireAt = $item['at'] - $leadMinutes * 60;
+            $key = $item['key'] . '-' . $leadMinutes;
+            if ($now < $fireAt || $now - $fireAt > 3600 || isset($sent[$key])) {
+                continue;
             }
+            $when = $leadMinutes === 0
+                ? 'начинается сейчас'
+                : ($leadMinutes < 60 ? ('через ' . $leadMinutes . ' мин')
+                    : ($leadMinutes < 1440 ? ('через ' . round($leadMinutes / 60) . ' ч') : ('через ' . round($leadMinutes / 1440) . ' дн.')));
+            $text = $item['title'] . ' — ' . $when . "\n"
+                . 'Когда: ' . $item['date'] . ' в ' . $item['time'] . "\n"
+                . ($item['address'] !== '' ? ('Адрес: ' . $item['address'] . "\n") : '')
+                . ($item['extra'] !== '' ? ($item['extra'] . "\n") : '')
+                . 'РЕцепт';
+            foreach (recept_notify_targets($settings, $item['assignees']) as $chatId) {
+                if (recept_telegram_send($settings['token'], $chatId, $text)) {
+                    $count += 1;
+                }
+            }
+            $sent[$key] = $now;
         }
-        $sent[$item['key']] = $now;
     }
 
     // 3. Утренняя сводка «что сегодня» — в день работ.
