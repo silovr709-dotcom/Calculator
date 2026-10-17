@@ -158,6 +158,12 @@ r = await call('notify/settings', { method: 'POST', body: { enabled: true, token
 const cronKey = r.json?.cronKey ?? '';
 check('настройки сохранены и выдан ключ планировщика', r.json?.ok === true && cronKey.length >= 16, r.text);
 
+r = await call('notify/settings', { method: 'POST', body: { enabled: true, chats: [{ name: 'Пётр', chatId: '555' }], eveningHour: 20, notifyNew: true, icsAlarms: [30, 1440], leadMinutes: 90, timezoneOffset: 3 } });
+check('настройки вечерней сводки и будильников сохраняются', r.json?.ok === true, r.text);
+
+r = await call('notify/settings');
+check('вечерняя сводка и будильники вернулись', r.json?.settings?.eveningHour === 20 && JSON.stringify(r.json?.settings?.icsAlarms) === '[30,1440]' && r.json?.settings?.notifyNew === true, r.text);
+
 r = await call('notify/settings');
 check('токен наружу не отдаётся целиком', r.json?.settings?.tokenSet === true && r.json?.settings?.tokenHint === '…TTOKEN', r.text);
 check('пустые получатели отфильтрованы', (r.json?.settings?.chats ?? []).length === 1, r.text);
@@ -188,6 +194,7 @@ check('подписка без ключа закрыта', r.status === 403, r.t
 r = await call('ics', { query: `&key=${cronKey}` });
 check('ICS отдаётся и содержит оба события', r.status === 200 && r.raw.includes('BEGIN:VCALENDAR') && r.raw.includes('Замер у Ирины') && r.raw.includes('Монтаж: Ирина'), String(r.status));
 check('в ICS есть адрес и завершение', r.raw.includes('LOCATION:ул. Мира') && r.raw.includes('END:VCALENDAR'), String(r.status));
+check('в ICS есть будильники для телефона', r.raw.includes('BEGIN:VALARM') && r.raw.includes('TRIGGER:-PT30M') && r.raw.includes('TRIGGER:-PT1440M'), String(r.status));
 
 r = await call('ics', { query: `&key=${cronKey}&who=Пётр` });
 check('подписка «только мои» фильтрует по исполнителю', r.raw.includes('Замер у Ирины') && !r.raw.includes('Монтаж: Ирина'), String(r.status));

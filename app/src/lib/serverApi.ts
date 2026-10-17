@@ -499,6 +499,12 @@ export interface NotifyServerSettings {
   cronKey: string;
   leadMinutes: number;
   dailyHour: number;
+  /** Час вечерней сводки «что завтра». */
+  eveningHour: number;
+  /** Сообщать сразу, когда дело появилось в графике. */
+  notifyNew: boolean;
+  /** За сколько минут будильники внутри подписного календаря телефона. */
+  icsAlarms: number[];
   timezoneOffset: number;
 }
 
@@ -513,6 +519,9 @@ export async function saveNotifyServerSettings(input: {
   chats: TelegramChat[];
   leadMinutes: number;
   timezoneOffset: number;
+  eveningHour?: number;
+  notifyNew?: boolean;
+  icsAlarms?: number[];
 }): Promise<{ cronKey: string; tokenSet: boolean }> {
   return request('notify/settings', { method: 'POST', body: JSON.stringify(input) });
 }

@@ -37,7 +37,7 @@ export default function TelegramNotifyCard() {
   if (error && !settings) return <section className="card"><div className="server-alert error">{error}</div></section>;
   if (!settings) return null;
 
-  const save = async (patch: Partial<{ enabled: boolean; leadMinutes: number; timezoneOffset: number }> = {}) => {
+  const save = async (patch: Partial<{ enabled: boolean; leadMinutes: number; timezoneOffset: number; eveningHour: number; notifyNew: boolean; icsAlarms: number[] }> = {}) => {
     setBusy(true);
     setMessage('');
     try {
@@ -47,6 +47,9 @@ export default function TelegramNotifyCard() {
         chats: chats.filter((chat) => chat.name.trim() && chat.chatId.trim()),
         leadMinutes: patch.leadMinutes ?? settings.leadMinutes,
         timezoneOffset: patch.timezoneOffset ?? settings.timezoneOffset,
+        eveningHour: patch.eveningHour ?? settings.eveningHour,
+        notifyNew: patch.notifyNew ?? settings.notifyNew,
+        icsAlarms: patch.icsAlarms ?? settings.icsAlarms,
       });
       setToken('');
       setMessage(result.tokenSet ? 'Сохранено. Не забудьте добавить ссылку в планировщик хостинга.' : 'Сохранено, но токен бота ещё не задан.');
@@ -126,6 +129,18 @@ export default function TelegramNotifyCard() {
             ))}
           </select>
         </label>
+        <label>Вечером напоминать о завтрашнем дне в
+          <select value={settings.eveningHour} disabled={busy} onChange={(event) => void save({ eveningHour: Number(event.target.value) })}>
+            {Array.from({ length: 24 }, (_, hour) => hour).map((hour) => (
+              <option key={hour} value={hour}>{String(hour).padStart(2, '0')}:00</option>
+            ))}
+          </select>
+        </label>
+        <label className="notify-check">
+          <input type="checkbox" checked={settings.notifyNew} disabled={busy}
+            onChange={(event) => void save({ notifyNew: event.target.checked })} />
+          Сообщать сразу, когда дело добавили в график
+        </label>
         <label>Часовой пояс (UTC+)
           <input type="number" min={-12} max={14} value={settings.timezoneOffset} disabled={busy}
             onChange={(event) => void save({ timezoneOffset: Number(event.target.value) })} />
@@ -174,6 +189,28 @@ export default function TelegramNotifyCard() {
       <div className="notify-cron">
         <b>Подписка календаря на телефон</b>
         <input readOnly value={calendarSubscriptionUrl(settings.cronKey)} onFocus={(event) => event.target.select()} />
+        <div className="notify-alarms">
+          <b>Будильники внутри календаря телефона</b>
+          <div className="notify-chips">
+            {[15, 30, 60, 120, 480, 960, 1440, 2880].map((minutes) => {
+              const active = settings.icsAlarms.includes(minutes);
+              return (
+                <button key={minutes} type="button" className={active ? 'active' : ''} disabled={busy}
+                  onClick={() => void save({
+                    icsAlarms: active
+                      ? settings.icsAlarms.filter((item) => item !== minutes)
+                      : [...settings.icsAlarms, minutes].sort((a, b) => a - b),
+                  })}>
+                  {minutes < 60 ? `${minutes} мин` : minutes < 1440 ? `${minutes / 60} ч` : `${minutes / 1440} дн`}
+                </button>
+              );
+            })}
+          </div>
+          <small className="muted">
+            Эти напоминания срабатывают в самом календаре iPhone или Android. Важно: при добавлении
+            подписки на iPhone не включайте «Удалить напоминания» (Remove Alarms) — иначе телефон их отбросит.
+          </small>
+        </div>
         <small className="muted">
           Добавьте ссылку в Google Календарь («Другие календари → Подписаться по URL») или на iPhone
           («Настройки → Календарь → Учётные записи → Другое → Подписной календарь») — все работы появятся

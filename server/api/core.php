@@ -866,6 +866,11 @@ function recept_notify_settings(): array
         'cronKey' => isset($data['cronKey']) && $data['cronKey'] !== '' ? (string) $data['cronKey'] : '',
         'leadMinutes' => isset($data['leadMinutes']) ? (int) $data['leadMinutes'] : 60,
         'dailyHour' => isset($data['dailyHour']) ? (int) $data['dailyHour'] : 8,
+        'eveningHour' => isset($data['eveningHour']) ? (int) $data['eveningHour'] : 19,
+        'notifyNew' => isset($data['notifyNew']) ? (bool) $data['notifyNew'] : true,
+        'icsAlarms' => isset($data['icsAlarms']) && is_array($data['icsAlarms'])
+            ? array_values(array_filter(array_map('intval', $data['icsAlarms']), function ($value) { return $value >= 0 && $value <= 20160; }))
+            : [60, 960],
         'timezoneOffset' => isset($data['timezoneOffset']) ? (int) $data['timezoneOffset'] : 3,
     ];
 }
@@ -894,6 +899,11 @@ function recept_notify_save(array $input): array
         'cronKey' => $current['cronKey'] !== '' ? $current['cronKey'] : bin2hex(random_bytes(10)),
         'leadMinutes' => isset($input['leadMinutes']) ? max(0, min(1440, (int) $input['leadMinutes'])) : $current['leadMinutes'],
         'dailyHour' => isset($input['dailyHour']) ? max(0, min(23, (int) $input['dailyHour'])) : $current['dailyHour'],
+        'eveningHour' => isset($input['eveningHour']) ? max(0, min(23, (int) $input['eveningHour'])) : $current['eveningHour'],
+        'notifyNew' => isset($input['notifyNew']) ? (bool) $input['notifyNew'] : $current['notifyNew'],
+        'icsAlarms' => isset($input['icsAlarms']) && is_array($input['icsAlarms'])
+            ? array_values(array_filter(array_map('intval', $input['icsAlarms']), function ($value) { return $value >= 0 && $value <= 20160; }))
+            : $current['icsAlarms'],
         'timezoneOffset' => isset($input['timezoneOffset']) ? max(-12, min(14, (int) $input['timezoneOffset'])) : $current['timezoneOffset'],
     ];
     recept_write_json(recept_notify_file(), $next);
@@ -1027,7 +1037,7 @@ function recept_notify_targets(array $settings, array $assignees): array
  * Разбор базы: какие дела и монтажи подходят под окно напоминания.
  * Время считаем по часовому поясу из настроек, чтобы «завтра в 10:00» было местным.
  */
-function recept_notify_collect(array $settings, int $now): array
+function recept_notify_collect(array $settings, int $now, bool $all = false): array
 {
     $state = recept_load_state();
     $data = is_object($state) ? get_object_vars($state) : (is_array($state) ? $state : []);
@@ -1092,6 +1102,17 @@ function recept_notify_collect(array $settings, int $now): array
         );
     }
 
+    if ($all) {
+        // Для сообщений о новых делах и вечерней сводки нужен весь ближайший месяц.
+        $soon = [];
+        foreach ($items as $item) {
+            if ($item['at'] > $now - 86400 && $item['at'] < $now + 31 * 86400) {
+                $soon[] = $item;
+            }
+        }
+        return $soon;
+    }
+
     $due = [];
     foreach ($items as $item) {
         $diff = $item['at'] - $now;
@@ -1111,12 +1132,19 @@ function recept_notify_run(): array
     }
 
     $now = time();
-    $sentFile = recept_path('notify-sent.json');
-    $sent = recept_read_json($sentFile, []);
-    if (!is_array($sent)) {
-        $sent = [];
+    $localHour = (int) gmdate('G', $now + $settings['timezoneOffset'] * 3600);
+    $localDay = gmdate('Y-m-d', $now + $settings['timezoneOffset'] * 3600);
+    $tomorrow = gmdate('Y-m-d', $now + $settings['timezoneOffset'] * 3600 + 86400);
+
+    $stateFile = recept_path('notify-sent.json');
+    $store = recept_read_json($stateFile, []);
+    if (!is_array($store)) {
+        $store = [];
     }
-    // Чистим отметки старше двух суток.
+    $sent = isset($store['sent']) && is_array($store['sent']) ? $store['sent'] : [];
+    $known = isset($store['known']) && is_array($store['known']) ? $store['known'] : [];
+    $digests = isset($store['digests']) && is_array($store['digests']) ? $store['digests'] : [];
+
     foreach ($sent as $key => $stamp) {
         if (!is_int($stamp) || $now - $stamp > 172800) {
             unset($sent[$key]);
@@ -1124,8 +1152,35 @@ function recept_notify_run(): array
     }
 
     $count = 0;
-    foreach (recept_notify_collect($settings, $now) as $item) {
-        if (isset($sent[$item['key']])) {
+    $items = recept_notify_collect($settings, $now, true);
+
+    // 1. Новое дело в графике — сообщаем сразу, как только планировщик его увидел.
+    if ($settings['notifyNew']) {
+        foreach ($items as $item) {
+            if (isset($known[$item['key']])) {
+                continue;
+            }
+            $known[$item['key']] = $now;
+            if ($item['date'] < $localDay) {
+                continue;   // старое дело, добавленное задним числом — не тревожим
+            }
+            $text = "Добавлено в график\n" . $item['title'] . "\n"
+                . 'Когда: ' . $item['date'] . ' в ' . $item['time'] . "\n"
+                . ($item['address'] !== '' ? ('Адрес: ' . $item['address'] . "\n") : '')
+                . 'РЕцепт';
+            foreach (recept_notify_targets($settings, $item['assignees']) as $chatId) {
+                if (recept_telegram_send($settings['token'], $chatId, $text)) {
+                    $count += 1;
+                }
+            }
+        }
+    }
+
+    // 2. Напоминание за выбранное время до начала.
+    $lead = $settings['leadMinutes'] * 60;
+    foreach ($items as $item) {
+        $diff = $item['at'] - $now;
+        if ($diff > $lead || $diff < -3600 || isset($sent[$item['key']])) {
             continue;
         }
         $text = $item['title'] . "\n"
@@ -1141,7 +1196,35 @@ function recept_notify_run(): array
         $sent[$item['key']] = $now;
     }
 
-    recept_write_json($sentFile, $sent);
+    // 3. Вечерняя сводка «что завтра» — каждому исполнителю своё.
+    $digestKey = 'evening-' . $localDay;
+    if ($localHour >= $settings['eveningHour'] && !isset($digests[$digestKey])) {
+        $byChat = [];
+        foreach ($items as $item) {
+            if ($item['date'] !== $tomorrow) {
+                continue;
+            }
+            foreach (recept_notify_targets($settings, $item['assignees']) as $chatId) {
+                $line = '• ' . $item['time'] . ' — ' . $item['title'] . ($item['address'] !== '' ? (', ' . $item['address']) : '');
+                $byChat[$chatId] = isset($byChat[$chatId]) ? array_merge($byChat[$chatId], [$line]) : [$line];
+            }
+        }
+        foreach ($byChat as $chatId => $lines) {
+            sort($lines);
+            $text = "Завтра, " . $tomorrow . ":\n" . implode("\n", $lines) . "\nРЕцепт";
+            if (recept_telegram_send($settings['token'], $chatId, $text)) {
+                $count += 1;
+            }
+        }
+        $digests[$digestKey] = $now;
+        foreach ($digests as $key => $stamp) {
+            if (!is_int($stamp) || $now - $stamp > 604800) {
+                unset($digests[$key]);
+            }
+        }
+    }
+
+    recept_write_json($stateFile, ['sent' => $sent, 'known' => $known, 'digests' => $digests]);
     return ['ok' => true, 'sent' => $count];
 }
 
@@ -1207,6 +1290,13 @@ function recept_ics_build(string $who = ''): string
         $lines[] = 'DTSTART:' . $start;
         $lines[] = 'DTEND:' . ($end !== '' && $end > $start ? $end : gmdate('Ymd\THis\Z', strtotime($start) + 3600));
         $lines[] = 'SUMMARY:' . recept_ics_escape((string) ($event['title'] ?? 'Дело'));
+        foreach ($settings['icsAlarms'] as $minutes) {
+            $lines[] = 'BEGIN:VALARM';
+            $lines[] = 'ACTION:DISPLAY';
+            $lines[] = 'TRIGGER:-PT' . max(1, (int) $minutes) . 'M';
+            $lines[] = 'DESCRIPTION:' . recept_ics_escape((string) ($event['title'] ?? 'Дело'));
+            $lines[] = 'END:VALARM';
+        }
         if (!empty($event['address'])) {
             $lines[] = 'LOCATION:' . recept_ics_escape((string) $event['address']);
         }
@@ -1238,6 +1328,13 @@ function recept_ics_build(string $who = ''): string
         $lines[] = 'DTSTART:' . $start;
         $lines[] = 'DTEND:' . gmdate('Ymd\THis\Z', strtotime($start) + $days * 8 * 3600);
         $lines[] = 'SUMMARY:' . recept_ics_escape('Монтаж: ' . (string) ($project['client'] ?? $project['name'] ?? ''));
+        foreach ($settings['icsAlarms'] as $minutes) {
+            $lines[] = 'BEGIN:VALARM';
+            $lines[] = 'ACTION:DISPLAY';
+            $lines[] = 'TRIGGER:-PT' . max(1, (int) $minutes) . 'M';
+            $lines[] = 'DESCRIPTION:' . recept_ics_escape('Монтаж: ' . (string) ($project['client'] ?? $project['name'] ?? ''));
+            $lines[] = 'END:VALARM';
+        }
         if (!empty($schedule['address'])) {
             $lines[] = 'LOCATION:' . recept_ics_escape((string) $schedule['address']);
         }

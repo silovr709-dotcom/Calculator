@@ -466,6 +466,9 @@ switch ($route . ' ' . $method) {
             'cronKey' => $settings['cronKey'],
             'leadMinutes' => $settings['leadMinutes'],
             'dailyHour' => $settings['dailyHour'],
+            'eveningHour' => $settings['eveningHour'],
+            'notifyNew' => $settings['notifyNew'],
+            'icsAlarms' => $settings['icsAlarms'],
             'timezoneOffset' => $settings['timezoneOffset'],
         ]]);
     }
