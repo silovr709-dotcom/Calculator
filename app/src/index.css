@@ -8271,6 +8271,9 @@ a.crm-item-phone:hover { text-decoration: underline; }
   cursor: pointer;
 }
 .dock-sheet button span { color: #8a97b4; font-size: 12px; font-weight: 500; }
+/* Нажатия без задержки и с видимой отдачей — так понятнее, что пункт сработал. */
+.dock-sheet button { touch-action: manipulation; -webkit-tap-highlight-color: rgba(22, 33, 63, .12); }
+.dock-sheet button:active { background: #eef2fb !important; transform: scale(.995); }
 .dock-sheet button.active { border-color: #16213f; background: #f2f5ff; }
 .dock-sheet .dock-sheet-close { justify-content: center; margin-top: 4px; background: #16213f; color: #fff; border-color: #16213f; }
 @keyframes dock-sheet-in { from { transform: translateY(14px); opacity: .6; } to { transform: none; opacity: 1; } }

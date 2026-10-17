@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CalendarEvent, NotifySettings, ClientProfile, OrderWorkflow, Pricebook, Project, ProjectSettings, Template, KbArticle } from './types';
 import {
   loadGlobalSettings, saveGlobalSettings,
@@ -150,19 +150,15 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
   // Клиентская ссылка вида …/#offer=abc123 — определяем её до любой загрузки базы.
   // Меню «Ещё» в нижней панели: на телефоне нет наведения, поэтому открываем по нажатию.
   const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef<HTMLDivElement | null>(null);
+  // Закрытие — затемнением фона, Escape и выбором пункта.
+  // Слушателя «нажатие мимо» здесь быть не должно: он срабатывает раньше click
+  // и снимает меню до того, как нажатие дойдёт до его кнопки (на телефоне это
+  // выглядело как «меню не нажимается»).
   useEffect(() => {
     if (!moreOpen) return;
-    const onPointer = (event: MouseEvent | TouchEvent) => {
-      if (!moreRef.current?.contains(event.target as Node)) setMoreOpen(false);
-    };
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setMoreOpen(false); };
-    document.addEventListener('pointerdown', onPointer);
     window.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', onPointer);
-      window.removeEventListener('keydown', onKey);
-    };
+    return () => window.removeEventListener('keydown', onKey);
   }, [moreOpen]);
 
   const [publicOfferId] = useState(() => {
@@ -908,7 +904,7 @@ const persistTemplates = useCallback((next: Template[]) => {
           <b>Фабрика</b>
           <small>бланк</small>
         </button>
-        <div className="mobile-dock-more" ref={moreRef}>
+        <div className="mobile-dock-more">
           <button
             type="button"
             aria-expanded={moreOpen}
