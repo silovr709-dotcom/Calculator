@@ -3166,7 +3166,7 @@ select option { background: #fff !important; color: #102037 !important; }
 .module-editor-empty h3 { margin: 4px 0 6px; color: #0b3a75; }
 @media (max-width: 1240px) {
   .module-master-detail { grid-template-columns: 1fr; }
-  .module-editor-panel, .module-editor-empty { position: static; max-height: none; }
+  .module-editor-panel:not(.module-editor-modal), .module-editor-empty { position: static; max-height: none; }
 }
 @media (max-width: 700px) {
   .module-card-list { grid-template-columns: 1fr; }
@@ -3356,7 +3356,7 @@ select option { background: #fff !important; color: #102037 !important; }
   .check-side-panel,
   .order-side-panel,
   .blank-side-panel,
-  .module-editor-panel {
+  .module-editor-panel:not(.module-editor-modal) {
     position: static !important;
     top: auto !important;
     max-height: none !important;
@@ -5926,6 +5926,8 @@ select option { background: #fff !important; color: #102037 !important; }
   width: min(1280px, calc(100vw - 28px));
   max-height: min(900px, calc(100vh - 28px));
   overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 0 22px 22px;
   border: 1px solid rgba(125, 181, 255, .30);
   border-top: 0;
@@ -6044,7 +6046,7 @@ select option { background: #fff !important; color: #102037 !important; }
   }
   .module-editor-panel.module-editor-modal .module-editor-hero {
     margin: 0 -12px 14px;
-    padding: 16px 14px 56px;
+    padding: calc(16px + env(safe-area-inset-top)) 14px 56px;
     border-radius: 0 0 18px 18px;
   }
   .module-editor-close { top: auto; right: 14px; bottom: 14px; }
