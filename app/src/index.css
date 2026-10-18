@@ -8921,3 +8921,10 @@ body {
 @media (max-width: 760px) {
   .crm-board { grid-auto-columns: 86%; }
 }
+
+/* ---------- Тач-устройства: поля ввода ---------- */
+/* iOS/Android зумят страницу при фокусе поля с шрифтом меньше 16px —
+   при редактировании модулей экран «прыгает». Держим поля ввода на 16px. */
+@media (pointer: coarse) {
+  input, select, textarea { font-size: 16px !important; }
+}

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CalendarEvent, NotifySettings, ClientProfile, OrderWorkflow, Pricebook, Project, ProjectSettings, Template, KbArticle } from './types';
 import {
   loadGlobalSettings, saveGlobalSettings,
@@ -115,6 +115,65 @@ export default function App() {
 const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig());
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => (loadSyncConfig().enabled ? 'synced' : 'idle'));
   const [projectHistory] = useState(() => new ProjectHistory());
+
+  // ——— Отложенная запись локального кэша ———
+  // Правка в форме идёт потоком (каждое нажатие клавиши — отдельное изменение),
+  // а запись всех проектов в localStorage — это сериализация мегабайт. На телефоне
+  // это заметно тормозит ввод, поэтому кэш пишем с паузой после последней правки,
+  // а перед закрытием страницы дописываем всё накопленное.
+  const projectsRef = useRef(projects);
+  const clientsRef = useRef(clients);
+  useEffect(() => { projectsRef.current = projects; }, [projects]);
+  useEffect(() => { clientsRef.current = clients; }, [clients]);
+  const cacheDirtyRef = useRef({ projects: false, clients: false });
+  const cacheTimerRef = useRef<number | null>(null);
+
+  const flushLocalCache = useCallback(() => {
+    if (cacheTimerRef.current != null) {
+      window.clearTimeout(cacheTimerRef.current);
+      cacheTimerRef.current = null;
+    }
+    const dirty = cacheDirtyRef.current;
+    if (!dirty.projects && !dirty.clients) return;
+    cacheDirtyRef.current = { projects: false, clients: false };
+    // В браузер кладём лёгкую копию (фото — ссылками). На своём сервере браузерное
+    // хранилище — лишь кэш, поэтому его переполнение ничего не значит и не тревожит.
+    if (dirty.projects && !saveProjects(dehydrateKnown(projectsRef.current)) && !isStorageServerBacked()) {
+      alert('Не удалось сохранить: закончилось место локального хранилища. Экспортируйте старые проекты в файл и удалите их.');
+    }
+    if (dirty.clients && !saveClientProfiles(dehydrateKnown(clientsRef.current)) && !isStorageServerBacked()) {
+      alert('Не удалось сохранить базу клиентов: закончилось место локального хранилища.');
+    }
+    if (isStorageServerBacked()) return;   // на сервер данные уходят отдельно
+    const cfg = loadSyncConfig();
+    if (cfg.enabled) {
+      pushToCloud(cfg, {
+        projects: projectsRef.current,
+        clients: clientsRef.current,
+        templates: loadTemplates(),
+        settings: loadGlobalSettings(),
+      }).then((r) => setSyncStatus(r.ok ? 'synced' : 'offline'));
+    }
+  }, []);
+
+  const scheduleCacheFlush = useCallback(() => {
+    if (cacheTimerRef.current != null) window.clearTimeout(cacheTimerRef.current);
+    cacheTimerRef.current = window.setTimeout(() => {
+      cacheTimerRef.current = null;
+      flushLocalCache();
+    }, 400);
+  }, [flushLocalCache]);
+
+  // Последние правки не должны потеряться при сворачивании или закрытии вкладки.
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flushLocalCache(); };
+    window.addEventListener('pagehide', flushLocalCache);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flushLocalCache);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [flushLocalCache]);
   const [commandOpen, setCommandOpen] = useState(false);
   const [workMode, setWorkMode] = useState<WorkMode>(() => {
     const storedMode = localStorage.getItem('recept.workMode') as WorkMode | null;
@@ -347,6 +406,7 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
 
     const doSync = async () => {
       setSyncStatus('syncing');
+      flushLocalCache();   // отложенные правки должны попасть в кэш до слияния
       const res = await performFullSync(loadSyncConfig());
       setSyncStatus(res.status);
       if (res.merged) {
@@ -369,7 +429,7 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
     };
-  }, []);
+  }, [flushLocalCache]);
 
   const pricebooks = useMemo<Pricebook[]>(
     () => (builtin ? [builtin, ...stored] : [...stored]),
@@ -381,49 +441,31 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
   useEffect(() => {
     const normalized = ensureClientProfiles(projects, clients, () => uid('cli'));
     if (!normalized.changed) return;
+    flushLocalCache();
     saveProjects(dehydrateKnown(normalized.projects));
     saveClientProfiles(dehydrateKnown(normalized.clients));
     window.setTimeout(() => {
       setProjects(normalized.projects);
       setClients(normalized.clients);
     }, 0);
-  }, [projects, clients]);
+  }, [projects, clients, flushLocalCache]);
 
   const persistProjects = useCallback((next: Project[]) => {
     setProjects(next);
-    // В браузер кладём лёгкую копию (фото — ссылками). На своём сервере браузерное
-    // хранилище — лишь кэш, поэтому его переполнение ничего не значит и не тревожит.
-    const storedOk = saveProjects(dehydrateKnown(next));
-    if (!storedOk && !isStorageServerBacked()) {
-      alert('Не удалось сохранить: закончилось место локального хранилища. Экспортируйте старые проекты в файл и удалите их.');
-      return;
-    }
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 1200);
-    if (isStorageServerBacked()) return;   // на сервер данные уходят отдельно
-    const cfg = loadSyncConfig();
-    if (cfg.enabled) {
-      pushToCloud(cfg, { projects: next, clients: loadClientProfiles(), templates: loadTemplates(), settings: loadGlobalSettings() })
-        .then((r) => setSyncStatus(r.ok ? 'synced' : 'offline'));
-    }
-  }, []);
+    // Запись в кэш и синхронизацию откладываем: набор текста не должен ждать сериализацию.
+    cacheDirtyRef.current = { ...cacheDirtyRef.current, projects: true };
+    scheduleCacheFlush();
+  }, [scheduleCacheFlush]);
 
   const persistClients = useCallback((next: ClientProfile[]) => {
     setClients(next);
-    const storedOk = saveClientProfiles(dehydrateKnown(next));
-    if (!storedOk && !isStorageServerBacked()) {
-      alert('Не удалось сохранить базу клиентов: закончилось место локального хранилища.');
-      return;
-    }
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 1200);
-    if (isStorageServerBacked()) return;
-    const cfg = loadSyncConfig();
-    if (cfg.enabled) {
-      pushToCloud(cfg, { projects: loadProjects(), clients: next, templates: loadTemplates(), settings: loadGlobalSettings() })
-        .then((r) => setSyncStatus(r.ok ? 'synced' : 'offline'));
-    }
-  }, []);
+    cacheDirtyRef.current = { ...cacheDirtyRef.current, clients: true };
+    scheduleCacheFlush();
+  }, [scheduleCacheFlush]);
 
   const persistNotifySettings = useCallback((next: NotifySettings) => {
     setNotifySettings(next);

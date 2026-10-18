@@ -101,12 +101,34 @@ export default function ModulesPanel(props: {
     : [];
   const pendingDimensionSurcharges = dimensionSurchargeRecommendations.filter((item) => !(sel?.surcharges ?? []).includes(item.itemId));
 
-  const checks = useMemo(() => new Map(mods.map((m) => [m.id, checkModule(m, defaults, pricebook)])), [mods, defaults, pricebook]);
+  // Проверки и стоимость пересчитывать по всем модулям на каждое нажатие клавиши
+  // дорого (сканы прайса) и на телефоне заметно тормозит ввод. Кэшируем результаты
+  // по объектам модулей: правка пересчитывает только изменённый модуль.
+  const checksCache = useRef(new WeakMap<KitchenModule, ReturnType<typeof checkModule>>());
+  const costsCache = useRef(new WeakMap<KitchenModule, number>());
+  const cacheScope = useRef<{ defaults: ModuleDefaults; pricebook: Pricebook } | null>(null);
+  if (!cacheScope.current || cacheScope.current.defaults !== defaults || cacheScope.current.pricebook !== pricebook) {
+    cacheScope.current = { defaults, pricebook };
+    checksCache.current = new WeakMap();
+    costsCache.current = new WeakMap();
+  }
+  const checks = useMemo(() => new Map(mods.map((m) => {
+    let check = checksCache.current.get(m);
+    if (!check) {
+      check = checkModule(m, defaults, pricebook);
+      checksCache.current.set(m, check);
+    }
+    return [m.id, check] as const;
+  })), [mods, defaults, pricebook]);
   // Себестоимость модуля = сумма его строк. Сборка/доставка и доп. расходы проекта
   // считаются один раз в итогах проекта (calcTotals), а не в каждом модуле.
   const costs = useMemo(() => new Map(mods.map((m) => {
-    const lines = moduleToLines(m, defaults, pricebook);
-    return [m.id, calcLinesCost(lines).cost];
+    let cost = costsCache.current.get(m);
+    if (cost == null) {
+      cost = calcLinesCost(moduleToLines(m, defaults, pricebook)).cost;
+      costsCache.current.set(m, cost);
+    }
+    return [m.id, cost] as const;
   })), [mods, defaults, pricebook]);
   const summary = useMemo(() => modulesSummary(mods), [mods]);
   const pendingDimensionModuleCount = useMemo(() => mods.filter((module) => {
@@ -506,7 +528,7 @@ export default function ModulesPanel(props: {
             </details>
           </section>
           {sel && (
-            <Overlay className="module-editor-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelId(null); }}>
+            <Overlay className="module-editor-modal-backdrop" onClick={(event) => { if (event.target === event.currentTarget) setSelId(null); }}>
               <section className="card mod-editor module-editor-panel module-editor-modal" role="dialog" aria-modal="true" aria-labelledby="module-editor-title">
           <div className="module-editor-hero">
             <div>
