@@ -187,7 +187,7 @@ export default function Dashboard(props: {
             <h2>{dayDesk.overdueContacts + dayDesk.contactsToday > 0 ? `Контакты требуют внимания: ${dayDesk.overdueContacts + dayDesk.contactsToday}` : 'День под контролем'}</h2>
             <p>Приложение само собирает рабочий список: контакты, КП без ответа, оплаты, фабрику, пустые клиенты и проверки.</p>
           </div>
-          <button type="button" className="btn primary" onClick={props.onOpenCrm}>Открыть задачи CRM</button>
+          <button type="button" className="btn ghost" onClick={props.onOpenCrm}>Открыть задачи CRM</button>
         </div>
         <div className="daydesk-metrics">
           <button type="button" className={metricTone(dayDesk.overdueContacts, 'danger')} onClick={props.onOpenCrm}><b>{dayDesk.overdueContacts}</b><span>просрочено</span></button>

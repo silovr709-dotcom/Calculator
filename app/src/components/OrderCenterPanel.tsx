@@ -270,7 +270,7 @@ export default function OrderCenterPanel(props: {
         </div>
         {latestSnapshot && <div className="snapshot-delta small muted">Текущая цена к последней версии «{latestSnapshot.name}»: <b className={calculated.totals.client - latestSnapshot.clientTotal >= 0 ? 'up' : 'down'}>{calculated.totals.client - latestSnapshot.clientTotal >= 0 ? '+' : ''}{fmtMoney(calculated.totals.client - latestSnapshot.clientTotal)}</b></div>}
         <div className="order-package-actions">
-          <button className="btn primary" onClick={createSnapshot}>＋ Сохранить версию КП</button>
+          <button className="btn" onClick={createSnapshot}>＋ Сохранить версию КП</button>
           <button className="btn ghost" onClick={() => void copyPackage()}>{copied ? '✓ Скопировано' : 'Скопировать пакет'}</button>
           <div className="dropdown">
             <button className="btn ghost">Открыть раздел ▾</button>

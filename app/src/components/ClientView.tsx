@@ -695,7 +695,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
               : <span className="muted small">Опубликуйте КП — получится ссылка, которую можно отправить в мессенджер. Клиент увидит это же предложение и сможет нажать «Согласовать».</span>}
           </div>
           <div className="client-offer-link-actions">
-            <button type="button" className="btn primary" disabled={offerBusy} onClick={() => void publishOffer()}>
+            <button type="button" className="btn" disabled={offerBusy} onClick={() => void publishOffer()}>
               {offerBusy ? 'Публикую…' : offerCopied ? 'Ссылка скопирована ✓' : offerLink ? 'Обновить ссылку' : 'Опубликовать и скопировать'}
             </button>
             {offerLink && <>

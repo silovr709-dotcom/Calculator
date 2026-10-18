@@ -392,7 +392,7 @@ function DocsTab(props: { articles: KbArticle[]; onChange: (a: KbArticle[]) => v
           {props.docs ? `${props.docs.docs.length} документа фабрики · ${totalSections} разделов` : 'Документы загружаются…'}
         </div>
         <div className="actions system-action-strip">
-          <button className="btn primary" onClick={openNew}>+ Статья</button>
+          <button className="btn" onClick={openNew}>+ Статья</button>
           {props.articles.length === 0 && (
             <div className="dropdown action-dropdown wide">
               <button className="btn ghost" type="button">База ▾</button>

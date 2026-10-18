@@ -1003,7 +1003,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             <p className="muted small">Клик по карточке открывает эскиз в редакторе. «Заменить фото» меняет только подложку — размеры, сноски, модули и коммуникации остаются на местах.</p>
           </div>
           <div className="actions">
-            <button className="btn primary" type="button" onClick={() => openPhotoPicker({ kind: 'add' })}>+ Эскиз из фото</button>
+            <button className="btn" type="button" onClick={() => openPhotoPicker({ kind: 'add' })}>+ Эскиз из фото</button>
             <button className="btn ghost" type="button" onClick={() => fileRef.current?.click()}>Импорт .eskiz</button>
           </div>
         </div>
@@ -1133,7 +1133,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             <div className="section-head"><div><h3>Экспорт Эскиз PRO</h3><p className="muted small">Быстрые выгрузки текущего главного эскиза: рабочий .eskiz, картинка PNG и PDF A4. Скрытые плашки габаритов коммуникаций остаются скрытыми.</p></div></div>
             <div className="eskiz-pro-export-actions unified-export-actions">
               {activeSketchLinks.length > 0 ? <>
-                <button className="btn primary block" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('pdf')}>{exportingSketch === 'pdf' ? 'Готовлю PDF…' : 'Скачать PDF — ссылки кликабельны'}</button>
+                <button className="btn block" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('pdf')}>{exportingSketch === 'pdf' ? 'Готовлю PDF…' : 'Скачать PDF — ссылки кликабельны'}</button>
                 <div className="dropdown action-dropdown wide">
                   <button className="btn ghost block" type="button">Другой формат ▾</button>
                   <div className="dropdown-menu">
@@ -1142,7 +1142,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
                   </div>
                 </div>
               </> : <>
-                <button className="btn primary block" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('png')}>{exportingSketch === 'png' ? 'Готовлю PNG…' : 'Скачать картинку PNG'}</button>
+                <button className="btn block" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('png')}>{exportingSketch === 'png' ? 'Готовлю PNG…' : 'Скачать картинку PNG'}</button>
                 <div className="dropdown action-dropdown wide">
                   <button className="btn ghost block" type="button">Другой формат ▾</button>
                   <div className="dropdown-menu">
@@ -1203,7 +1203,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
           <section className="card no-print eskiz-pro-module-sync">
             <div className="section-head"><div><h3>Модули с эскиза → просчёт</h3><p className="muted small">Поставьте объект «Модуль» на эскизе и кликните его в превью/списке: удобный редактор откроется отдельной широкой карточкой сразу под Эскиз PRO.</p></div></div>
             <div className="eskiz-pro-module-stats"><div><b>{moduleMarkers.length}</b><span>маркеров</span></div><div><b>{linkedModuleCount}</b><span>уже связаны</span></div><div><b>{Math.max(0, moduleMarkers.length - linkedModuleCount)}</b><span>новые</span></div></div>
-            <button className="btn primary block" disabled={moduleMarkers.length === 0} onClick={syncModulesToCalculation}>Создать / обновить модули в расчёте</button>
+            <button className="btn block" disabled={moduleMarkers.length === 0} onClick={syncModulesToCalculation}>Создать / обновить модули в расчёте</button>
             {moduleMarkers.length > 0 && <div className="eskiz-pro-marker-bulk-actions"><button className="btn tiny ghost" onClick={() => setBulkMarkerKeys(moduleMarkers.map((marker) => marker.key))}>Выбрать все</button><button className="btn tiny ghost" onClick={() => setBulkMarkerKeys([])}>Снять</button><button className="btn tiny" disabled={!activeModule || bulkMarkerKeys.length === 0} onClick={applyActiveModuleKitToSelected}>Применить комплектовку активного к выбранным ({bulkMarkerKeys.length})</button></div>}
             {moduleMarkers.length === 0 ? <div className="empty small">В привязанных эскизах пока нет объектов «Модуль».</div> : (
               <div className="eskiz-pro-marker-list">

@@ -326,7 +326,7 @@ export default function ProjectEditor(props: {
               <div className="pad muted">{qrError ? 'QR-код не создан.' : 'Генерация QR-кода…'}</div>
             )}
             <div className="modal-actions" style={{ justifyContent: 'center', marginTop: 18 }}>
-              <button className="btn primary" onClick={() => setShowQrModal(false)}>Закрыть</button>
+              <button className="btn" onClick={() => setShowQrModal(false)}>Закрыть</button>
             </div>
           </div>
         </Overlay>
@@ -503,7 +503,7 @@ export default function ProjectEditor(props: {
         <div className="editor-grid">
           <div className="lines-col">
             <div className="lines-toolbar">
-              <button className="btn primary" onClick={() => setShowPicker(true)}>+ Добавить элемент из прайса</button>
+              <button className="btn" onClick={() => setShowPicker(true)}>+ Добавить элемент из прайса</button>
               {totals.unpricedCount > 0 && <span className="warn">⚠ строк без цены: {totals.unpricedCount}</span>}
             </div>
             {moduleLines.length > 0 && (
@@ -546,7 +546,7 @@ export default function ProjectEditor(props: {
             {previousStage
               ? <button type="button" className="btn ghost" onClick={() => openStage(previousStage)}>← {PROJECT_STAGE_LABELS[previousStage].label}</button>
               : <span />}
-            {nextStage && <button type="button" className="btn primary" onClick={() => openStage(nextStage)}>{PROJECT_STAGE_LABELS[nextStage].label} →</button>}
+            {nextStage && <button type="button" className="btn" onClick={() => openStage(nextStage)}>{PROJECT_STAGE_LABELS[nextStage].label} →</button>}
           </nav>
         </section>
         <ProjectContextPanel

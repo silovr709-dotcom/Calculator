@@ -276,7 +276,7 @@ export default function CrmDealDialog(props: {
                 </select>
                 <input type="date" value={taskDue} onChange={(event) => setTaskDue(event.target.value)} />
                 <input list="crm-assignees" value={taskWho} placeholder="кто" onChange={(event) => setTaskWho(event.target.value)} />
-                <button type="button" className="btn primary" onClick={submitTask}>Добавить</button>
+                <button type="button" className="btn" onClick={submitTask}>Добавить</button>
               </div>
               {tasks.length === 0
                 ? <div className="empty small">Задач нет. Добавьте звонок, замер или напоминание об оплате — они появятся в списке «Сегодня».</div>
@@ -360,7 +360,7 @@ export default function CrmDealDialog(props: {
                 </select>
                 <input type="date" value={payDate} onChange={(event) => setPayDate(event.target.value)} />
                 <input value={payComment} placeholder="комментарий" onChange={(event) => setPayComment(event.target.value)} />
-                <button type="button" className="btn primary" onClick={submitPayment}>Записать платёж</button>
+                <button type="button" className="btn" onClick={submitPayment}>Записать платёж</button>
               </div>
 
               {paymentEntries(card.payment).length > 0 && (
