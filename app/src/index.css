@@ -9205,3 +9205,32 @@ body.work-focus .project-section-head { display: none; }
   .project-subtab { min-height: 30px; padding: 4px 10px; font-size: 12px; }
   .project-subtab-row { padding-top: 6px; }
 }
+
+/* ==========================================================================
+   ПАЛИТРА ИНСТРУМЕНТОВ — вертикальная колонка слева от полотна (23.10)
+   На компьютере строка инструментов сверху становится короче: основные
+   инструменты переехали в палитру. На телефоне и планшете — прежняя строка.
+   ========================================================================== */
+.embedded-eskiz-palette { display: none; }
+@media (min-width: 981px) {
+  .embedded-eskiz-palette {
+    display: flex; flex-direction: column; gap: 4px;
+    position: absolute; left: 10px; top: 10px; z-index: 4;
+    width: 76px; padding: 6px; border: 1px solid var(--line); border-radius: 14px;
+    background: rgba(255, 255, 255, .97); box-shadow: var(--shadow-md);
+  }
+  .palette-tool {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    width: 100%; min-height: 50px; padding: 5px 2px; border: 0; border-radius: 10px;
+    background: transparent; color: #3b3553; cursor: pointer; font: inherit;
+  }
+  .palette-tool:hover:not(:disabled) { background: var(--accent-soft); }
+  .palette-tool.active { background: var(--accent); color: #fff; }
+  .palette-tool:disabled { opacity: .4; cursor: not-allowed; }
+  .palette-glyph { font-size: 18px; line-height: 1; }
+  .palette-label { font-size: 10px; font-weight: 700; line-height: 1.1; text-align: center; }
+  .palette-tool kbd { font-size: 9px; opacity: .65; }
+  /* строка сверху: быстрые кнопки дублируют палитру, а список «все инструменты»
+     остаётся — там размеры по горизонтали/вертикали, цепочка, ссылка, техника */
+  .embedded-eskiz-tools .embedded-eskiz-quick-tools { display: none; }
+}

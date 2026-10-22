@@ -44,6 +44,16 @@ function normalizeExportLayerVisibility(settings?: EskizExportViewSettings): Esk
 }
 
 const QUICK_TOOLS: Tool[] = ['select', 'free-dimension', 'module', 'hinge', 'callout', 'comment'];
+// Вертикальная палитра на компьютере: основные инструменты с короткими значками.
+const PALETTE_TOOLS: { id: Tool; glyph: string }[] = [
+  { id: 'select', glyph: '↖' },
+  { id: 'free-dimension', glyph: '⟷' },
+  { id: 'module', glyph: '▭' },
+  { id: 'hinge', glyph: '●' },
+  { id: 'facade', glyph: '①' },
+  { id: 'callout', glyph: '↗' },
+  { id: 'comment', glyph: '✎' },
+];
 
 type Props = {
   project: EskizProject | null;
@@ -1539,6 +1549,17 @@ export default function EmbeddedEskizEditor(props: Props) {
     {communicationMode && <div className="embedded-eskiz-communication-banner">{props.communicationAddKind ? `Режим добавления: ${COMMUNICATION_KIND_META[props.communicationAddKind].label}. Тапните по основному эскизу Эскиз PRO.` : 'Рисуйте свободную линию расстояния: ведите курсор от выбранной коммуникации и кликните конечную точку.'}</div>}
     {error && <div className="embedded-eskiz-toast no-print" role="status"><span>{error}</span><button type="button" aria-label="Скрыть сообщение" onClick={() => setError('')}>✕</button></div>}
     <div className={`embedded-eskiz-workarea ${sidebarOpen ? '' : 'no-inspector'}`}>
+      <nav className="embedded-eskiz-palette" aria-label="Палитра инструментов">
+        {PALETTE_TOOLS.map(({ id, glyph }) => {
+          const item = TOOL_ITEMS.find((toolItem) => toolItem.id === id);
+          if (!item) return null;
+          return <button key={id} type="button" className={`palette-tool ${tool === id ? 'active' : ''}`} disabled={communicationMode} title={item.hotkey ? `${item.label} (${item.hotkey})` : item.label} aria-pressed={tool === id} onClick={() => setActiveTool(id)}>
+            <span className="palette-glyph" aria-hidden="true">{glyph}</span>
+            <span className="palette-label">{item.label}</span>
+            {item.hotkey && <kbd>{item.hotkey}</kbd>}
+          </button>;
+        })}
+      </nav>
       <section
         ref={viewportRef}
         className={`embedded-eskiz-viewport ${spaceDown ? 'panning' : ''} ${photoDragOver ? 'drop-active' : ''}`}
