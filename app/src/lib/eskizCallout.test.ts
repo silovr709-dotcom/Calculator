@@ -44,3 +44,31 @@ describe('значение нового размера по калибровке
     expect(dimensionDefaultValue('free', 0, 0, 30, 40, 1)).toBe('50');
   });
 });
+
+describe('точка выхода линий выноски', () => {
+  it('по умолчанию — середина края, обращённого к цели', async () => {
+    const { calloutAnchor } = await import('./eskizPro');
+    const o: EskizCalloutObject = { ...base };
+    expect(calloutAnchor(o, 200, 80, 10)).toEqual({ x: 100, y: 140, side: 'left' });
+    expect(calloutAnchor(o, 200, 80, 500)).toEqual({ x: 300, y: 140, side: 'right' });
+  });
+  it('выбранная точка выхода сохраняется при перемещении выноски', async () => {
+    const { calloutAnchor } = await import('./eskizPro');
+    const o: EskizCalloutObject = { ...base, leaderStart: { side: 'top', t: 0.25 } };
+    expect(calloutAnchor(o, 200, 80, 10)).toEqual({ x: 150, y: 100, side: 'top' });
+    o.x += 30;
+    o.y += 10;
+    shiftCallout(o, 30, 10);
+    expect(calloutAnchor(o, 200, 80, 10)).toEqual({ x: 180, y: 110, side: 'top' });
+  });
+  it('точка прилипает к ближайшей стороне рамки', async () => {
+    const { nearestCalloutEdge } = await import('./eskizPro');
+    expect(nearestCalloutEdge({ x: 100, y: 100 }, 200, 80, { x: 103, y: 130 })).toEqual({ side: 'left', t: 0.375 });
+    expect(nearestCalloutEdge({ x: 100, y: 100 }, 200, 80, { x: 200, y: 98 })).toEqual({ side: 'top', t: 0.5 });
+    expect(nearestCalloutEdge({ x: 100, y: 100 }, 200, 80, { x: 310, y: 140 })).toEqual({ side: 'right', t: 0.5 });
+  });
+  it('ломаная линии: цель → излом → точка выхода', async () => {
+    const { calloutLeaderPoints } = await import('./eskizPro');
+    expect(calloutLeaderPoints({ x: 100, y: 140, side: 'left' }, { x: 10, y: 20 })).toBe('10,20 82,140 100,140');
+  });
+});

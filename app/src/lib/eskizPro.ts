@@ -43,7 +43,45 @@ export type EskizDimensionObject = EskizBaseObject & {
 export type EskizModuleObject = EskizBaseObject & { type: 'module'; number: string; description: string };
 export type EskizHingeObject = EskizBaseObject & { type: 'hinge'; label: string; side?: 'left' | 'right' | 'top' | 'bottom' | 'auto' };
 export type EskizTextObject = EskizBaseObject & { type: 'comment' | 'link' | 'equipment'; text: string; url?: string; equipmentType?: EskizEquipmentType };
-export type EskizCalloutObject = EskizBaseObject & { type: 'callout'; targetX: number; targetY: number; text: string; url?: string; /** Дополнительные линии выноски (точки на полотне). */ extraTargets?: { x: number; y: number }[] };
+export type CalloutSide = 'left' | 'right' | 'top' | 'bottom';
+/** Точка выхода линий на рамке выноски: сторона и положение вдоль неё (0…1). */
+export type CalloutLeaderStart = { side: CalloutSide; t: number };
+export type EskizCalloutObject = EskizBaseObject & { type: 'callout'; targetX: number; targetY: number; text: string; url?: string; /** Дополнительные линии выноски (точки на полотне). */ extraTargets?: { x: number; y: number }[]; /** Выбранная точка выхода линий; не задана — автоматически (середина ближайшего края). */ leaderStart?: CalloutLeaderStart };
+
+/** Точка выхода линии выноски. Без leaderStart — середина края, обращённого к цели. */
+export function calloutAnchor(o: EskizCalloutObject, width: number, height: number, targetX: number): { x: number; y: number; side: CalloutSide } {
+  if (o.leaderStart) {
+    const { side, t } = o.leaderStart;
+    if (side === 'left') return { x: o.x, y: o.y + t * height, side };
+    if (side === 'right') return { x: o.x + width, y: o.y + t * height, side };
+    if (side === 'top') return { x: o.x + t * width, y: o.y, side };
+    return { x: o.x + t * width, y: o.y + height, side };
+  }
+  const left = o.x > targetX;
+  return { x: left ? o.x : o.x + width, y: o.y + height / 2, side: left ? 'left' : 'right' };
+}
+
+/** Точки ломаной линии: цель → излом (18 px от рамки) → точка выхода. */
+export function calloutLeaderPoints(anchor: { x: number; y: number; side: CalloutSide }, target: { x: number; y: number }): string {
+  const d = 18;
+  const elbow = anchor.side === 'left' ? { x: anchor.x - d, y: anchor.y }
+    : anchor.side === 'right' ? { x: anchor.x + d, y: anchor.y }
+    : anchor.side === 'top' ? { x: anchor.x, y: anchor.y - d }
+    : { x: anchor.x, y: anchor.y + d };
+  return `${target.x},${target.y} ${elbow.x},${elbow.y} ${anchor.x},${anchor.y}`;
+}
+
+/** Ближайшая точка рамки к указанной точке, выраженная как сторона и доля вдоль неё. */
+export function nearestCalloutEdge(o: { x: number; y: number }, width: number, height: number, p: { x: number; y: number }): CalloutLeaderStart {
+  const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+  const candidates: { d: number; start: CalloutLeaderStart }[] = [
+    { d: Math.abs(p.x - o.x), start: { side: 'left', t: clamp01((p.y - o.y) / height) } },
+    { d: Math.abs(p.x - (o.x + width)), start: { side: 'right', t: clamp01((p.y - o.y) / height) } },
+    { d: Math.abs(p.y - o.y), start: { side: 'top', t: clamp01((p.x - o.x) / width) } },
+    { d: Math.abs(p.y - (o.y + height)), start: { side: 'bottom', t: clamp01((p.x - o.x) / width) } },
+  ];
+  return candidates.reduce((best, c) => (c.d < best.d ? c : best)).start;
+}
 
 /** Все точки, к которым ведёт выноска: основная и дополнительные линии. */
 export function calloutTargets(o: EskizCalloutObject): { x: number; y: number }[] {

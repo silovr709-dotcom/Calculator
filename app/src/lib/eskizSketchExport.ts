@@ -1,6 +1,6 @@
 import type { EskizCommunicationDistance, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizFacadeObject, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from './eskizPro';
-import { calloutTargets, FACADE_DEFAULT_COLOR, facadeMarkerRadius } from './eskizPro';
+import { calloutAnchor, calloutLeaderPoints, calloutTargets, FACADE_DEFAULT_COLOR, facadeMarkerRadius } from './eskizPro';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationColor, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale } from './eskizCommunications';
 
 export type EskizSketchModuleMarkerMode = 'full' | 'compact' | 'hidden';
@@ -227,8 +227,8 @@ function calloutBox(o: EskizCalloutObject): { width: number; height: number; lin
 function renderCallout(o: EskizCalloutObject) {
   const { width, height, lines } = calloutBox(o);
   const leaders = calloutTargets(o).map((t) => {
-    const elbowX = o.x > t.x ? o.x - 18 : o.x + width + 18;
-    return `<polyline points="${t.x},${t.y} ${elbowX},${o.y + height / 2} ${o.x > t.x ? o.x : o.x + width},${o.y + height / 2}" fill="none" stroke="${xml(o.color)}" stroke-width="2" /><circle cx="${t.x}" cy="${t.y}" r="5" fill="${xml(o.color)}" />`;
+    const anchor = calloutAnchor(o, width, height, t.x);
+    return `<polyline points="${calloutLeaderPoints(anchor, t)}" fill="none" stroke="${xml(o.color)}" stroke-width="2" /><circle cx="${t.x}" cy="${t.y}" r="5" fill="${xml(o.color)}" />`;
   }).join('');
   return `<g class="callout label">
     ${leaders}
