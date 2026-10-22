@@ -187,7 +187,7 @@ function renderModule(o: EskizModuleObject, markerMode: EskizSketchModuleMarkerM
   const textBlockHeight = lines.length * (o.fontSize + 5) - 5;
   const textY = Math.max(8, (height - textBlockHeight) / 2);
   return `<g class="module label" transform="translate(${o.x} ${o.y})">
-    <rect x="0" y="0" width="${width}" height="${height}" rx="${o.borderRadius ?? 6}" fill="${xml(o.fill ?? 'white')}" fill-opacity="${o.fillOpacity ?? 1}" stroke="${xml(color)}" stroke-width="2" />
+    <rect x="0" y="0" width="${width}" height="${height}" rx="${o.borderRadius ?? 6}" fill="${xml(o.fill ?? 'white')}" fill-opacity="${o.fillOpacity ?? 1}" stroke="${o.frameless ? 'none' : xml(color)}" stroke-width="2" />
     <circle cx="0" cy="0" r="7" fill="${xml(color)}" stroke="#fff" stroke-width="3" />
     ${lines.map((line, index) => `<text x="${width / 2}" y="${textY + index * (o.fontSize + 5)}" dominant-baseline="hanging" text-anchor="middle" font-size="${o.fontSize}" font-weight="${index === 0 ? 800 : 550}" fill="${xml(o.color)}">${xml(line)}</text>`).join('')}
   </g>`;
@@ -230,7 +230,7 @@ function renderCallout(o: EskizCalloutObject) {
   return `<g class="callout label">
     <polyline points="${o.targetX},${o.targetY} ${elbowX},${o.y + height / 2} ${o.x > o.targetX ? o.x : o.x + width},${o.y + height / 2}" fill="none" stroke="${xml(o.color)}" stroke-width="2" />
     <circle cx="${o.targetX}" cy="${o.targetY}" r="5" fill="${xml(o.color)}" />
-    <rect x="${o.x}" y="${o.y}" width="${width}" height="${height}" rx="${o.borderRadius ?? 6}" fill="${xml(o.fill ?? '#fff')}" fill-opacity="${o.fillOpacity ?? 1}" stroke="${xml(o.color)}" stroke-width="2" />
+    <rect x="${o.x}" y="${o.y}" width="${width}" height="${height}" rx="${o.borderRadius ?? 6}" fill="${xml(o.fill ?? '#fff')}" fill-opacity="${o.fillOpacity ?? 1}" stroke="${o.frameless ? 'none' : xml(o.color)}" stroke-width="2" />
     ${lines.map((line, index) => `<text x="${o.x + 12}" y="${o.y + 11 + index * (o.fontSize + 5)}" dominant-baseline="hanging" font-size="${o.fontSize}" font-weight="650" fill="${xml(o.color)}">${xml(line)}</text>`).join('')}
   </g>`;
 }
@@ -253,7 +253,7 @@ function renderTextObject(o: EskizTextObject) {
   const isComment = o.type === 'comment';
   const { width, height, lines, isLink } = textObjectBox(o);
   return `<g class="text label" transform="translate(${o.x} ${o.y})">
-    <rect x="0" y="0" width="${width}" height="${height}" rx="${o.borderRadius ?? 7}" fill="${xml(o.fill ?? (isComment ? '#fff8d8' : 'white'))}" fill-opacity="${o.fillOpacity ?? 1}" stroke="${xml(o.color)}" stroke-width="1.5" />
+    <rect x="0" y="0" width="${width}" height="${height}" rx="${o.borderRadius ?? 7}" fill="${xml(o.fill ?? (isComment ? '#fff8d8' : 'white'))}" fill-opacity="${o.fillOpacity ?? 1}" stroke="${o.frameless ? 'none' : xml(o.color)}" stroke-width="1.5" />
     ${isLink ? `<text x="13" y="${height / 2 + 5}" text-anchor="middle" font-size="${o.fontSize}" font-weight="900" fill="${xml(o.color)}">↗</text>` : ''}
     ${lines.map((line, index) => `<text x="${isLink ? 31 : 14}" y="${12 + index * (o.fontSize + 5)}" dominant-baseline="hanging" font-size="${o.fontSize}" font-weight="${o.type === 'equipment' ? 750 : 550}" fill="${xml(o.color)}">${xml(line)}</text>`).join('')}
   </g>`;

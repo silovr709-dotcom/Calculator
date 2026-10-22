@@ -15,6 +15,8 @@ export type EskizBaseObject = {
   height?: number;
   fill?: string;
   fillOpacity?: number;
+  /** true — без контура (рамки) вокруг текстового блока; подложка задаётся fillOpacity. */
+  frameless?: boolean;
   borderRadius?: number;
   hidden?: boolean;
   locked?: boolean;
