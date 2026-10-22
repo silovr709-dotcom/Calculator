@@ -9274,3 +9274,9 @@ body.work-focus .project-section-head { display: none; }
   }
   .embedded-eskiz-inspector-close { top: 10px; right: 12px; }
 }
+
+/* Ручки и линии размеров: палец тянет ручку, а не панорамирует полотно.
+   Зоны нажатия задаются в пикселях экрана (см. DimensionObjectView). */
+.embedded-eskiz-handle-hit { cursor: grab; touch-action: none; }
+.embedded-eskiz-handle { touch-action: none; }
+.embedded-eskiz-object.selected { touch-action: none; }
