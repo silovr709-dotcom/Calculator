@@ -1006,9 +1006,14 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
                   <small>{item.image.width}×{item.image.height} · размеров {dimensionCount} · модулей {moduleCount} · коммуникаций {communicationCount}</small>
                 </div>
                 <div className="eskiz-sketch-actions">
-                  <button className="btn tiny" type="button" onClick={() => openPhotoPicker({ kind: 'replace', id: item.id })}>Заменить фото</button>
-                  <button className="btn tiny ghost" type="button" onClick={() => setRenamingId(item.id)}>Имя</button>
-                  <button className="btn tiny ghost danger" type="button" onClick={() => detach(item.id)}>Удалить</button>
+                  <div className="dropdown row-action-menu">
+                    <button className="btn tiny ghost" type="button" aria-label="Действия с эскизом">⋯</button>
+                    <div className="dropdown-menu align-right">
+                      <button type="button" onClick={() => openPhotoPicker({ kind: 'replace', id: item.id })}>Заменить фото</button>
+                      <button type="button" onClick={() => setRenamingId(item.id)}>Переименовать</button>
+                      <button type="button" className="danger-menu-item" onClick={() => detach(item.id)}>Убрать из КП</button>
+                    </div>
+                  </div>
                 </div>
               </article>;
             })}
