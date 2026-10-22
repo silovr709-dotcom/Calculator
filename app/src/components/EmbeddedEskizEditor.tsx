@@ -734,6 +734,21 @@ export default function EmbeddedEskizEditor(props: Props) {
         nudgeSelected(event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0, event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0);
       }
       if (event.key === 'Escape') { setTool('select'); selectOnly(null); setChainLast(null); setChainAxis(null); setChainSessionId(null); setPendingDimension(null); setPendingLeaderId(null); setCommunicationQuickEdit(null); onCancelCommunicationMode(); }
+      // Выбранный фасад: цифры 1–5 — его номер, [ и ] — размер кружка (шаг 2, границы 16–36).
+      if (selected && !event.ctrlKey && !event.metaKey && (/^[1-5]$/.test(event.key) || event.key === '[' || event.key === ']')) {
+        const facade = projectRef.current?.objects.find((o) => o.id === selected);
+        if (facade?.type === 'facade') {
+          event.preventDefault();
+          if (event.key === '[' || event.key === ']') {
+            const delta = event.key === ']' ? 2 : -2;
+            commit((p) => ({ ...p, objects: p.objects.map((o) => (o.id === facade.id && o.type === 'facade' ? { ...o, fontSize: Math.min(36, Math.max(16, (o.fontSize || 22) + delta)) } : o)) }));
+          } else {
+            const number = Number(event.key);
+            commit((p) => ({ ...p, objects: p.objects.map((o) => (o.id === facade.id && o.type === 'facade' ? { ...o, number } : o)) }));
+          }
+          return;
+        }
+      }
       if (tool === 'facade' && !event.ctrlKey && !event.metaKey && /^[1-5]$/.test(event.key)) { setFacadeNumber(Number(event.key)); return; }
       const found = TOOL_ITEMS.find((item) => item.hotkey?.toLowerCase() === event.key.toLowerCase());
       if (found && !event.ctrlKey && !event.metaKey) {
@@ -746,7 +761,7 @@ export default function EmbeddedEskizEditor(props: Props) {
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
-  }, [copySelected, copySelectedStyle, deleteSelected, duplicate, fit, lastDrawingTool, tool, nudgeSelected, onCancelCommunicationMode, pasteClipboard, pasteSelectedStyle, redo, saveNow, selectOnly, selected, undo, zoomTo]);
+  }, [copySelected, copySelectedStyle, deleteSelected, duplicate, fit, lastDrawingTool, tool, nudgeSelected, onCancelCommunicationMode, pasteClipboard, pasteSelectedStyle, redo, saveNow, selectOnly, selected, commit, undo, zoomTo]);
 
   const point = useCallback((event: { clientX: number; clientY: number }): Point => {
     const current = projectRef.current;
