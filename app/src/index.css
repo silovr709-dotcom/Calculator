@@ -9262,3 +9262,15 @@ body.work-focus .project-section-head { display: none; }
 .dashboard-daydesk > summary.dashboard-daydesk-summary i::after { content: '▸ раскрыть'; }
 .dashboard-daydesk[open] > summary.dashboard-daydesk-summary i::after { content: '▾ свернуть'; }
 .dashboard-daydesk[open] > summary.dashboard-daydesk-summary { margin-bottom: 10px; }
+
+/* Планшет/телефон: «Свойства» открываются нижней шторкой поверх экрана.
+   Раньше панель стояла под полотном, и по нажатию на планшете ничего не было видно. */
+@media (max-width: 980px) {
+  .embedded-eskiz-inspector {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: auto;
+    max-height: 58dvh; overflow: auto; overscroll-behavior: contain;
+    z-index: var(--z-dock-menu); border-top: 1px solid #dce8e3; border-radius: 16px 16px 0 0;
+    box-shadow: 0 -16px 36px -14px rgba(15, 23, 42, .4); padding-top: 4px;
+  }
+  .embedded-eskiz-inspector-close { top: 10px; right: 12px; }
+}
