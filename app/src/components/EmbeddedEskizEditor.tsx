@@ -10,7 +10,7 @@ import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, COMMUNICATION_KIN
 import { evaluateNumericExpression } from '../lib/numericExpression';
 
 type Tool = 'select' | 'free-dimension' | 'h-dimension' | 'v-dimension' | 'chain' | 'anchor' | 'h-guide' | 'v-guide' | 'module' | 'hinge' | 'facade' | 'callout' | 'comment' | 'equipment' | 'link';
-type Drag = { mode: 'create' | 'move' | 'handle' | 'marquee'; start: Point; id?: string; end?: 'start' | 'end' | 'offset' | 'resize'; before: EskizProject; original?: EskizObject };
+type Drag = { mode: 'create' | 'move' | 'handle' | 'marquee'; start: Point; id?: string; end?: 'start' | 'end' | 'offset' | 'resize' | 'leader'; leaderIndex?: number; before: EskizProject; original?: EskizObject };
 type Point = { x: number; y: number };
 type QuickEdit = { id: string; value: string; left: number; top: number; repeatTool: Tool };
 type CommunicationQuickEdit = { mode: 'marker'; communicationId: string; left: number; top: number } | { mode: 'distance'; communicationId: string; distanceId: string; value: string; left: number; top: number };
@@ -1097,6 +1097,7 @@ export default function EmbeddedEskizEditor(props: Props) {
             ? { ...original, x: original.orientation === 'vertical' ? original.x : target.x, y: original.orientation === 'horizontal' ? original.y : target.y }
             : { ...original, x2: original.orientation === 'vertical' ? original.x2 : target.x, y2: original.orientation === 'horizontal' ? original.y2 : target.y };
         }
+        if (original.type === 'callout' && drag.end === 'leader' && drag.leaderIndex !== undefined) return { ...original, extraTargets: (original.extraTargets ?? []).map((t, i) => (i === drag.leaderIndex ? { x: target.x, y: target.y } : t)) };
         if (original.type === 'callout') return { ...original, targetX: target.x, targetY: target.y };
       }
       const moved = { ...original, x: original.x + dx, y: original.y + dy } as EskizObject;
@@ -1223,14 +1224,14 @@ export default function EmbeddedEskizEditor(props: Props) {
     svgRef.current?.setPointerCapture(event.pointerId);
   }, [communicationMode, point, props, selectOnly, selectedIds, tool]);
 
-  const handleDown = useCallback((event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize') => {
+  const handleDown = useCallback((event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize' | 'leader', leaderIndex?: number) => {
     const project = projectRef.current;
     if (!chosen || chosen.locked || communicationMode) return;
     // Второй палец — щипок масштаба, а не перетаскивание точки.
     if (event.pointerType !== 'mouse' && viewportPointersRef.current.size > 0) return;
     event.stopPropagation();
     if (!project) return;
-    dragRef.current = { mode: 'handle', start: point(event), id: chosen.id, before: project, original: chosen, end };
+    dragRef.current = { mode: 'handle', start: point(event), id: chosen.id, before: project, original: chosen, end, leaderIndex };
     svgRef.current?.setPointerCapture(event.pointerId);
   }, [chosen, communicationMode, point]);
 
@@ -1984,7 +1985,7 @@ function wrapLines(text: string, maxChars: number) {
 }
 
 const EmbeddedObjectView = memo(function EmbeddedObjectView({ object, selected, primary = selected, zoom, onPointerDown, onHandleDown }: {
-  zoom: number; object: EskizObject; selected: boolean; primary?: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void; onHandleDown: (event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize') => void }) {
+  zoom: number; object: EskizObject; selected: boolean; primary?: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void; onHandleDown: (event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize' | 'leader' | 'leader', leaderIndex?: number) => void }) {
   const objectClass = `embedded-eskiz-object ${selected ? 'selected' : ''}`;
   if (object.type === 'anchor') return <g className={`${objectClass} helper-object`} transform={`translate(${object.x} ${object.y})`} onPointerDown={(event) => onPointerDown(event, object)}><circle r="9" fill="#fff" fillOpacity=".8" stroke={object.color} strokeWidth="2" /><path d="M -14 0 H 14 M 0 -14 V 14" stroke={object.color} strokeWidth="1.5" /><text x="12" y="-11" fontSize={object.fontSize} fontWeight="800" fill={object.color} stroke="white" strokeWidth="3" paintOrder="stroke">{object.label}</text></g>;
   if (object.type === 'guide') return <g className={`${objectClass} helper-object`} onPointerDown={(event) => onPointerDown(event, object)}>{object.orientation === 'horizontal' ? <line x1="-100000" y1={object.y} x2="100000" y2={object.y} stroke={object.color} strokeWidth="1.5" strokeDasharray="8 6" /> : <line x1={object.x} y1="-100000" x2={object.x} y2="100000" stroke={object.color} strokeWidth="1.5" strokeDasharray="8 6" />}</g>;
@@ -1996,7 +1997,7 @@ const EmbeddedObjectView = memo(function EmbeddedObjectView({ object, selected, 
   return <TextObjectView object={object} selected={selected} primary={primary} onPointerDown={onPointerDown} onHandleDown={onHandleDown} />;
 });
 
-function DimensionObjectView({ object, selected, primary, zoom, onPointerDown, onHandleDown }: { zoom: number; object: EskizDimensionObject; selected: boolean; primary: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void; onHandleDown: (event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize') => void }) {
+function DimensionObjectView({ object, selected, primary, zoom, onPointerDown, onHandleDown }: { zoom: number; object: EskizDimensionObject; selected: boolean; primary: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void; onHandleDown: (event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize' | 'leader' | 'leader', leaderIndex?: number) => void }) {
   const x1 = object.x;
   const y1 = object.y;
   const x2 = object.x2;
@@ -2061,7 +2062,7 @@ function HingeObjectView({ object, selected, primary, onPointerDown }: { object:
   </g>;
 }
 
-function ModuleObjectView({ object, selected, primary, onPointerDown, onHandleDown }: { object: EskizModuleObject; selected: boolean; primary: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void; onHandleDown: (event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize') => void }) {
+function ModuleObjectView({ object, selected, primary, onPointerDown, onHandleDown }: { object: EskizModuleObject; selected: boolean; primary: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void; onHandleDown: (event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize' | 'leader' | 'leader', leaderIndex?: number) => void }) {
   const sourceLines = [object.number, ...object.description.split('\n').filter(Boolean)];
   const autoWidth = Math.max(72, ...sourceLines.map((text) => text.length * object.fontSize * .6)) + 22;
   const width = object.width ? Math.max(60, object.width) : autoWidth;
@@ -2074,7 +2075,7 @@ function ModuleObjectView({ object, selected, primary, onPointerDown, onHandleDo
   return <g className={`embedded-eskiz-object embedded-eskiz-label-object ${selected ? 'selected' : ''}`} transform={`translate(${object.x} ${object.y})`} onPointerDown={(event) => onPointerDown(event, object)}><rect x="0" y="0" width={width} height={height} rx={object.borderRadius ?? 6} fill={object.fill ?? 'white'} fillOpacity={object.fillOpacity ?? 1} stroke={object.frameless ? (selected ? '#2563eb' : 'none') : object.color} strokeDasharray={object.frameless && selected ? '4 3' : undefined} strokeWidth="2" />{lines.map((line, index) => <text key={index} x={width / 2} y={textY + index * (object.fontSize + 5)} dominantBaseline="hanging" textAnchor="middle" fontSize={object.fontSize} fontWeight={index === 0 ? 800 : 500} fill={object.color}>{line}</text>)}{primary && <circle className="embedded-eskiz-handle resize-handle" cx={width} cy={height} r="8" onPointerDown={(event) => onHandleDown(event, 'resize')} />}</g>;
 }
 
-function CalloutObjectView({ object, selected, primary, onPointerDown, onHandleDown }: { object: EskizCalloutObject; selected: boolean; primary: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void; onHandleDown: (event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize') => void }) {
+function CalloutObjectView({ object, selected, primary, onPointerDown, onHandleDown }: { object: EskizCalloutObject; selected: boolean; primary: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void; onHandleDown: (event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize' | 'leader' | 'leader', leaderIndex?: number) => void }) {
   const sourceLines = object.text.split('\n');
   const autoWidth = Math.max(120, ...sourceLines.map((text) => text.length * object.fontSize * .56)) + 24;
   const width = object.width ? Math.max(70, object.width) : autoWidth;
@@ -2082,10 +2083,10 @@ function CalloutObjectView({ object, selected, primary, onPointerDown, onHandleD
   const lines = wrapLines(object.text, maxChars);
   const autoHeight = Math.max(48, lines.length * (object.fontSize + 5) + 18);
   const height = Math.max(autoHeight, object.height ?? 0);
-  return <g className={`embedded-eskiz-object embedded-eskiz-label-object ${selected ? 'selected' : ''}`} onPointerDown={(event) => onPointerDown(event, object)}>{calloutTargets(object).map((t, i) => { const elbowX = object.x > t.x ? object.x - 18 : object.x + width + 18; return <g key={i}><polyline points={`${t.x},${t.y} ${elbowX},${object.y + height / 2} ${object.x > t.x ? object.x : object.x + width},${object.y + height / 2}`} fill="none" stroke={object.color} strokeWidth="2" /><circle cx={t.x} cy={t.y} r="5" fill={object.color} /></g>; })}<rect x={object.x} y={object.y} width={width} height={height} rx={object.borderRadius ?? 6} fill={object.fill ?? '#fff'} fillOpacity={object.fillOpacity ?? 1} stroke={object.color} strokeWidth="2" />{lines.map((line, index) => <text key={index} x={object.x + 12} y={object.y + 11 + index * (object.fontSize + 5)} dominantBaseline="hanging" fontSize={object.fontSize} fontWeight="600" fill={object.color}>{line}</text>)}{primary && <><circle className="embedded-eskiz-handle" cx={object.targetX} cy={object.targetY} r="7" onPointerDown={(event) => onHandleDown(event, 'start')} /><circle className="embedded-eskiz-handle resize-handle" cx={object.x + width} cy={object.y + height} r="8" onPointerDown={(event) => onHandleDown(event, 'resize')} /></>}</g>;
+  return <g className={`embedded-eskiz-object embedded-eskiz-label-object ${selected ? 'selected' : ''}`} onPointerDown={(event) => onPointerDown(event, object)}>{calloutTargets(object).map((t, i) => { const elbowX = object.x > t.x ? object.x - 18 : object.x + width + 18; return <g key={i}><polyline points={`${t.x},${t.y} ${elbowX},${object.y + height / 2} ${object.x > t.x ? object.x : object.x + width},${object.y + height / 2}`} fill="none" stroke={object.color} strokeWidth="2" /><circle cx={t.x} cy={t.y} r="5" fill={object.color} /></g>; })}<rect x={object.x} y={object.y} width={width} height={height} rx={object.borderRadius ?? 6} fill={object.fill ?? '#fff'} fillOpacity={object.fillOpacity ?? 1} stroke={object.color} strokeWidth="2" />{lines.map((line, index) => <text key={index} x={object.x + 12} y={object.y + 11 + index * (object.fontSize + 5)} dominantBaseline="hanging" fontSize={object.fontSize} fontWeight="600" fill={object.color}>{line}</text>)}{primary && <>{object.extraTargets?.map((t, i) => <g key={`leader-${i}`} className="embedded-eskiz-leader-handle"><title>Линия {i + 2}: перетащите, чтобы изменить конец</title><circle cx={t.x} cy={t.y} r="18" fill="transparent" onPointerDown={(event) => onHandleDown(event, 'leader', i)} /><circle className="embedded-eskiz-handle" cx={t.x} cy={t.y} r="7" pointerEvents="none" /><text x={t.x + 11} y={t.y - 9} fontSize="12" fontWeight="800" fill={object.color} stroke="#fff" strokeWidth="3" paintOrder="stroke" pointerEvents="none">{i + 2}</text></g>)}<circle className="embedded-eskiz-handle" cx={object.targetX} cy={object.targetY} r="7" onPointerDown={(event) => onHandleDown(event, 'start')} /><circle className="embedded-eskiz-handle resize-handle" cx={object.x + width} cy={object.y + height} r="8" onPointerDown={(event) => onHandleDown(event, 'resize')} /></>}</g>;
 }
 
-function TextObjectView({ object, selected, primary, onPointerDown, onHandleDown }: { object: EskizTextObject; selected: boolean; primary: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void; onHandleDown: (event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize') => void }) {
+function TextObjectView({ object, selected, primary, onPointerDown, onHandleDown }: { object: EskizTextObject; selected: boolean; primary: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void; onHandleDown: (event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize' | 'leader' | 'leader', leaderIndex?: number) => void }) {
   const isComment = object.type === 'comment';
   const isLink = object.type === 'link';
   const sourceLines = object.text.split('\n');
