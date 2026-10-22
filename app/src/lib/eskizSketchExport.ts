@@ -1,5 +1,6 @@
 import type { EskizCommunicationDistance, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
-import type { EskizCalloutObject, EskizDimensionObject, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from './eskizPro';
+import type { EskizCalloutObject, EskizDimensionObject, EskizFacadeObject, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from './eskizPro';
+import { FACADE_DEFAULT_COLOR, facadeMarkerRadius } from './eskizPro';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationColor, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale } from './eskizCommunications';
 
 export type EskizSketchModuleMarkerMode = 'full' | 'compact' | 'hidden';
@@ -192,6 +193,16 @@ function renderModule(o: EskizModuleObject, markerMode: EskizSketchModuleMarkerM
   </g>`;
 }
 
+function renderFacade(o: EskizFacadeObject) {
+  const radius = facadeMarkerRadius(o.fontSize);
+  return `<g class="facade" transform="translate(${o.x} ${o.y})">
+    <circle r="${radius + 2}" fill="#fff" opacity=".95" />
+    <circle r="${radius}" fill="${xml(o.color || FACADE_DEFAULT_COLOR)}" stroke="#fff" stroke-width="1.6" />
+    <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#fff" font-size="${(radius * 1.1).toFixed(1)}" font-weight="800" font-family="Arial, sans-serif">${o.number}</text>
+    <title>Фасад ${o.number}</title>
+  </g>`;
+}
+
 function renderHinge(o: EskizHingeObject) {
   const color = o.color || '#1d4ed8';
   const radius = clamp((o.fontSize || 18) * .28, 3.5, 6.5);
@@ -327,6 +338,7 @@ function objectLayerKey(object: EskizObject): EskizLayerKey | 'helpers' {
   if (object.type === 'dimension') return 'dimensions';
   if (object.type === 'module') return 'modules';
   if (object.type === 'hinge') return 'hinges';
+  if (object.type === 'facade') return 'modules';
   if (object.type === 'callout') return 'callouts';
   if (object.type === 'comment') return 'comments';
   if (object.type === 'equipment') return 'equipment';
@@ -419,6 +431,7 @@ function renderObjectBody(object: EskizObject, markerMode: EskizSketchModuleMark
   if (object.type === 'dimension') return renderDimension(object);
   if (object.type === 'module') return renderModule(object, markerMode);
   if (object.type === 'hinge') return renderHinge(object);
+  if (object.type === 'facade') return renderFacade(object);
   if (object.type === 'callout') return renderCallout(object);
   if (object.type === 'comment' || object.type === 'link' || object.type === 'equipment') return renderTextObject(object);
   return renderHelper(object, width, height);

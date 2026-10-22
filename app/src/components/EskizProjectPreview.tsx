@@ -1,6 +1,7 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
 import type { EskizCommunicationDistance, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
-import type { EskizCalloutObject, EskizDimensionObject, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
+import type { EskizCalloutObject, EskizDimensionObject, EskizFacadeObject, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
+import { FACADE_DEFAULT_COLOR, facadeMarkerRadius } from '../lib/eskizPro';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationColor, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale } from '../lib/eskizCommunications';
 import { normalizeEskizLinkUrl } from '../lib/eskizSketchExport';
 
@@ -29,6 +30,7 @@ function objectLayerKey(object: EskizObject): EskizLayerKey | 'helpers' {
   if (object.type === 'dimension') return 'dimensions';
   if (object.type === 'module') return 'modules';
   if (object.type === 'hinge') return 'hinges';
+  if (object.type === 'facade') return 'modules';
   if (object.type === 'callout') return 'callouts';
   if (object.type === 'comment') return 'comments';
   if (object.type === 'equipment') return 'equipment';
@@ -175,6 +177,18 @@ function ModulePreview({ object: o, projectId, active = false, linked = false, s
       {status && <g className="eskiz-preview-module-status" transform={`translate(${Math.max(5, width - badgeWidth - 6)} ${-10})`}><rect width={badgeWidth} height="19" rx="9.5" fill={statusColor} /><text x={badgeWidth / 2} y="10" dominantBaseline="middle" textAnchor="middle" fontSize="10" fontWeight="900" fill="#fff">{status.label}</text></g>}
       {status?.summary && <title>{status.summary}</title>}
       {lines.map((line, index) => <text key={index} x={width / 2} y={textY + index * (o.fontSize + 5)} dominantBaseline="hanging" textAnchor="middle" fontSize={o.fontSize} fontWeight={index === 0 ? 800 : 500} fill={o.color}>{line}</text>)}
+    </g>
+  );
+}
+
+function FacadePreview({ object: o }: { object: EskizFacadeObject }) {
+  const radius = facadeMarkerRadius(o.fontSize);
+  return (
+    <g className="eskiz-preview-object eskiz-preview-facade" transform={`translate(${o.x} ${o.y})`}>
+      <circle r={radius + 2} fill="#fff" opacity=".95" />
+      <circle r={radius} fill={o.color || FACADE_DEFAULT_COLOR} stroke="#fff" strokeWidth="1.6" />
+      <text x="0" y="1" textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize={radius * 1.1} fontWeight="800" fontFamily="Segoe UI, Arial, sans-serif">{o.number}</text>
+      <title>{`Фасад ${o.number}`}</title>
     </g>
   );
 }
@@ -357,6 +371,7 @@ function ObjectPreviewBody({ object, projectId, activeModuleKey, moduleBindings,
     return <ModulePreview object={object} projectId={projectId} active={activeModuleKey === key} linked={Boolean(moduleBindings?.[key])} status={moduleStatuses?.[key]} markerMode={moduleMarkerMode} onModuleClick={onModuleClick} />;
   }
   if (object.type === 'hinge') return <HingePreview object={object} />;
+  if (object.type === 'facade') return <FacadePreview object={object} />;
   if (object.type === 'callout') return <CalloutPreview object={object} />;
   if (object.type === 'comment' || object.type === 'link' || object.type === 'equipment') return <TextPreview object={object} />;
   return null;

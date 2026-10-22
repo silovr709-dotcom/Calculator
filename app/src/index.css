@@ -9143,3 +9143,10 @@ body.work-focus.work-peek .sidebar { display: flex; }
   .communication-picker select { min-width: 180px; }
   .eskiz-pro-workspace.fullscreen .embedded-eskiz-viewport { flex: 1 1 auto; height: auto; min-height: 240px; }
 }
+
+/* Выбор номера фасада (1–5) для инструмента «Фасад». */
+.embedded-eskiz-facade-picker { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border-radius: var(--r-pill); background: rgba(124, 58, 237, .18); }
+.embedded-eskiz-facade-picker span { color: #e9ddff; font-size: var(--fs-xs); font-weight: 800; text-transform: uppercase; letter-spacing: .05em; margin-right: 2px; }
+.embedded-eskiz-facade-picker button { width: 28px; height: 28px; min-width: 28px; padding: 0; border-radius: 50%; border: 1px solid rgba(255,255,255,.3); background: #fff; color: #4c1d95; font-weight: 800; font-size: var(--fs-sm); cursor: pointer; }
+.embedded-eskiz-facade-picker button.active { background: #7c3aed; color: #fff; border-color: #fff; box-shadow: 0 0 0 2px rgba(124, 58, 237, .5); }
+@media (pointer: coarse) { .embedded-eskiz-facade-picker button { width: 36px; height: 36px; min-width: 36px; } }

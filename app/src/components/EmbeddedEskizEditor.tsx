@@ -1,13 +1,14 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
-import type { EskizCalloutObject, EskizDimensionObject, EskizEquipmentType, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
+import type { EskizCalloutObject, EskizDimensionObject, EskizEquipmentType, EskizFacadeObject, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
+import { FACADE_DEFAULT_COLOR, facadeMarkerRadius } from '../lib/eskizPro';
 import { normalizeEskizLinkUrl } from '../lib/eskizSketchExport';
 import { createEskizProjectFromImage, downloadEskizFile, eskizFileFromTransfer, eskizImageReplaceScale, imageFileFromTransfer, readEskizFileBundle, readEskizImageFile, replaceEskizProjectImage, scaleEskizCommunication, SUPPORTED_ESKIZ_IMAGE_TYPES, type EskizImageReplaceMode } from '../lib/eskizPro';
 import EskizPhotoDialog from './EskizPhotoDialog';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, COMMUNICATION_KINDS, COMMUNICATION_VISUAL_SCALE_MAX, COMMUNICATION_VISUAL_SCALE_MIN, communicationColor, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale, defaultCommunicationDimensions, normalizeCommunicationVisualScale } from '../lib/eskizCommunications';
 import { evaluateNumericExpression } from '../lib/numericExpression';
 
-type Tool = 'select' | 'free-dimension' | 'h-dimension' | 'v-dimension' | 'chain' | 'anchor' | 'h-guide' | 'v-guide' | 'module' | 'hinge' | 'callout' | 'comment' | 'equipment' | 'link';
+type Tool = 'select' | 'free-dimension' | 'h-dimension' | 'v-dimension' | 'chain' | 'anchor' | 'h-guide' | 'v-guide' | 'module' | 'hinge' | 'facade' | 'callout' | 'comment' | 'equipment' | 'link';
 type Drag = { mode: 'create' | 'move' | 'handle' | 'marquee'; start: Point; id?: string; end?: 'start' | 'end' | 'offset' | 'resize'; before: EskizProject; original?: EskizObject };
 type Point = { x: number; y: number };
 type QuickEdit = { id: string; value: string; left: number; top: number; repeatTool: Tool };
@@ -98,6 +99,7 @@ const TOOL_ITEMS: { id: Tool; label: string; hotkey?: string }[] = [
   { id: 'v-guide', label: 'Верт. направляющая' },
   { id: 'module', label: 'Модуль', hotkey: 'M' },
   { id: 'hinge', label: 'Петля', hotkey: 'P' },
+  { id: 'facade', label: 'Фасад 1–5', hotkey: 'F' },
   { id: 'callout', label: 'Выноска', hotkey: 'L' },
   { id: 'comment', label: 'Комментарий', hotkey: 'T' },
   { id: 'equipment', label: 'Техника', hotkey: 'E' },
@@ -180,6 +182,7 @@ function objectListLabel(object: EskizObject) {
   if (object.type === 'dimension') return `${object.value} мм`;
   if (object.type === 'module') return object.number;
   if (object.type === 'hinge') return `Петля${object.label ? `: ${object.label}` : ''}`;
+  if (object.type === 'facade') return `Фасад ${object.number}`;
   if (object.type === 'anchor') return `Точка ${object.label}`;
   if (object.type === 'guide') return `${object.orientation === 'horizontal' ? 'Горизонтальная' : 'Вертикальная'} направляющая`;
   if (object.type === 'link') return `Ссылка: ${object.text}`;
@@ -191,6 +194,7 @@ function objectLayerKey(object: EskizObject): EskizLayerKey | 'helpers' {
   if (object.type === 'dimension') return 'dimensions';
   if (object.type === 'module') return 'modules';
   if (object.type === 'hinge') return 'hinges';
+  if (object.type === 'facade') return 'modules';
   if (object.type === 'callout') return 'callouts';
   if (object.type === 'comment') return 'comments';
   if (object.type === 'equipment') return 'equipment';
@@ -368,6 +372,7 @@ export default function EmbeddedEskizEditor(props: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [zoom, setZoom] = useState(1);
+  const [facadeNumber, setFacadeNumber] = useState(1);
   const [showImage, setShowImage] = useState(() => props.exportViewSettings?.showImage !== false);
   const [showAnnotations, setShowAnnotations] = useState(() => props.exportViewSettings?.showAnnotations !== false);
   const [showHelpers, setShowHelpers] = useState(() => props.exportViewSettings?.showHelpers !== false);
@@ -711,6 +716,7 @@ export default function EmbeddedEskizEditor(props: Props) {
         nudgeSelected(event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0, event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0);
       }
       if (event.key === 'Escape') { setTool('select'); selectOnly(null); setChainLast(null); setChainAxis(null); setChainSessionId(null); setPendingDimension(null); setCommunicationQuickEdit(null); onCancelCommunicationMode(); }
+      if (tool === 'facade' && !event.ctrlKey && !event.metaKey && /^[1-5]$/.test(event.key)) { setFacadeNumber(Number(event.key)); return; }
       const found = TOOL_ITEMS.find((item) => item.hotkey?.toLowerCase() === event.key.toLowerCase());
       if (found && !event.ctrlKey && !event.metaKey) {
         setTool(found.id);
@@ -722,7 +728,7 @@ export default function EmbeddedEskizEditor(props: Props) {
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
-  }, [copySelected, copySelectedStyle, deleteSelected, duplicate, fit, lastDrawingTool, nudgeSelected, onCancelCommunicationMode, pasteClipboard, pasteSelectedStyle, redo, saveNow, selectOnly, selected, undo, zoomTo]);
+  }, [copySelected, copySelectedStyle, deleteSelected, duplicate, fit, lastDrawingTool, tool, nudgeSelected, onCancelCommunicationMode, pasteClipboard, pasteSelectedStyle, redo, saveNow, selectOnly, selected, undo, zoomTo]);
 
   const point = useCallback((event: { clientX: number; clientY: number }): Point => {
     const current = projectRef.current;
@@ -777,13 +783,14 @@ export default function EmbeddedEskizEditor(props: Props) {
     let object: EskizObject;
     if (type === 'module') object = { ...base, type: 'module', number: nextModuleNumber(project.objects), description: '' };
     else if (type === 'hinge') object = { ...base, type: 'hinge', label: 'Петля', side: 'auto', color: '#1d4ed8', fontSize: 18 };
+    else if (type === 'facade') object = { ...base, type: 'facade', number: facadeNumber, color: FACADE_DEFAULT_COLOR, fontSize: 22 };
     else if (type === 'comment') object = { ...base, type: 'comment', text: 'Новый комментарий' };
     else if (type === 'equipment') object = { ...base, type: 'equipment', text: 'ПММ 600', equipmentType: 'ПММ', color: COLORS.blue };
     else object = { ...base, type: 'link', text: 'Название ссылки', url: 'https://' };
     commit((current) => ({ ...current, objects: [...current.objects, object] }));
     selectOnly(object.id);
     setTool('select');
-  }, [commit, project, selectOnly]);
+  }, [commit, facadeNumber, project, selectOnly]);
 
   const handleCommunicationStagePoint = useCallback((event: ReactPointerEvent<SVGRectElement>) => {
     if (!project) return;
@@ -944,7 +951,7 @@ export default function EmbeddedEskizEditor(props: Props) {
       setTool('select');
       return;
     }
-    if (['module', 'hinge', 'comment', 'equipment', 'link'].includes(tool)) { addAt(tool, target); return; }
+    if (['module', 'hinge', 'facade', 'comment', 'equipment', 'link'].includes(tool)) { addAt(tool, target); return; }
     if (tool === 'chain') {
       if (!chainLast) { setChainLast(target); setChainAxis(null); setChainSessionId(uid('chain')); return; }
       const axis = chainAxis ?? (Math.abs(target.x - chainLast.x) >= Math.abs(target.y - chainLast.y) ? 'horizontal' : 'vertical');
@@ -1520,6 +1527,7 @@ export default function EmbeddedEskizEditor(props: Props) {
         if (!item) return null;
         return <button key={id} className={`tool-quick ${tool === id ? 'active' : ''}`} disabled={communicationMode} title={item.hotkey ? `${item.label} (${item.hotkey})` : item.label} onClick={() => setActiveTool(id)}><span>{item.label}</span>{item.hotkey && <kbd>{item.hotkey}</kbd>}</button>;
       })}</div>
+      {tool === 'facade' && <div className="embedded-eskiz-facade-picker" role="radiogroup" aria-label="Номер фасада (клавиши 1–5)"><span>Фасад</span>{[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" role="radio" aria-checked={facadeNumber === n} className={facadeNumber === n ? 'active' : ''} onClick={() => setFacadeNumber(n)}>{n}</button>)}</div>}
       <label className="embedded-eskiz-toolbar-select communication-picker" style={{ '--comm-color': activeCommunicationColor } as CSSProperties}><span>Коммуникация</span><select value={props.communicationAddKind ?? ''} disabled={props.pickingDistancePoint} onChange={(event) => {
         const nextKind = event.target.value as EskizCommunicationKind | '';
         if (nextKind) props.onStartCommunicationPlacement(nextKind);
@@ -1842,13 +1850,14 @@ function CommunicationFields(props: {
 
 function ObjectFields({ object, moduleSummary, onOpenModule, onObject, onSelectChain }: { object: EskizObject; moduleSummary?: ModuleSummary; onOpenModule?: () => void; onObject: (patch: Partial<EskizObject>) => void; onSelectChain: (chainId: string) => void }) {
   const hasFrame = ['module', 'callout', 'comment', 'equipment', 'link'].includes(object.type);
-  const title = object.type === 'dimension' ? 'Размерная линия' : object.type === 'module' ? 'Модуль' : object.type === 'hinge' ? 'Петля' : object.type === 'callout' ? 'Выноска' : object.type === 'equipment' ? 'Техника' : object.type === 'link' ? 'Ссылка' : object.type === 'anchor' ? 'Опорная точка' : object.type === 'guide' ? 'Направляющая' : 'Комментарий';
+  const title = object.type === 'facade' ? 'Фасад' : object.type === 'dimension' ? 'Размерная линия' : object.type === 'module' ? 'Модуль' : object.type === 'hinge' ? 'Петля' : object.type === 'callout' ? 'Выноска' : object.type === 'equipment' ? 'Техника' : object.type === 'link' ? 'Ссылка' : object.type === 'anchor' ? 'Опорная точка' : object.type === 'guide' ? 'Направляющая' : 'Комментарий';
   return <div className="embedded-eskiz-fields"><div className="embedded-eskiz-fields-heading"><span>{title}</span><small>#{object.id.slice(0, 5)}</small></div>
     {object.type !== 'anchor' && object.type !== 'guide' && <><div className="embedded-eskiz-section-label">Быстрый стиль</div><div className="embedded-eskiz-preset-row"><button onClick={() => onObject(object.type === 'dimension' ? { color: '#20242b', fontSize: 22, lineWidth: 2 } as Partial<EskizObject> : { color: '#20242b', fill: '#ffffff', fillOpacity: 1, borderRadius: 6 } as Partial<EskizObject>)}>Чертёж</button><button onClick={() => onObject(object.type === 'dimension' ? { color: '#ff5c35', fontSize: 24, lineWidth: 3 } as Partial<EskizObject> : { color: '#c83c18', fill: '#fff0eb', fillOpacity: .95, borderRadius: 8 } as Partial<EskizObject>)}>Акцент</button><button onClick={() => onObject(object.type === 'dimension' ? { color: '#2563eb', fontSize: 22, lineWidth: 2 } as Partial<EskizObject> : { color: '#35568d', fill: '#f1f5ff', fillOpacity: .92, borderRadius: 4 } as Partial<EskizObject>)}>Монтаж</button></div></>}
     {object.type === 'dimension' && <DimensionFields object={object} onObject={onObject} onSelectChain={onSelectChain} />}
     {object.type === 'anchor' && <label>Название точки<input autoFocus value={object.label} onChange={(event) => onObject({ label: event.target.value } as Partial<EskizObject>)} /></label>}
     {object.type === 'guide' && <label>Ориентация<select value={object.orientation} onChange={(event) => onObject({ orientation: event.target.value } as Partial<EskizObject>)}><option value="horizontal">Горизонтальная</option><option value="vertical">Вертикальная</option></select></label>}
     {object.type === 'module' && <><div className={`embedded-eskiz-module-mini ${moduleSummary?.status ?? 'new'}`}><b>{moduleSummary ? moduleSummary.label : 'Модуль ещё не создан в просчёте'}</b><span>{moduleSummary?.body ?? 'Кликните «Редактор модуля», чтобы создать/открыть позицию расчёта.'}</span>{moduleSummary?.cost && <small>{moduleSummary.cost}{moduleSummary.lines != null ? ` · ${moduleSummary.lines} строк` : ''}</small>}<button type="button" onClick={onOpenModule}>{moduleSummary ? 'Редактор модуля' : 'Создать в просчёте'}</button></div><label>Номер модуля<input autoFocus value={object.number} onChange={(event) => onObject({ number: event.target.value } as Partial<EskizObject>)} /></label><label>Описание<textarea rows={4} placeholder={'600\nНиз'} value={object.description} onChange={(event) => onObject({ description: event.target.value } as Partial<EskizObject>)} /></label></>}
+    {object.type === 'facade' && <label>Номер фасада<select value={object.number} onChange={(event) => onObject({ number: Number(event.target.value) } as Partial<EskizObject>)}>{[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>}
     {object.type === 'hinge' && <><div className="embedded-eskiz-helper-card"><b>Отдельный слой «Петли»</b><span>На эскизе петли показываются маленькими точками без подписи; слой можно скрыть в документе и экспорте.</span></div><label>Название в списке<input autoFocus value={object.label} placeholder="Петля" onChange={(event) => onObject({ label: event.target.value } as Partial<EskizObject>)} /></label></>}
     {(object.type === 'comment' || object.type === 'callout') && <label>Текст<textarea autoFocus rows={5} value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label>}
     {object.type === 'equipment' && <><label>Тип техники<select value={object.equipmentType} onChange={(event) => onObject({ equipmentType: event.target.value, text: event.target.value } as Partial<EskizObject>)}>{EQUIPMENT_TYPES.map((item) => <option key={item}>{item}</option>)}</select></label><label>Подпись<input autoFocus value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label><label>Ссылка на модель<input type="url" placeholder="https://…" value={object.url || ''} onChange={(event) => onObject({ url: event.target.value } as Partial<EskizObject>)} /></label>{objectLinkUrl(object) ? <><a className="embedded-eskiz-test-link" href={objectLinkUrl(object) ?? '#'} target="_blank" rel="noreferrer">Открыть ссылку ↗</a><small className="muted">Ссылка кликается в PDF-выгрузке, в КП и на эскизе по Ctrl/⌘ + клик.</small></> : object.url ? <small className="muted">Проверьте адрес: нужен вид https://site.ru/model</small> : null}</>}
@@ -1945,6 +1954,7 @@ const EmbeddedObjectView = memo(function EmbeddedObjectView({ object, selected, 
   if (object.type === 'dimension') return <DimensionObjectView object={object} selected={selected} primary={primary} onPointerDown={onPointerDown} onHandleDown={onHandleDown} />;
   if (object.type === 'module') return <ModuleObjectView object={object} selected={selected} primary={primary} onPointerDown={onPointerDown} onHandleDown={onHandleDown} />;
   if (object.type === 'hinge') return <HingeObjectView object={object} selected={selected} primary={primary} onPointerDown={onPointerDown} />;
+  if (object.type === 'facade') return <FacadeObjectView object={object} selected={selected} primary={primary} onPointerDown={onPointerDown} />;
   if (object.type === 'callout') return <CalloutObjectView object={object} selected={selected} primary={primary} onPointerDown={onPointerDown} onHandleDown={onHandleDown} />;
   return <TextObjectView object={object} selected={selected} primary={primary} onPointerDown={onPointerDown} onHandleDown={onHandleDown} />;
 });
@@ -1982,6 +1992,17 @@ function DimensionObjectView({ object, selected, primary, onPointerDown, onHandl
   const normalY = unitNormalY * tick;
   const extension = offset === 0 ? 0 : Math.sign(offset) * 7;
   return <g className={`embedded-eskiz-object ${selected ? 'selected' : ''}`} onPointerDown={(event) => onPointerDown(event, object)}>{offset !== 0 && <><line x1={x1} y1={y1} x2={lineX1 + unitNormalX * extension} y2={lineY1 + unitNormalY * extension} stroke={object.color} strokeWidth={Math.max(1, object.lineWidth * .7)} opacity=".78" /><line x1={x2} y1={y2} x2={lineX2 + unitNormalX * extension} y2={lineY2 + unitNormalY * extension} stroke={object.color} strokeWidth={Math.max(1, object.lineWidth * .7)} opacity=".78" /></>}<line x1={lineX1} y1={lineY1} x2={lineX2} y2={lineY2} stroke={object.color} strokeWidth={object.lineWidth} markerStart={object.arrowStyle === 'tick' ? undefined : `url(#${object.arrowStyle === 'closed' ? 'embeddedDimArrowClosed' : 'embeddedDimArrow'})`} markerEnd={object.arrowStyle === 'tick' ? undefined : `url(#${object.arrowStyle === 'closed' ? 'embeddedDimArrowClosed' : 'embeddedDimArrow'})`} /><line x1={lineX1 - normalX} y1={lineY1 - normalY} x2={lineX1 + normalX} y2={lineY1 + normalY} stroke={object.color} strokeWidth={object.lineWidth} /><line x1={lineX2 - normalX} y1={lineY2 - normalY} x2={lineX2 + normalX} y2={lineY2 + normalY} stroke={object.color} strokeWidth={object.lineWidth} /><g transform={`translate(${textX} ${textY}) rotate(${textAngle})`}><rect x={-approxWidth / 2} y={-object.fontSize * .72} width={approxWidth} height={object.fontSize * 1.25} rx="3" fill="white" opacity=".92" /><text textAnchor="middle" dominantBaseline="middle" fontSize={object.fontSize} fontWeight="700" fill={object.color}>{label}</text></g>{primary && <>{offset !== 0 && <line x1={baseMidX} y1={baseMidY} x2={midX} y2={midY} stroke="#2563eb" strokeWidth="1" strokeDasharray="4 4" opacity=".7" />}<circle className="embedded-eskiz-handle" cx={x1} cy={y1} r="7" onPointerDown={(event) => onHandleDown(event, 'start')} /><circle className="embedded-eskiz-handle" cx={x2} cy={y2} r="7" onPointerDown={(event) => onHandleDown(event, 'end')} /><circle className="embedded-eskiz-handle offset-handle" cx={midX} cy={midY} r="8" onPointerDown={(event) => onHandleDown(event, 'offset')} /></>}</g>;
+}
+
+function FacadeObjectView({ object, selected, primary, onPointerDown }: { object: EskizFacadeObject; selected: boolean; primary: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void }) {
+  const radius = facadeMarkerRadius(object.fontSize);
+  return <g className={`embedded-eskiz-object embedded-eskiz-facade-object ${selected ? 'selected' : ''}`} transform={`translate(${object.x} ${object.y})`} onPointerDown={(event) => onPointerDown(event, object)}>
+    <circle r={radius + 6} fill="transparent" />
+    <circle r={radius + 2} fill="#fff" opacity=".95" />
+    <circle r={radius} fill={object.color || FACADE_DEFAULT_COLOR} stroke="#fff" strokeWidth={selected ? 2.6 : 1.6} />
+    <text x="0" y="1" textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize={radius * 1.1} fontWeight="800" fontFamily="Segoe UI, Arial, sans-serif" style={{ pointerEvents: 'none' }}>{object.number}</text>
+    {primary && <circle r={radius + 6} fill="none" stroke="#2563eb" strokeDasharray="3 3" strokeWidth="1.2" />}
+  </g>;
 }
 
 function HingeObjectView({ object, selected, primary, onPointerDown }: { object: EskizHingeObject; selected: boolean; primary: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void }) {

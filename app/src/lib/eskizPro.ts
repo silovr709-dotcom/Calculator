@@ -44,7 +44,15 @@ export type EskizTextObject = EskizBaseObject & { type: 'comment' | 'link' | 'eq
 export type EskizCalloutObject = EskizBaseObject & { type: 'callout'; targetX: number; targetY: number; text: string; url?: string };
 export type EskizAnchorObject = EskizBaseObject & { type: 'anchor'; label: string };
 export type EskizGuideObject = EskizBaseObject & { type: 'guide'; orientation: 'horizontal' | 'vertical' };
-export type EskizObject = EskizDimensionObject | EskizModuleObject | EskizHingeObject | EskizTextObject | EskizCalloutObject | EskizAnchorObject | EskizGuideObject;
+/** Метка фасада: цифра 1–5 в кружочке (тип фасада на эскизе). */
+export type EskizFacadeObject = EskizBaseObject & { type: 'facade'; number: number };
+export type EskizObject = EskizDimensionObject | EskizModuleObject | EskizHingeObject | EskizTextObject | EskizCalloutObject | EskizAnchorObject | EskizGuideObject | EskizFacadeObject;
+
+/** Общая геометрия кружка с цифрой: радиус от размера текста. Редактор, KP-превью и экспорт берут отсюда. */
+export const FACADE_DEFAULT_COLOR = '#7c3aed';
+export function facadeMarkerRadius(fontSize: number | undefined): number {
+  return Math.min(30, Math.max(12, (fontSize || 22) * 0.8));
+}
 
 export interface EskizProject {
   version: 1;
