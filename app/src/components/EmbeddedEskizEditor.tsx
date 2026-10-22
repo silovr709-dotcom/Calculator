@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
+import { calloutTargets, shiftCallout } from '../lib/eskizPro';
 import type { EskizCalloutObject, EskizDimensionObject, EskizEquipmentType, EskizFacadeObject, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
 import { FACADE_COLORS, FACADE_DEFAULT_COLOR, facadeMarkerRadius } from '../lib/eskizPro';
 import { normalizeEskizLinkUrl } from '../lib/eskizSketchExport';
@@ -401,6 +402,8 @@ export default function EmbeddedEskizEditor(props: Props) {
   const [chainAxis, setChainAxis] = useState<'horizontal' | 'vertical' | null>(null);
   const [chainSessionId, setChainSessionId] = useState<string | null>(null);
   const [pendingDimension, setPendingDimension] = useState<{ id: string; sourceTool: Tool } | null>(null);
+  /** Выноска, которой добавляем новую линию: следующий клик по полотну задаёт её конец. */
+  const [pendingLeaderId, setPendingLeaderId] = useState<string | null>(null);
   const [draftLine, setDraftLine] = useState<{ start: Point; end: Point; callout: boolean } | null>(null);
   const [selectionBox, setSelectionBox] = useState<{ start: Point; end: Point } | null>(null);
   const [snapIndicator, setSnapIndicator] = useState<Point | null>(null);
@@ -637,7 +640,7 @@ export default function EmbeddedEskizEditor(props: Props) {
           copy.chainId = copiedChains.get(copy.chainId);
         }
       }
-      if (copy.type === 'callout') { copy.targetX += 24; copy.targetY += 24; }
+      if (copy.type === 'callout') shiftCallout(copy, 24, 24);
       if (copy.type === 'module') copy.number = nextModuleNumber(all);
       all.push(copy);
       return copy;
@@ -666,7 +669,7 @@ export default function EmbeddedEskizEditor(props: Props) {
           copy.chainId = pastedChains.get(copy.chainId);
         }
       }
-      if (copy.type === 'callout') { copy.targetX += 32; copy.targetY += 32; }
+      if (copy.type === 'callout') shiftCallout(copy, 32, 32);
       if (copy.type === 'module') copy.number = nextModuleNumber(all);
       all.push(copy);
       return copy;
@@ -695,7 +698,7 @@ export default function EmbeddedEskizEditor(props: Props) {
       if (!selectedIds.includes(object.id)) return object;
       const moved = { ...object, x: object.x + dx, y: object.y + dy } as EskizObject;
       if (moved.type === 'dimension') { moved.x2 += dx; moved.y2 += dy; }
-      if (moved.type === 'callout') { moved.targetX += dx; moved.targetY += dy; }
+      if (moved.type === 'callout') shiftCallout(moved, dx, dy);
       return moved;
     }) }));
   }, [commit, selectedIds]);
@@ -730,7 +733,7 @@ export default function EmbeddedEskizEditor(props: Props) {
         const step = event.shiftKey ? 10 : 1;
         nudgeSelected(event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0, event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0);
       }
-      if (event.key === 'Escape') { setTool('select'); selectOnly(null); setChainLast(null); setChainAxis(null); setChainSessionId(null); setPendingDimension(null); setCommunicationQuickEdit(null); onCancelCommunicationMode(); }
+      if (event.key === 'Escape') { setTool('select'); selectOnly(null); setChainLast(null); setChainAxis(null); setChainSessionId(null); setPendingDimension(null); setPendingLeaderId(null); setCommunicationQuickEdit(null); onCancelCommunicationMode(); }
       if (tool === 'facade' && !event.ctrlKey && !event.metaKey && /^[1-5]$/.test(event.key)) { setFacadeNumber(Number(event.key)); return; }
       const found = TOOL_ITEMS.find((item) => item.hotkey?.toLowerCase() === event.key.toLowerCase());
       if (found && !event.ctrlKey && !event.metaKey) {
@@ -767,7 +770,7 @@ export default function EmbeddedEskizEditor(props: Props) {
       }
       points.push({ x: object.x, y: object.y });
       if (object.type === 'dimension') points.push({ x: object.x2, y: object.y2 });
-      if (object.type === 'callout') points.push({ x: object.targetX, y: object.targetY });
+      if (object.type === 'callout') calloutTargets(object).forEach((t) => points.push({ x: t.x, y: t.y }));
     }
     const threshold = 14 / zoom;
     let best: Point | null = null;
@@ -927,6 +930,14 @@ export default function EmbeddedEskizEditor(props: Props) {
     if (communicationQuickEdit) setCommunicationQuickEdit(null);
     if (communicationMode) return;
     if (spaceDown || event.button === 1) return;
+    if (pendingLeaderId) {
+      const raw = point(event);
+      const end = nearestSnap(raw) ?? raw;
+      commit((current) => ({ ...current, objects: current.objects.map((o) => (o.id === pendingLeaderId && o.type === 'callout' ? { ...o, extraTargets: [...(o.extraTargets ?? []), { x: end.x, y: end.y }] } : o)) }));
+      setPendingLeaderId(null);
+      setSnapIndicator(null);
+      return;
+    }
     if (pendingDimension) {
       const dimension = project.objects.find((object) => object.id === pendingDimension.id);
       if (dimension?.type === 'dimension') setQuickEdit({ id: dimension.id, value: dimension.value, left: event.clientX, top: event.clientY, repeatTool: pendingDimension.sourceTool });
@@ -1072,7 +1083,7 @@ export default function EmbeddedEskizEditor(props: Props) {
         if (!source || source.locked) return object;
         const moved = { ...source, x: source.x + dx, y: source.y + dy } as EskizObject;
         if (moved.type === 'dimension') { moved.x2 += dx; moved.y2 += dy; }
-        if (moved.type === 'callout') { moved.targetX += dx; moved.targetY += dy; }
+        if (moved.type === 'callout') shiftCallout(moved, dx, dy);
         return moved;
       }
       if (drag.mode === 'handle' && drag.end === 'offset' && drag.original?.type === 'dimension' && drag.original.chainId && object.type === 'dimension' && object.chainId === drag.original.chainId) return { ...object, offset: dimensionOffset(drag.original, target) };
@@ -1090,7 +1101,7 @@ export default function EmbeddedEskizEditor(props: Props) {
       }
       const moved = { ...original, x: original.x + dx, y: original.y + dy } as EskizObject;
       if (moved.type === 'dimension') { moved.x2 += dx; moved.y2 += dy; }
-      if (moved.type === 'callout') { moved.targetX += dx; moved.targetY += dy; }
+      if (moved.type === 'callout') shiftCallout(moved, dx, dy);
       return moved;
     }) } : current);
   };
@@ -1302,7 +1313,7 @@ export default function EmbeddedEskizEditor(props: Props) {
       const dy = ['top', 'centerY', 'bottom'].includes(mode) ? target - currentValue : 0;
       const moved = { ...object, x: object.x + dx, y: object.y + dy } as EskizObject;
       if (moved.type === 'dimension') { moved.x2 += dx; moved.y2 += dy; }
-      if (moved.type === 'callout') { moved.targetX += dx; moved.targetY += dy; }
+      if (moved.type === 'callout') shiftCallout(moved, dx, dy);
       return moved;
     }) }));
   };
@@ -1550,6 +1561,7 @@ export default function EmbeddedEskizEditor(props: Props) {
       <button className={sidebarOpen ? 'active side-toggle' : 'side-toggle'} onClick={() => setSidebarOpen((value) => !value)}>Свойства</button>
     </nav>
     {communicationMode && <div className="embedded-eskiz-communication-banner">{props.communicationAddKind ? `Режим добавления: ${COMMUNICATION_KIND_META[props.communicationAddKind].label}. Тапните по основному эскизу Эскиз PRO.` : 'Рисуйте свободную линию расстояния: ведите курсор от выбранной коммуникации и кликните конечную точку.'}</div>}
+    {pendingLeaderId && <div className="embedded-eskiz-communication-banner">Нажмите на полотно — конец новой линии выноски. Esc — отмена.</div>}
     {error && <div className="embedded-eskiz-toast no-print" role="status"><span>{error}</span><button type="button" aria-label="Скрыть сообщение" onClick={() => setError('')}>✕</button></div>}
     <div className={`embedded-eskiz-workarea ${sidebarOpen ? '' : 'no-inspector'}`}>
       <nav className="embedded-eskiz-palette" aria-label="Палитра инструментов">
@@ -1647,7 +1659,7 @@ export default function EmbeddedEskizEditor(props: Props) {
       </section>
       {quickEdit && <div className="embedded-eskiz-quick" style={{ left: Math.min(quickEdit.left + 14, window.innerWidth - 210), top: Math.min(quickEdit.top + 14, window.innerHeight - 105) }}><span>Размер</span><div><input autoFocus inputMode="decimal" value={quickEdit.value} onChange={(event) => setQuickEdit({ ...quickEdit, value: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); finishQuickEdit(false); } if (event.key === 'Tab') { event.preventDefault(); finishQuickEdit(true); } if (event.key === 'Escape') { event.preventDefault(); setQuickEdit(null); } }} /><b>мм</b></div><small>Enter — готово · Tab — следующий</small></div>}
       {communicationQuickEdit && inlineCommunication && <CommunicationQuickPopover key={`${communicationQuickEdit.mode}-${communicationQuickEdit.communicationId}-${communicationQuickEdit.mode === 'distance' ? communicationQuickEdit.distanceId : 'marker'}`} edit={communicationQuickEdit} marker={inlineCommunication} onChange={(patch) => props.onCommunicationChange(inlineCommunication.id, patch)} onDistanceChange={(distanceId, patch) => props.onCommunicationDistanceChange(inlineCommunication.id, distanceId, patch)} onStartDistance={() => { startCommunicationDistance(inlineCommunication.id); setCommunicationQuickEdit(null); }} onClose={() => setCommunicationQuickEdit(null)} />}
-      {sidebarOpen && <Inspector project={project} onClose={() => setSidebarOpen(false)} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} moduleSummaries={props.moduleSummaries} onModuleObjectClick={(projectId, object) => { props.onProjectChange(project); props.onModuleObjectClick?.(projectId, object); }} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} showCommunicationMeasures={showCommunicationMeasures} layerVisibility={layerVisibility} onShowImage={setImageLayerVisible} onShowAnnotations={setAnnotationLayersVisible} onShowHelpers={setHelperLayersVisible} onShowCommunicationMeasures={setCommunicationMeasuresVisible} onLayerVisibility={setEskizLayerVisible} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); setCommunicationQuickEdit(null); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceAddSet={props.onCommunicationDistanceAddSet} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
+      {sidebarOpen && <Inspector project={project} onStartLeader={(id) => setPendingLeaderId(id)} onClose={() => setSidebarOpen(false)} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} moduleSummaries={props.moduleSummaries} onModuleObjectClick={(projectId, object) => { props.onProjectChange(project); props.onModuleObjectClick?.(projectId, object); }} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} showCommunicationMeasures={showCommunicationMeasures} layerVisibility={layerVisibility} onShowImage={setImageLayerVisible} onShowAnnotations={setAnnotationLayersVisible} onShowHelpers={setHelperLayersVisible} onShowCommunicationMeasures={setCommunicationMeasuresVisible} onLayerVisibility={setEskizLayerVisible} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); setCommunicationQuickEdit(null); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceAddSet={props.onCommunicationDistanceAddSet} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
     </div>
     <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span className="eskiz-status-tip tip-desktop">Перетащите новое фото на полотно или вставьте Ctrl+V — разметка сохранится · Ctrl/⌘ + колесо — зум · Пробел — перемещение</span><span className="eskiz-status-tip tip-touch">Палец по пустому месту — двигать вид · два пальца — масштаб · тап по объекту — правка</span>
     <div className="embedded-eskiz-zoombar" aria-label="Масштаб эскиза">
@@ -1716,6 +1728,7 @@ function CommunicationQuickPopover(props: {
 
 function Inspector(props: {
   project: EskizProject;
+  onStartLeader?: (id: string) => void;
   onClose?: () => void;
   object?: EskizObject;
   communication?: EskizCommunicationMarker | null;
@@ -1760,7 +1773,7 @@ function Inspector(props: {
   return <aside className="embedded-eskiz-inspector">
     <button type="button" className="embedded-eskiz-inspector-close" aria-label="Закрыть панель свойств" title="Закрыть" onClick={props.onClose}>×</button>
     <div className="embedded-eskiz-tabs"><button className={activeTab === 'object' ? 'active' : ''} onClick={() => setTab('object')}>Объект</button><button className={activeTab === 'objects' ? 'active' : ''} onClick={() => setTab('objects')}>Список</button><button className={activeTab === 'document' ? 'active' : ''} onClick={() => setTab('document')}>Документ</button></div>
-    {activeTab === 'object' ? selectedIds.length > 1 ? <div className="embedded-eskiz-fields"><div className="embedded-eskiz-fields-heading"><span>Выбрано объектов: {selectedIds.length}</span></div><div className="embedded-eskiz-section-label">Выравнивание</div><div className="embedded-eskiz-align-grid"><button onClick={() => props.onAlign('left')}>По левому</button><button onClick={() => props.onAlign('centerX')}>Центр X</button><button onClick={() => props.onAlign('right')}>По правому</button><button onClick={() => props.onAlign('top')}>По верху</button><button onClick={() => props.onAlign('centerY')}>Центр Y</button><button onClick={() => props.onAlign('bottom')}>По низу</button></div></div> : object ? <ObjectFields object={object} moduleSummary={object.type === 'module' ? props.moduleSummaries?.[`${project.id}:${object.id}`] : undefined} onOpenModule={object.type === 'module' ? () => props.onModuleObjectClick?.(project.id, object) : undefined} onObject={props.onObject} onSelectChain={props.onSelectChain} /> : communication ? <CommunicationFields marker={communication} imageWidth={project.image.width} imageHeight={project.image.height} onChange={(patch) => props.onCommunicationChange(communication.id, patch)} onDelete={() => props.onCommunicationDelete(communication.id)} onStartDistance={() => props.onStartCommunicationDistance(communication.id)} onDistanceAdd={(anchor) => props.onCommunicationDistanceAdd(communication.id, anchor)} onDistanceAddSet={(anchors) => props.onCommunicationDistanceAddSet(communication.id, anchors)} onDistanceChange={(distanceId, patch) => props.onCommunicationDistanceChange(communication.id, distanceId, patch)} onDistanceDelete={(distanceId) => props.onCommunicationDistanceDelete(communication.id, distanceId)} /> : <div className="embedded-eskiz-empty"><strong>Ничего не выбрано</strong><span>Выберите объект или коммуникацию на эскизе, чтобы изменить параметры.</span></div> : activeTab === 'objects' ? <InspectorObjectList project={project} selectedIds={selectedIds} communications={props.communications} activeCommunicationId={props.activeCommunicationId} onSelect={props.onSelect} onProject={props.onProject} onPatchObject={props.onPatchObject} onCommunicationSelect={props.onCommunicationSelect} onStartCommunicationDistance={props.onStartCommunicationDistance} /> : <DocumentFields project={project} communications={props.communications} showImage={props.showImage} showAnnotations={props.showAnnotations} showHelpers={props.showHelpers} showCommunicationMeasures={props.showCommunicationMeasures} layerVisibility={props.layerVisibility} onShowImage={props.onShowImage} onShowAnnotations={props.onShowAnnotations} onShowHelpers={props.onShowHelpers} onShowCommunicationMeasures={props.onShowCommunicationMeasures} onLayerVisibility={props.onLayerVisibility} onProject={props.onProject} />}
+    {activeTab === 'object' ? selectedIds.length > 1 ? <div className="embedded-eskiz-fields"><div className="embedded-eskiz-fields-heading"><span>Выбрано объектов: {selectedIds.length}</span></div><div className="embedded-eskiz-section-label">Выравнивание</div><div className="embedded-eskiz-align-grid"><button onClick={() => props.onAlign('left')}>По левому</button><button onClick={() => props.onAlign('centerX')}>Центр X</button><button onClick={() => props.onAlign('right')}>По правому</button><button onClick={() => props.onAlign('top')}>По верху</button><button onClick={() => props.onAlign('centerY')}>Центр Y</button><button onClick={() => props.onAlign('bottom')}>По низу</button></div></div> : object ? <ObjectFields onStartLeader={props.onStartLeader} object={object} moduleSummary={object.type === 'module' ? props.moduleSummaries?.[`${project.id}:${object.id}`] : undefined} onOpenModule={object.type === 'module' ? () => props.onModuleObjectClick?.(project.id, object) : undefined} onObject={props.onObject} onSelectChain={props.onSelectChain} /> : communication ? <CommunicationFields marker={communication} imageWidth={project.image.width} imageHeight={project.image.height} onChange={(patch) => props.onCommunicationChange(communication.id, patch)} onDelete={() => props.onCommunicationDelete(communication.id)} onStartDistance={() => props.onStartCommunicationDistance(communication.id)} onDistanceAdd={(anchor) => props.onCommunicationDistanceAdd(communication.id, anchor)} onDistanceAddSet={(anchors) => props.onCommunicationDistanceAddSet(communication.id, anchors)} onDistanceChange={(distanceId, patch) => props.onCommunicationDistanceChange(communication.id, distanceId, patch)} onDistanceDelete={(distanceId) => props.onCommunicationDistanceDelete(communication.id, distanceId)} /> : <div className="embedded-eskiz-empty"><strong>Ничего не выбрано</strong><span>Выберите объект или коммуникацию на эскизе, чтобы изменить параметры.</span></div> : activeTab === 'objects' ? <InspectorObjectList project={project} selectedIds={selectedIds} communications={props.communications} activeCommunicationId={props.activeCommunicationId} onSelect={props.onSelect} onProject={props.onProject} onPatchObject={props.onPatchObject} onCommunicationSelect={props.onCommunicationSelect} onStartCommunicationDistance={props.onStartCommunicationDistance} /> : <DocumentFields project={project} communications={props.communications} showImage={props.showImage} showAnnotations={props.showAnnotations} showHelpers={props.showHelpers} showCommunicationMeasures={props.showCommunicationMeasures} layerVisibility={props.layerVisibility} onShowImage={props.onShowImage} onShowAnnotations={props.onShowAnnotations} onShowHelpers={props.onShowHelpers} onShowCommunicationMeasures={props.onShowCommunicationMeasures} onLayerVisibility={props.onLayerVisibility} onProject={props.onProject} />}
     {activeTab === 'object' && selectedIds.length > 0 && <div className="embedded-eskiz-inspector-bottom"><button onClick={props.onDuplicate}>Дублировать</button><button className="danger" onClick={props.onDelete}>Удалить</button></div>}
   </aside>;
 }
@@ -1868,7 +1881,7 @@ function CommunicationFields(props: {
   </div>;
 }
 
-function ObjectFields({ object, moduleSummary, onOpenModule, onObject, onSelectChain }: { object: EskizObject; moduleSummary?: ModuleSummary; onOpenModule?: () => void; onObject: (patch: Partial<EskizObject>) => void; onSelectChain: (chainId: string) => void }) {
+function ObjectFields({ object, moduleSummary, onOpenModule, onObject, onSelectChain, onStartLeader }: { onStartLeader?: (id: string) => void; object: EskizObject; moduleSummary?: ModuleSummary; onOpenModule?: () => void; onObject: (patch: Partial<EskizObject>) => void; onSelectChain: (chainId: string) => void }) {
   const hasFrame = ['module', 'callout', 'comment', 'equipment', 'link'].includes(object.type);
   const title = object.type === 'facade' ? 'Фасад' : object.type === 'dimension' ? 'Размерная линия' : object.type === 'module' ? 'Модуль' : object.type === 'hinge' ? 'Петля' : object.type === 'callout' ? 'Выноска' : object.type === 'equipment' ? 'Техника' : object.type === 'link' ? 'Ссылка' : object.type === 'anchor' ? 'Опорная точка' : object.type === 'guide' ? 'Направляющая' : 'Комментарий';
   return <div className="embedded-eskiz-fields"><div className="embedded-eskiz-fields-heading"><span>{title}</span><small>#{object.id.slice(0, 5)}</small></div>
@@ -1881,6 +1894,7 @@ function ObjectFields({ object, moduleSummary, onOpenModule, onObject, onSelectC
     {object.type === 'facade' && <div className="embedded-eskiz-facade-color-row"><span>Цвет кружка</span>{FACADE_COLORS.map((c) => <button key={c.value} type="button" aria-label={c.label} title={c.label} className={(object.color || FACADE_DEFAULT_COLOR) === c.value ? 'active' : ''} style={{ background: c.value }} onClick={() => onObject({ color: c.value } as Partial<EskizObject>)} />)}</div>}
     {object.type === 'facade' && <div className="embedded-eskiz-facade-size-row"><span>Размер кружка</span><input type="range" min={16} max={36} step={1} aria-label="Размер кружка фасада" value={object.fontSize || 22} onChange={(event) => onObject({ fontSize: Number(event.target.value) } as Partial<EskizObject>)} /><b>{object.fontSize || 22}</b></div>}
     {object.type === 'hinge' && <><div className="embedded-eskiz-helper-card"><b>Отдельный слой «Петли»</b><span>На эскизе петли показываются маленькими точками без подписи; слой можно скрыть в документе и экспорте.</span></div><label>Название в списке<input autoFocus value={object.label} placeholder="Петля" onChange={(event) => onObject({ label: event.target.value } as Partial<EskizObject>)} /></label></>}
+    {object.type === 'callout' && <><div className="embedded-eskiz-section-label">Линии выноски</div><div className="embedded-eskiz-helper-card">Выноска ведёт к точек: {calloutTargets(object).length}. Добавьте линию, затем кликните по полотну.</div><button type="button" className="btn tiny" onClick={() => onStartLeader?.(object.id)}>+ Добавить линию</button>{(object.extraTargets ?? []).map((t, i) => <div key={i} className="embedded-eskiz-leader-row"><span>Линия {i + 2}: {Math.round(t.x)}, {Math.round(t.y)}</span><button type="button" aria-label="Удалить линию" onClick={() => onObject({ extraTargets: (object.extraTargets ?? []).filter((_, j) => j !== i) } as Partial<EskizObject>)}>×</button></div>)}</>}
     {(object.type === 'comment' || object.type === 'callout') && <label>Текст<textarea autoFocus={canAutoFocus()} rows={5} value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label>}
     {object.type === 'equipment' && <><label>Тип техники<select value={object.equipmentType} onChange={(event) => onObject({ equipmentType: event.target.value, text: event.target.value } as Partial<EskizObject>)}>{EQUIPMENT_TYPES.map((item) => <option key={item}>{item}</option>)}</select></label><label>Подпись<input autoFocus value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label><label>Ссылка на модель<input type="url" placeholder="https://…" value={object.url || ''} onChange={(event) => onObject({ url: event.target.value } as Partial<EskizObject>)} /></label>{objectLinkUrl(object) ? <><a className="embedded-eskiz-test-link" href={objectLinkUrl(object) ?? '#'} target="_blank" rel="noreferrer">Открыть ссылку ↗</a><small className="muted">Ссылка кликается в PDF-выгрузке, в КП и на эскизе по Ctrl/⌘ + клик.</small></> : object.url ? <small className="muted">Проверьте адрес: нужен вид https://site.ru/model</small> : null}</>}
     {object.type === 'link' && <><label>Название<input autoFocus={canAutoFocus()} value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label><label>URL<input type="url" placeholder="https://…" value={object.url || ''} onChange={(event) => onObject({ url: event.target.value } as Partial<EskizObject>)} /></label>{objectLinkUrl(object) ? <><a className="embedded-eskiz-test-link" href={objectLinkUrl(object) ?? '#'} target="_blank" rel="noreferrer">Открыть ссылку ↗</a><small className="muted">Ссылка кликается в PDF-выгрузке, в КП и на эскизе по Ctrl/⌘ + клик.</small></> : object.url ? <small className="muted">Проверьте адрес: нужен вид https://site.ru/model</small> : null}</>}
@@ -2068,8 +2082,7 @@ function CalloutObjectView({ object, selected, primary, onPointerDown, onHandleD
   const lines = wrapLines(object.text, maxChars);
   const autoHeight = Math.max(48, lines.length * (object.fontSize + 5) + 18);
   const height = Math.max(autoHeight, object.height ?? 0);
-  const elbowX = object.x > object.targetX ? object.x - 18 : object.x + width + 18;
-  return <g className={`embedded-eskiz-object embedded-eskiz-label-object ${selected ? 'selected' : ''}`} onPointerDown={(event) => onPointerDown(event, object)}><polyline points={`${object.targetX},${object.targetY} ${elbowX},${object.y + height / 2} ${object.x > object.targetX ? object.x : object.x + width},${object.y + height / 2}`} fill="none" stroke={object.color} strokeWidth="2" /><circle cx={object.targetX} cy={object.targetY} r="5" fill={object.color} /><rect x={object.x} y={object.y} width={width} height={height} rx={object.borderRadius ?? 6} fill={object.fill ?? '#fff'} fillOpacity={object.fillOpacity ?? 1} stroke={object.color} strokeWidth="2" />{lines.map((line, index) => <text key={index} x={object.x + 12} y={object.y + 11 + index * (object.fontSize + 5)} dominantBaseline="hanging" fontSize={object.fontSize} fontWeight="600" fill={object.color}>{line}</text>)}{primary && <><circle className="embedded-eskiz-handle" cx={object.targetX} cy={object.targetY} r="7" onPointerDown={(event) => onHandleDown(event, 'start')} /><circle className="embedded-eskiz-handle resize-handle" cx={object.x + width} cy={object.y + height} r="8" onPointerDown={(event) => onHandleDown(event, 'resize')} /></>}</g>;
+  return <g className={`embedded-eskiz-object embedded-eskiz-label-object ${selected ? 'selected' : ''}`} onPointerDown={(event) => onPointerDown(event, object)}>{calloutTargets(object).map((t, i) => { const elbowX = object.x > t.x ? object.x - 18 : object.x + width + 18; return <g key={i}><polyline points={`${t.x},${t.y} ${elbowX},${object.y + height / 2} ${object.x > t.x ? object.x : object.x + width},${object.y + height / 2}`} fill="none" stroke={object.color} strokeWidth="2" /><circle cx={t.x} cy={t.y} r="5" fill={object.color} /></g>; })}<rect x={object.x} y={object.y} width={width} height={height} rx={object.borderRadius ?? 6} fill={object.fill ?? '#fff'} fillOpacity={object.fillOpacity ?? 1} stroke={object.color} strokeWidth="2" />{lines.map((line, index) => <text key={index} x={object.x + 12} y={object.y + 11 + index * (object.fontSize + 5)} dominantBaseline="hanging" fontSize={object.fontSize} fontWeight="600" fill={object.color}>{line}</text>)}{primary && <><circle className="embedded-eskiz-handle" cx={object.targetX} cy={object.targetY} r="7" onPointerDown={(event) => onHandleDown(event, 'start')} /><circle className="embedded-eskiz-handle resize-handle" cx={object.x + width} cy={object.y + height} r="8" onPointerDown={(event) => onHandleDown(event, 'resize')} /></>}</g>;
 }
 
 function TextObjectView({ object, selected, primary, onPointerDown, onHandleDown }: { object: EskizTextObject; selected: boolean; primary: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>, object: EskizObject) => void; onHandleDown: (event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize') => void }) {

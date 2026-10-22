@@ -9343,3 +9343,8 @@ body.work-focus .project-section-head { display: none; }
    остаётся сверху колонки. */
 .eskiz-pro-workspace.fullscreen .eskiz-pro-grid { align-items: stretch; }
 .eskiz-pro-workspace.fullscreen .eskiz-pro-side-details { align-self: start; }
+
+/* Линии выноски: список дополнительных линий в «Свойствах». */
+.embedded-eskiz-leader-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0; font-size: var(--fs-xs); color: var(--text); }
+.embedded-eskiz-leader-row button { min-width: 30px; min-height: 30px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; }
+.embedded-eskiz-leader-row button:hover { color: #b42318; border-color: #f0b4ad; }

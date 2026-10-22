@@ -1,6 +1,6 @@
 import type { EskizCommunicationDistance, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizFacadeObject, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from './eskizPro';
-import { FACADE_DEFAULT_COLOR, facadeMarkerRadius } from './eskizPro';
+import { calloutTargets, FACADE_DEFAULT_COLOR, facadeMarkerRadius } from './eskizPro';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationColor, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale } from './eskizCommunications';
 
 export type EskizSketchModuleMarkerMode = 'full' | 'compact' | 'hidden';
@@ -226,10 +226,12 @@ function calloutBox(o: EskizCalloutObject): { width: number; height: number; lin
 
 function renderCallout(o: EskizCalloutObject) {
   const { width, height, lines } = calloutBox(o);
-  const elbowX = o.x > o.targetX ? o.x - 18 : o.x + width + 18;
+  const leaders = calloutTargets(o).map((t) => {
+    const elbowX = o.x > t.x ? o.x - 18 : o.x + width + 18;
+    return `<polyline points="${t.x},${t.y} ${elbowX},${o.y + height / 2} ${o.x > t.x ? o.x : o.x + width},${o.y + height / 2}" fill="none" stroke="${xml(o.color)}" stroke-width="2" /><circle cx="${t.x}" cy="${t.y}" r="5" fill="${xml(o.color)}" />`;
+  }).join('');
   return `<g class="callout label">
-    <polyline points="${o.targetX},${o.targetY} ${elbowX},${o.y + height / 2} ${o.x > o.targetX ? o.x : o.x + width},${o.y + height / 2}" fill="none" stroke="${xml(o.color)}" stroke-width="2" />
-    <circle cx="${o.targetX}" cy="${o.targetY}" r="5" fill="${xml(o.color)}" />
+    ${leaders}
     <rect x="${o.x}" y="${o.y}" width="${width}" height="${height}" rx="${o.borderRadius ?? 6}" fill="${xml(o.fill ?? '#fff')}" fill-opacity="${o.fillOpacity ?? 1}" stroke="${o.frameless ? 'none' : xml(o.color)}" stroke-width="2" />
     ${lines.map((line, index) => `<text x="${o.x + 12}" y="${o.y + 11 + index * (o.fontSize + 5)}" dominant-baseline="hanging" font-size="${o.fontSize}" font-weight="650" fill="${xml(o.color)}">${xml(line)}</text>`).join('')}
   </g>`;

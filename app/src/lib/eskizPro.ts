@@ -43,7 +43,19 @@ export type EskizDimensionObject = EskizBaseObject & {
 export type EskizModuleObject = EskizBaseObject & { type: 'module'; number: string; description: string };
 export type EskizHingeObject = EskizBaseObject & { type: 'hinge'; label: string; side?: 'left' | 'right' | 'top' | 'bottom' | 'auto' };
 export type EskizTextObject = EskizBaseObject & { type: 'comment' | 'link' | 'equipment'; text: string; url?: string; equipmentType?: EskizEquipmentType };
-export type EskizCalloutObject = EskizBaseObject & { type: 'callout'; targetX: number; targetY: number; text: string; url?: string };
+export type EskizCalloutObject = EskizBaseObject & { type: 'callout'; targetX: number; targetY: number; text: string; url?: string; /** Дополнительные линии выноски (точки на полотне). */ extraTargets?: { x: number; y: number }[] };
+
+/** Все точки, к которым ведёт выноска: основная и дополнительные линии. */
+export function calloutTargets(o: EskizCalloutObject): { x: number; y: number }[] {
+  return [{ x: o.targetX, y: o.targetY }, ...(o.extraTargets ?? [])];
+}
+
+/** Сдвиг выноски вместе со всеми её линиями (мутирует переданную копию). */
+export function shiftCallout(o: EskizCalloutObject, dx: number, dy: number): void {
+  o.targetX += dx;
+  o.targetY += dy;
+  if (o.extraTargets) o.extraTargets = o.extraTargets.map((t) => ({ x: t.x + dx, y: t.y + dy }));
+}
 export type EskizAnchorObject = EskizBaseObject & { type: 'anchor'; label: string };
 export type EskizGuideObject = EskizBaseObject & { type: 'guide'; orientation: 'horizontal' | 'vertical' };
 /** Метка фасада: цифра 1–5 в кружочке (тип фасада на эскизе). */
