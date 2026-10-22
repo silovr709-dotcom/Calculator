@@ -9296,3 +9296,13 @@ body.work-focus .project-section-head { display: none; }
 @media (pointer: coarse) {
   .embedded-eskiz-facade-swatches button, .embedded-eskiz-facade-color-row button { width: 30px; height: 30px; min-width: 30px; }
 }
+
+/* Эскиз PRO на компьютере (23.10): полотно было ~220px высотой на ноутбуке 1366×768,
+   «Вписать» уменьшало эскиз до 19%. Редактор теперь занимает почти весь экран по высоте;
+   верхние блоки страницы прокручиваются, полотно остаётся крупным. Полноэкранный режим не меняем. */
+@media (min-width: 981px) {
+  .eskiz-pro-workspace:not(.fullscreen) .eskiz-pro-frame-card > .embedded-eskiz-editor {
+    height: clamp(620px, calc(100dvh - 110px), 1400px);
+    min-height: 620px;
+  }
+}
