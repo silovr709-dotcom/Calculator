@@ -180,15 +180,15 @@ export default function Dashboard(props: {
         <input ref={fileRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) props.onImport(f); e.target.value = ''; }} />
       </section>
 
-      <section className="dashboard-daydesk card" aria-label="Рабочий стол дня">
-        <div className="daydesk-head">
-          <div>
-            <span className="eyebrow">Сегодня</span>
-            <h2>{dayDesk.overdueContacts + dayDesk.contactsToday > 0 ? `Контакты требуют внимания: ${dayDesk.overdueContacts + dayDesk.contactsToday}` : 'День под контролем'}</h2>
-            <p>Приложение само собирает рабочий список: контакты, КП без ответа, оплаты, фабрику, пустые клиенты и проверки.</p>
-          </div>
-          <button type="button" className="btn ghost" onClick={props.onOpenCrm}>Открыть задачи CRM</button>
-        </div>
+      <details className="dashboard-daydesk card" aria-label="Рабочий стол дня">
+        <summary className="dashboard-daydesk-summary">
+          <span className="eyebrow">Сегодня</span>
+          <b>Контакты: {dayDesk.overdueContacts + dayDesk.contactsToday}</b>
+          <span>задач: {taskSummary.today + taskSummary.overdue}</span>
+          <span>КП ждут: {dayDesk.offersWaiting}</span>
+          <span>проблем: {dayDesk.problems}</span>
+          <i aria-hidden="true" />
+        </summary>
         <div className="daydesk-metrics">
           <button type="button" className={metricTone(dayDesk.overdueContacts, 'danger')} onClick={props.onOpenCrm}><b>{dayDesk.overdueContacts}</b><span>просрочено</span></button>
           <button type="button" className={metricTone(dayDesk.contactsToday, 'warn')} onClick={props.onOpenCrm}><b>{dayDesk.contactsToday}</b><span>контакт сегодня</span></button>
@@ -237,7 +237,7 @@ export default function Dashboard(props: {
             </button>
           ))}
         </div>
-      </section>
+      </details>
 
       {showNew && (
         <Overlay className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowNew(false); }}>
@@ -271,19 +271,16 @@ export default function Dashboard(props: {
         </div>
       ) : (
         <>
-          <section className="dashboard-crm-card card">
-            <div className="dashboard-crm-copy">
-              <span className="eyebrow">CRM в работе</span>
-              <h2>{crmSummary.due > 0 ? `Есть контакты на сегодня: ${crmSummary.due}` : 'Клиентская работа под контролем'}</h2>
-              <p>Быстрый обзор клиентских задач прямо на главном экране. Полная воронка, база клиентов и редактирование следующих шагов — в отдельном разделе CRM.</p>
-              <div className="dashboard-crm-metrics">
+          <section className="dashboard-crm-strip card">
+            <div className="dashboard-crm-metrics">
                 <button type="button" className="tone-info" onClick={props.onOpenCrm}><b>{crmSummary.active}</b><span>активных заказов</span></button>
                 <button type="button" className={metricTone(crmSummary.due, 'warn')} onClick={props.onOpenCrm}><b>{crmSummary.due}</b><span>контакт сегодня</span></button>
                 <button type="button" className={metricTone(crmSummary.noNext, 'warn')} onClick={props.onOpenCrm}><b>{crmSummary.noNext}</b><span>без шага/даты</span></button>
                 <button type="button" className={metricTone(crmSummary.stuck, 'danger')} onClick={props.onOpenCrm}><b>{crmSummary.stuck}</b><span>КП ждёт решения</span></button>
               </div>
-            </div>
-            <div className="dashboard-crm-focus">
+            <details className="dashboard-crm-focus-details">
+              <summary>Фокус менеджера</summary>
+              <div className="dashboard-crm-focus">
               <b>Фокус менеджера</b>
               {crmSummary.focus.length === 0 ? <span className="muted small">Нет срочных CRM-задач. Добавляйте дату контакта в карточках заказов или в CRM.</span> : crmSummary.focus.map(({ project, workflow, tone }) => (
                 <button type="button" key={project.id} onClick={() => props.onOpen(project.id)} className={`tone-${tone}`}>
@@ -293,6 +290,7 @@ export default function Dashboard(props: {
               ))}
               {props.onOpenCrm && <button type="button" className="btn tiny primary" onClick={props.onOpenCrm}>Открыть CRM</button>}
             </div>
+            </details>
           </section>
 
           <div className="dashboard-filters card">

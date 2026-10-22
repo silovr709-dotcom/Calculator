@@ -9234,3 +9234,31 @@ body.work-focus .project-section-head { display: none; }
      остаётся — там размеры по горизонтали/вертикали, цепочка, ссылка, техника */
   .embedded-eskiz-tools .embedded-eskiz-quick-tools { display: none; }
 }
+
+/* ==========================================================================
+   СПИСОК ПРОЕКТОВ — CRM одной строкой (23.10)
+   Раньше — большая карточка с заголовком, абзацем и списком фокуса (дубль экрана CRM).
+   Теперь: строка с четырьмя метриками и свёрнутый «Фокус менеджера».
+   ========================================================================== */
+.dashboard-crm-strip { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; }
+.dashboard-crm-strip .dashboard-crm-metrics { display: flex; flex-wrap: wrap; gap: 6px; }
+.dashboard-crm-strip .dashboard-crm-metrics button { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 10px; border-radius: var(--r-pill); }
+.dashboard-crm-strip .dashboard-crm-metrics button b { font-size: var(--fs-md); }
+.dashboard-crm-strip .dashboard-crm-metrics button span { font-size: var(--fs-xs); }
+.dashboard-crm-focus-details > summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 700; color: var(--muted); list-style: none; }
+.dashboard-crm-focus-details > summary::-webkit-details-marker { display: none; }
+.dashboard-crm-focus-details > summary::before { content: '▸ '; }
+.dashboard-crm-focus-details[open] > summary::before { content: '▾ '; }
+.dashboard-crm-focus-details .dashboard-crm-focus { margin-top: 6px; }
+
+/* «Сегодня» на экране проектов — свёрнуто по умолчанию, в заголовке главные числа. */
+.dashboard-daydesk > summary.dashboard-daydesk-summary {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; cursor: pointer; list-style: none;
+  font-size: var(--fs-sm); color: var(--muted);
+}
+.dashboard-daydesk > summary.dashboard-daydesk-summary::-webkit-details-marker { display: none; }
+.dashboard-daydesk > summary.dashboard-daydesk-summary b { color: var(--text); font-size: var(--fs-md); }
+.dashboard-daydesk > summary.dashboard-daydesk-summary i { margin-left: auto; font-style: normal; font-size: var(--fs-xs); }
+.dashboard-daydesk > summary.dashboard-daydesk-summary i::after { content: '▸ раскрыть'; }
+.dashboard-daydesk[open] > summary.dashboard-daydesk-summary i::after { content: '▾ свернуть'; }
+.dashboard-daydesk[open] > summary.dashboard-daydesk-summary { margin-bottom: 10px; }
