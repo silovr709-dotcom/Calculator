@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
 import { calloutTargets, shiftCallout } from '../lib/eskizPro';
+import { Overlay } from './Portal';
 import type { EskizCalloutObject, EskizDimensionObject, EskizEquipmentType, EskizFacadeObject, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
 import { FACADE_COLORS, FACADE_DEFAULT_COLOR, facadeMarkerRadius } from '../lib/eskizPro';
 import { normalizeEskizLinkUrl } from '../lib/eskizSketchExport';
@@ -55,6 +56,30 @@ const PALETTE_TOOLS: { id: Tool; glyph: string }[] = [
   { id: 'callout', glyph: '↗' },
   { id: 'comment', glyph: '✎' },
 ];
+
+/** Подсказка в строке состояния для активного инструмента. */
+const TOOL_STATUS_HINT: Partial<Record<Tool, string>> = {
+  select: 'Клик — выбрать · тянуть по пустому месту — рамка выделения · двойной клик по тексту — правка',
+  'free-dimension': 'Кликните начало и конец размера · Shift — выровнять по углу',
+  'h-dimension': 'Кликните две точки по горизонтали',
+  'v-dimension': 'Кликните две точки по вертикали',
+  chain: 'Кликайте точки цепочки подряд · Esc — закончить',
+  anchor: 'Кликните, чтобы поставить опорную точку',
+  module: 'Кликните место модуля или протяните рамку',
+  hinge: 'Кликните место петли',
+  facade: 'Кликните место фасада · 1–5 — номер · [ ] — размер кружка',
+  callout: 'Кликните цель выноски, затем место текста · дополнительные линии — в «Свойствах»',
+  comment: 'Кликните место комментария и введите текст',
+  equipment: 'Кликните место техники',
+  link: 'Кликните место ссылки',
+  'h-guide': 'Кликните, чтобы поставить горизонтальную направляющую',
+  'v-guide': 'Кликните, чтобы поставить вертикальную направляющую',
+};
+
+/** Буква горячей клавиши по коду клавиши: работает и на русской раскладке (там event.key даёт «м» вместо «V»). */
+function hotkeyLetter(event: KeyboardEvent): string {
+  return event.code?.startsWith('Key') ? event.code.slice(3).toLowerCase() : hotkeyLetter(event);
+}
 
 /** Короткие подписи для узкой палитры слева (полные названия — в подсказках и выпадающем списке). */
 const PALETTE_SHORT_LABELS: Partial<Record<Tool, string>> = { select: 'Курсор', 'free-dimension': 'Размер', module: 'Модуль', hinge: 'Петля', facade: 'Фасад', callout: 'Выноска', comment: 'Текст' };
@@ -404,6 +429,7 @@ export default function EmbeddedEskizEditor(props: Props) {
   const [pendingDimension, setPendingDimension] = useState<{ id: string; sourceTool: Tool } | null>(null);
   /** Выноска, которой добавляем новую линию: следующий клик по полотну задаёт её конец. */
   const [pendingLeaderId, setPendingLeaderId] = useState<string | null>(null);
+  const [showHotkeys, setShowHotkeys] = useState(false);
   const [draftLine, setDraftLine] = useState<{ start: Point; end: Point; callout: boolean } | null>(null);
   const [selectionBox, setSelectionBox] = useState<{ start: Point; end: Point } | null>(null);
   const [snapIndicator, setSnapIndicator] = useState<Point | null>(null);
@@ -708,39 +734,43 @@ export default function EmbeddedEskizEditor(props: Props) {
       const target = event.target as HTMLElement | null;
       const input = target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
       if (event.code === 'Space' && !input) { event.preventDefault(); setSpaceDown(true); }
-      if (input) return;
+      if (input) {
+        if (event.key === 'Escape' && target) target.blur();
+        return;
+      }
       if ((event.ctrlKey || event.metaKey) && ['=', '+'].includes(event.key)) { event.preventDefault(); zoomTo((value) => value * ZOOM_FACTOR); return; }
       if ((event.ctrlKey || event.metaKey) && event.key === '-') { event.preventDefault(); zoomTo((value) => value / ZOOM_FACTOR); return; }
       if ((event.ctrlKey || event.metaKey) && event.key === '0') { event.preventDefault(); fit(); return; }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === '1') { event.preventDefault(); zoomTo(1); return; }
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'c') { event.preventDefault(); copySelectedStyle(); return; }
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'v') { event.preventDefault(); pasteSelectedStyle(); return; }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') { event.preventDefault(); copySelected(); return; }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') {
+      if ((event.ctrlKey || event.metaKey) && hotkeyLetter(event) === '1') { event.preventDefault(); zoomTo(1); return; }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && hotkeyLetter(event) === 'c') { event.preventDefault(); copySelectedStyle(); return; }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && hotkeyLetter(event) === 'v') { event.preventDefault(); pasteSelectedStyle(); return; }
+      if ((event.ctrlKey || event.metaKey) && hotkeyLetter(event) === 'c') { event.preventDefault(); copySelected(); return; }
+      if ((event.ctrlKey || event.metaKey) && hotkeyLetter(event) === 'v') {
         // Если своих скопированных объектов нет — не перехватываем Ctrl+V, чтобы сработала вставка фото из буфера.
         if (!embeddedClipboard.length) return;
         event.preventDefault();
         pasteClipboard();
         return;
       }
-      if (event.key.toLowerCase() === 'q' && !event.ctrlKey && !event.metaKey) { event.preventDefault(); setTool(lastDrawingTool); setPendingDimension(null); return; }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); if (event.shiftKey) redo(); else undo(); return; }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd') { event.preventDefault(); duplicate(); return; }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); saveNow(); return; }
+      if (hotkeyLetter(event) === 'q' && !event.ctrlKey && !event.metaKey) { event.preventDefault(); setTool(lastDrawingTool); setPendingDimension(null); return; }
+      if ((event.ctrlKey || event.metaKey) && hotkeyLetter(event) === 'z') { event.preventDefault(); if (event.shiftKey) redo(); else undo(); return; }
+      if ((event.ctrlKey || event.metaKey) && hotkeyLetter(event) === 'd') { event.preventDefault(); duplicate(); return; }
+      if ((event.ctrlKey || event.metaKey) && hotkeyLetter(event) === 's') { event.preventDefault(); saveNow(); return; }
       if (event.key === 'Delete' || event.key === 'Backspace') deleteSelected();
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) && selected) {
         event.preventDefault();
         const step = event.shiftKey ? 10 : 1;
         nudgeSelected(event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0, event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0);
       }
-      if (event.key === 'Escape') { setTool('select'); selectOnly(null); setChainLast(null); setChainAxis(null); setChainSessionId(null); setPendingDimension(null); setPendingLeaderId(null); setCommunicationQuickEdit(null); onCancelCommunicationMode(); }
+      if (event.key === '?' || event.key === 'F1') { event.preventDefault(); setShowHotkeys((value) => !value); return; }
+      if (event.key === 'Escape') { setTool('select'); selectOnly(null); setChainLast(null); setChainAxis(null); setChainSessionId(null); setPendingDimension(null); setPendingLeaderId(null); setShowHotkeys(false); setCommunicationQuickEdit(null); onCancelCommunicationMode(); }
       // Выбранный фасад: цифры 1–5 — его номер, [ и ] — размер кружка (шаг 2, границы 16–36).
-      if (selected && !event.ctrlKey && !event.metaKey && (/^[1-5]$/.test(event.key) || event.key === '[' || event.key === ']')) {
+      if (selected && !event.ctrlKey && !event.metaKey && (/^[1-5]$/.test(event.key) || event.code === 'BracketLeft' || event.code === 'BracketRight')) {
         const facade = projectRef.current?.objects.find((o) => o.id === selected);
         if (facade?.type === 'facade') {
           event.preventDefault();
-          if (event.key === '[' || event.key === ']') {
-            const delta = event.key === ']' ? 2 : -2;
+          if (event.code === 'BracketLeft' || event.code === 'BracketRight') {
+            const delta = event.code === 'BracketRight' ? 2 : -2;
             commit((p) => ({ ...p, objects: p.objects.map((o) => (o.id === facade.id && o.type === 'facade' ? { ...o, fontSize: Math.min(36, Math.max(16, (o.fontSize || 22) + delta)) } : o)) }));
           } else {
             const number = Number(event.key);
@@ -750,7 +780,7 @@ export default function EmbeddedEskizEditor(props: Props) {
         }
       }
       if (tool === 'facade' && !event.ctrlKey && !event.metaKey && /^[1-5]$/.test(event.key)) { setFacadeNumber(Number(event.key)); return; }
-      const found = TOOL_ITEMS.find((item) => item.hotkey?.toLowerCase() === event.key.toLowerCase());
+      const found = TOOL_ITEMS.find((item) => item.hotkey?.toLowerCase() === hotkeyLetter(event));
       if (found && !event.ctrlKey && !event.metaKey) {
         setTool(found.id);
         if (found.id !== 'select') setLastDrawingTool(found.id);
@@ -943,6 +973,8 @@ export default function EmbeddedEskizEditor(props: Props) {
   }, [props]);
 
   const onStageDown = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const active = document.activeElement as HTMLElement | null;
+    if (active && ['INPUT', 'SELECT', 'TEXTAREA'].includes(active.tagName)) active.blur();
     if (!project) return;
     // Второй и последующие пальцы — это щипок для масштаба, а не действие на полотне.
     if (event.pointerType !== 'mouse' && viewportPointersRef.current.size > 0) return;
@@ -1686,7 +1718,27 @@ export default function EmbeddedEskizEditor(props: Props) {
       {communicationQuickEdit && inlineCommunication && <CommunicationQuickPopover key={`${communicationQuickEdit.mode}-${communicationQuickEdit.communicationId}-${communicationQuickEdit.mode === 'distance' ? communicationQuickEdit.distanceId : 'marker'}`} edit={communicationQuickEdit} marker={inlineCommunication} onChange={(patch) => props.onCommunicationChange(inlineCommunication.id, patch)} onDistanceChange={(distanceId, patch) => props.onCommunicationDistanceChange(inlineCommunication.id, distanceId, patch)} onStartDistance={() => { startCommunicationDistance(inlineCommunication.id); setCommunicationQuickEdit(null); }} onClose={() => setCommunicationQuickEdit(null)} />}
       {sidebarOpen && <Inspector project={project} onStartLeader={(id) => setPendingLeaderId(id)} onClose={() => setSidebarOpen(false)} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} moduleSummaries={props.moduleSummaries} onModuleObjectClick={(projectId, object) => { props.onProjectChange(project); props.onModuleObjectClick?.(projectId, object); }} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} showCommunicationMeasures={showCommunicationMeasures} layerVisibility={layerVisibility} onShowImage={setImageLayerVisible} onShowAnnotations={setAnnotationLayersVisible} onShowHelpers={setHelperLayersVisible} onShowCommunicationMeasures={setCommunicationMeasuresVisible} onLayerVisibility={setEskizLayerVisible} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); setCommunicationQuickEdit(null); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceAddSet={props.onCommunicationDistanceAddSet} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
     </div>
-    <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span className="eskiz-status-tip tip-desktop">Перетащите новое фото на полотно или вставьте Ctrl+V — разметка сохранится · Ctrl/⌘ + колесо — зум · Пробел — перемещение</span><span className="eskiz-status-tip tip-touch">Палец по пустому месту — двигать вид · два пальца — масштаб · тап по объекту — правка</span>
+    {showHotkeys && <Overlay className="eskiz-hotkeys-overlay" onClick={() => setShowHotkeys(false)}><div className="eskiz-hotkeys-card" role="dialog" aria-label="Горячие клавиши" onClick={(event) => event.stopPropagation()}>
+      <header><b>Горячие клавиши</b><button type="button" aria-label="Закрыть" onClick={() => setShowHotkeys(false)}>×</button></header>
+      <h4>Инструменты</h4>
+      <div className="eskiz-hotkeys-grid">{TOOL_ITEMS.filter((item) => item.hotkey).map((item) => <span key={item.id}><kbd>{item.hotkey}</kbd>{item.label}</span>)}</div>
+      <h4>Работа с объектами</h4>
+      <div className="eskiz-hotkeys-grid">
+        <span><kbd>Delete</kbd>удалить</span><span><kbd>Ctrl+D</kbd>дубликат</span>
+        <span><kbd>Ctrl+C</kbd>/<kbd>V</kbd>копировать / вставить</span><span><kbd>Ctrl+Shift+C</kbd>/<kbd>V</kbd>стиль</span>
+        <span><kbd>Ctrl+Z</kbd>отменить</span><span><kbd>Ctrl+Shift+Z</kbd>повторить</span>
+        <span><kbd>←↑→↓</kbd>сдвиг (Shift — ×10)</span><span><kbd>Ctrl+S</kbd>сохранить</span>
+      </div>
+      <h4>Вид и режимы</h4>
+      <div className="eskiz-hotkeys-grid">
+        <span><kbd>Ctrl+0</kbd>вписать</span><span><kbd>Ctrl+1</kbd>100%</span>
+        <span><kbd>Ctrl+колесо</kbd>зум</span><span><kbd>Пробел</kbd>перемещение вида</span>
+        <span><kbd>Q</kbd>последний инструмент</span><span><kbd>Esc</kbd>отмена / выбор</span>
+        <span><kbd>1</kbd>–<kbd>5</kbd>номер фасада</span><span><kbd>[</kbd>/<kbd>]</kbd>размер фасада</span>
+        <span><kbd>?</kbd>эта справка</span>
+      </div>
+    </div></Overlay>}
+    <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span className="eskiz-status-tip tip-desktop">{TOOL_STATUS_HINT[tool] ?? 'Перетащите фото на полотно или вставьте Ctrl+V · Ctrl/⌘ + колесо — зум · Пробел — перемещение'}</span><button type="button" className="embedded-eskiz-keys-btn tip-desktop" title="Горячие клавиши (?)" onClick={() => setShowHotkeys(true)}>Клавиши ?</button><span className="eskiz-status-tip tip-touch">Палец по пустому месту — двигать вид · два пальца — масштаб · тап по объекту — правка</span>
     <div className="embedded-eskiz-zoombar" aria-label="Масштаб эскиза">
           <button type="button" title="Отдалить" onClick={() => zoomTo((value) => value / ZOOM_FACTOR)}>−</button>
           <input type="range" min={MIN_ZOOM} max={MAX_ZOOM} step="0.01" value={zoom} aria-label="Масштаб" onChange={(event) => zoomTo(Number(event.currentTarget.value))} />

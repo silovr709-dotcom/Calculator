@@ -9356,3 +9356,16 @@ body.work-focus .project-section-head { display: none; }
 .embedded-eskiz-fold > summary::after { content: '▾'; color: var(--muted); }
 .embedded-eskiz-fold[open] > summary { color: var(--text); }
 .embedded-eskiz-fold[open] > summary::after { content: '▴'; }
+
+/* Горячие клавиши Эскиз PRO: справка (?) и кнопка в строке состояния. */
+.eskiz-hotkeys-overlay { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 23, 42, .45); }
+.eskiz-hotkeys-card { width: min(640px, 100%); max-height: 86vh; overflow: auto; padding: 16px 18px; border-radius: 16px; background: #fff; color: #102037; box-shadow: var(--shadow-lg, 0 20px 50px rgba(0,0,0,.3)); }
+.eskiz-hotkeys-card header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.eskiz-hotkeys-card header b { font-size: 16px; }
+.eskiz-hotkeys-card header button { width: 36px; height: 36px; border: 1px solid #d6e0ea; border-radius: 10px; background: #fff; font-size: 20px; cursor: pointer; }
+.eskiz-hotkeys-card h4 { margin: 12px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #5b6b7f; }
+.eskiz-hotkeys-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 14px; font-size: 13px; }
+.eskiz-hotkeys-grid span { display: flex; align-items: center; gap: 8px; }
+.eskiz-hotkeys-card kbd { display: inline-block; min-width: 24px; padding: 2px 6px; border: 1px solid #c9d6e3; border-bottom-width: 2px; border-radius: 6px; background: #f5f8fb; font: 600 12px ui-monospace, Consolas, monospace; text-align: center; }
+.embedded-eskiz-keys-btn { min-height: 28px; padding: 3px 10px; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; background: transparent; color: #eaf4ff; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.embedded-eskiz-keys-btn:hover { background: rgba(255,255,255,.12); }
