@@ -55,6 +55,9 @@ const PALETTE_TOOLS: { id: Tool; glyph: string }[] = [
   { id: 'comment', glyph: '✎' },
 ];
 
+/** Короткие подписи для узкой палитры слева (полные названия — в подсказках и выпадающем списке). */
+const PALETTE_SHORT_LABELS: Partial<Record<Tool, string>> = { select: 'Курсор', 'free-dimension': 'Размер', module: 'Модуль', hinge: 'Петля', facade: 'Фасад', callout: 'Выноска', comment: 'Текст' };
+
 type Props = {
   project: EskizProject | null;
   calculatorProjectName: string;
@@ -1555,7 +1558,7 @@ export default function EmbeddedEskizEditor(props: Props) {
           if (!item) return null;
           return <button key={id} type="button" className={`palette-tool ${tool === id ? 'active' : ''}`} disabled={communicationMode} title={item.hotkey ? `${item.label} (${item.hotkey})` : item.label} aria-pressed={tool === id} onClick={() => setActiveTool(id)}>
             <span className="palette-glyph" aria-hidden="true">{glyph}</span>
-            <span className="palette-label">{item.label}</span>
+            <span className="palette-label">{PALETTE_SHORT_LABELS[id] ?? item.label}</span>
             {item.hotkey && <kbd>{item.hotkey}</kbd>}
           </button>;
         })}
