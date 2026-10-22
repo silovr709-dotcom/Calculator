@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizEquipmentType, EskizFacadeObject, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
-import { FACADE_DEFAULT_COLOR, facadeMarkerRadius } from '../lib/eskizPro';
+import { FACADE_COLORS, FACADE_DEFAULT_COLOR, facadeMarkerRadius } from '../lib/eskizPro';
 import { normalizeEskizLinkUrl } from '../lib/eskizSketchExport';
 import { createEskizProjectFromImage, downloadEskizFile, eskizFileFromTransfer, eskizImageReplaceScale, imageFileFromTransfer, readEskizFileBundle, readEskizImageFile, replaceEskizProjectImage, scaleEskizCommunication, SUPPORTED_ESKIZ_IMAGE_TYPES, type EskizImageReplaceMode } from '../lib/eskizPro';
 import EskizPhotoDialog from './EskizPhotoDialog';
@@ -383,6 +383,7 @@ export default function EmbeddedEskizEditor(props: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [zoom, setZoom] = useState(1);
   const [facadeNumber, setFacadeNumber] = useState(1);
+  const [facadeColor, setFacadeColor] = useState(FACADE_DEFAULT_COLOR);
   const [showImage, setShowImage] = useState(() => props.exportViewSettings?.showImage !== false);
   const [showAnnotations, setShowAnnotations] = useState(() => props.exportViewSettings?.showAnnotations !== false);
   const [showHelpers, setShowHelpers] = useState(() => props.exportViewSettings?.showHelpers !== false);
@@ -794,14 +795,14 @@ export default function EmbeddedEskizEditor(props: Props) {
     let object: EskizObject;
     if (type === 'module') object = { ...base, type: 'module', number: nextModuleNumber(project.objects), description: '' };
     else if (type === 'hinge') object = { ...base, type: 'hinge', label: 'Петля', side: 'auto', color: '#1d4ed8', fontSize: 18 };
-    else if (type === 'facade') object = { ...base, type: 'facade', number: facadeNumber, color: FACADE_DEFAULT_COLOR, fontSize: 22 };
+    else if (type === 'facade') object = { ...base, type: 'facade', number: facadeNumber, color: facadeColor, fontSize: 22 };
     else if (type === 'comment') object = { ...base, type: 'comment', text: 'Новый комментарий' };
     else if (type === 'equipment') object = { ...base, type: 'equipment', text: 'ПММ 600', equipmentType: 'ПММ', color: COLORS.blue };
     else object = { ...base, type: 'link', text: 'Название ссылки', url: 'https://' };
     commit((current) => ({ ...current, objects: [...current.objects, object] }));
     selectOnly(object.id);
     setTool('select');
-  }, [commit, facadeNumber, project, selectOnly]);
+  }, [commit, facadeColor, facadeNumber, project, selectOnly]);
 
   const handleCommunicationStagePoint = useCallback((event: ReactPointerEvent<SVGRectElement>) => {
     if (!project) return;
@@ -1535,7 +1536,7 @@ export default function EmbeddedEskizEditor(props: Props) {
         if (!item) return null;
         return <button key={id} className={`tool-quick ${tool === id ? 'active' : ''}`} disabled={communicationMode} title={item.hotkey ? `${item.label} (${item.hotkey})` : item.label} onClick={() => setActiveTool(id)}><span>{item.label}</span>{item.hotkey && <kbd>{item.hotkey}</kbd>}</button>;
       })}</div>
-      {tool === 'facade' && <div className="embedded-eskiz-facade-picker" role="radiogroup" aria-label="Номер фасада (клавиши 1–5)"><span>Фасад</span>{[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" role="radio" aria-checked={facadeNumber === n} className={facadeNumber === n ? 'active' : ''} onClick={() => setFacadeNumber(n)}>{n}</button>)}</div>}
+      {tool === 'facade' && <div className="embedded-eskiz-facade-picker" role="radiogroup" aria-label="Номер фасада (клавиши 1–5)"><span>Фасад</span>{[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" role="radio" aria-checked={facadeNumber === n} className={facadeNumber === n ? 'active' : ''} onClick={() => setFacadeNumber(n)}>{n}</button>)}<span className="embedded-eskiz-facade-swatches" role="radiogroup" aria-label="Цвет фасада">{FACADE_COLORS.map((c) => <button key={c.value} type="button" role="radio" aria-checked={facadeColor === c.value} aria-label={c.label} title={c.label} className={facadeColor === c.value ? 'active' : ''} style={{ background: c.value }} onClick={() => setFacadeColor(c.value)} />)}</span></div>}
       <label className="embedded-eskiz-toolbar-select communication-picker" style={{ '--comm-color': activeCommunicationColor } as CSSProperties}><select aria-label="Коммуникация" value={props.communicationAddKind ?? ''} disabled={props.pickingDistancePoint} onChange={(event) => {
         const nextKind = event.target.value as EskizCommunicationKind | '';
         if (nextKind) props.onStartCommunicationPlacement(nextKind);
@@ -1874,6 +1875,7 @@ function ObjectFields({ object, moduleSummary, onOpenModule, onObject, onSelectC
     {object.type === 'guide' && <label>Ориентация<select value={object.orientation} onChange={(event) => onObject({ orientation: event.target.value } as Partial<EskizObject>)}><option value="horizontal">Горизонтальная</option><option value="vertical">Вертикальная</option></select></label>}
     {object.type === 'module' && <><div className={`embedded-eskiz-module-mini ${moduleSummary?.status ?? 'new'}`}><b>{moduleSummary ? moduleSummary.label : 'Модуль ещё не создан в просчёте'}</b><span>{moduleSummary?.body ?? 'Кликните «Редактор модуля», чтобы создать/открыть позицию расчёта.'}</span>{moduleSummary?.cost && <small>{moduleSummary.cost}{moduleSummary.lines != null ? ` · ${moduleSummary.lines} строк` : ''}</small>}<button type="button" onClick={onOpenModule}>{moduleSummary ? 'Редактор модуля' : 'Создать в просчёте'}</button></div><label>Номер модуля<input autoFocus value={object.number} onChange={(event) => onObject({ number: event.target.value } as Partial<EskizObject>)} /></label><label>Описание<textarea rows={4} placeholder={'600\nНиз'} value={object.description} onChange={(event) => onObject({ description: event.target.value } as Partial<EskizObject>)} /></label></>}
     {object.type === 'facade' && <label>Номер фасада<select value={object.number} onChange={(event) => onObject({ number: Number(event.target.value) } as Partial<EskizObject>)}>{[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>}
+    {object.type === 'facade' && <div className="embedded-eskiz-facade-color-row"><span>Цвет кружка</span>{FACADE_COLORS.map((c) => <button key={c.value} type="button" aria-label={c.label} title={c.label} className={(object.color || FACADE_DEFAULT_COLOR) === c.value ? 'active' : ''} style={{ background: c.value }} onClick={() => onObject({ color: c.value } as Partial<EskizObject>)} />)}</div>}
     {object.type === 'hinge' && <><div className="embedded-eskiz-helper-card"><b>Отдельный слой «Петли»</b><span>На эскизе петли показываются маленькими точками без подписи; слой можно скрыть в документе и экспорте.</span></div><label>Название в списке<input autoFocus value={object.label} placeholder="Петля" onChange={(event) => onObject({ label: event.target.value } as Partial<EskizObject>)} /></label></>}
     {(object.type === 'comment' || object.type === 'callout') && <label>Текст<textarea autoFocus rows={5} value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label>}
     {object.type === 'equipment' && <><label>Тип техники<select value={object.equipmentType} onChange={(event) => onObject({ equipmentType: event.target.value, text: event.target.value } as Partial<EskizObject>)}>{EQUIPMENT_TYPES.map((item) => <option key={item}>{item}</option>)}</select></label><label>Подпись<input autoFocus value={object.text} onChange={(event) => onObject({ text: event.target.value } as Partial<EskizObject>)} /></label><label>Ссылка на модель<input type="url" placeholder="https://…" value={object.url || ''} onChange={(event) => onObject({ url: event.target.value } as Partial<EskizObject>)} /></label>{objectLinkUrl(object) ? <><a className="embedded-eskiz-test-link" href={objectLinkUrl(object) ?? '#'} target="_blank" rel="noreferrer">Открыть ссылку ↗</a><small className="muted">Ссылка кликается в PDF-выгрузке, в КП и на эскизе по Ctrl/⌘ + клик.</small></> : object.url ? <small className="muted">Проверьте адрес: нужен вид https://site.ru/model</small> : null}</>}

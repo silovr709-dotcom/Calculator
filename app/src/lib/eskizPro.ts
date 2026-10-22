@@ -50,6 +50,15 @@ export type EskizObject = EskizDimensionObject | EskizModuleObject | EskizHingeO
 
 /** Общая геометрия кружка с цифрой: радиус от размера текста. Редактор, KP-превью и экспорт берут отсюда. */
 export const FACADE_DEFAULT_COLOR = '#7c3aed';
+/** Набор цветов для кружков с номером фасада (выбор кнопками, без системной палитры). */
+export const FACADE_COLORS: { value: string; label: string }[] = [
+  { value: '#7c3aed', label: 'Фиолетовый' },
+  { value: '#2563eb', label: 'Синий' },
+  { value: '#16a34a', label: 'Зелёный' },
+  { value: '#ea580c', label: 'Оранжевый' },
+  { value: '#dc2626', label: 'Красный' },
+  { value: '#1f2937', label: 'Графит' },
+];
 export function facadeMarkerRadius(fontSize: number | undefined): number {
   return Math.min(30, Math.max(12, (fontSize || 22) * 0.8));
 }

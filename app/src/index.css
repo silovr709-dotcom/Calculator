@@ -9286,3 +9286,13 @@ body.work-focus .project-section-head { display: none; }
 .client-docs-details > summary::-webkit-details-marker { display: none; }
 .client-docs-details > summary::before { content: '▸ '; color: var(--muted); }
 .client-docs-details[open] > summary::before { content: '▾ '; }
+
+/* Цвета кружков с номером фасада: кнопки-образцы вместо системной палитры. */
+.embedded-eskiz-facade-swatches { display: inline-flex; gap: 4px; margin-left: 4px; padding-left: 6px; border-left: 1px solid rgba(255,255,255,.28); }
+.embedded-eskiz-facade-swatches button, .embedded-eskiz-facade-color-row button { width: 20px; height: 20px; min-width: 20px; padding: 0; border-radius: 50%; border: 2px solid #fff; cursor: pointer; box-shadow: 0 0 0 1px rgba(15,23,42,.25); }
+.embedded-eskiz-facade-swatches button.active, .embedded-eskiz-facade-color-row button.active { box-shadow: 0 0 0 2px #2563eb; }
+.embedded-eskiz-facade-color-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.embedded-eskiz-facade-color-row span { font-size: var(--fs-xs); font-weight: 700; color: var(--muted); margin-right: 4px; }
+@media (pointer: coarse) {
+  .embedded-eskiz-facade-swatches button, .embedded-eskiz-facade-color-row button { width: 30px; height: 30px; min-width: 30px; }
+}
