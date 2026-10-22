@@ -350,11 +350,11 @@ const CommunicationLayer = memo(function CommunicationLayer({ projectId, imageWi
             <line x1={marker.x} y1={marker.y} x2={anchor.x} y2={anchor.y} stroke={color} strokeWidth="2.2" strokeDasharray="8 5" markerStart="url(#embeddedEskizDistanceDot)" markerEnd="url(#embeddedEskizDistanceArrow)" />
             {distance.anchor === 'custom' && <g className="embedded-eskiz-distance-target"><line x1={anchor.x - 8} y1={anchor.y} x2={anchor.x + 8} y2={anchor.y} stroke={color} strokeWidth="2" /><line x1={anchor.x} y1={anchor.y - 8} x2={anchor.x} y2={anchor.y + 8} stroke={color} strokeWidth="2" /></g>}
             <CommunicationDistanceLabel text={text} x={labelPoint.x} y={labelPoint.y} color={color} onPointerDown={(event) => onDistanceLabelPointerDown(event, marker, distance)} />
-            {(active || distance.anchor === 'custom') && <circle className="embedded-eskiz-distance-end-handle" cx={anchor.x} cy={anchor.y} r="8" fill="#fff" stroke={color} strokeWidth="3" onPointerDown={(event) => onDistanceEndPointerDown(event, marker, distance)} onClick={(event) => event.stopPropagation()} />}
+            {(active || distance.anchor === 'custom') && <circle className="embedded-eskiz-distance-end-handle" cx={anchor.x} cy={anchor.y} r="11" fill="#fff" stroke={color} strokeWidth="3" onPointerDown={(event) => onDistanceEndPointerDown(event, marker, distance)} onClick={(event) => event.stopPropagation()} />}
           </g>;
         })}
         <CommunicationMarkerIcon marker={marker} active={active} />
-        {active && <circle className="embedded-eskiz-communication-scale-handle" cx={marker.x + 30 * scale} cy={marker.y + 22 * scale} r="7" fill="#fff" stroke={color} strokeWidth="3" onPointerDown={(event) => onCommunicationScalePointerDown(event, marker)} onClick={(event) => event.stopPropagation()} />}
+        {active && <circle className="embedded-eskiz-communication-scale-handle" cx={marker.x + 30 * scale} cy={marker.y + 22 * scale} r="10" fill="#fff" stroke={color} strokeWidth="3" onPointerDown={(event) => onCommunicationScalePointerDown(event, marker)} onClick={(event) => event.stopPropagation()} />}
         {showMeasureBadges && <CommunicationMeasureBadges marker={marker} width={imageWidth} height={imageHeight} />}
       </g>;
     })}
@@ -375,6 +375,7 @@ export default function EmbeddedEskizEditor(props: Props) {
   const [lastDrawingTool, setLastDrawingTool] = useState<Tool>('free-dimension');
   const [saved, setSaved] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [chainLast, setChainLast] = useState<Point | null>(null);
   const [chainAxis, setChainAxis] = useState<'horizontal' | 'vertical' | null>(null);
   const [chainSessionId, setChainSessionId] = useState<string | null>(null);
@@ -408,6 +409,9 @@ export default function EmbeddedEskizEditor(props: Props) {
   const [communicationPreview, setCommunicationPreview] = useState<CommunicationPreview | null>(null);
   const distanceClickIgnoreRef = useRef(false);
   const panRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+  // Мультитач на полотне: два пальца — масштаб щипком, как на картах.
+  const viewportPointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{ distance: number; zoom: number; anchorX: number; anchorY: number } | null>(null);
   const past = useRef<EskizProject[]>([]);
   const future = useRef<EskizProject[]>([]);
   useEffect(() => { projectRef.current = project; }, [project]);
@@ -889,6 +893,8 @@ export default function EmbeddedEskizEditor(props: Props) {
 
   const onStageDown = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (!project) return;
+    // Второй и последующие пальцы — это щипок для масштаба, а не действие на полотне.
+    if (event.pointerType !== 'mouse' && viewportPointersRef.current.size > 0) return;
     if (quickEdit) {
       setProject((current) => current ? { ...current, objects: current.objects.map((object) => object.id === quickEdit.id && object.type === 'dimension' ? { ...object, value: quickEdit.value } : object) } : current);
       setQuickEdit(null);
@@ -914,6 +920,15 @@ export default function EmbeddedEskizEditor(props: Props) {
     }
     if (tool === 'select') {
       selectOnly(null);
+      if (event.pointerType === 'touch') {
+        // Палец по пустому полотну на тач-экране двигает вид (рамка выделения пальцем не нужна).
+        const viewport = viewportRef.current;
+        if (viewport) {
+          panRef.current = { x: event.clientX, y: event.clientY, left: viewport.scrollLeft, top: viewport.scrollTop };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }
+        return;
+      }
       dragRef.current = { mode: 'marquee', start: target, before: project };
       setSelectionBox({ start: target, end: target });
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -1144,6 +1159,8 @@ export default function EmbeddedEskizEditor(props: Props) {
   const objectDown = useCallback((event: ReactPointerEvent<SVGGElement>, object: EskizObject) => {
     const project = projectRef.current;
     if (!project || communicationMode) return;
+    // Второй палец — щипок масштаба: не трогаем объект и не меняем выделение.
+    if (event.pointerType !== 'mouse' && viewportPointersRef.current.size > 0) return;
     event.stopPropagation();
     if (tool !== 'select') return;
     // Ctrl/⌘ + клик по технике, ссылке или выноске с адресом открывает ссылку.
@@ -1174,6 +1191,8 @@ export default function EmbeddedEskizEditor(props: Props) {
   const handleDown = useCallback((event: ReactPointerEvent<SVGCircleElement>, end: 'start' | 'end' | 'offset' | 'resize') => {
     const project = projectRef.current;
     if (!chosen || chosen.locked || communicationMode) return;
+    // Второй палец — щипок масштаба, а не перетаскивание точки.
+    if (event.pointerType !== 'mouse' && viewportPointersRef.current.size > 0) return;
     event.stopPropagation();
     if (!project) return;
     dragRef.current = { mode: 'handle', start: point(event), id: chosen.id, before: project, original: chosen, end };
@@ -1441,16 +1460,19 @@ export default function EmbeddedEskizEditor(props: Props) {
     <input ref={projectInputRef} type="file" accept=".eskiz,application/json" hidden onChange={onFileInput((file) => void importProject(file))} />
     <header className="embedded-eskiz-header">
       <div className="embedded-eskiz-title"><b>Эскиз PRO</b><input value={project.title} onChange={(event) => titleUpdate(event.target.value)} /><span className={saved ? 'ok' : ''}>{saved ? 'сохранено в расчёт' : 'сохраняем…'}</span></div>
-      <div className="embedded-eskiz-actions">
+      <div className={`embedded-eskiz-actions ${actionsOpen ? 'expanded' : ''}`}>
         <button className="btn tiny ghost" onClick={undo}>↶</button>
         <button className="btn tiny ghost" onClick={redo}>↷</button>
-        <button className="btn tiny ghost" disabled={photoBusy} title="Поменять фото, сохранив все размеры, сноски и модули" onClick={() => imageInputRef.current?.click()}>Заменить фото</button>
-        <button className="btn tiny ghost" disabled={photoBusy} title="Вставить скрин из буфера обмена (Ctrl+V прямо на полотне)" onClick={() => void pastePhotoFromClipboard()}>Фото из буфера</button>
-        <button className="btn tiny ghost" onClick={() => projectInputRef.current?.click()}>Импорт .eskiz</button>
-        <button className="btn tiny ghost" onClick={exportProject}>Экспорт .eskiz</button>
-        {props.onExportImage && <button className="btn tiny ghost" disabled={props.exportBusy} onClick={() => props.onExportImage?.(project, exportViewSettings)}>PNG</button>}
-        {props.onExportPdf && <button className="btn tiny ghost" disabled={props.exportBusy} onClick={() => props.onExportPdf?.(project, exportViewSettings)}>PDF</button>}
         <button className="btn tiny primary" onClick={saveNow}>Сохранить</button>
+        <button className="btn tiny ghost embedded-eskiz-actions-toggle" aria-expanded={actionsOpen} onClick={() => setActionsOpen((value) => !value)}>Ещё {actionsOpen ? '▴' : '▾'}</button>
+        <div className="embedded-eskiz-actions-extra">
+          <button className="btn tiny ghost" disabled={photoBusy} title="Поменять фото, сохранив все размеры, сноски и модули" onClick={() => imageInputRef.current?.click()}>Заменить фото</button>
+          <button className="btn tiny ghost" disabled={photoBusy} title="Вставить скрин из буфера обмена (Ctrl+V прямо на полотне)" onClick={() => void pastePhotoFromClipboard()}>Фото из буфера</button>
+          <button className="btn tiny ghost" onClick={() => projectInputRef.current?.click()}>Импорт .eskiz</button>
+          <button className="btn tiny ghost" onClick={exportProject}>Экспорт .eskiz</button>
+          {props.onExportImage && <button className="btn tiny ghost" disabled={props.exportBusy} onClick={() => props.onExportImage?.(project, exportViewSettings)}>PNG</button>}
+          {props.onExportPdf && <button className="btn tiny ghost" disabled={props.exportBusy} onClick={() => props.onExportPdf?.(project, exportViewSettings)}>PDF</button>}
+        </div>
       </div>
     </header>
     <nav className="embedded-eskiz-tools compact" aria-label="Инструменты Эскиз PRO">
@@ -1494,6 +1516,27 @@ export default function EmbeddedEskizEditor(props: Props) {
         onDragLeave={onPhotoDragLeave}
         onDrop={onPhotoDrop}
         onPointerDown={(event) => {
+          // Считаем все касания области (в т.ч. всплывшие с полотна): второго пальца
+          // достаточно, чтобы начать масштаб щипком и отменить одиночное перетаскивание.
+          viewportPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+          if (viewportPointersRef.current.size === 2) {
+            dragRef.current = null;
+            communicationDragRef.current = null;
+            communicationPreviewRef.current = null;
+            setCommunicationPreview(null);
+            panRef.current = null;
+            setSelectionBox(null);
+            setDraftLine(null);
+            const points = [...viewportPointersRef.current.values()];
+            pinchRef.current = {
+              distance: Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y) || 1,
+              zoom,
+              anchorX: (points[0].x + points[1].x) / 2,
+              anchorY: (points[0].y + points[1].y) / 2,
+            };
+            return;
+          }
+          if (viewportPointersRef.current.size > 2) return;
           if (!spaceDown && event.button !== 1) return;
           const viewport = viewportRef.current;
           if (!viewport) return;
@@ -1501,14 +1544,24 @@ export default function EmbeddedEskizEditor(props: Props) {
           viewport.setPointerCapture(event.pointerId);
         }}
         onPointerMove={(event) => {
+          const pinch = pinchRef.current;
+          if (pinch && viewportPointersRef.current.has(event.pointerId)) {
+            viewportPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+            const points = [...viewportPointersRef.current.values()];
+            if (points.length >= 2) {
+              const distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y) || 1;
+              zoomTo(pinch.zoom * (distance / pinch.distance), { x: pinch.anchorX, y: pinch.anchorY });
+            }
+            return;
+          }
           const pan = panRef.current;
           const viewport = viewportRef.current;
           if (!pan || !viewport) return;
           viewport.scrollLeft = pan.left - (event.clientX - pan.x);
           viewport.scrollTop = pan.top - (event.clientY - pan.y);
         }}
-        onPointerUp={() => { panRef.current = null; }}
-        onPointerCancel={() => { panRef.current = null; }}
+        onPointerUp={(event) => { viewportPointersRef.current.delete(event.pointerId); if (viewportPointersRef.current.size < 2) pinchRef.current = null; panRef.current = null; }}
+        onPointerCancel={(event) => { viewportPointersRef.current.delete(event.pointerId); if (viewportPointersRef.current.size < 2) pinchRef.current = null; panRef.current = null; }}
         onWheel={handleViewportWheel}
       >
         <div className="embedded-eskiz-canvas-shell" style={{ width: scaledCanvasWidth, height: scaledCanvasHeight }}>
@@ -1542,7 +1595,7 @@ export default function EmbeddedEskizEditor(props: Props) {
       {communicationQuickEdit && inlineCommunication && <CommunicationQuickPopover key={`${communicationQuickEdit.mode}-${communicationQuickEdit.communicationId}-${communicationQuickEdit.mode === 'distance' ? communicationQuickEdit.distanceId : 'marker'}`} edit={communicationQuickEdit} marker={inlineCommunication} onChange={(patch) => props.onCommunicationChange(inlineCommunication.id, patch)} onDistanceChange={(distanceId, patch) => props.onCommunicationDistanceChange(inlineCommunication.id, distanceId, patch)} onStartDistance={() => { startCommunicationDistance(inlineCommunication.id); setCommunicationQuickEdit(null); }} onClose={() => setCommunicationQuickEdit(null)} />}
       {sidebarOpen && <Inspector project={project} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} moduleSummaries={props.moduleSummaries} onModuleObjectClick={(projectId, object) => { props.onProjectChange(project); props.onModuleObjectClick?.(projectId, object); }} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} showCommunicationMeasures={showCommunicationMeasures} layerVisibility={layerVisibility} onShowImage={setImageLayerVisible} onShowAnnotations={setAnnotationLayersVisible} onShowHelpers={setHelperLayersVisible} onShowCommunicationMeasures={setCommunicationMeasuresVisible} onLayerVisibility={setEskizLayerVisible} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); setCommunicationQuickEdit(null); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceAddSet={props.onCommunicationDistanceAddSet} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
     </div>
-    <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span>Перетащите новое фото на полотно или вставьте Ctrl+V — разметка сохранится · Ctrl/⌘ + колесо — зум · Пробел — перемещение</span><div><button onClick={() => zoomTo((value) => value / ZOOM_FACTOR)}>−</button><button onClick={fit}>Вписать · {Math.round(zoom * 100)}%</button><button onClick={() => zoomTo((value) => value * ZOOM_FACTOR)}>+</button></div></footer>
+    <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span className="eskiz-status-tip tip-desktop">Перетащите новое фото на полотно или вставьте Ctrl+V — разметка сохранится · Ctrl/⌘ + колесо — зум · Пробел — перемещение</span><span className="eskiz-status-tip tip-touch">Палец по пустому месту — двигать вид · два пальца — масштаб · тап по объекту — правка</span><div><button onClick={() => zoomTo((value) => value / ZOOM_FACTOR)}>−</button><button onClick={fit}>Вписать · {Math.round(zoom * 100)}%</button><button onClick={() => zoomTo((value) => value * ZOOM_FACTOR)}>+</button></div></footer>
     {photoDialog}
   </div>;
 }

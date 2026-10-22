@@ -8955,3 +8955,78 @@ body {
 @media (pointer: coarse) {
   input, select, textarea { font-size: 16px !important; }
 }
+
+/* =====================================================================
+   ТАЧ-ИСПОЛЬЗОВАНИЕ (телефон и планшет): Эскиз PRO и общие цели нажатия.
+   ===================================================================== */
+
+/* Шапка Эскиз PRO: вторичные действия за «Ещё ▾», экран не забит кнопками. */
+.embedded-eskiz-actions-extra { display: contents; }
+.embedded-eskiz-actions-toggle { display: none; }
+
+@media (max-width: 980px) {
+  .embedded-eskiz-actions-toggle { display: inline-flex; }
+  .embedded-eskiz-actions-extra {
+    display: none;
+    width: 100%;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 6px;
+  }
+  .embedded-eskiz-actions.expanded .embedded-eskiz-actions-extra { display: flex; }
+  .embedded-eskiz-actions-extra .btn { width: 100%; justify-content: center; }
+
+  /* Быстрые инструменты одной прокручиваемой строкой; hotkey-подсказки не нужны. */
+  .embedded-eskiz-quick-tools { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+  .embedded-eskiz-tools kbd { display: none; }
+  .embedded-eskiz-workflow-strip { display: none; }
+
+  /* Полотно и панель свойств на узком экране — в один прокручиваемый столбец. */
+  .embedded-eskiz-workarea {
+    display: block;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .embedded-eskiz-viewport { height: clamp(300px, 55dvh, 640px); }
+  .embedded-eskiz-inspector { border-left: 0; border-top: 1px solid #dce8e3; }
+}
+
+/* Область полотна: свайп-скролл сохраняется, браузерный щипок отключён —
+   масштаб двумя пальцами обрабатывает сам редактор. */
+.embedded-eskiz-viewport { touch-action: pan-x pan-y; }
+
+/* Подсказки статуса: для мыши и для пальца — разные. */
+.tip-touch { display: none; }
+@media (pointer: coarse) {
+  .tip-desktop { display: none; }
+  .tip-touch { display: inline; }
+}
+
+/* Пикер каталога на телефоне: одна колонка (правило ≤980px возвращало две). */
+@media (max-width: 760px) {
+  .picker { grid-template-columns: 1fr; }
+}
+
+/* Крупные цели нажатия пальцем: минимум 36–44px. */
+@media (pointer: coarse) {
+  .btn { min-height: 42px; }
+  .btn.small { min-height: 38px; }
+  .btn.tiny { min-height: 36px; padding: 8px 12px; }
+  .embedded-eskiz-tools button { min-height: 44px; padding: 10px 12px; font-size: 12px; }
+  .embedded-eskiz-zoombar button { min-height: 40px; min-width: 40px; padding: 8px 12px; font-size: 12px; }
+  .embedded-eskiz-zoombar input[type="range"] { height: 34px; }
+  .embedded-eskiz-status button { min-height: 40px; padding: 8px 12px; }
+  .embedded-eskiz-tabs button { min-height: 44px; }
+  .embedded-eskiz-preset-row button,
+  .embedded-eskiz-align-grid button,
+  .embedded-eskiz-inspector-bottom button,
+  .embedded-eskiz-object-list button { min-height: 40px; font-size: 12px; }
+  .embedded-eskiz-fields input,
+  .embedded-eskiz-fields select,
+  .embedded-eskiz-fields textarea { min-height: 44px; }
+  .embedded-eskiz-fields label { font-size: 12px; }
+  .module-editor-close { min-height: 44px; padding: 10px 16px; }
+  /* Кнопки, которые открывались только наведением, на тач-экране видны всегда. */
+  .schedule-day .schedule-day-add { opacity: 1; }
+}
