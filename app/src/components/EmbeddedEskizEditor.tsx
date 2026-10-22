@@ -1213,7 +1213,8 @@ export default function EmbeddedEskizEditor(props: Props) {
     const editor = editorRef.current;
     if (!editor) return;
     const applyHeight = () => {
-      if (props.fullScreen) {
+      // Полный экран и узкие экраны (планшет/телефон): высоту задаёт CSS, страница прокручивается.
+      if (props.fullScreen || window.innerWidth <= 980) {
         editor.style.height = '';
         return;
       }

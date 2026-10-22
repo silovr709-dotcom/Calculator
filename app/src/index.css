@@ -9123,3 +9123,23 @@ body.work-focus.work-peek .sidebar { display: flex; }
   .card { padding: 14px; margin-bottom: 12px; }
   .sidebar { padding: 14px 10px; gap: 12px; }
 }
+
+/* ==========================================================================
+   ПЛАНШЕТ / ТЕЛЕФОН (≤980px) — Эскиз PRO (22.10, скриншот планшета)
+   Раньше панель свойств делила редактор пополам по высоте, полотно получалось
+   ~240px и «Вписать» уменьшало картинку до 8%. Теперь редактор растёт по
+   содержимому, полотно берёт ~68% экрана, панель идёт под ним, страница скроллится.
+   ========================================================================== */
+@media (max-width: 980px) {
+  .embedded-eskiz-workarea { display: flex; flex-direction: column; overflow: visible; }
+  .embedded-eskiz-viewport { flex: none; height: clamp(380px, 68dvh, 760px); min-height: 0; }
+  .embedded-eskiz-inspector { flex: none; max-height: none; overflow: visible; }
+  .embedded-eskiz-editor { min-height: 0; }
+  .embedded-eskiz-zoombar { flex: 1 1 100%; }
+  .embedded-eskiz-zoombar input[type="range"] { flex: 1 1 140px; min-width: 120px; }
+  .embedded-eskiz-actions .btn,
+  .embedded-eskiz-header .btn { white-space: nowrap; }
+  .embedded-eskiz-title input { min-width: 0; }
+  .communication-picker select { min-width: 180px; }
+  .eskiz-pro-workspace.fullscreen .embedded-eskiz-viewport { flex: 1 1 auto; height: auto; min-height: 240px; }
+}
