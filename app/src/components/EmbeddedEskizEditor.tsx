@@ -1493,12 +1493,22 @@ export default function EmbeddedEskizEditor(props: Props) {
         <button className="btn tiny primary" onClick={saveNow}>Сохранить</button>
         <button className="btn tiny ghost embedded-eskiz-actions-toggle" aria-expanded={actionsOpen} onClick={() => setActionsOpen((value) => !value)}>Ещё {actionsOpen ? '▴' : '▾'}</button>
         <div className="embedded-eskiz-actions-extra">
-          <button className="btn tiny ghost" disabled={photoBusy} title="Поменять фото, сохранив все размеры, сноски и модули" onClick={() => imageInputRef.current?.click()}>Заменить фото</button>
-          <button className="btn tiny ghost" disabled={photoBusy} title="Вставить скрин из буфера обмена (Ctrl+V прямо на полотне)" onClick={() => void pastePhotoFromClipboard()}>Фото из буфера</button>
-          <button className="btn tiny ghost" onClick={() => projectInputRef.current?.click()}>Импорт .eskiz</button>
-          <button className="btn tiny ghost" onClick={exportProject}>Экспорт .eskiz</button>
-          {props.onExportImage && <button className="btn tiny ghost" disabled={props.exportBusy} onClick={() => props.onExportImage?.(project, exportViewSettings)}>PNG</button>}
-          {props.onExportPdf && <button className="btn tiny ghost" disabled={props.exportBusy} onClick={() => props.onExportPdf?.(project, exportViewSettings)}>PDF</button>}
+        <div className="dropdown action-dropdown embedded-eskiz-io-menu">
+          <button type="button" className="btn tiny ghost">Импорт ▾</button>
+          <div className="dropdown-menu align-right">
+            <button type="button" onClick={() => projectInputRef.current?.click()}>Файл .eskiz</button>
+            <button type="button" disabled={photoBusy} title="Поменять фото, сохранив все размеры, сноски и модули" onClick={() => imageInputRef.current?.click()}>Заменить фото (JPG / PNG / WEBP)</button>
+            <button type="button" disabled={photoBusy} title="Вставить скрин из буфера обмена (Ctrl+V прямо на полотне)" onClick={() => void pastePhotoFromClipboard()}>Фото из буфера</button>
+          </div>
+        </div>
+        <div className="dropdown action-dropdown embedded-eskiz-io-menu">
+          <button type="button" className="btn tiny ghost">Экспорт ▾</button>
+          <div className="dropdown-menu align-right">
+            <button type="button" onClick={exportProject}>Файл .eskiz (рабочий, для редактирования)</button>
+            {props.onExportImage && <button type="button" disabled={props.exportBusy} onClick={() => props.onExportImage?.(project, exportViewSettings)}>Картинка PNG</button>}
+            {props.onExportPdf && <button type="button" disabled={props.exportBusy} onClick={() => props.onExportPdf?.(project, exportViewSettings)}>PDF A4 — ссылки кликабельны</button>}
+          </div>
+        </div>
         </div>
       </div>
     </header>
@@ -1520,9 +1530,8 @@ export default function EmbeddedEskizEditor(props: Props) {
         <button type="button" title="Отдалить" onClick={() => zoomTo((value) => value / ZOOM_FACTOR)}>−</button>
         <input type="range" min={MIN_ZOOM} max={MAX_ZOOM} step="0.01" value={zoom} aria-label="Масштаб" onChange={(event) => zoomTo(Number(event.currentTarget.value))} />
         <button type="button" title="Приблизить" onClick={() => zoomTo((value) => value * ZOOM_FACTOR)}>+</button>
-        <button type="button" title="Масштаб 100%" onClick={() => zoomTo(1)}>100%</button>
         <button type="button" title="Вписать эскиз в область" onClick={fit}>Вписать</button>
-        <output>{Math.round(zoom * 100)}%</output>
+        <button type="button" className="zoom-readout" title="Нажмите, чтобы вернуть 100%" onClick={() => zoomTo(1)}>{Math.round(zoom * 100)}%</button>
       </div>
       <button className={sidebarOpen ? 'active side-toggle' : 'side-toggle'} onClick={() => setSidebarOpen((value) => !value)}>Свойства</button>
     </nav>
@@ -1531,7 +1540,6 @@ export default function EmbeddedEskizEditor(props: Props) {
       <span className={eskizDimensionCount > 0 ? 'ready' : ''}><b>Размеры</b><small>{eskizDimensionCount || 'добавьте'}</small></span>
       <span className={eskizModuleCount > 0 ? 'ready' : ''}><b>Модули</b><small>{eskizModuleCount || 'точки/плашки'}</small></span>
       <span className={eskizCommunicationCount > 0 ? 'ready' : ''}><b>Коммуникации</b><small>{eskizCommunicationCount || 'по необходимости'}</small></span>
-      <span><b>Вид</b><small>{Math.round(zoom * 100)}% · слои справа</small></span>
     </div>
     {communicationMode && <div className="embedded-eskiz-communication-banner">{props.communicationAddKind ? `Режим добавления: ${COMMUNICATION_KIND_META[props.communicationAddKind].label}. Тапните по основному эскизу Эскиз PRO.` : 'Рисуйте свободную линию расстояния: ведите курсор от выбранной коммуникации и кликните конечную точку.'}</div>}
     {error && <div className="embedded-eskiz-toast no-print" role="status"><span>{error}</span><button type="button" aria-label="Скрыть сообщение" onClick={() => setError('')}>✕</button></div>}
@@ -1622,7 +1630,7 @@ export default function EmbeddedEskizEditor(props: Props) {
       {communicationQuickEdit && inlineCommunication && <CommunicationQuickPopover key={`${communicationQuickEdit.mode}-${communicationQuickEdit.communicationId}-${communicationQuickEdit.mode === 'distance' ? communicationQuickEdit.distanceId : 'marker'}`} edit={communicationQuickEdit} marker={inlineCommunication} onChange={(patch) => props.onCommunicationChange(inlineCommunication.id, patch)} onDistanceChange={(distanceId, patch) => props.onCommunicationDistanceChange(inlineCommunication.id, distanceId, patch)} onStartDistance={() => { startCommunicationDistance(inlineCommunication.id); setCommunicationQuickEdit(null); }} onClose={() => setCommunicationQuickEdit(null)} />}
       {sidebarOpen && <Inspector project={project} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} moduleSummaries={props.moduleSummaries} onModuleObjectClick={(projectId, object) => { props.onProjectChange(project); props.onModuleObjectClick?.(projectId, object); }} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} showCommunicationMeasures={showCommunicationMeasures} layerVisibility={layerVisibility} onShowImage={setImageLayerVisible} onShowAnnotations={setAnnotationLayersVisible} onShowHelpers={setHelperLayersVisible} onShowCommunicationMeasures={setCommunicationMeasuresVisible} onLayerVisibility={setEskizLayerVisible} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); setCommunicationQuickEdit(null); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceAddSet={props.onCommunicationDistanceAddSet} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
     </div>
-    <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span className="eskiz-status-tip tip-desktop">Перетащите новое фото на полотно или вставьте Ctrl+V — разметка сохранится · Ctrl/⌘ + колесо — зум · Пробел — перемещение</span><span className="eskiz-status-tip tip-touch">Палец по пустому месту — двигать вид · два пальца — масштаб · тап по объекту — правка</span><div><button onClick={() => zoomTo((value) => value / ZOOM_FACTOR)}>−</button><button onClick={fit}>Вписать · {Math.round(zoom * 100)}%</button><button onClick={() => zoomTo((value) => value * ZOOM_FACTOR)}>+</button></div></footer>
+    <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span className="eskiz-status-tip tip-desktop">Перетащите новое фото на полотно или вставьте Ctrl+V — разметка сохранится · Ctrl/⌘ + колесо — зум · Пробел — перемещение</span><span className="eskiz-status-tip tip-touch">Палец по пустому месту — двигать вид · два пальца — масштаб · тап по объекту — правка</span></footer>
     {photoDialog}
   </div>;
 }

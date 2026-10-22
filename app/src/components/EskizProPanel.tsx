@@ -3,7 +3,6 @@ import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCom
 import {
   collectEskizModuleMarkers,
   createEskizProjectFromImage,
-  downloadEskizFile,
   eskizImageReplaceScale,
   imageFileFromTransfer,
   parseEskizModuleMarker,
@@ -695,15 +694,6 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
     }
   };
 
-  const exportActiveEskizFile = () => {
-    if (!activePreviewProject) {
-      setMessage('Сначала загрузите или создайте эскиз в Эскиз PRO.');
-      return;
-    }
-    downloadEskizFile(activePreviewProject, communications.filter((marker) => marker.eskizId === activePreviewProject.id));
-    setMessage(`Файл «${activePreviewProject.title}.eskiz» экспортирован. Его можно импортировать обратно через «Импорт .eskiz».`);
-  };
-
   const sketchExportOptions = (eskizProject: EskizProject, viewOverride?: EskizExportViewSettings) => {
     // Выключатели выгрузки только убирают: что скрыто в редакторе, скрытым и остаётся.
     const layers = mergeEskizExportLayers(exportViewSettings, exportOverrides, viewOverride);
@@ -972,15 +962,6 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
         <div className="actions eskiz-primary-actions system-action-strip">
           <button className="btn primary" disabled={!activePreviewProject} onClick={syncModulesToCalculation}>Модули → просчёт</button>
           <button className="btn ghost" onClick={() => setFullScreenSketch(true)}>На весь экран</button>
-          <div className="dropdown action-dropdown wide">
-            <button className="btn ghost" type="button">Файлы и экспорт ▾</button>
-            <div className="dropdown-menu">
-              <button type="button" onClick={() => fileRef.current?.click()}>Импорт старого .eskiz</button>
-              <button type="button" disabled={!activePreviewProject} onClick={exportActiveEskizFile}>Экспорт файла Эскиз</button>
-              <button type="button" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('png')}>Экспорт PNG</button>
-              <button type="button" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('pdf')}>Экспорт PDF</button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -1004,7 +985,6 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
           </div>
           <div className="actions">
             <button className="btn" type="button" onClick={() => openPhotoPicker({ kind: 'add' })}>+ Эскиз из фото</button>
-            <button className="btn ghost" type="button" onClick={() => fileRef.current?.click()}>Импорт .eskiz</button>
           </div>
         </div>
         {linkedProjects.length === 0 ? (
@@ -1126,35 +1106,12 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
               <div><b>{activeId ? 'Да' : 'Нет'}</b><span>главный эскиз</span></div>
               <div><b>Да</b><span>встроен</span></div>
             </div>
-            <div className="eskiz-pro-file-note">Импорт, рабочий файл и быстрый экспорт собраны в верхнем меню «Файлы и экспорт», чтобы не дублировать кнопки в разных местах.</div>
-            {message && <div className="eskiz-pro-message muted small">{message}</div>}
+                        {message && <div className="eskiz-pro-message muted small">{message}</div>}
           </section>
 
           <section className="card no-print eskiz-pro-export-card">
-            <div className="section-head"><div><h3>Экспорт Эскиз PRO</h3><p className="muted small">Быстрые выгрузки текущего главного эскиза: рабочий .eskiz, картинка PNG и PDF A4. Скрытые плашки габаритов коммуникаций остаются скрытыми.</p></div></div>
-            <div className="eskiz-pro-export-actions unified-export-actions">
-              {activeSketchLinks.length > 0 ? <>
-                <button className="btn block" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('pdf')}>{exportingSketch === 'pdf' ? 'Готовлю PDF…' : 'Скачать PDF — ссылки кликабельны'}</button>
-                <div className="dropdown action-dropdown wide">
-                  <button className="btn ghost block" type="button">Другой формат ▾</button>
-                  <div className="dropdown-menu">
-                    <button type="button" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('png')}>{exportingSketch === 'png' ? 'Готовлю PNG…' : 'Картинка PNG (без кликов)'}</button>
-                    <button type="button" disabled={!activePreviewProject} onClick={exportActiveEskizFile}>Скачать .eskiz</button>
-                  </div>
-                </div>
-              </> : <>
-                <button className="btn block" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('png')}>{exportingSketch === 'png' ? 'Готовлю PNG…' : 'Скачать картинку PNG'}</button>
-                <div className="dropdown action-dropdown wide">
-                  <button className="btn ghost block" type="button">Другой формат ▾</button>
-                  <div className="dropdown-menu">
-                    <button type="button" disabled={!activePreviewProject} onClick={exportActiveEskizFile}>Скачать .eskiz</button>
-                    <button type="button" disabled={!activePreviewProject || exportingSketch !== null} onClick={() => void exportEskizAs('pdf')}>{exportingSketch === 'pdf' ? 'Готовлю PDF…' : 'Скачать PDF'}</button>
-                  </div>
-                </div>
-              </>}
-            </div>
+            <div className="section-head"><div><h3>Что входит в PNG и PDF</h3><p className="muted small">Выгрузка запускается из меню «Экспорт ▾» в редакторе. Скрытые плашки габаритов коммуникаций остаются скрытыми.</p></div></div>
             <div className="eskiz-pro-export-toggles">
-              <b>Что включать в PNG и PDF</b>
               <p className="muted small">Снятая галочка убирает элемент только из файла — в редакторе он остаётся на месте.</p>
               <div className="eskiz-pro-export-toggle-grid">
                 <label className="chk-row">

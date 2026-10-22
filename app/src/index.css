@@ -9097,3 +9097,29 @@ body {
   }
   .embedded-eskiz-title { flex: 1 1 100%; }
 }
+
+/* ==========================================================================
+   РАБОЧИЙ ФОКУС И ПЛОТНОСТЬ (22.10)
+   1) Вкладки «Модули», «Эскиз PRO», «КП» занимают весь экран: боковое меню и
+      пульс-полоса скрыты, «☰ Меню» возвращает навигацию по запросу (класс work-peek).
+   2) На десктопе (≥861px) интерфейс чуть плотнее: кегль 13px, карточки 14px, поля
+      страницы уже. Мобильные правила не трогаем — они уже заданы выше по файлу.
+   ========================================================================== */
+body.work-focus .sidebar { display: none; }
+body.work-focus .main::before { inset: 0; }
+body.work-focus .project-section-head { display: none; }
+.work-menu-toggle { display: none; }
+body.work-focus .work-menu-toggle { display: inline-flex; }
+body.work-focus.work-peek .sidebar { display: flex; }
+
+@media (min-width: 861px) {
+  body.work-focus.work-peek .sidebar {
+    position: fixed; top: 0; bottom: 0; left: 0;
+    width: 232px; height: 100vh; max-height: none;
+    z-index: var(--z-sidebar); box-shadow: var(--shadow-lg); overflow-y: auto;
+  }
+  body { font-size: 13px; }
+  .page { padding: 16px 20px 64px; }
+  .card { padding: 14px; margin-bottom: 12px; }
+  .sidebar { padding: 14px 10px; gap: 12px; }
+}
