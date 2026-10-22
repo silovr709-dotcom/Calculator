@@ -9306,3 +9306,40 @@ body.work-focus .project-section-head { display: none; }
     min-height: 620px;
   }
 }
+
+/* Размер кружка фасада (ползунок в «Свойствах»). */
+.embedded-eskiz-facade-size-row { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; }
+.embedded-eskiz-facade-size-row span { font-size: var(--fs-xs); font-weight: 700; color: var(--muted); }
+.embedded-eskiz-facade-size-row input { flex: 1 1 120px; min-width: 100px; accent-color: #7c3aed; }
+.embedded-eskiz-facade-size-row b { min-width: 28px; text-align: right; font-size: var(--fs-xs); color: var(--text); }
+
+/* ==========================================================================
+   КОМПЬЮТЕР (≥981px): больше места под полотно (23.10)
+   1) Шапка редактора Эскиз — одна строка: «Импорт ▾» и «Экспорт ▾» не переносятся.
+   2) Инструменты уже есть в палитре слева — дублирующий список и выбор убраны из строки.
+   3) Вкладка «Эскиз PRO» в обычном режиме: шапка проекта ужата, описание блока скрыто.
+   ========================================================================== */
+@media (min-width: 981px) {
+  .embedded-eskiz-header { flex-wrap: nowrap; }
+  .embedded-eskiz-title { min-width: 0; }
+  .embedded-eskiz-title input { min-width: 120px; max-width: 360px; }
+  .embedded-eskiz-title span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .embedded-eskiz-actions { flex: 0 0 auto; flex-wrap: nowrap; }
+  .embedded-eskiz-actions .btn { white-space: nowrap; }
+  .embedded-eskiz-tools .tool-picker,
+  .embedded-eskiz-tools .embedded-eskiz-quick-tools { display: none; }
+
+  body.work-focus .project-topbar { padding: 6px 10px; gap: 4px; }
+  body.work-focus .project-topbar-title h1 { font-size: 16px; line-height: 1.2; }
+  body.work-focus .project-topbar-title .muted { display: none; }
+  body.work-focus .project-stage-nav button { min-height: 30px; padding: 3px 8px; }
+  body.work-focus .project-subtab { min-height: 26px; padding: 2px 8px; }
+  body.work-focus .project-subtab-row { padding-top: 4px; }
+  .eskiz-pro-workspace:not(.fullscreen) .eskiz-pro-editor-head p { display: none; }
+}
+
+/* Полный экран Эскиз PRO: карточка полотна должна растянуться на всю высоту окна
+   (базовая сетка стоит align-items:start и не давала растяжения). Блок «Связь с КП»
+   остаётся сверху колонки. */
+.eskiz-pro-workspace.fullscreen .eskiz-pro-grid { align-items: stretch; }
+.eskiz-pro-workspace.fullscreen .eskiz-pro-side-details { align-self: start; }
