@@ -74,7 +74,7 @@ export const FACADE_COLORS: { value: string; label: string }[] = [
   { value: '#1f2937', label: 'Графит' },
 ];
 export function facadeMarkerRadius(fontSize: number | undefined): number {
-  return Math.min(30, Math.max(12, (fontSize || 22) * 0.8));
+  return Math.min(30, Math.max(5, (fontSize || 22) * 0.8));
 }
 
 export interface EskizProject {

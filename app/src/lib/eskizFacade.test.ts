@@ -15,7 +15,7 @@ const base: EskizProject = {
 describe('метка фасада (цифра в кружочке)', () => {
   it('радиус растёт с размером текста, но остаётся в разумных границах', () => {
     expect(facadeMarkerRadius(undefined)).toBeGreaterThan(12);
-    expect(facadeMarkerRadius(4)).toBe(12);
+    expect(facadeMarkerRadius(4)).toBe(5);
     expect(facadeMarkerRadius(22)).toBeCloseTo(17.6);
     expect(facadeMarkerRadius(200)).toBe(30);
   });
