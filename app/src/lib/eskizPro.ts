@@ -88,6 +88,15 @@ export interface EskizProject {
   objects: EskizObject[];
   header: { enabled: boolean; project: string; room: string; date: string; variant: string };
   integration: { projectId?: string; clientId?: string };
+  /** Масштаб по калибровке: мм на 1 пиксель изображения. Не задан — размеры по умолчанию 600 мм. */
+  mmPerPx?: number;
+}
+
+/** Значение нового размера: длина отрезка в мм, если масштаб откалиброван. */
+export function dimensionDefaultValue(orientation: 'horizontal' | 'vertical' | 'free', x1: number, y1: number, x2: number, y2: number, mmPerPx?: number): string {
+  if (!mmPerPx || !(mmPerPx > 0)) return '600';
+  const length = orientation === 'horizontal' ? Math.abs(x2 - x1) : orientation === 'vertical' ? Math.abs(y2 - y1) : Math.hypot(x2 - x1, y2 - y1);
+  return String(Math.max(1, Math.round(length * mmPerPx)));
 }
 
 export interface EskizFileBundle {
