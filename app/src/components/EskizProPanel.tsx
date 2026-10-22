@@ -953,12 +953,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
 
   return (
     <section className={`eskiz-pro-workspace ${fullScreenSketch ? 'fullscreen' : ''}`}>
-      <div className="card eskiz-pro-intro no-print">
-        <div>
-          <span className="eyebrow">ЭСКИЗ PRO</span>
-          <h3>Встроенный инструмент для скрина проекта, размеров, модулей и коммуникаций</h3>
-          <p className="muted small">Код Эскиз PRO перенесён внутрь калькулятора: загрузите скрин, нанесите размеры/подписи, поставьте объект «Модуль» и добавляйте коммуникации на том же основном полотне без iframe и отдельного маленького превью.</p>
-        </div>
+      <div className="card eskiz-pro-intro no-print eskiz-pro-toolrow">
         <div className="actions eskiz-primary-actions system-action-strip">
           <button className="btn primary" disabled={!activePreviewProject} onClick={syncModulesToCalculation}>Модули → просчёт</button>
           <button className="btn ghost" onClick={() => setFullScreenSketch(true)}>На весь экран</button>
@@ -980,9 +975,8 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       >
         <div className="section-head">
           <div>
-            <h3>Эскизы проекта</h3>
-            <p className="muted small">Клик по карточке открывает эскиз в редакторе. «Заменить фото» меняет только подложку — размеры, сноски, модули и коммуникации остаются на местах.</p>
-          </div>
+            <h3 title="Клик по карточке открывает эскиз в редакторе. «Заменить фото» меняет только подложку — размеры, сноски, модули и коммуникации остаются на местах.">Эскизы проекта</h3>
+                      </div>
           <div className="actions">
             <button className="btn" type="button" onClick={() => openPhotoPicker({ kind: 'add' })}>+ Эскиз из фото</button>
           </div>
@@ -1092,7 +1086,9 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
           </section>
         )}
 
-        <aside className="eskiz-pro-side">
+        <details className="eskiz-pro-side-details no-print">
+        <summary>Связь с КП, экспорт и настройки выгрузки</summary>
+        <div className="eskiz-pro-side">
           <section className="card no-print">
             <div className="section-head"><div><h3>Связь с проектом</h3><p className="muted small">Snapshot сохраняется внутри проекта калькулятора, поэтому КП и экспорт проекта не зависят от локальной базы браузера.</p></div></div>
             <div className="eskiz-pro-kp-controls">
@@ -1203,7 +1199,8 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
               </div>
             )}
           </section>
-        </aside>
+        </div>
+        </details>
       </div>
 
       {photoCandidate && photoCandidateProject && <EskizPhotoDialog

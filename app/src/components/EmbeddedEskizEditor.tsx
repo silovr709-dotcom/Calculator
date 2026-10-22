@@ -380,7 +380,9 @@ export default function EmbeddedEskizEditor(props: Props) {
   const [layerVisibility, setLayerVisibility] = useState<EskizLayerVisibility>(() => normalizeExportLayerVisibility(props.exportViewSettings));
   const [lastDrawingTool, setLastDrawingTool] = useState<Tool>('free-dimension');
   const [saved, setSaved] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Свойства — выдвижная панель: открывается при выборе объекта, закрывается кнопкой ×.
+  useEffect(() => { if (selectedIds.length > 0) setSidebarOpen(true); }, [selectedIds.length]);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [chainLast, setChainLast] = useState<Point | null>(null);
   const [chainAxis, setChainAxis] = useState<'horizontal' | 'vertical' | null>(null);
@@ -1485,9 +1487,6 @@ export default function EmbeddedEskizEditor(props: Props) {
   const canvasHeaderHeight = project.header.enabled ? 58 : 0;
   const scaledCanvasWidth = project.image.width * zoom;
   const scaledCanvasHeight = (project.image.height + canvasHeaderHeight) * zoom;
-  const eskizDimensionCount = project.objects.filter((object) => object.type === 'dimension').length;
-  const eskizModuleCount = project.objects.filter((object) => object.type === 'module').length;
-  const eskizCommunicationCount = props.communications.filter((marker) => marker.eskizId === project.id).length;
 
   return <div ref={editorRef} className={`embedded-eskiz-editor ${communicationMode ? 'communication-mode' : ''}`}>
     <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; void openImage(file); }} />
@@ -1521,35 +1520,22 @@ export default function EmbeddedEskizEditor(props: Props) {
       </div>
     </header>
     <nav className="embedded-eskiz-tools compact" aria-label="Инструменты Эскиз PRO">
-      <label className="embedded-eskiz-toolbar-select tool-picker"><span>Инструмент</span><select value={tool} disabled={communicationMode} onChange={(event) => setActiveTool(event.target.value as Tool)}>{TOOL_ITEMS.map((item) => <option key={item.id} value={item.id}>{item.label}{item.hotkey ? ` · ${item.hotkey}` : ''}</option>)}</select></label>
+      <label className="embedded-eskiz-toolbar-select tool-picker"><select aria-label="Инструмент" value={tool} disabled={communicationMode} onChange={(event) => setActiveTool(event.target.value as Tool)}>{TOOL_ITEMS.map((item) => <option key={item.id} value={item.id}>{item.label}{item.hotkey ? ` · ${item.hotkey}` : ''}</option>)}</select></label>
       <div className="embedded-eskiz-quick-tools" aria-label="Быстрые инструменты">{QUICK_TOOLS.map((id) => {
         const item = TOOL_ITEMS.find((toolItem) => toolItem.id === id);
         if (!item) return null;
         return <button key={id} className={`tool-quick ${tool === id ? 'active' : ''}`} disabled={communicationMode} title={item.hotkey ? `${item.label} (${item.hotkey})` : item.label} onClick={() => setActiveTool(id)}><span>{item.label}</span>{item.hotkey && <kbd>{item.hotkey}</kbd>}</button>;
       })}</div>
       {tool === 'facade' && <div className="embedded-eskiz-facade-picker" role="radiogroup" aria-label="Номер фасада (клавиши 1–5)"><span>Фасад</span>{[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" role="radio" aria-checked={facadeNumber === n} className={facadeNumber === n ? 'active' : ''} onClick={() => setFacadeNumber(n)}>{n}</button>)}</div>}
-      <label className="embedded-eskiz-toolbar-select communication-picker" style={{ '--comm-color': activeCommunicationColor } as CSSProperties}><span>Коммуникация</span><select value={props.communicationAddKind ?? ''} disabled={props.pickingDistancePoint} onChange={(event) => {
+      <label className="embedded-eskiz-toolbar-select communication-picker" style={{ '--comm-color': activeCommunicationColor } as CSSProperties}><select aria-label="Коммуникация" value={props.communicationAddKind ?? ''} disabled={props.pickingDistancePoint} onChange={(event) => {
         const nextKind = event.target.value as EskizCommunicationKind | '';
         if (nextKind) props.onStartCommunicationPlacement(nextKind);
         else if (communicationMode) cancelCommunicationMode();
       }}><option value="">Выбрать и поставить…</option>{COMMUNICATION_KINDS.map((kind) => <option key={kind} value={kind}>{COMMUNICATION_KIND_META[kind].icon} {COMMUNICATION_KIND_META[kind].label}</option>)}</select></label>
       <button className={props.pickingDistancePoint ? 'active communication-distance-tool' : 'communication-distance-tool'} disabled={!activeCommunication} title={activeCommunication ? 'Нарисовать свободную линию расстояния от выбранной коммуникации' : 'Сначала выберите коммуникацию на эскизе'} onClick={() => activeCommunication && startCommunicationDistance(activeCommunication.id)}>+ линия</button>
       {communicationMode && <button className="communication-cancel-tool" onClick={cancelCommunicationMode}>Отмена</button>}
-      <div className="embedded-eskiz-zoombar" aria-label="Масштаб эскиза">
-        <button type="button" title="Отдалить" onClick={() => zoomTo((value) => value / ZOOM_FACTOR)}>−</button>
-        <input type="range" min={MIN_ZOOM} max={MAX_ZOOM} step="0.01" value={zoom} aria-label="Масштаб" onChange={(event) => zoomTo(Number(event.currentTarget.value))} />
-        <button type="button" title="Приблизить" onClick={() => zoomTo((value) => value * ZOOM_FACTOR)}>+</button>
-        <button type="button" title="Вписать эскиз в область" onClick={fit}>Вписать</button>
-        <button type="button" className="zoom-readout" title="Нажмите, чтобы вернуть 100%" onClick={() => zoomTo(1)}>{Math.round(zoom * 100)}%</button>
-      </div>
       <button className={sidebarOpen ? 'active side-toggle' : 'side-toggle'} onClick={() => setSidebarOpen((value) => !value)}>Свойства</button>
     </nav>
-    <div className="embedded-eskiz-workflow-strip no-print" aria-label="Маршрут Эскиз PRO">
-      <span className="ready"><b>Скрин</b><small>{project.image.width}×{project.image.height}</small></span>
-      <span className={eskizDimensionCount > 0 ? 'ready' : ''}><b>Размеры</b><small>{eskizDimensionCount || 'добавьте'}</small></span>
-      <span className={eskizModuleCount > 0 ? 'ready' : ''}><b>Модули</b><small>{eskizModuleCount || 'точки/плашки'}</small></span>
-      <span className={eskizCommunicationCount > 0 ? 'ready' : ''}><b>Коммуникации</b><small>{eskizCommunicationCount || 'по необходимости'}</small></span>
-    </div>
     {communicationMode && <div className="embedded-eskiz-communication-banner">{props.communicationAddKind ? `Режим добавления: ${COMMUNICATION_KIND_META[props.communicationAddKind].label}. Тапните по основному эскизу Эскиз PRO.` : 'Рисуйте свободную линию расстояния: ведите курсор от выбранной коммуникации и кликните конечную точку.'}</div>}
     {error && <div className="embedded-eskiz-toast no-print" role="status"><span>{error}</span><button type="button" aria-label="Скрыть сообщение" onClick={() => setError('')}>✕</button></div>}
     <div className={`embedded-eskiz-workarea ${sidebarOpen ? '' : 'no-inspector'}`}>
@@ -1637,9 +1623,17 @@ export default function EmbeddedEskizEditor(props: Props) {
       </section>
       {quickEdit && <div className="embedded-eskiz-quick" style={{ left: Math.min(quickEdit.left + 14, window.innerWidth - 210), top: Math.min(quickEdit.top + 14, window.innerHeight - 105) }}><span>Размер</span><div><input autoFocus inputMode="decimal" value={quickEdit.value} onChange={(event) => setQuickEdit({ ...quickEdit, value: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); finishQuickEdit(false); } if (event.key === 'Tab') { event.preventDefault(); finishQuickEdit(true); } if (event.key === 'Escape') { event.preventDefault(); setQuickEdit(null); } }} /><b>мм</b></div><small>Enter — готово · Tab — следующий</small></div>}
       {communicationQuickEdit && inlineCommunication && <CommunicationQuickPopover key={`${communicationQuickEdit.mode}-${communicationQuickEdit.communicationId}-${communicationQuickEdit.mode === 'distance' ? communicationQuickEdit.distanceId : 'marker'}`} edit={communicationQuickEdit} marker={inlineCommunication} onChange={(patch) => props.onCommunicationChange(inlineCommunication.id, patch)} onDistanceChange={(distanceId, patch) => props.onCommunicationDistanceChange(inlineCommunication.id, distanceId, patch)} onStartDistance={() => { startCommunicationDistance(inlineCommunication.id); setCommunicationQuickEdit(null); }} onClose={() => setCommunicationQuickEdit(null)} />}
-      {sidebarOpen && <Inspector project={project} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} moduleSummaries={props.moduleSummaries} onModuleObjectClick={(projectId, object) => { props.onProjectChange(project); props.onModuleObjectClick?.(projectId, object); }} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} showCommunicationMeasures={showCommunicationMeasures} layerVisibility={layerVisibility} onShowImage={setImageLayerVisible} onShowAnnotations={setAnnotationLayersVisible} onShowHelpers={setHelperLayersVisible} onShowCommunicationMeasures={setCommunicationMeasuresVisible} onLayerVisibility={setEskizLayerVisible} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); setCommunicationQuickEdit(null); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceAddSet={props.onCommunicationDistanceAddSet} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
+      {sidebarOpen && <Inspector project={project} onClose={() => setSidebarOpen(false)} object={chosen} communication={!chosen ? activeCommunication : null} communications={props.communications.filter((marker) => marker.eskizId === project.id)} moduleSummaries={props.moduleSummaries} onModuleObjectClick={(projectId, object) => { props.onProjectChange(project); props.onModuleObjectClick?.(projectId, object); }} activeCommunicationId={props.activeCommunicationId} selectedIds={selectedIds} onSelect={selectOnly} onSelectChain={selectChain} onAlign={alignSelection} showImage={showImage} showAnnotations={showAnnotations} showHelpers={showHelpers} showCommunicationMeasures={showCommunicationMeasures} layerVisibility={layerVisibility} onShowImage={setImageLayerVisible} onShowAnnotations={setAnnotationLayersVisible} onShowHelpers={setHelperLayersVisible} onShowCommunicationMeasures={setCommunicationMeasuresVisible} onLayerVisibility={setEskizLayerVisible} onProject={(patch) => commit((current) => ({ ...current, ...patch }))} onObject={(patch) => chosen && changeObject(chosen.id, patch)} onPatchObject={changeObject} onDelete={deleteSelected} onDuplicate={duplicate} onCommunicationSelect={(marker) => { selectOnly(null); props.onCommunicationClick(marker.eskizId, marker); setCommunicationQuickEdit(null); }} onCommunicationChange={props.onCommunicationChange} onCommunicationDelete={props.onCommunicationDelete} onStartCommunicationDistance={startCommunicationDistance} onCommunicationDistanceAdd={props.onCommunicationDistanceAdd} onCommunicationDistanceAddSet={props.onCommunicationDistanceAddSet} onCommunicationDistanceChange={props.onCommunicationDistanceChange} onCommunicationDistanceDelete={props.onCommunicationDistanceDelete} />}
     </div>
-    <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span className="eskiz-status-tip tip-desktop">Перетащите новое фото на полотно или вставьте Ctrl+V — разметка сохранится · Ctrl/⌘ + колесо — зум · Пробел — перемещение</span><span className="eskiz-status-tip tip-touch">Палец по пустому месту — двигать вид · два пальца — масштаб · тап по объекту — правка</span></footer>
+    <footer className="embedded-eskiz-status"><span><span className="status-dot" /> {project.image.name} · {project.image.width} × {project.image.height}px</span><span className="eskiz-status-tip tip-desktop">Перетащите новое фото на полотно или вставьте Ctrl+V — разметка сохранится · Ctrl/⌘ + колесо — зум · Пробел — перемещение</span><span className="eskiz-status-tip tip-touch">Палец по пустому месту — двигать вид · два пальца — масштаб · тап по объекту — правка</span>
+    <div className="embedded-eskiz-zoombar" aria-label="Масштаб эскиза">
+          <button type="button" title="Отдалить" onClick={() => zoomTo((value) => value / ZOOM_FACTOR)}>−</button>
+          <input type="range" min={MIN_ZOOM} max={MAX_ZOOM} step="0.01" value={zoom} aria-label="Масштаб" onChange={(event) => zoomTo(Number(event.currentTarget.value))} />
+          <button type="button" title="Приблизить" onClick={() => zoomTo((value) => value * ZOOM_FACTOR)}>+</button>
+          <button type="button" title="Вписать эскиз в область" onClick={fit}>Вписать</button>
+          <button type="button" className="zoom-readout" title="Нажмите, чтобы вернуть 100%" onClick={() => zoomTo(1)}>{Math.round(zoom * 100)}%</button>
+        </div>
+    </footer>
     {photoDialog}
   </div>;
 }
@@ -1698,6 +1692,7 @@ function CommunicationQuickPopover(props: {
 
 function Inspector(props: {
   project: EskizProject;
+  onClose?: () => void;
   object?: EskizObject;
   communication?: EskizCommunicationMarker | null;
   communications: EskizCommunicationMarker[];
@@ -1739,6 +1734,7 @@ function Inspector(props: {
   const activeTab = selectedJustChanged ? 'object' : tabState.tab;
   const setTab = (tab: 'object' | 'objects' | 'document') => setTabState({ tab, selectionKey: currentSelectionKey });
   return <aside className="embedded-eskiz-inspector">
+    <button type="button" className="embedded-eskiz-inspector-close" aria-label="Закрыть панель свойств" title="Закрыть" onClick={props.onClose}>×</button>
     <div className="embedded-eskiz-tabs"><button className={activeTab === 'object' ? 'active' : ''} onClick={() => setTab('object')}>Объект</button><button className={activeTab === 'objects' ? 'active' : ''} onClick={() => setTab('objects')}>Список</button><button className={activeTab === 'document' ? 'active' : ''} onClick={() => setTab('document')}>Документ</button></div>
     {activeTab === 'object' ? selectedIds.length > 1 ? <div className="embedded-eskiz-fields"><div className="embedded-eskiz-fields-heading"><span>Выбрано объектов: {selectedIds.length}</span></div><div className="embedded-eskiz-section-label">Выравнивание</div><div className="embedded-eskiz-align-grid"><button onClick={() => props.onAlign('left')}>По левому</button><button onClick={() => props.onAlign('centerX')}>Центр X</button><button onClick={() => props.onAlign('right')}>По правому</button><button onClick={() => props.onAlign('top')}>По верху</button><button onClick={() => props.onAlign('centerY')}>Центр Y</button><button onClick={() => props.onAlign('bottom')}>По низу</button></div></div> : object ? <ObjectFields object={object} moduleSummary={object.type === 'module' ? props.moduleSummaries?.[`${project.id}:${object.id}`] : undefined} onOpenModule={object.type === 'module' ? () => props.onModuleObjectClick?.(project.id, object) : undefined} onObject={props.onObject} onSelectChain={props.onSelectChain} /> : communication ? <CommunicationFields marker={communication} imageWidth={project.image.width} imageHeight={project.image.height} onChange={(patch) => props.onCommunicationChange(communication.id, patch)} onDelete={() => props.onCommunicationDelete(communication.id)} onStartDistance={() => props.onStartCommunicationDistance(communication.id)} onDistanceAdd={(anchor) => props.onCommunicationDistanceAdd(communication.id, anchor)} onDistanceAddSet={(anchors) => props.onCommunicationDistanceAddSet(communication.id, anchors)} onDistanceChange={(distanceId, patch) => props.onCommunicationDistanceChange(communication.id, distanceId, patch)} onDistanceDelete={(distanceId) => props.onCommunicationDistanceDelete(communication.id, distanceId)} /> : <div className="embedded-eskiz-empty"><strong>Ничего не выбрано</strong><span>Выберите объект или коммуникацию на эскизе, чтобы изменить параметры.</span></div> : activeTab === 'objects' ? <InspectorObjectList project={project} selectedIds={selectedIds} communications={props.communications} activeCommunicationId={props.activeCommunicationId} onSelect={props.onSelect} onProject={props.onProject} onPatchObject={props.onPatchObject} onCommunicationSelect={props.onCommunicationSelect} onStartCommunicationDistance={props.onStartCommunicationDistance} /> : <DocumentFields project={project} communications={props.communications} showImage={props.showImage} showAnnotations={props.showAnnotations} showHelpers={props.showHelpers} showCommunicationMeasures={props.showCommunicationMeasures} layerVisibility={props.layerVisibility} onShowImage={props.onShowImage} onShowAnnotations={props.onShowAnnotations} onShowHelpers={props.onShowHelpers} onShowCommunicationMeasures={props.onShowCommunicationMeasures} onLayerVisibility={props.onLayerVisibility} onProject={props.onProject} />}
     {activeTab === 'object' && selectedIds.length > 0 && <div className="embedded-eskiz-inspector-bottom"><button onClick={props.onDuplicate}>Дублировать</button><button className="danger" onClick={props.onDelete}>Удалить</button></div>}

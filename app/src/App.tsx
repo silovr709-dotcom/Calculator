@@ -175,6 +175,13 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
     };
   }, [flushLocalCache]);
   const [commandOpen, setCommandOpen] = useState(false);
+  // Боковое меню на компьютере скрыто по умолчанию: открывается кнопкой ☰ и запоминается.
+  const [navOpen, setNavOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem('recept.navOpen') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('recept.navOpen', navOpen ? '1' : '0'); } catch { /* память переполнена — не страшно */ }
+  }, [navOpen]);
   const [workMode, setWorkMode] = useState<WorkMode>(() => {
     const storedMode = localStorage.getItem('recept.workMode') as WorkMode | null;
     return storedMode && storedMode in WORK_MODE_LABELS ? storedMode : 'manager';
@@ -678,7 +685,8 @@ const persistTemplates = useCallback((next: Template[]) => {
   const current = currentRaw ? applyClientProfileToProject(currentRaw, findClientForProject(currentRaw, clients)) : undefined;
 
   return (
-    <div className={`app work-mode-${workMode}`}>
+    <div className={`app work-mode-${workMode} ${navOpen ? 'nav-open' : 'nav-closed'}`}>
+      <button type="button" className="nav-toggle" aria-expanded={navOpen} aria-label="Главное меню" title="Главное меню" onClick={() => setNavOpen((value) => !value)}>☰</button>
       <ToastHost />
       {lastWork && view.kind !== 'project' && projects.some((item) => item.id === lastWork.id) && (
         <button type="button" className="resume-work no-print"

@@ -9101,23 +9101,14 @@ body {
 /* ==========================================================================
    РАБОЧИЙ ФОКУС И ПЛОТНОСТЬ (22.10)
    1) Вкладки «Модули», «Эскиз PRO», «КП» занимают весь экран: боковое меню и
-      пульс-полоса скрыты, «☰ Меню» возвращает навигацию по запросу (класс work-peek).
+      пульс-полоса скрыта; навигацию открывает кнопка ☰ (см. «Главное меню» ниже).
    2) На десктопе (≥861px) интерфейс чуть плотнее: кегль 13px, карточки 14px, поля
       страницы уже. Мобильные правила не трогаем — они уже заданы выше по файлу.
    ========================================================================== */
-body.work-focus .sidebar { display: none; }
 body.work-focus .main::before { inset: 0; }
 body.work-focus .project-section-head { display: none; }
-.work-menu-toggle { display: none; }
-body.work-focus .work-menu-toggle { display: inline-flex; }
-body.work-focus.work-peek .sidebar { display: flex; }
 
 @media (min-width: 861px) {
-  body.work-focus.work-peek .sidebar {
-    position: fixed; top: 0; bottom: 0; left: 0;
-    width: 232px; height: 100vh; max-height: none;
-    z-index: var(--z-sidebar); box-shadow: var(--shadow-lg); overflow-y: auto;
-  }
   body { font-size: 13px; }
   .page { padding: 16px 20px 64px; }
   .card { padding: 14px; margin-bottom: 12px; }
@@ -9150,3 +9141,53 @@ body.work-focus.work-peek .sidebar { display: flex; }
 .embedded-eskiz-facade-picker button { width: 28px; height: 28px; min-width: 28px; padding: 0; border-radius: 50%; border: 1px solid rgba(255,255,255,.3); background: #fff; color: #4c1d95; font-weight: 800; font-size: var(--fs-sm); cursor: pointer; }
 .embedded-eskiz-facade-picker button.active { background: #7c3aed; color: #fff; border-color: #fff; box-shadow: 0 0 0 2px rgba(124, 58, 237, .5); }
 @media (pointer: coarse) { .embedded-eskiz-facade-picker button { width: 36px; height: 36px; min-width: 36px; } }
+
+/* ==========================================================================
+   ЭСКИЗ PRO — редактор без лишнего (23.10, пилот полной переделки)
+   • Полотно занимает всю рабочую область; панель «Свойства» — выдвижная,
+     открывается при выборе объекта (или кнопкой «Свойства»), закрывается ×.
+   • Масштаб переехал в нижнюю статус-строку, полоса маршрута убрана.
+   • Блок «Связь с КП и экспорт» свёрнут под полотном.
+   ========================================================================== */
+@media (min-width: 981px) {
+  .embedded-eskiz-workarea,
+  .embedded-eskiz-workarea.no-inspector { grid-template-columns: minmax(0, 1fr); }
+  .embedded-eskiz-inspector {
+    position: absolute; top: 0; right: 0; bottom: 0; width: 300px; z-index: 6;
+    box-shadow: -14px 0 32px -18px rgba(15, 23, 42, .45);
+  }
+}
+.embedded-eskiz-inspector-close {
+  position: absolute; top: 6px; right: 8px; z-index: 1;
+  width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line);
+  background: #fff; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer;
+}
+.embedded-eskiz-inspector-close:hover { color: var(--text); border-color: var(--line-strong); }
+.embedded-eskiz-status .embedded-eskiz-zoombar { margin-left: auto; background: transparent; border: 0; padding: 0; }
+.eskiz-pro-toolrow { padding: 8px 12px; margin-bottom: 10px; justify-content: flex-end; }
+.eskiz-pro-toolrow .eskiz-primary-actions { margin: 0; }
+.eskiz-pro-side-details { margin-bottom: 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--panel); }
+.eskiz-pro-side-details > summary {
+  cursor: pointer; list-style: none; padding: 10px 14px; font-size: var(--fs-md); font-weight: 700; color: var(--text);
+}
+.eskiz-pro-side-details > summary::-webkit-details-marker { display: none; }
+.eskiz-pro-side-details > summary::after { content: '▾'; float: right; color: var(--muted); }
+.eskiz-pro-side-details[open] > summary::after { content: '▴'; }
+.eskiz-pro-side-details > .eskiz-pro-side { padding: 0 12px 12px; }
+
+/* Главное меню (23.10): на компьютере боковое меню скрыто по умолчанию,
+   одна кнопка ☰ открывает и закрывает его. На телефоне меню остаётся как было. */
+.nav-toggle { display: none; }
+@media (min-width: 861px) {
+  .nav-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    position: fixed; top: 12px; left: 12px; z-index: var(--z-sidebar);
+    width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line-strong);
+    background: #fff; color: var(--text); font-size: 18px; line-height: 1; cursor: pointer;
+    box-shadow: var(--shadow-sm);
+  }
+  .nav-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  .app.nav-open .nav-toggle { left: 244px; }
+  .app.nav-closed > .sidebar { display: none; }
+  .app.nav-closed .page { padding-left: 64px; }
+}

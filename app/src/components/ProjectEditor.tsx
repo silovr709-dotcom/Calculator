@@ -79,16 +79,12 @@ export default function ProjectEditor(props: {
   );
   const [editorMode, setEditorMode] = useState<'wizard' | 'advanced'>(() => props.initialTab ? 'advanced' : project.wizardMode ?? 'advanced');
   const [focusModuleId, setFocusModuleId] = useState<string | null>(null);
-  // Рабочие вкладки (модули, эскиз, КП) занимают весь экран: боковое меню и пульс-полоса уходят,
-  // а «☰ Меню» возвращает навигацию по запросу. Класс на body снимается при уходе из проекта.
+  // Рабочие вкладки (модули, эскиз, КП): пульс-полоса скрыта, класс work-focus на body снимается при уходе.
   const focusWork = tab === 'modules' || tab === 'sketch' || tab === 'client';
-  const [menuPeek, setMenuPeek] = useState(false);
   useEffect(() => {
-    const body = document.body;
-    body.classList.toggle('work-focus', focusWork);
-    body.classList.toggle('work-peek', focusWork && menuPeek);
-    return () => { body.classList.remove('work-focus', 'work-peek'); };
-  }, [focusWork, menuPeek]);
+    document.body.classList.toggle('work-focus', focusWork);
+    return () => { document.body.classList.remove('work-focus'); };
+  }, [focusWork]);
   const [focusLineId, setFocusLineId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [editMeta, setEditMeta] = useState(false);
@@ -345,7 +341,6 @@ export default function ProjectEditor(props: {
       <header className="project-topbar no-print" ref={topbarRef}>
         <div className="project-topbar-row project-topbar-main">
           <button className="btn ghost small project-topbar-back" onClick={props.onBack} title="К списку проектов">← Проекты</button>
-          {focusWork && <button type="button" className="btn ghost small work-menu-toggle" aria-expanded={menuPeek} onClick={() => setMenuPeek((value) => !value)} title="Главное меню приложения">☰ Меню</button>}
           <div className="project-topbar-title">
             <h1>{project.name}</h1>
             <div className="muted small">
