@@ -638,8 +638,6 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
       <section className="card client-document-hub no-print" aria-label="Документы для клиента">
         <div className="client-document-hub-main">
           <span className="eyebrow">КП для клиента</span>
-          <h3>Один аккуратный пакет: эскиз, КП, спецификация, фирменный договор и товарный чек</h3>
-          <p>Клиент видит только документы без себестоимости, закупочных цен и внутренних данных.{selectedVariant && <> Активен вариант: <b>{selectedVariant.name}</b>.</>} Договор заполняется из фирменного шаблона DOCX, товарный чек формируется в Word, всё выгружается из одного центра.</p>
           <div className="client-document-readiness" aria-label="Готовность клиентского КП">
             {offerReadinessItems.map((item) => <span key={item.label} className={item.ready ? 'ready' : 'warn'}><b>{item.label}</b><small>{item.value}</small></span>)}
           </div>
@@ -660,8 +658,8 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           </div>
         </div>
         {documents.length > 0 && (
-          <div className="client-docs-store">
-            <b>Документы проекта на хостинге</b>
+          <details className="client-docs-store client-docs-details">
+            <summary>Документы проекта на хостинге · {documents.length}</summary>
             <p className="muted small">Каждая выгрузка сохраняется здесь: файл не потеряется в «Загрузках», а по статусу видно, что уже выдано клиенту.</p>
             <ul>
               {documents.map((doc) => (
@@ -685,7 +683,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
                 </li>
               ))}
             </ul>
-          </div>
+          </details>
         )}
         <div className="client-offer-link">
           <div className="client-offer-link-main">
