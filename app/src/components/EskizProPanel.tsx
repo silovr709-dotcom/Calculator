@@ -1073,6 +1073,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
             communicationAddKind={communicationAddKind}
             pickingDistancePoint={Boolean(distancePointPick)}
             fullScreen={fullScreenSketch}
+            onToggleFullScreen={() => setFullScreenSketch((value) => !value)}
             onProjectChange={saveEmbeddedProject}
             onProjectImport={saveEmbeddedProject}
             onShowCommunicationSizeBadgesChange={(value) => updateEskizPro({ showCommunicationSizeBadges: value })}

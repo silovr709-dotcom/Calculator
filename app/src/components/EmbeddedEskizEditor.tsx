@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizEquipmentType, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
 import { normalizeEskizLinkUrl } from '../lib/eskizSketchExport';
@@ -75,6 +75,7 @@ type Props = {
   onCommunicationDistanceChange: (communicationId: string, distanceId: string, patch: Partial<EskizCommunicationDistance>) => void;
   onCommunicationDistanceDelete: (communicationId: string, distanceId: string) => void;
   fullScreen?: boolean;
+  onToggleFullScreen?: () => void;
 };
 
 const COLORS = { ink: '#20242b', accent: '#ff5c35', blue: '#2563eb' };
@@ -394,6 +395,7 @@ export default function EmbeddedEskizEditor(props: Props) {
   const [photoBusy, setPhotoBusy] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
   const manualZoomRef = useRef(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const projectInputRef = useRef<HTMLInputElement>(null);
@@ -1205,6 +1207,30 @@ export default function EmbeddedEskizEditor(props: Props) {
     return () => window.clearTimeout(timer);
   }, [fit, project?.id, props.fullScreen]);
 
+  // Редактор занимает всё свободное место до низа экрана: раньше полотно теряло
+  // половину высоты, потому что формула «100vh − 230px» не учитывала шапку проекта.
+  useLayoutEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const applyHeight = () => {
+      if (props.fullScreen) {
+        editor.style.height = '';
+        return;
+      }
+      const top = editor.getBoundingClientRect().top;
+      const available = window.innerHeight - top - 6;
+      editor.style.height = `${Math.max(420, available)}px`;
+    };
+    applyHeight();
+    // Повторяем после раскладки шрифтов/картинок и при ресайзе окна.
+    const timers = [window.setTimeout(applyHeight, 120), window.setTimeout(applyHeight, 400)];
+    window.addEventListener('resize', applyHeight);
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+      window.removeEventListener('resize', applyHeight);
+    };
+  }, [props.fullScreen, project?.id]);
+
   // Область меняет размер: вход/выход из полного экрана, скрытие панели свойств,
   // изменение окна. Пока масштаб не трогали руками — пересчитываем вписывание.
   useEffect(() => {
@@ -1455,12 +1481,13 @@ export default function EmbeddedEskizEditor(props: Props) {
   const eskizModuleCount = project.objects.filter((object) => object.type === 'module').length;
   const eskizCommunicationCount = props.communications.filter((marker) => marker.eskizId === project.id).length;
 
-  return <div className={`embedded-eskiz-editor ${communicationMode ? 'communication-mode' : ''}`}>
+  return <div ref={editorRef} className={`embedded-eskiz-editor ${communicationMode ? 'communication-mode' : ''}`}>
     <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; void openImage(file); }} />
     <input ref={projectInputRef} type="file" accept=".eskiz,application/json" hidden onChange={onFileInput((file) => void importProject(file))} />
     <header className="embedded-eskiz-header">
       <div className="embedded-eskiz-title"><b>Эскиз PRO</b><input value={project.title} onChange={(event) => titleUpdate(event.target.value)} /><span className={saved ? 'ok' : ''}>{saved ? 'сохранено в расчёт' : 'сохраняем…'}</span></div>
       <div className={`embedded-eskiz-actions ${actionsOpen ? 'expanded' : ''}`}>
+        {props.onToggleFullScreen && <button className="btn tiny ghost" onClick={props.onToggleFullScreen}>{props.fullScreen ? '⤡ Свернуть' : '⤢ На весь экран'}</button>}
         <button className="btn tiny ghost" onClick={undo}>↶</button>
         <button className="btn tiny ghost" onClick={redo}>↷</button>
         <button className="btn tiny primary" onClick={saveNow}>Сохранить</button>

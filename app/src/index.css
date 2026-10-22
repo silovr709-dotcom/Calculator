@@ -9030,3 +9030,70 @@ body {
   /* Кнопки, которые открывались только наведением, на тач-экране видны всегда. */
   .schedule-day .schedule-day-add { opacity: 1; }
 }
+
+/* =====================================================================
+   ЭСКИЗ PRO: полотну — всю доступную высоту (аудит 22.10, ноутбук/тач).
+   ===================================================================== */
+
+/* «Рама» редактора (шапка, инструменты, чеклист, статус) больше не сжимается —
+   раньше flex сплющивал шапку в полоску с обрезанными кнопками, а полотно
+   получало остатки. Теперь сжимается только полотно. */
+.embedded-eskiz-header,
+.embedded-eskiz-tools,
+.embedded-eskiz-workflow-strip,
+.embedded-eskiz-status { flex: 0 0 auto; }
+.embedded-eskiz-workarea { flex: 1 1 auto; min-height: 0; }
+.embedded-eskiz-editor { min-height: 320px; }
+
+/* Чеклист-полоса (Скрин/Размеры/Модули/…) — только на высоких экранах:
+   на ноутбуках её высоту занимает полотно. */
+@media (max-height: 940px) {
+  .embedded-eskiz-workflow-strip { display: none; }
+}
+
+/* Невысокие экраны: ужимаем раму, чтобы полотну досталось больше. */
+@media (max-height: 1000px) {
+  .embedded-eskiz-header { padding: 6px 12px; }
+  .embedded-eskiz-tools { padding: 6px; gap: 5px; }
+  .embedded-eskiz-tools button { min-height: 30px; padding: 5px 8px; }
+  .embedded-eskiz-tools button.tool-quick { min-height: 28px; }
+  .embedded-eskiz-status { padding: 5px 12px; }
+  .embedded-eskiz-workflow-strip { padding: 4px 10px; }
+  .embedded-eskiz-workflow-strip span { padding: 3px 8px; }
+}
+
+/* Полный экран: карточка-заголовок не нужна — «Свернуть» теперь в шапке редактора. */
+.eskiz-pro-workspace.fullscreen .eskiz-pro-editor-head { display: none; }
+
+/* Узкие экраны (телефон/планшет): полотно забирает высоту, панель свойств —
+   фиксированная доля с внутренней прокруткой. */
+@media (max-width: 980px) {
+  .embedded-eskiz-workarea {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .embedded-eskiz-viewport {
+    height: auto;
+    flex: 1 1 auto;
+    min-height: 240px;
+  }
+  .embedded-eskiz-inspector {
+    flex: 0 0 auto;
+    max-height: 42%;
+    overflow: auto;
+    border-left: 0;
+    border-top: 1px solid #dce8e3;
+  }
+}
+
+/* Телефон: шапка и статус — строками с переносом, а не колонками (экономия высоты). */
+@media (max-width: 760px) {
+  .embedded-eskiz-header,
+  .embedded-eskiz-status {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .embedded-eskiz-title { flex: 1 1 100%; }
+}
