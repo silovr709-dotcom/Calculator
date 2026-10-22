@@ -9348,3 +9348,11 @@ body.work-focus .project-section-head { display: none; }
 .embedded-eskiz-leader-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0; font-size: var(--fs-xs); color: var(--text); }
 .embedded-eskiz-leader-row button { min-width: 30px; min-height: 30px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; }
 .embedded-eskiz-leader-row button:hover { color: #b42318; border-color: #f0b4ad; }
+
+/* Свёрнутые секции в «Документ»: редко нужные настройки не занимают место. */
+.embedded-eskiz-fold { margin: 8px 0; border-top: 1px solid var(--line); }
+.embedded-eskiz-fold > summary { cursor: pointer; list-style: none; min-height: 36px; display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-xs); font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.embedded-eskiz-fold > summary::-webkit-details-marker { display: none; }
+.embedded-eskiz-fold > summary::after { content: '▾'; color: var(--muted); }
+.embedded-eskiz-fold[open] > summary { color: var(--text); }
+.embedded-eskiz-fold[open] > summary::after { content: '▴'; }
