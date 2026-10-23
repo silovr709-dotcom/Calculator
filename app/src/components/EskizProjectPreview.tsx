@@ -1,7 +1,7 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
 import type { EskizCommunicationDistance, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizFacadeObject, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
-import { FACADE_DEFAULT_COLOR, facadeMarkerRadius } from '../lib/eskizPro';
+import { FACADE_DEFAULT_COLOR, facadeInkColor, facadeMarkerRadius } from '../lib/eskizPro';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationColor, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale } from '../lib/eskizCommunications';
 import { normalizeEskizLinkUrl } from '../lib/eskizSketchExport';
 
@@ -186,8 +186,8 @@ function FacadePreview({ object: o }: { object: EskizFacadeObject }) {
   return (
     <g className="eskiz-preview-object eskiz-preview-facade" transform={`translate(${o.x} ${o.y})`}>
       <circle r={radius + 2} fill="#fff" opacity=".95" />
-      <circle r={radius} fill={o.color || FACADE_DEFAULT_COLOR} stroke="#fff" strokeWidth="1.6" />
-      <text x="0" y="1" textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize={radius * 1.1} fontWeight="800" fontFamily="Segoe UI, Arial, sans-serif">{o.number}</text>
+      <circle r={radius} fill={o.color || FACADE_DEFAULT_COLOR} stroke={facadeInkColor(o.color)} strokeWidth="1.6" />
+      <text x="0" y="1" textAnchor="middle" dominantBaseline="central" fill={facadeInkColor(o.color)} fontSize={radius * 1.1} fontWeight="800" fontFamily="Segoe UI, Arial, sans-serif">{o.number}</text>
       <title>{`Фасад ${o.number}`}</title>
     </g>
   );

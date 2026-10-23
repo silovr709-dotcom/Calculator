@@ -1,6 +1,6 @@
 import type { EskizCommunicationDistance, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
 import type { EskizCalloutObject, EskizDimensionObject, EskizFacadeObject, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from './eskizPro';
-import { calloutAnchor, calloutLeaderPoints, calloutTargets, FACADE_DEFAULT_COLOR, facadeMarkerRadius } from './eskizPro';
+import { calloutAnchor, calloutLeaderPoints, calloutTargets, FACADE_DEFAULT_COLOR, facadeInkColor, facadeMarkerRadius } from './eskizPro';
 import { COMMUNICATION_ANCHOR_LABELS, COMMUNICATION_KIND_META, communicationColor, communicationCompactSizeText, communicationDistanceText, communicationElevationText, communicationSizeText, communicationSocketCount, communicationSwitchCount, communicationVisualScale } from './eskizCommunications';
 
 export type EskizSketchModuleMarkerMode = 'full' | 'compact' | 'hidden';
@@ -197,8 +197,8 @@ function renderFacade(o: EskizFacadeObject) {
   const radius = facadeMarkerRadius(o.fontSize);
   return `<g class="facade" transform="translate(${o.x} ${o.y})">
     <circle r="${radius + 2}" fill="#fff" opacity=".95" />
-    <circle r="${radius}" fill="${xml(o.color || FACADE_DEFAULT_COLOR)}" stroke="#fff" stroke-width="1.6" />
-    <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#fff" font-size="${(radius * 1.1).toFixed(1)}" font-weight="800" font-family="Arial, sans-serif">${o.number}</text>
+    <circle r="${radius}" fill="${xml(o.color || FACADE_DEFAULT_COLOR)}" stroke="${facadeInkColor(o.color)}" stroke-width="1.6" />
+    <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="${facadeInkColor(o.color)}" font-size="${(radius * 1.1).toFixed(1)}" font-weight="800" font-family="Arial, sans-serif">${o.number}</text>
     <title>Фасад ${o.number}</title>
   </g>`;
 }

@@ -111,6 +111,18 @@ export const FACADE_COLORS: { value: string; label: string }[] = [
   { value: '#dc2626', label: 'Красный' },
   { value: '#1f2937', label: 'Графит' },
 ];
+/** Цвет цифры и обводки кружка фасада: тёмный на светлой заливке, белый на тёмной. */
+export function facadeInkColor(fill: string | undefined): string {
+  const hex = (fill || FACADE_DEFAULT_COLOR).trim().replace('#', '');
+  const full = hex.length === 3 ? hex.split('').map((c) => c + c).join('') : hex;
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) return '#fff';
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 160 ? '#1f2937' : '#fff';
+}
+
 export function facadeMarkerRadius(fontSize: number | undefined): number {
   return Math.min(30, Math.max(5, (fontSize || 22) * 0.8));
 }

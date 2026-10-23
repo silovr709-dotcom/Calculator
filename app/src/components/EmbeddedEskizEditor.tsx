@@ -3,7 +3,7 @@ import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCom
 import { calloutAnchor, calloutLeaderPoints, calloutTargets, dimensionDefaultValue, nearestCalloutEdge, shiftCallout } from '../lib/eskizPro';
 import { Overlay } from './Portal';
 import type { EskizCalloutObject, EskizDimensionObject, EskizEquipmentType, EskizFacadeObject, EskizHingeObject, EskizModuleObject, EskizObject, EskizProject, EskizTextObject } from '../lib/eskizPro';
-import { FACADE_COLORS, FACADE_DEFAULT_COLOR, facadeMarkerRadius } from '../lib/eskizPro';
+import { FACADE_COLORS, FACADE_DEFAULT_COLOR, facadeInkColor, facadeMarkerRadius } from '../lib/eskizPro';
 import { normalizeEskizLinkUrl } from '../lib/eskizSketchExport';
 import { createEskizProjectFromImage, downloadEskizFile, eskizFileFromTransfer, eskizImageReplaceScale, imageFileFromTransfer, readEskizFileBundle, readEskizImageFile, replaceEskizProjectImage, scaleEskizCommunication, SUPPORTED_ESKIZ_IMAGE_TYPES, type EskizImageReplaceMode } from '../lib/eskizPro';
 import EskizPhotoDialog from './EskizPhotoDialog';
@@ -2162,8 +2162,8 @@ function FacadeObjectView({ object, selected, primary, onPointerDown }: { object
   return <g className={`embedded-eskiz-object embedded-eskiz-facade-object ${selected ? 'selected' : ''}`} transform={`translate(${object.x} ${object.y})`} onPointerDown={(event) => onPointerDown(event, object)}>
     <circle r={radius + 6} fill="transparent" />
     <circle r={radius + 2} fill="#fff" opacity=".95" />
-    <circle r={radius} fill={object.color || FACADE_DEFAULT_COLOR} stroke="#fff" strokeWidth={selected ? 2.6 : 1.6} />
-    <text x="0" y="1" textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize={radius * 1.1} fontWeight="800" fontFamily="Segoe UI, Arial, sans-serif" style={{ pointerEvents: 'none' }}>{object.number}</text>
+    <circle r={radius} fill={object.color || FACADE_DEFAULT_COLOR} stroke={facadeInkColor(object.color)} strokeWidth={selected ? 2.6 : 1.6} />
+    <text x="0" y="1" textAnchor="middle" dominantBaseline="central" fill={facadeInkColor(object.color)} fontSize={radius * 1.1} fontWeight="800" fontFamily="Segoe UI, Arial, sans-serif" style={{ pointerEvents: 'none' }}>{object.number}</text>
     {primary && <circle r={radius + 6} fill="none" stroke="#2563eb" strokeDasharray="3 3" strokeWidth="1.2" />}
   </g>;
 }
