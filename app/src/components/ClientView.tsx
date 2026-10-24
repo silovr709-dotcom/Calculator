@@ -53,11 +53,11 @@ const DOCUMENT_STATUS_LABELS: Record<string, string> = {
   paid: 'оплачен',
 };
 
-const MODE_LABELS: Record<ClientOfferPresentationMode, string> = {
-  brief: 'Кратко',
-  detailed: 'Подробно',
-  technical: 'Техническое приложение',
-};
+/** Имя заказчика для шапки КП: служебные заглушки не печатаем. */
+function hasClientName(value?: string): boolean {
+  const name = value?.trim() ?? '';
+  return name !== '' && name.toLocaleLowerCase('ru') !== 'без клиента';
+}
 
 const CLIENT_ESKIZ_LAYERS: { key: EskizLayerKey; label: string }[] = [
   { key: 'dimensions', label: 'Размеры' },
@@ -861,20 +861,20 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
               ? <EditableText value={project.name} label="Название проекта" placeholder="Название проекта" onChange={(value) => onProjectMetaChange({ name: value })} />
               : project.name}</h1>
             <div className="cd-hero-meta">
-              <span>Заказчик: <b>{onProjectMetaChange
+              {(canEditInline || hasClientName(project.client)) && <span>Заказчик: <b>{onProjectMetaChange
                 ? <EditableText value={project.client} label="Заказчик" placeholder="имя заказчика" onChange={(value) => onProjectMetaChange({ client: value })} />
-                : project.client}</b></span>
+                : project.client}</b></span>}
               <span>Дата: {onProjectMetaChange
                 ? <EditableDate value={project.date} label="Дата КП" onChange={(value) => onProjectMetaChange({ date: value })} />
                 : fmtDateLong(project.date)}</span>
               {selectedVariant && <span>Вариант: <b>{selectedVariant.name}</b></span>}
             </div>
-            <div className="cd-hero-tags"><span>{MODE_LABELS[presentationMode]}</span><span>Детализация: {DETAIL_LEVEL_LABELS[detailLevel]}</span>{clientSketchVisible && <span>Эскиз PRO включён</span>}{groups.length > 0 && <span>{fmtNum(moduleQty, 3)} модулей</span>}</div>
+            <div className="cd-hero-tags">{clientSketchVisible && <span>Эскиз PRO</span>}{groups.length > 0 && <span>{fmtNum(moduleQty, 3)} модулей</span>}</div>
           </div>
           <div className="cd-hero-price">
             <span>Итоговая стоимость</span>
             <b>{fmtMoney(offerTotal)}</b>
-            <em>без внутренних закупочных цен</em>
+            <em>итого по всему предложению</em>
           </div>
         </header>
 
@@ -899,12 +899,12 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
               : (project.clientOffer?.summaryNote ?? DEFAULT_SUMMARY_NOTE)}</p>
           </div>
           <div className="cd-summary-facts">
-            <div><b>{fmtNum(moduleQty, 3)}</b><span>модулей</span></div>
+            {moduleQty > 0 && <div><b>{fmtNum(moduleQty, 3)}</b><span>модулей</span></div>}
             <div><b>{projectSummary.facadeAreaM2 > 0 ? fmtNum(projectSummary.facadeAreaM2, 2) : fmtNum(facadeQty, 3)}</b><span>{projectSummary.facadeAreaM2 > 0 ? 'м² фасадов' : 'фасадов / рамок'}</span></div>
-            <div><b>{fmtNum(hingeQty, 3)}</b><span>петель</span></div>
-            <div><b>{fmtNum(drawerQty, 3)}</b><span>систем ящиков</span></div>
-            <div><b>{fmtNum(liftQty, 3)}</b><span>подъёмников</span></div>
-            <div><b>{fmtMoney(projectSummary.bodyTotal)}</b><span>корпуса общ.</span></div>
+            {hingeQty > 0 && <div><b>{fmtNum(hingeQty, 3)}</b><span>петель</span></div>}
+            {drawerQty > 0 && <div><b>{fmtNum(drawerQty, 3)}</b><span>систем ящиков</span></div>}
+            {liftQty > 0 && <div><b>{fmtNum(liftQty, 3)}</b><span>подъёмников</span></div>}
+            {projectSummary.bodyTotal > 0 && <div><b>{fmtMoney(projectSummary.bodyTotal)}</b><span>корпуса</span></div>}
           </div>
           {includedChips.length > 0 && <div className="cd-included"><b>В предложение входит</b><div>{includedChips.map((chip) => <span key={chip}>{chip}</span>)}</div></div>}
           {materialHighlights.length > 0 && <div className="cd-materials"><b>Ключевые материалы</b><ul>{materialHighlights.map((item) => <li key={item}>{item}</li>)}</ul></div>}
@@ -921,7 +921,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           <section className="cd-rollup">
             <div className="cd-section-head">
               <h3>Сводная ведомость</h3>
-              <span>сколько и какие — по типам{canEditInline ? '; количество и суммы правятся прямо здесь' : ''}</span>
+              <span>состав и стоимость по типам{canEditInline && <em className="no-print"> · количество и суммы правятся прямо здесь</em>}</span>
             </div>
             <div className="cd-rollup-table" role="table" aria-label="Сводная ведомость по типам">
               <div className="cd-rollup-head" role="row"><span>Раздел / позиция</span><span>Количество</span><span>Сумма</span></div>
@@ -985,7 +985,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
 
         {showCompositionSections && compositionSections.length > 0 && (
           <section className="cd-composition">
-            <div className="cd-section-head"><h3>Смета по разделам</h3><span>коротко по категориям, без повторов внутри модулей</span></div>
+            <div className="cd-section-head"><h3>Смета по разделам</h3><span>по категориям</span></div>
             <div className="cd-composition-grid">
               {compositionSections.map((section) => <article className="cd-composition-card" key={section.id}>
                 <div className="cd-composition-card-head"><div><b>{section.title}</b><span>{section.qtyText}</span></div><strong>{fmtMoney(section.total)}</strong></div>

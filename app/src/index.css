@@ -9369,3 +9369,128 @@ body.work-focus .project-section-head { display: none; }
 .eskiz-hotkeys-card kbd { display: inline-block; min-width: 24px; padding: 2px 6px; border: 1px solid #c9d6e3; border-bottom-width: 2px; border-radius: 6px; background: #f5f8fb; font: 600 12px ui-monospace, Consolas, monospace; text-align: center; }
 .embedded-eskiz-keys-btn { min-height: 28px; padding: 3px 10px; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; background: transparent; color: #eaf4ff; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .embedded-eskiz-keys-btn:hover { background: rgba(255,255,255,.12); }
+
+/* ——— КП: премиальное оформление документа для клиента ———
+   Спокойная графитовая палитра, золотой акцент, serif для заголовков и цифр,
+   тонкие линии вместо плотных плашек. Только внутри .client-doc. */
+.client-doc {
+  --kp-ink: #1c1f26;
+  --kp-muted: #6b6f78;
+  --kp-line: #e4dfd3;
+  --kp-gold: #9a7b4f;
+  --kp-gold-soft: #e8d9b8;
+  --kp-paper: #f7f4ee;
+  --kp-serif: Georgia, 'Times New Roman', serif;
+  color: var(--kp-ink);
+}
+.client-doc h1, .client-doc h2, .client-doc h3 { font-family: var(--kp-serif); font-weight: 400; letter-spacing: 0; }
+.client-doc .cd-hero {
+  background: var(--kp-ink);
+  color: #f4efe6;
+  border-radius: 6px;
+  border-bottom: 3px solid var(--kp-gold);
+  padding: 34px 36px 30px;
+  margin: 0 0 22px;
+  box-shadow: none;
+}
+.client-doc .cd-hero .cd-brand { font-family: var(--kp-serif); font-size: 30px; font-weight: 700; color: #f4efe6; letter-spacing: .02em; }
+.client-doc .cd-hero .cd-sub { color: #b9b1a1; letter-spacing: .03em; }
+.client-doc .cd-hero h2 { margin: 26px 0 6px; font-size: 11px; font-family: inherit; font-weight: 700; letter-spacing: .24em; color: var(--kp-gold-soft); opacity: 1; }
+.client-doc .cd-hero h1 { font-size: 40px; line-height: 1.05; color: #fff; }
+.client-doc .cd-hero-meta { color: #c9c1b0; margin-top: 14px; }
+.client-doc .cd-hero-meta b { color: #fff; font-weight: 600; }
+.client-doc .cd-hero-tags { margin-top: 16px; }
+.client-doc .cd-hero-tags span {
+  background: transparent;
+  border: 1px solid rgba(232, 217, 184, .45);
+  border-radius: 2px;
+  color: var(--kp-gold-soft);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.client-doc .cd-hero-price {
+  background: transparent;
+  border: none;
+  border-left: 1px solid rgba(232, 217, 184, .35);
+  border-radius: 0;
+  padding: 6px 0 6px 30px;
+  text-align: left;
+  justify-content: flex-end;
+}
+.client-doc .cd-hero-price span, .client-doc .cd-hero-price em { color: #b9b1a1; font-size: 11px; letter-spacing: .04em; }
+.client-doc .cd-hero-price b { font-family: var(--kp-serif); font-size: 36px; font-weight: 400; color: var(--kp-gold-soft); white-space: nowrap; }
+
+.client-doc .cd-terms { border-radius: 0; border: none; border-top: 1px solid var(--kp-line); border-bottom: 1px solid var(--kp-line); background: transparent; }
+
+.client-doc .cd-summary, .client-doc .cd-summary-modern {
+  background: #fff;
+  border: 1px solid var(--kp-line);
+  border-radius: 4px;
+  box-shadow: none;
+}
+.client-doc .cd-summary h3, .client-doc .cd-section-head h3, .client-doc .cd-rollup h3, .client-doc .cd-composition h3 {
+  font-size: 22px;
+  color: var(--kp-ink);
+  margin: 0;
+}
+.client-doc .cd-section-head { border-bottom: 1px solid var(--kp-line); padding-bottom: 8px; margin-bottom: 12px; align-items: baseline; }
+.client-doc .cd-section-head span { color: var(--kp-muted); font-size: 12px; }
+.client-doc .cd-summary-facts > div {
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--kp-line);
+  border-radius: 0;
+  padding: 12px 2px 4px;
+}
+.client-doc .cd-summary-facts b { font-family: var(--kp-serif); font-weight: 400; font-size: 24px; color: var(--kp-ink); }
+.client-doc .cd-summary-facts span { color: var(--kp-muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.client-doc .cd-included span {
+  background: #fff;
+  border: 1px solid var(--kp-line);
+  border-radius: 2px;
+  color: var(--kp-ink);
+  font-weight: 600;
+}
+.client-doc .cd-materials b, .client-doc .cd-included b { color: var(--kp-gold); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; }
+
+.client-doc .cd-next-steps > div {
+  background: #fff;
+  border: 1px solid var(--kp-line);
+  border-radius: 2px;
+  box-shadow: none;
+}
+.client-doc .cd-next-steps b {
+  background: var(--kp-ink);
+  color: var(--kp-gold-soft);
+  border-radius: 50%;
+  font-family: var(--kp-serif);
+}
+
+.client-doc .cd-rollup-table { border: 1px solid var(--kp-line); border-radius: 4px; overflow: hidden; background: #fff; }
+.client-doc .cd-rollup-head { background: var(--kp-paper); color: var(--kp-muted); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; border-bottom: 1px solid var(--kp-line); }
+.client-doc .cd-rollup-row { border-bottom: 1px solid #efebe2; }
+.client-doc .cd-rollup-total { background: #fff; }
+.client-doc .cd-rollup-total b { font-weight: 700; }
+.client-doc .cd-rollup-total strong, .client-doc .cd-rollup-sum strong { font-family: var(--kp-serif); font-weight: 400; }
+.client-doc .cd-rollup-grand { background: var(--kp-ink); color: #f4efe6; border-bottom: none; }
+.client-doc .cd-rollup-grand strong { font-family: var(--kp-serif); font-size: 19px; font-weight: 400; color: var(--kp-gold-soft); }
+.client-doc .cd-rollup-grand span { color: #b9b1a1; }
+
+.client-doc .cd-composition-card {
+  background: #fff;
+  border: 1px solid var(--kp-line);
+  border-radius: 4px;
+  box-shadow: none;
+}
+.client-doc .cd-composition-card-head strong { font-family: var(--kp-serif); font-weight: 400; font-size: 18px; color: var(--kp-ink); }
+.client-doc .cd-composition-card-head b { font-weight: 700; }
+
+@media print {
+  .client-doc .cd-hero, .client-doc .cd-rollup-grand, .client-doc .cd-next-steps b {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .client-doc section, .client-doc .cd-hero, .client-doc .cd-composition-card { break-inside: avoid; }
+}
