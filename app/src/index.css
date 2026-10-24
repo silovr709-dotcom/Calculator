@@ -9906,3 +9906,22 @@ body.work-focus .project-section-head { display: none; }
   .client-doc .cd-section-head { margin-bottom: 6px; }
   .client-doc .cd-footer { margin-top: 10px; }
 }
+
+/* ——— КП: адаптация под телефон и планшет ——— */
+@media (max-width: 760px) {
+  .client-doc { padding: 14px 12px 14px; border-radius: 12px; }
+  .client-doc::before { inset: 7px; }
+  .client-doc .cd-hero { grid-template-columns: 1fr; gap: 12px; padding: 16px 16px; }
+  .client-doc .cd-hero h1 { font-size: 28px; }
+  .client-doc .cd-hero-price { min-width: 0; padding: 12px 14px; }
+  .client-doc .cd-hero-price b { font-size: 30px; }
+  .client-doc .cd-payment { grid-template-columns: 1fr; }
+  .client-doc .cd-payment-step > strong { font-size: 24px; }
+  .client-doc .cd-section-head h3 { font-size: 20px; }
+  .client-doc .cd-module-table-row { grid-template-columns: 24px minmax(0, 1fr) auto; }
+  .client-doc .cd-module-table-materials { grid-column: 2 / -1; }
+  .client-doc .cd-module-table-row strong { grid-column: 3; }
+  .client-doc .cd-signoff { grid-template-columns: 1fr 1fr; }
+  .client-doc .cd-qr { grid-column: 1 / -1; justify-self: start; }
+  .client-doc .cd-footer { flex-wrap: wrap; font-size: 9px; }
+}
