@@ -1071,6 +1071,12 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           {offerQr && <figure className="cd-qr"><img src={offerQr} alt="QR-код онлайн-версии КП" /><figcaption>Онлайн-версия КП</figcaption></figure>}
         </section>
 
+        <footer className="cd-footer">
+          <span>РЕцепт</span>
+          <span>{project.name}</span>
+          <span>{fmtDateLong(project.date)}</span>
+        </footer>
+
         {packageDocumentNames.length > 0 && (
           <section className="cd-package-docs cd-package-note no-print">
             <div className="cd-section-head"><h3>Файлы клиентского пакета</h3><span>выгружаются отдельно, не раздувают печатное КП</span></div>

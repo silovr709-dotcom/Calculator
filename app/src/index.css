@@ -9833,3 +9833,76 @@ body.work-focus .project-section-head { display: none; }
   .client-doc .cd-payment-step { break-inside: avoid; }
   .client-doc .cd-signoff { break-inside: avoid; }
 }
+
+/* ——— КП: визуальная полировка ——— */
+/* Цифры выровнены по разрядам: суммы и количества читаются столбиком */
+.client-doc :is(.cd-rollup-row, .cd-module-table-row, .cd-composition-card, .cd-payment-step, .cd-hero-price, .cd-summary-facts) {
+  font-variant-numeric: tabular-nums;
+}
+.client-doc .cd-rollup-row strong,
+.client-doc .cd-module-table-row strong,
+.client-doc .cd-rollup-sum,
+.client-doc .cd-rollup-qty { text-align: right; }
+
+/* Заголовки разделов: тонкая линия на всю ширину, единый ритм */
+.client-doc .cd-section-head {
+  position: relative;
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 0;
+}
+.client-doc .cd-section-head::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--kp-silver-lo), rgba(200, 212, 230, .12) 60%, transparent);
+}
+.client-doc .cd-section-head h3 { font-size: 24px; letter-spacing: .01em; }
+
+/* Группы ведомости разделяются заметнее строк внутри группы */
+.client-doc .cd-rollup-group + .cd-rollup-group { margin-top: 6px; }
+.client-doc .cd-rollup-total {
+  background: linear-gradient(90deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .015));
+  border-top: 1px solid var(--kp-line);
+}
+.client-doc .cd-rollup-item { padding-left: 22px; }
+
+/* Итог проекта — главная строка документа */
+.client-doc .cd-rollup-grand { padding: 12px 14px; border-top: 1px solid var(--kp-line-strong); }
+.client-doc .cd-rollup-grand strong { font-size: 26px; }
+
+/* Модули: номер и название читаются как единая строка */
+.client-doc .cd-module-table-row { align-items: center; }
+.client-doc .cd-module-table-title b { font-family: var(--kp-serif); font-size: 15px; font-weight: 600; }
+
+/* Подвал: тонкая серебряная линия и реквизиты в одну строку */
+.client-doc .cd-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 10px;
+  border-top: 1px solid var(--kp-line);
+  font-size: 10px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--kp-silver-lo);
+}
+.client-doc .cd-footer span:first-child {
+  font-family: var(--kp-serif);
+  font-size: 14px;
+  letter-spacing: .04em;
+  text-transform: none;
+  color: var(--kp-silver-mid);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .client-doc > * { animation: none !important; }
+}
+
+@media print {
+  .client-doc .cd-section-head { margin-bottom: 6px; }
+  .client-doc .cd-footer { margin-top: 10px; }
+}
