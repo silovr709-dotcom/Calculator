@@ -2229,7 +2229,6 @@ body::before {
 .brand-sub { color: rgba(214,243,255,.62); letter-spacing: .08em; text-transform: uppercase; font-size: 9px; }
 @media print {
   body { background: #fff !important; color: #111 !important; }
-  .client-doc { color: #111 !important; background: #fff !important; }
 }
 
 /* ---------- HUD readability audit: keep the J.A.R.V.I.S. direction usable ---------- */
@@ -2253,22 +2252,22 @@ body::before {
   color: #eafcff;
 }
 
-/* Keep customer-facing documents and printable sheets as clean light islands. */
+/* КП клиенту: тёмно-синяя тема с серебряной типографикой (см. блок «КП: тёмно-синее оформление» в конце файла). */
 .client-doc,
 .client-doc * {
-  --text: #172033;
-  --muted: #64748b;
-  --line: #e2e8f0;
-  --line-strong: #cbd5e1;
-  --accent: #0f766e;
-  --accent-2: #7c3aed;
+  --text: #e6ebf3;
+  --muted: #9aa6bb;
+  --line: rgba(200, 212, 230, .22);
+  --line-strong: rgba(214, 223, 236, .50);
+  --accent: #cfd8e6;
+  --accent-2: #aab8cc;
 }
 .client-doc .table th,
 .client-doc .client-table th {
   position: static;
-  background: #f8fafc !important;
-  color: #475569 !important;
-  border-bottom-color: #e2e8f0 !important;
+  background: rgba(255, 255, 255, .05);
+  color: #9aa6bb;
+  border-bottom-color: rgba(200, 212, 230, .22);
 }
 
 @media print {
@@ -6812,71 +6811,12 @@ input.editable-number { max-width: 120px; text-align: right; }
 
 @media print {
   @page { margin: 12mm; }
-
+  /* Тёмный фон КП печатается как есть (Chrome: «Фоновые графики» тоже включить). */
   .client-doc,
   .client-doc * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
-  /* Тёмная типографика вместо светло-серой */
-  .client-doc,
-  .client-doc * {
-    --text: #0b1220 !important;
-    --muted: #3c4a5c !important;
-    --line: #aebccb !important;
-    --line-strong: #8496a9 !important;
-  }
-  .client-doc { color: #0b1220 !important; background: #fff !important; }
-  .client-doc :where(p, li, td, th, label, summary, div, b, strong) { color: #16233a; }
-  .client-doc :where(.muted, small, em, figcaption) { color: #3c4a5c !important; }
-  .client-doc :where(
-    .cd-section-head span, .cd-module-name span, .cd-module-table-title small,
-    .cd-module-table-materials span, .cd-module-table-materials em,
-    .cd-component-qty, .cd-component-notes span, .cd-compact-explain,
-    .cd-summary-facts span, .cd-terms b, .cd-materials ul, .cd-materials li,
-    .cd-next-steps span, .cd-comment, .cd-measured, .cd-sketch-summary span
-  ) { color: #33435c !important; }
-  .client-doc :where(h1, h2, h3, h4, .cd-section-head h3, .cd-component-main b, .cd-module-name b, .cd-module-table-title b) { color: #0b2342 !important; }
-
-  /* Фирменная шапка печатается цветной, а не белым прямоугольником */
-  .client-doc .cd-hero {
-    background: linear-gradient(135deg, #0b3a75, #123f73 52%, #15607f) !important;
-    color: #ffffff !important;
-    border-color: #0b3a75 !important;
-  }
-  .client-doc .cd-hero :where(h1, h2, b, strong, span, em, small, div) { color: #ffffff !important; }
-  .client-doc .cd-hero :where(.cd-sub, .cd-hero-meta, .cd-hero-price span, .cd-hero-price em) { color: rgba(255,255,255,.86) !important; }
-  .client-doc .cd-hero-price,
-  .client-doc .cd-hero-tags span { background: rgba(255,255,255,.18) !important; border-color: rgba(255,255,255,.40) !important; }
-
-  /* Заливки, которые держат структуру документа */
-  .client-doc .cd-rollup-head { background: #0f2f57 !important; }
-  .client-doc .cd-rollup-head span { color: #ffffff !important; }
-  .client-doc .cd-rollup-total { background: #e7eef8 !important; }
-  .client-doc .cd-rollup-grand { background: #0b3a75 !important; }
-  .client-doc .cd-rollup-grand :where(b, span, strong) { color: #ffffff !important; }
-  .client-doc .cd-module-table-head { background: #e7eef8 !important; }
-  .client-doc .cd-module-table-head span { color: #1f3350 !important; }
-  .client-doc .cd-module-table-row:nth-child(even) { background: #f6f9fd !important; }
-  .client-doc .cd-module-card-head { background: #eef3fa !important; }
-  .client-doc :where(.cd-module-num, .cd-next-steps b) { background: #0b3a75 !important; color: #ffffff !important; }
-  .client-doc .cd-module-table-num { background: #dbe8f8 !important; color: #0b2342 !important; }
-  .client-doc .cd-summary { background: #f3f7fc !important; }
-  .client-doc .cd-summary-facts div { background: #ffffff !important; border-color: #c3d1e0 !important; }
-  .client-doc .cd-terms { background: #eef3fa !important; }
-  .client-doc .cd-included span { background: #e3eefb !important; color: #0b3a75 !important; }
-  .client-doc .cd-component-kind { background: #e7eef8 !important; color: #28415f !important; }
-  .client-doc .cd-total { color: #0b1220 !important; font-weight: 800 !important; }
-
-  /* Линии: светло-серые рамки на бумаге пропадают */
-  .client-doc :where(
-    .cd-module-table, .cd-module-card, .cd-component-list-extra, .cd-rollup-table,
-    .cd-summary, .cd-next-steps div, .cd-terms, .cd-variants, .cd-eskiz-modules,
-    .cd-legal-card, .cd-receipt-grid, .cd-compact-explain
-  ) { border-color: #9db0c4 !important; }
-  .client-doc .cd-component { border-bottom-color: #ccd8e5 !important; }
-  .client-doc .cd-module-table-row { border-bottom-color: #ccd8e5 !important; }
-  .client-doc .cd-section-head { border-bottom-color: #9db0c4 !important; }
 }
 
 /* ===================================================================== */
@@ -9370,127 +9310,335 @@ body.work-focus .project-section-head { display: none; }
 .embedded-eskiz-keys-btn { min-height: 28px; padding: 3px 10px; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; background: transparent; color: #eaf4ff; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .embedded-eskiz-keys-btn:hover { background: rgba(255,255,255,.12); }
 
-/* ——— КП: премиальное оформление документа для клиента ———
-   Спокойная графитовая палитра, золотой акцент, serif для заголовков и цифр,
-   тонкие линии вместо плотных плашек. Только внутри .client-doc. */
+
+/* ——— КП: тёмно-синее оформление с серебром ———
+   Глубокий нави-фон, серебряная типографика и обводки, металлические цифры,
+   тонкие орнаменты, мягкие появления блоков. Только внутри .client-doc. */
 .client-doc {
-  --kp-ink: #1c1f26;
-  --kp-muted: #6b6f78;
-  --kp-line: #e4dfd3;
-  --kp-gold: #9a7b4f;
-  --kp-gold-soft: #e8d9b8;
-  --kp-paper: #f7f4ee;
+  --kp-navy-0: #040b1a;
+  --kp-navy-1: #091a38;
+  --kp-navy-2: #123062;
+  --kp-silver-hi: #f4f7fb;
+  --kp-silver: #d7deea;
+  --kp-silver-mid: #aeb9cc;
+  --kp-silver-lo: #7f8ca3;
+  --kp-line: rgba(200, 212, 230, .22);
+  --kp-line-soft: rgba(200, 212, 230, .12);
+  --kp-line-strong: rgba(214, 223, 236, .55);
+  --kp-metal: linear-gradient(120deg, #ffffff 0%, #d3dbe8 28%, #8d9ab2 52%, #eef2f8 74%, #a7b3c7 100%);
   --kp-serif: Georgia, 'Times New Roman', serif;
-  color: var(--kp-ink);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 34px 38px 30px;
+  border: 1px solid rgba(200, 212, 230, .18);
+  border-radius: 16px;
+  color: var(--kp-silver);
+  background:
+    radial-gradient(900px 520px at 12% -12%, rgba(78, 128, 214, .30), transparent 62%),
+    radial-gradient(760px 520px at 108% 108%, rgba(52, 96, 178, .28), transparent 60%),
+    linear-gradient(168deg, var(--kp-navy-2) 0%, var(--kp-navy-1) 42%, var(--kp-navy-0) 100%);
+  box-shadow: 0 34px 70px -28px rgba(2, 8, 22, .85), inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+/* Серебряная внутренняя рамка с тонкими углами */
+.client-doc::before {
+  content: '';
+  position: absolute;
+  inset: 12px;
+  border: 1px solid rgba(214, 223, 236, .14);
+  border-radius: 10px;
+  background:
+    linear-gradient(90deg, rgba(232, 238, 246, .55), transparent 90px) top left / 90px 1px no-repeat,
+    linear-gradient(180deg, rgba(232, 238, 246, .55), transparent 90px) top left / 1px 90px no-repeat,
+    linear-gradient(270deg, rgba(232, 238, 246, .55), transparent 90px) bottom right / 90px 1px no-repeat,
+    linear-gradient(0deg, rgba(232, 238, 246, .55), transparent 90px) bottom right / 1px 90px no-repeat;
+  pointer-events: none;
+  z-index: -1;
+}
+/* Мягкие диагональные блики по всему листу */
+.client-doc::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(115deg, rgba(255, 255, 255, .025) 0 2px, transparent 2px 26px);
+  pointer-events: none;
+  z-index: -1;
 }
 .client-doc h1, .client-doc h2, .client-doc h3 { font-family: var(--kp-serif); font-weight: 400; letter-spacing: 0; }
-.client-doc .cd-hero {
-  background: var(--kp-ink);
-  color: #f4efe6;
-  border-radius: 6px;
-  border-bottom: 3px solid var(--kp-gold);
-  padding: 34px 36px 30px;
-  margin: 0 0 22px;
-  box-shadow: none;
+.client-doc :is(p, li, td, th, span, div, b, strong, label, summary, figcaption, dt, dd) { color: var(--kp-silver); }
+.client-doc :is(small, em, .muted, figcaption) { color: var(--kp-silver-lo); }
+.client-doc :is(input, select, textarea) {
+  background: rgba(255, 255, 255, .06);
+  color: var(--kp-silver-hi);
+  border-color: var(--kp-line);
 }
-.client-doc .cd-hero .cd-brand { font-family: var(--kp-serif); font-size: 30px; font-weight: 700; color: #f4efe6; letter-spacing: .02em; }
-.client-doc .cd-hero .cd-sub { color: #b9b1a1; letter-spacing: .03em; }
-.client-doc .cd-hero h2 { margin: 26px 0 6px; font-size: 11px; font-family: inherit; font-weight: 700; letter-spacing: .24em; color: var(--kp-gold-soft); opacity: 1; }
-.client-doc .cd-hero h1 { font-size: 40px; line-height: 1.05; color: #fff; }
-.client-doc .cd-hero-meta { color: #c9c1b0; margin-top: 14px; }
-.client-doc .cd-hero-meta b { color: #fff; font-weight: 600; }
-.client-doc .cd-hero-tags { margin-top: 16px; }
+
+/* Шапка */
+.client-doc .cd-hero {
+  position: relative;
+  margin: 0 0 24px;
+  padding: 38px 42px 34px;
+  border: 1px solid rgba(214, 223, 236, .26);
+  border-radius: 12px;
+  background:
+    repeating-radial-gradient(circle at 96% 6%, rgba(214, 223, 236, .12) 0 1px, transparent 1px 20px),
+    linear-gradient(118deg, #18407c 0%, #0f2c5e 46%, #071a3c 100%);
+  box-shadow: 0 22px 44px -26px rgba(0, 0, 0, .7);
+  overflow: hidden;
+}
+.client-doc .cd-hero::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #e9eef6 30%, #8d9ab2 60%, transparent);
+}
+.client-doc .cd-hero .cd-brand {
+  font-family: var(--kp-serif);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  background: var(--kp-metal);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.client-doc .cd-hero .cd-sub { color: var(--kp-silver-mid); letter-spacing: .04em; }
+.client-doc .cd-hero h2 {
+  margin: 30px 0 8px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .3em;
+  color: var(--kp-silver-mid);
+  opacity: 1;
+}
+.client-doc .cd-hero h1 {
+  font-size: 46px;
+  line-height: 1.05;
+  background: var(--kp-metal);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.client-doc .cd-hero-meta { color: var(--kp-silver-mid); margin-top: 16px; }
+.client-doc .cd-hero-meta b { color: var(--kp-silver-hi); font-weight: 600; }
+.client-doc .cd-hero-tags { margin-top: 18px; }
 .client-doc .cd-hero-tags span {
-  background: transparent;
-  border: 1px solid rgba(232, 217, 184, .45);
-  border-radius: 2px;
-  color: var(--kp-gold-soft);
+  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
+  border: 1px solid rgba(214, 223, 236, .40);
+  border-radius: 999px;
+  padding: 5px 12px;
+  color: var(--kp-silver);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: .1em;
+  letter-spacing: .12em;
   text-transform: uppercase;
 }
 .client-doc .cd-hero-price {
-  background: transparent;
+  justify-content: center;
+  padding: 24px 26px;
+  border: 1px solid rgba(214, 223, 236, .32);
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.02));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 14px 30px -18px rgba(0,0,0,.6);
+  text-align: right;
+}
+.client-doc .cd-hero-price span, .client-doc .cd-hero-price em { color: var(--kp-silver-mid); font-size: 11px; letter-spacing: .06em; }
+.client-doc .cd-hero-price b {
+  font-family: var(--kp-serif);
+  font-size: 40px;
+  font-weight: 400;
+  white-space: nowrap;
+  background: var(--kp-metal);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 12px rgba(190, 210, 240, .25));
+}
+
+/* Блоки */
+.client-doc .cd-terms {
   border: none;
-  border-left: 1px solid rgba(232, 217, 184, .35);
-  border-radius: 0;
-  padding: 6px 0 6px 30px;
-  text-align: left;
-  justify-content: flex-end;
+  border-top: 1px solid var(--kp-line);
+  border-bottom: 1px solid var(--kp-line);
+  background: transparent;
 }
-.client-doc .cd-hero-price span, .client-doc .cd-hero-price em { color: #b9b1a1; font-size: 11px; letter-spacing: .04em; }
-.client-doc .cd-hero-price b { font-family: var(--kp-serif); font-size: 36px; font-weight: 400; color: var(--kp-gold-soft); white-space: nowrap; }
+.client-doc .cd-terms b { color: var(--kp-silver-lo); letter-spacing: .08em; text-transform: uppercase; font-size: 10px; }
 
-.client-doc .cd-terms { border-radius: 0; border: none; border-top: 1px solid var(--kp-line); border-bottom: 1px solid var(--kp-line); background: transparent; }
-
-.client-doc .cd-summary, .client-doc .cd-summary-modern {
-  background: #fff;
+.client-doc .cd-summary,
+.client-doc .cd-summary-modern,
+.client-doc .cd-composition-card,
+.client-doc .cd-next-steps > div,
+.client-doc .cd-included,
+.client-doc .cd-materials,
+.client-doc .cd-variants,
+.client-doc .cd-legal-card,
+.client-doc .cd-receipt-grid {
   border: 1px solid var(--kp-line);
-  border-radius: 4px;
-  box-shadow: none;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.02));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
 }
-.client-doc .cd-summary h3, .client-doc .cd-section-head h3, .client-doc .cd-rollup h3, .client-doc .cd-composition h3 {
-  font-size: 22px;
-  color: var(--kp-ink);
+.client-doc .cd-summary h3,
+.client-doc .cd-section-head h3,
+.client-doc .cd-rollup h3,
+.client-doc .cd-composition h3 {
+  font-size: 23px;
+  color: var(--kp-silver-hi);
   margin: 0;
 }
-.client-doc .cd-section-head { border-bottom: 1px solid var(--kp-line); padding-bottom: 8px; margin-bottom: 12px; align-items: baseline; }
-.client-doc .cd-section-head span { color: var(--kp-muted); font-size: 12px; }
+.client-doc .cd-summary h3::before,
+.client-doc .cd-section-head h3::before {
+  content: '';
+  display: inline-block;
+  width: 26px;
+  height: 1px;
+  margin-right: 12px;
+  vertical-align: middle;
+  background: linear-gradient(90deg, transparent, var(--kp-silver));
+}
+.client-doc .cd-section-head {
+  border-bottom: 1px solid var(--kp-line);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+  align-items: baseline;
+}
+.client-doc .cd-section-head span { color: var(--kp-silver-lo); font-size: 12px; }
+
 .client-doc .cd-summary-facts > div {
   background: transparent;
   border: none;
-  border-top: 1px solid var(--kp-line);
+  border-top: 1px solid var(--kp-line-soft);
   border-radius: 0;
-  padding: 12px 2px 4px;
+  padding: 14px 2px 4px;
 }
-.client-doc .cd-summary-facts b { font-family: var(--kp-serif); font-weight: 400; font-size: 24px; color: var(--kp-ink); }
-.client-doc .cd-summary-facts span { color: var(--kp-muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.client-doc .cd-summary-facts b {
+  font-family: var(--kp-serif);
+  font-weight: 400;
+  font-size: 26px;
+  background: var(--kp-metal);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.client-doc .cd-summary-facts span { color: var(--kp-silver-lo); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
+
+.client-doc .cd-included span,
+.client-doc .cd-materials li:first-child { color: var(--kp-silver); }
 .client-doc .cd-included span {
-  background: #fff;
-  border: 1px solid var(--kp-line);
-  border-radius: 2px;
-  color: var(--kp-ink);
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(214, 223, 236, .30);
+  border-radius: 999px;
   font-weight: 600;
 }
-.client-doc .cd-materials b, .client-doc .cd-included b { color: var(--kp-gold); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; }
+.client-doc .cd-materials b, .client-doc .cd-included b { color: var(--kp-silver-mid); font-size: 10px; letter-spacing: .24em; text-transform: uppercase; }
+.client-doc .cd-materials li { color: var(--kp-silver-mid); }
 
-.client-doc .cd-next-steps > div {
-  background: #fff;
-  border: 1px solid var(--kp-line);
-  border-radius: 2px;
-  box-shadow: none;
-}
+.client-doc .cd-next-steps > div { transition: transform .3s ease, border-color .3s ease; }
 .client-doc .cd-next-steps b {
-  background: var(--kp-ink);
-  color: var(--kp-gold-soft);
+  background: var(--kp-metal);
+  color: var(--kp-navy-1);
   border-radius: 50%;
   font-family: var(--kp-serif);
+  box-shadow: 0 0 0 4px rgba(214, 223, 236, .10);
 }
 
-.client-doc .cd-rollup-table { border: 1px solid var(--kp-line); border-radius: 4px; overflow: hidden; background: #fff; }
-.client-doc .cd-rollup-head { background: var(--kp-paper); color: var(--kp-muted); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; border-bottom: 1px solid var(--kp-line); }
-.client-doc .cd-rollup-row { border-bottom: 1px solid #efebe2; }
-.client-doc .cd-rollup-total { background: #fff; }
-.client-doc .cd-rollup-total b { font-weight: 700; }
-.client-doc .cd-rollup-total strong, .client-doc .cd-rollup-sum strong { font-family: var(--kp-serif); font-weight: 400; }
-.client-doc .cd-rollup-grand { background: var(--kp-ink); color: #f4efe6; border-bottom: none; }
-.client-doc .cd-rollup-grand strong { font-family: var(--kp-serif); font-size: 19px; font-weight: 400; color: var(--kp-gold-soft); }
-.client-doc .cd-rollup-grand span { color: #b9b1a1; }
-
-.client-doc .cd-composition-card {
-  background: #fff;
+/* Ведомость и итоги */
+.client-doc .cd-rollup-table {
   border: 1px solid var(--kp-line);
-  border-radius: 4px;
-  box-shadow: none;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(3, 10, 26, .35);
 }
-.client-doc .cd-composition-card-head strong { font-family: var(--kp-serif); font-weight: 400; font-size: 18px; color: var(--kp-ink); }
-.client-doc .cd-composition-card-head b { font-weight: 700; }
+.client-doc .cd-rollup-head {
+  background: rgba(255, 255, 255, .05);
+  border-bottom: 1px solid var(--kp-line);
+  color: var(--kp-silver-lo);
+  font-size: 10px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.client-doc .cd-rollup-head span { color: var(--kp-silver-lo); }
+.client-doc .cd-rollup-row { border-bottom: 1px solid var(--kp-line-soft); }
+.client-doc .cd-rollup-total { background: linear-gradient(90deg, rgba(255,255,255,.07), rgba(255,255,255,.02)); }
+.client-doc .cd-rollup-total b { color: var(--kp-silver-hi); font-weight: 700; }
+.client-doc .cd-rollup-total strong, .client-doc .cd-rollup-sum strong { font-family: var(--kp-serif); font-weight: 400; color: var(--kp-silver-hi); }
+.client-doc .cd-rollup-grand {
+  background: linear-gradient(90deg, rgba(214, 223, 236, .22), rgba(214, 223, 236, .06));
+  border-top: 1px solid var(--kp-line-strong);
+  border-bottom: none;
+}
+.client-doc .cd-rollup-grand b, .client-doc .cd-rollup-grand span { color: var(--kp-silver); }
+.client-doc .cd-rollup-grand strong {
+  font-family: var(--kp-serif);
+  font-size: 22px;
+  font-weight: 400;
+  background: var(--kp-metal);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.client-doc .cd-composition-card-head strong {
+  font-family: var(--kp-serif);
+  font-weight: 400;
+  font-size: 19px;
+  color: var(--kp-silver-hi);
+}
+.client-doc .cd-composition-card-head b { color: var(--kp-silver-hi); font-weight: 700; }
+.client-doc .cd-composition-card-head span { color: var(--kp-silver-lo); }
+.client-doc .cd-composition-card li { color: var(--kp-silver-mid); }
+
+/* Таблицы модулей и прочие рамки — в той же серебряной линии */
+.client-doc :is(table, .cd-module-table, .cd-module-card, .cd-component-list-extra, .cd-rollup-table) {
+  border-color: var(--kp-line);
+}
+.client-doc :is(th) { background: rgba(255, 255, 255, .05); color: var(--kp-silver-lo); }
+.client-doc :is(td) { border-color: var(--kp-line-soft); }
+.client-doc img { border-radius: 10px; border: 1px solid var(--kp-line); }
+
+/* Переходы: блоки плавно появляются при открытии (на экране, не в печати) */
+@media (prefers-reduced-motion: no-preference) {
+  .client-doc > * { animation: kp-rise .7s cubic-bezier(.2, .7, .2, 1) both; }
+  .client-doc > *:nth-child(2) { animation-delay: .06s; }
+  .client-doc > *:nth-child(3) { animation-delay: .12s; }
+  .client-doc > *:nth-child(4) { animation-delay: .18s; }
+  .client-doc > *:nth-child(5) { animation-delay: .24s; }
+  .client-doc > *:nth-child(n+6) { animation-delay: .3s; }
+}
+@keyframes kp-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+/* Наведение (только мышь): карточки чуть приподнимаются */
+@media (hover: hover) {
+  .client-doc .cd-summary-facts > div,
+  .client-doc .cd-composition-card,
+  .client-doc .cd-next-steps > div { transition: transform .3s ease, border-color .3s ease, box-shadow .3s ease; }
+  .client-doc .cd-composition-card:hover,
+  .client-doc .cd-next-steps > div:hover {
+    transform: translateY(-2px);
+    border-color: var(--kp-line-strong);
+    box-shadow: 0 14px 26px -16px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255,255,255,.08);
+  }
+}
 
 @media print {
-  .client-doc .cd-hero, .client-doc .cd-rollup-grand, .client-doc .cd-next-steps b {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+  .client-doc > * { animation: none; }
+  .client-doc {
+    margin: 0;
+    max-width: none;
+    border-radius: 0;
+    box-shadow: none;
   }
-  .client-doc section, .client-doc .cd-hero, .client-doc .cd-composition-card { break-inside: avoid; }
+  .client-doc section,
+  .client-doc .cd-hero,
+  .client-doc .cd-composition-card,
+  .client-doc .cd-rollup-group { break-inside: avoid; }
 }
