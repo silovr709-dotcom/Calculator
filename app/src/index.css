@@ -9356,8 +9356,8 @@ body.work-focus .project-section-head { display: none; }
   --kp-navy-2: #123062;
   --kp-silver-hi: #f4f7fb;
   --kp-silver: #d7deea;
-  --kp-silver-mid: #aeb9cc;
-  --kp-silver-lo: #7f8ca3;
+  --kp-silver-mid: #c3cddd;
+  --kp-silver-lo: #a4b1c6;
   --kp-line: rgba(200, 212, 230, .22);
   --kp-line-soft: rgba(200, 212, 230, .12);
   --kp-line-strong: rgba(214, 223, 236, .55);
@@ -9685,3 +9685,55 @@ body.work-focus .project-section-head { display: none; }
 
 @media print {
 }
+
+/* ——— КП: контраст текста на тёмно-синем ———
+   Финальный блок: перекрывает старые тёмные цвета текста внутри документа.
+   Иерархия: яркое серебро — названия и значения; среднее — описания; приглушённое — подписи. */
+.client-doc .cd-rollup-total b,
+.client-doc .cd-rollup-item .cd-rollup-name,
+.client-doc .cd-composition-card-head b,
+.client-doc .cd-composition-card-head strong,
+.client-doc .cd-summary-copy h3,
+.client-doc .cd-module-table-row strong,
+.client-doc .cd-module-table-title b,
+.client-doc .cd-section-head h3,
+.client-doc .cd-summary-facts b,
+.client-doc .cd-eskiz-modules b,
+.client-doc .cd-included b,
+.client-doc .cd-materials b,
+.client-doc .cd-terms b { color: var(--kp-silver-hi); }
+
+.client-doc .cd-rollup-total span,
+.client-doc .cd-rollup-item .cd-rollup-qty,
+.client-doc .cd-summary-copy p,
+.client-doc .cd-materials ul,
+.client-doc .cd-composition-card ul,
+.client-doc .cd-next-steps span,
+.client-doc .cd-component-qty,
+.client-doc .cd-module-table-head,
+.client-doc .cd-comp,
+.client-doc .cd-detail-row td:first-child,
+.client-doc .cd-detail-row small,
+.client-doc .cd-component-notes span,
+.client-doc .cd-module-table-materials span { color: var(--kp-silver-mid); }
+
+.client-doc .cd-rollup-note { color: #e4c98a; }
+.client-doc .cd-module-table-materials em { color: #e4c98a; }
+.client-doc .cd-composition-card-head span,
+.client-doc .cd-photos figcaption,
+.client-doc .cd-section-head span { color: var(--kp-silver-lo); }
+
+/* Плашки «Действительно до / Оплата / Срок / Гарантия»: тёмная стеклянная карточка, без белых полей */
+.client-doc .cd-terms > div {
+  padding: 10px 12px;
+  border: 1px solid var(--kp-line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .04);
+}
+.client-doc .cd-terms > div span,
+.client-doc .cd-terms > div em,
+.client-doc .cd-term-empty span { color: var(--kp-silver-mid); font-style: italic; }
+.client-doc .cd-terms input,
+.client-doc .cd-terms select,
+.client-doc .cd-terms textarea { color: var(--kp-silver-hi); background: rgba(255, 255, 255, .06); border-color: var(--kp-line); }
+
