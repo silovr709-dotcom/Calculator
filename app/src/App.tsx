@@ -1,11 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CalendarEvent, NotifySettings, ClientProfile, OrderWorkflow, Pricebook, Project, ProjectSettings, Template, KbArticle } from './types';
+import type { ClientProfile, Pricebook, Project, ProjectSettings, Template, KbArticle } from './types';
 import {
   loadGlobalSettings, saveGlobalSettings,
   loadProjects, saveProjects, loadTemplates, saveTemplates,
   loadClientProfiles, saveClientProfiles,
   loadStoredPricebooks, saveStoredPricebooks, uid, loadKbArticles, saveKbArticles,
-  loadCalendarEvents, saveCalendarEvents, loadNotifySettings, saveNotifySettings,
   isStorageServerBacked, setStorageServerBacked } from './lib/storage';
 import {
   loadSyncConfig, saveSyncConfig, performFullSync, parseIncomingHash,
@@ -14,8 +13,7 @@ import {
 import type { SyncConfig, SyncStatus } from './lib/sync';
 import { ProjectHistory } from './lib/history';
 import { todayISO } from './lib/format';
-import { projectStatusForWorkflow, workflowForProject } from './lib/crm';
-import { appendClientHistory, applyClientProfileToProject, applyClientProfilesToProjects, createClientProfileFromProject, ensureClientProfiles, findClientForProject, mergeClientProfiles, mergeClientPatch } from './lib/clientProfiles';
+import { applyClientProfileToProject, applyClientProfilesToProjects, createClientProfileFromProject, ensureClientProfiles, findClientForProject, mergeClientPatch } from './lib/clientProfiles';
 import Dashboard from './components/Dashboard';
 import ProjectEditor, { type ProjectTab } from './components/ProjectEditor';
 import SettingsPanel from './components/SettingsPanel';
@@ -25,9 +23,6 @@ import ServerSaveChip from './components/ServerSaveChip';
 import InstallAppCard from './components/InstallAppCard';
 import ToastHost from './components/ToastHost';
 import { toast } from './lib/toast';
-import NotifySettingsCard from './components/NotifySettingsCard';
-import { useReminders } from './lib/useReminders';
-import { normalizeNotifySettings } from './lib/reminders';
 import { capabilitiesFor } from './lib/permissions';
 import { dehydrateKnown } from './lib/photoStore';
 import NumberFieldCalculator from './components/NumberFieldCalculator';
@@ -39,7 +34,6 @@ import type { Workspace } from './lib/serverWorkspace';
 
 type View =
   | { kind: 'dashboard' }
-  | { kind: 'crm' }
   | { kind: 'project'; id: string; tab?: ProjectTab }
   | { kind: 'quick' }
   | { kind: 'factory'; id?: string }
@@ -48,15 +42,12 @@ type View =
   | { kind: 'pricebook' }
   | { kind: 'server' }
   | { kind: 'analytics' }
-  | { kind: 'schedule' }
   | { kind: 'audit'; id?: string }
   | { kind: 'sync' };
 
 
 
 // Тяжёлые разделы подгружаются по мере открытия: первый экран появляется быстрее.
-const CrmView = lazy(() => import('./components/CrmView'));
-const ScheduleView = lazy(() => import('./components/ScheduleView'));
 const AnalyticsView = lazy(() => import('./components/AnalyticsView'));
 const PriceAuditView = lazy(() => import('./components/PriceAuditView'));
 const KnowledgeView = lazy(() => import('./components/KnowledgeView'));
@@ -65,8 +56,6 @@ const ServerPanel = lazy(() => import('./components/ServerPanel'));
 const SyncPanel = lazy(() => import('./components/SyncPanel'));
 const FactoryBlankView = lazy(() => import('./components/FactoryBlankView'));
 const PublicOfferPage = lazy(() => import('./components/PublicOfferPage'));
-const WorkOrderPage = lazy(() => import('./components/WorkOrderPage'));
-const TelegramNotifyCard = lazy(() => import('./components/TelegramNotifyCard'));
 
 /** Где пользователь был в прошлый раз: экран и открытый проект. */
 const VIEW_STORE = 'recept.nav.view.v1';
@@ -77,7 +66,7 @@ function restoreView(): View {
     const raw = localStorage.getItem(VIEW_STORE);
     if (!raw) return { kind: 'dashboard' };
     const parsed = JSON.parse(raw) as View;
-    const known = ['dashboard', 'crm', 'project', 'quick', 'factory', 'kb', 'settings', 'pricebook', 'server', 'analytics', 'schedule', 'audit', 'sync'];
+    const known = ['dashboard', 'project', 'quick', 'factory', 'kb', 'settings', 'pricebook', 'server', 'analytics', 'audit', 'sync'];
     if (parsed && typeof parsed === 'object' && known.includes(parsed.kind)) return parsed;
   } catch {
     /* испорченные настройки — просто начинаем с проектов */
@@ -110,8 +99,6 @@ export default function App() {
   const [lastWork, setLastWork] = useState<{ id: string; tab?: ProjectTab } | null>(() => loadLastWork());
   const [savedFlash, setSavedFlash] = useState(false);
     const [kbArticles, setKbArticles] = useState<KbArticle[]>(() => loadKbArticles());
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(() => loadCalendarEvents());
-  const [notifySettings, setNotifySettings] = useState<NotifySettings>(() => normalizeNotifySettings(loadNotifySettings()));
 const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig());
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => (loadSyncConfig().enabled ? 'synced' : 'idle'));
   const [projectHistory] = useState(() => new ProjectHistory());
@@ -197,7 +184,6 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
     setGlobalSettings(workspace.settings);
     setStored(workspace.pricebooks);
     setKbArticles(workspace.knowledge);
-    setCalendarEvents(workspace.events);
   }, []);
   const server = useServerSync(applyWorkspace);
   const appVersion = useAppVersion();
@@ -215,8 +201,6 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
       /* память браузера переполнена — просто не запомним */
     }
   }, [view]);
-  // Служба напоминаний: показывает уведомления в нужный момент на любом экране.
-  useReminders(projects, calendarEvents, notifySettings, server.user?.name || server.user?.login || '');
   // Клиентская ссылка вида …/#offer=abc123 — определяем её до любой загрузки базы.
   // Меню «Ещё» в нижней панели: на телефоне нет наведения, поэтому открываем по нажатию.
   const [moreOpen, setMoreOpen] = useState(false);
@@ -237,13 +221,6 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
     const byHash = /[#&]offer=([a-f0-9]{10,32})/.exec(window.location.hash);
     return byHash ? byHash[1] : '';
   });
-  // Наряд мастеру: …/mo/abc123 — открывается без входа, как и КП клиенту.
-  const [workOrderId] = useState(() => {
-    const byPath = /\/mo\/([a-f0-9]{10,32})/.exec(window.location.pathname);
-    if (byPath) return byPath[1];
-    const byHash = /[#&]order=([a-f0-9]{10,32})/.exec(window.location.hash);
-    return byHash ? byHash[1] : '';
-  });
   // На своём сервере переполненный localStorage — не беда: база живёт на сервере.
   useEffect(() => { setStorageServerBacked(server.mode === 'server'); }, [server.mode]);
   const serverScheduleSave = server.scheduleSave;
@@ -259,8 +236,7 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
     const go = (next: View) => () => {
       setView(next);
       setMoreOpen(false);
-      toast.info(`Открываю: ${next.kind === 'schedule' ? 'График работ'
-        : next.kind === 'analytics' ? 'Аналитика'
+      toast.info(`Открываю: ${next.kind === 'analytics' ? 'Аналитика'
         : next.kind === 'audit' ? 'Проверка цен'
         : next.kind === 'kb' ? 'База знаний'
         : next.kind === 'pricebook' ? 'Прайс и версии'
@@ -268,9 +244,7 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
         : next.kind === 'server' ? 'Сервер'
         : 'Настройки'}`);
     };
-    const items: Array<{ key: View['kind']; label: string; hint: string; open: () => void }> = [
-      { key: 'schedule', label: 'График работ', hint: 'монтажи', open: go({ kind: 'schedule' }) },
-    ];
+    const items: Array<{ key: View['kind']; label: string; hint: string; open: () => void }> = [];
     if (can.viewCost) {
       items.push({ key: 'analytics', label: 'Аналитика', hint: 'деньги', open: go({ kind: 'analytics' }) });
       items.push({ key: 'audit', label: 'Проверка цен', hint: 'опт/розн.', open: go({ kind: 'audit' }) });
@@ -294,8 +268,8 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
   // через небольшую паузу после последнего изменения.
   useEffect(() => {
     if (!serverReady) return;
-    serverScheduleSave({ projects, clients, templates, settings: globalSettings, pricebooks: stored, knowledge: kbArticles, events: calendarEvents });
-  }, [calendarEvents, clients, globalSettings, kbArticles, projects, serverReady, serverScheduleSave, stored, templates]);
+    serverScheduleSave({ projects, clients, templates, settings: globalSettings, pricebooks: stored, knowledge: kbArticles });
+  }, [clients, globalSettings, kbArticles, projects, serverReady, serverScheduleSave, stored, templates]);
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}data/pricebook-visma-2026.json`)
@@ -474,16 +448,6 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
     scheduleCacheFlush();
   }, [scheduleCacheFlush]);
 
-  const persistNotifySettings = useCallback((next: NotifySettings) => {
-    setNotifySettings(next);
-    saveNotifySettings(next);
-  }, []);
-
-  const persistCalendarEvents = useCallback((next: CalendarEvent[]) => {
-    setCalendarEvents(next);
-    saveCalendarEvents(next);
-  }, []);
-
     const persistKb = useCallback((next: KbArticle[]) => {
     setKbArticles(next);
     saveKbArticles(next);
@@ -578,26 +542,6 @@ const persistTemplates = useCallback((next: Template[]) => {
     persistProjects(projects.map((x) => (x.id === p.id ? { ...projectToSave, updatedAt: new Date().toISOString() } : x)));
   }, [clients, persistClients, projects, persistProjects, projectHistory]);
 
-  const updateProjectWorkflow = useCallback((id: string, patch: Partial<OrderWorkflow>) => {
-    const project = projects.find((item) => item.id === id);
-    if (!project) return;
-    const workflow = workflowForProject(project);
-    const nextStatus = patch.status ? projectStatusForWorkflow(patch.status, project.status) : project.status;
-    updateProject({
-      ...project,
-      status: nextStatus,
-      orderWorkflow: { ...workflow, ...patch, updatedAt: new Date().toISOString() },
-    });
-    if (project.clientId) {
-      const client = clients.find((item) => item.id === project.clientId);
-      if (client && patch.status && patch.status !== workflow.status) {
-        persistClients(clients.map((item) => item.id === client.id
-          ? appendClientHistory(client, { kind: 'status', title: `Статус заказа: ${patch.status}`, projectId: project.id }, uid('hist'))
-          : item));
-      }
-    }
-  }, [clients, persistClients, projects, updateProject]);
-
   const undoProject = useCallback((id: string) => {
     const previous = projectHistory.undo(id);
     if (!previous) return;
@@ -650,17 +594,6 @@ const persistTemplates = useCallback((next: Template[]) => {
       </>
     );
   }
-  if (workOrderId) {
-    return (
-      <>
-        <ToastHost />
-        <Suspense fallback={<div className="public-offer-state"><h1>Загружаем наряд…</h1></div>}>
-          <WorkOrderPage id={workOrderId} />
-        </Suspense>
-      </>
-    );
-  }
-
   if (server.mode === 'checking') {
     return <div className="app-fatal app-boot">Подключаемся к серверу…</div>;
   }
@@ -721,11 +654,6 @@ const persistTemplates = useCallback((next: Template[]) => {
             <button className={view.kind === 'dashboard' ? 'active' : ''} onClick={() => setView({ kind: 'dashboard' })}>
               <span className="nav-icon nav-projects" aria-hidden="true" />Проекты<span className="nav-count">{projects.length}</span>
             </button>
-            {can.viewCrm && (
-              <button className={view.kind === 'crm' ? 'active' : ''} onClick={() => setView({ kind: 'crm' })}>
-                <span className="nav-icon nav-crm" aria-hidden="true" />CRM<span className="nav-count">{projects.length}</span>
-              </button>
-            )}
             {can.viewClientPrices && (
               <button className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>
                 <span className="nav-icon nav-quick" aria-hidden="true" />Быстрый расчёт
@@ -736,9 +664,6 @@ const persistTemplates = useCallback((next: Template[]) => {
                 <span className="nav-icon nav-factory" aria-hidden="true" />Бланк на фабрику
               </button>
             )}
-            <button className={view.kind === 'schedule' ? 'active' : ''} onClick={() => setView({ kind: 'schedule' })}>
-              <span className="nav-icon nav-schedule" aria-hidden="true" />График работ
-            </button>
           </div>
           {(can.editProjects || can.viewPricebook) && (
             <div className="sidebar-nav-group">
@@ -807,50 +732,8 @@ const persistTemplates = useCallback((next: Template[]) => {
             }}
             onImport={importProject}
             onQuick={() => setView({ kind: 'quick' })}
-            onOpenCrm={() => setView({ kind: 'crm' })}
-            events={calendarEvents}
-            me={server.user?.name || server.user?.login || ''}
-            onOpenSchedule={() => setView({ kind: 'schedule' })}
             onOpenSync={() => setView({ kind: 'sync' })}
             pricebookLabel={`${activePricebook.meta.name} · импорт ${activePricebook.meta.importedAt.slice(0, 10)}`}
-          />
-        )}
-        {view.kind === 'crm' && !can.viewCrm && (
-          <div className="app-no-access">CRM доступна менеджеру и владельцу.</div>
-        )}
-        {view.kind === 'crm' && can.viewCrm && (
-          <CrmView
-            projects={projectsForUi}
-            clients={clients}
-            pricebooks={pricebooks}
-            onOpen={(id) => setView({ kind: 'project', id })}
-            onProjectChange={updateProject}
-            onWorkflowChange={updateProjectWorkflow}
-            onClientChange={(client) => {
-              // Новый клиент добавляется, существующий — обновляется.
-              const exists = clients.some((item) => item.id === client.id);
-              persistClients(exists ? clients.map((item) => (item.id === client.id ? client : item)) : [client, ...clients]);
-            }}
-            onClientHistory={(clientId, entry) => {
-              const client = clients.find((item) => item.id === clientId);
-              if (client) persistClients(clients.map((item) => item.id === clientId ? appendClientHistory(client, entry, uid('hist')) : item));
-            }}
-            onCreateDeal={(clientName) => {
-              const name = prompt('Название нового расчёта:', `Кухня ${clientName}`)?.trim();
-              if (!name) return;
-              createProject({ name, client: clientName, date: todayISO(), comment: '' });
-              toast.ok('Сделка создана — открываю список проектов');
-              setView({ kind: 'dashboard' });
-            }}
-            onOpenSchedule={() => setView({ kind: 'schedule' })}
-            onMergeClients={(targetId, sourceId) => {
-              const target = clients.find((item) => item.id === targetId);
-              const source = clients.find((item) => item.id === sourceId);
-              if (!target || !source || target.id === source.id) return;
-              const merged = mergeClientProfiles(target, source);
-              persistClients([merged, ...clients.filter((item) => item.id !== targetId && item.id !== sourceId)]);
-              persistProjects(projects.map((project) => project.clientId === sourceId ? { ...project, clientId: targetId, client: merged.name } : project));
-            }}
           />
         )}
         {view.kind === 'analytics' && (can.viewCost
@@ -867,20 +750,10 @@ const persistTemplates = useCallback((next: Template[]) => {
             onOpen={(id) => setView({ kind: 'project', id })}
           />
         )}
-        {view.kind === 'schedule' && (
-          <ScheduleView
-            projects={projectsForUi}
-            events={calendarEvents}
-            me={server.user?.name || server.user?.login || ''}
-            onEventsChange={persistCalendarEvents}
-            onOpen={(id) => setView({ kind: 'project', id })}
-            onProjectChange={updateProject}
-          />
-        )}
         {view.kind === 'server' && (
           <ServerPanel
             sync={server}
-            workspace={{ projects, clients, templates, settings: globalSettings, pricebooks: stored, knowledge: kbArticles, events: calendarEvents }}
+            workspace={{ projects, clients, templates, settings: globalSettings, pricebooks: stored, knowledge: kbArticles }}
             onRestored={applyWorkspace}
           />
         )}
@@ -914,7 +787,6 @@ const persistTemplates = useCallback((next: Template[]) => {
             onDuplicate={() => duplicateProject(current.id)}
             initialTab={view.tab}
             clientProfile={findClientForProject(currentRaw ?? current, clients) ?? null}
-            onOpenCrm={() => setView({ kind: 'crm' })}
             onDelete={() => deleteProject(current.id)}
             templates={templates}
             onOpenFactoryBlank={() => setView({ kind: 'factory', id: current.id })}
@@ -950,8 +822,6 @@ const persistTemplates = useCallback((next: Template[]) => {
         )}
         {view.kind === 'settings' && (
           <>
-            <NotifySettingsCard value={notifySettings} onChange={persistNotifySettings} />
-            {can.manageUsers && server.mode === 'server' && <TelegramNotifyCard />}
             <SettingsPanel
               title="Настройки по умолчанию (для новых проектов)"
               settings={globalSettings}
@@ -1008,11 +878,6 @@ const persistTemplates = useCallback((next: Template[]) => {
           <b>Проекты</b>
           <small>{projects.length}</small>
         </button>
-        <button type="button" className={view.kind === 'crm' ? 'active' : ''} onClick={() => setView({ kind: 'crm' })}>
-          <span className="nav-icon nav-crm" aria-hidden="true" />
-          <b>CRM</b>
-          <small>клиенты</small>
-        </button>
         <button type="button" className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>
           <span className="nav-icon nav-quick" aria-hidden="true" />
           <b>Быстрый</b>
@@ -1028,7 +893,7 @@ const persistTemplates = useCallback((next: Template[]) => {
             type="button"
             aria-expanded={moreOpen}
             aria-haspopup="menu"
-            className={(['kb', 'pricebook', 'sync', 'settings', 'schedule', 'analytics', 'audit', 'server'] as string[]).includes(view.kind) ? 'active' : ''}
+            className={(['kb', 'pricebook', 'sync', 'settings', 'analytics', 'audit', 'server'] as string[]).includes(view.kind) ? 'active' : ''}
             onClick={() => setMoreOpen((open) => !open)}
           >
             <span className="nav-icon nav-settings" aria-hidden="true" />
@@ -1049,7 +914,6 @@ const persistTemplates = useCallback((next: Template[]) => {
         workMode={workMode}
         onWorkModeChange={setWorkMode}
         onOpenDashboard={() => setView({ kind: 'dashboard' })}
-        onOpenCrm={() => setView({ kind: 'crm' })}
         onOpenQuick={() => setView({ kind: 'quick' })}
         onOpenFactory={(projectId) => setView({ kind: 'factory', id: projectId })}
         onOpenKb={() => setView({ kind: 'kb' })}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ClientProfile, Pricebook, Project } from '../types';
 import { defaultSettings } from './storage';
-import { buildDayDesk, buildProjectActionAlerts, projectNextStep } from './workflow';
+import { buildProjectActionAlerts, projectNextStep } from './workflow';
 
 const pb: Pricebook = {
   meta: {
@@ -33,29 +33,16 @@ describe('workflow helpers', () => {
     expect(step.target).toBe('modules');
   });
 
-  it('подсказывает контакт, если КП отправлено и дата просрочена', () => {
-    const p = project({
-      lines: [{ id: 'l1', itemId: 'x', pricebookId: 'pb', name: 'Комплект мебели', article: null, category: 'Прочее', group: 'Прочее', priceKind: 'fixed', priceBasis: 'unit', price: 1000, priceGroup: null, unit: 'шт', qty: 1, params: {}, note: '' }],
-      checklistConfirmations: ['plinth', 'baseboard', 'worktop', 'wallPanel'],
-      orderWorkflow: { status: 'offerSent', nextContactAt: '2026-01-01T12:00:00.000Z', nextAction: 'Позвонить' },
-    });
-    const step = projectNextStep(p, pb, client());
-    expect(step.key).toBe('contact-due');
-    expect(step.target).toBe('crm');
+  it('без клиента первым шагом просит указать клиента', () => {
+    const step = projectNextStep(project({ client: '' }), pb, null);
+    expect(step.key).toBe('client-missing');
   });
 
-  it('собирает рабочий стол дня с проблемами клиента, оплаты и фабрики', () => {
+  it('при составе без КП предлагает собрать КП клиенту', () => {
     const p = project({
-      id: 'p2', client: '', clientId: 'c2', status: 'approved',
-      modules: [{ id: 'm1', type: 'Нижний шкаф', name: 'Низ 600', qty: 1, widthMm: 600, heightMm: 720, depthMm: 560, facades: 0, drawers: 0, shelves: 0, hinges: 0, handles: 0, lifts: 0, legs: 0, facadeWmm: null, facadeHmm: null, slots: {} as never }],
-      orderWorkflow: { status: 'approved' },
+      lines: [{ id: 'l1', itemId: 'x', pricebookId: 'pb', name: 'Комплект мебели', article: null, category: 'Прочее', group: 'Прочее', priceKind: 'fixed', priceBasis: 'unit', unit: 'шт', price: 1000, priceGroup: 'Прочее', qty: 1, params: {} }],
     });
-    const c = client({ id: 'c2', name: 'Петров', phones: [] });
-    const day = buildDayDesk([p], [pb], [c]);
-    expect(day.missingPhone).toBe(1);
-    expect(day.missingPayment).toBe(1);
-    expect(day.factoryNotExported).toBe(1);
-    expect(day.tasks.length).toBeGreaterThan(0);
+    expect(projectNextStep(p, null, client()).key).toBe('prepare-offer');
   });
 
   it('находит незаполненную схему столешницы как задачу фабрики', () => {

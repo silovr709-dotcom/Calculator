@@ -36,7 +36,7 @@ const PROJECT_STAGE_LABELS: Record<ProjectStage, { label: string; hint: string; 
   eskiz: { label: 'Эскиз / замер', hint: 'Эскиз PRO, замер и фото', step: '2' },
   check: { label: 'Проверка', hint: 'ошибки, предупреждения и рекомендации', step: '3' },
   client: { label: 'Клиент', hint: 'КП, эскиз, договор и чек', step: '4' },
-  order: { label: 'Заказ', hint: 'CRM, закупка и фабрика', step: '5' },
+  order: { label: 'Заказ', hint: 'статус, закупка и фабрика', step: '5' },
 };
 
 const PROJECT_STAGE_ORDER: ProjectStage[] = ['composition', 'eskiz', 'check', 'client', 'order'];
@@ -69,7 +69,6 @@ export default function ProjectEditor(props: {
   templates?: Template[];
   onSaveModuleTemplate?: (name: string, module: KitchenModule) => void;
   onOpenFactoryBlank?: () => void;
-  onOpenCrm?: () => void;
   clientProfile?: ClientProfile | null;
   initialTab?: ProjectTab;
 }) {
@@ -561,7 +560,6 @@ export default function ProjectEditor(props: {
           client={props.clientProfile}
           onOpenTab={openProjectTab}
           onOpenFactory={props.onOpenFactoryBlank}
-          onOpenCrm={props.onOpenCrm}
         />
       </div>
       </Suspense>)}

@@ -1,8 +1,7 @@
 import { toast } from '../lib/toast';
 import { useMemo, useState } from 'react';
-import type { ClientOfferSnapshot, OrderWorkflowStatus, Pricebook, Project, ProjectLine, SummaryGroup } from '../types';
+import type { ClientOfferSnapshot, Pricebook, Project, ProjectLine, SummaryGroup } from '../types';
 import { SUMMARY_GROUPS } from '../types';
-import { ORDER_WORKFLOW_STATUSES, dateInputValue, projectStatusForWorkflow, workflowForProject } from '../lib/crm';
 import { calcTotals } from '../lib/engine';
 import { fmtDate, fmtMoney, fmtNum } from '../lib/format';
 import { moduleToLines } from '../lib/modules';
@@ -54,8 +53,6 @@ function buildProcurement(lines: ProjectLine[], lineCalcs: ReturnType<typeof cal
   }
   return Array.from(map.values()).sort((a, b) => SUMMARY_GROUPS.indexOf(a.group) - SUMMARY_GROUPS.indexOf(b.group) || a.name.localeCompare(b.name, 'ru'));
 }
-
-const ORDER_STATUSES = ORDER_WORKFLOW_STATUSES;
 
 const issueFilterOptions = [
   { value: 'all', label: 'Все' },
@@ -131,21 +128,9 @@ export default function OrderCenterPanel(props: {
   const minVariantClient = variantRows.length ? Math.min(...variantRows.map((row) => row.calculation.totals.client)) : null;
   const snapshots = project.clientOfferSnapshots ?? [];
   const latestSnapshot = snapshots[0];
-  const workflow = workflowForProject(project);
-  const workflowStatus = ORDER_STATUSES.find((item) => item.value === workflow.status) ?? ORDER_STATUSES[0];
-
   const canSendClient = validation.errors.length === 0;
   const readyForFactory = validation.errors.length === 0 && validation.warnings.length === 0 && combinedLines.length > 0 && (eskizMarkers.length === 0 || boundEskizMarkers.length === eskizMarkers.length);
   const risk = validation.errors.length > 0 ? 'high' : validation.warnings.length > 0 || calculated.totals.unpricedCount > 0 ? 'medium' : 'low';
-
-  const updateWorkflow = (patch: Partial<typeof workflow>) => {
-    props.onChange({ ...project, orderWorkflow: { ...workflow, ...patch, updatedAt: new Date().toISOString() } });
-  };
-
-  const setWorkflowStatus = (status: OrderWorkflowStatus, nextAction?: string) => {
-    const projectStatus = projectStatusForWorkflow(status, project.status);
-    props.onChange({ ...project, status: projectStatus, orderWorkflow: { ...workflow, status, nextAction: nextAction ?? workflow.nextAction, updatedAt: new Date().toISOString() } });
-  };
 
   const updateSnapshot = (id: string, patch: Partial<ClientOfferSnapshot>) => {
     props.onChange({ ...project, clientOfferSnapshots: snapshots.map((snapshot) => (snapshot.id === id ? { ...snapshot, ...patch } : snapshot)) });
@@ -190,10 +175,6 @@ export default function OrderCenterPanel(props: {
       `Пакет заказа: ${project.name}`,
       project.client ? `Клиент: ${project.client}` : null,
       `Дата: ${project.date}`,
-      `Статус заказа: ${workflowStatus.label}`,
-      workflow.nextAction ? `Следующее действие: ${workflow.nextAction}` : null,
-      workflow.nextContactAt ? `Следующий контакт: ${fmtDate(workflow.nextContactAt)}` : null,
-      workflow.managerComment ? `Комментарий менеджера: ${workflow.managerComment}` : null,
       `КП: ${canSendClient ? 'можно отправлять' : 'нельзя отправлять'}`,
       `Готовность к фабрике: ${readyForFactory ? 'готово' : 'нужна проверка'}`,
       `Себестоимость: ${fmtMoney(calculated.totals.cost)}`,
@@ -239,29 +220,6 @@ export default function OrderCenterPanel(props: {
 
       <div className="order-master-detail">
         <aside className="order-side-panel">
-      <section className="card order-workflow no-print">
-        <div className="section-head"><div><h3>Статус заказа PRO</h3><p className="muted small">Мини-CRM для менеджера: этап, следующий контакт и что нужно сделать дальше.</p></div><span className="order-status-pill">{workflowStatus.label}<small>{workflowStatus.hint}</small></span></div>
-        <div className="order-status-picker">
-          <label>Текущий этап заказа
-            <select value={workflow.status} onChange={(event) => setWorkflowStatus(event.target.value as OrderWorkflowStatus)}>
-              {ORDER_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label} — {status.hint}</option>)}
-            </select>
-          </label>
-          <p className="muted small">Для ежедневной работы используйте быстрые кнопки ниже, полный этап выбирается из одного списка.</p>
-        </div>
-        <div className="order-workflow-fields">
-          <label>Следующее действие<input value={workflow.nextAction ?? ''} onChange={(event) => updateWorkflow({ nextAction: event.target.value })} placeholder="Например: отправить обновлённое КП" /></label>
-          <label>Дата следующего контакта<input type="date" value={dateInputValue(workflow.nextContactAt)} onChange={(event) => updateWorkflow({ nextContactAt: event.target.value ? new Date(`${event.target.value}T12:00:00`).toISOString() : undefined })} /></label>
-          <label className="span-2">Комментарий менеджера<textarea value={workflow.managerComment ?? ''} onChange={(event) => updateWorkflow({ managerComment: event.target.value })} placeholder="Что согласовано, что ждём от клиента, особые условия заказа" rows={3} /></label>
-        </div>
-        <div className="quick-status-actions">
-          <button className="btn ghost" onClick={() => setWorkflowStatus('offerSent', 'Созвониться с клиентом и получить обратную связь')}>КП отправлено</button>
-          <button className="btn ghost" onClick={() => setWorkflowStatus('approved', 'Подготовить пакет на проверку технолога')}>Согласовано</button>
-          <button className="btn ghost" disabled={!canSendClient} onClick={() => setWorkflowStatus('techCheck', 'Технолог проверяет эскиз, бланк и комплектацию')}>Передать технологу</button>
-          <button className="btn primary" disabled={!readyForFactory} onClick={() => setWorkflowStatus('factorySent', 'Контролировать подтверждение фабрики')}>Передать на фабрику</button>
-        </div>
-      </section>
-
       <section className="order-actions card no-print">
         <div><h3>Пакет КП / заказа</h3><p className="muted small">Сохраните контрольную версию перед отправкой клиенту, затем используйте закупку и бланк для передачи дальше.</p></div>
         <div className="snapshot-form">

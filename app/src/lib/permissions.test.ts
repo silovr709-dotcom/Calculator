@@ -13,14 +13,12 @@ describe('права доступа по ролям', () => {
     expect(can('manager', 'manageUsers')).toBe(false);
   });
 
-  it('замерщик работает с проектом, но без цен и CRM', () => {
+  it('замерщик работает с проектом, но без цен', () => {
     expect(can('measurer', 'editProjects')).toBe(true);
     expect(can('measurer', 'viewClientPrices')).toBe(false);
-    expect(can('measurer', 'viewCrm')).toBe(false);
   });
 
-  it('монтажник видит только график', () => {
-    expect(can('installer', 'viewSchedule')).toBe(true);
+  it('монтажник не видит проекты и цены', () => {
     expect(can('installer', 'editProjects')).toBe(false);
     expect(can('installer', 'viewClientPrices')).toBe(false);
   });

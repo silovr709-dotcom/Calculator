@@ -46,7 +46,6 @@ export default function CommandPalette(props: {
   workMode: WorkMode;
   onWorkModeChange: (mode: WorkMode) => void;
   onOpenDashboard: () => void;
-  onOpenCrm: () => void;
   onOpenQuick: () => void;
   onOpenFactory: (projectId?: string) => void;
   onOpenKb: () => void;
@@ -74,8 +73,7 @@ export default function CommandPalette(props: {
     const current = props.currentProject ?? null;
     const add = (item: CommandItem) => list.push(item);
 
-    add({ id: 'nav-dashboard', group: 'Навигация', title: 'Открыть рабочий стол дня', subtitle: 'Проекты, задачи на сегодня, проблемные заказы', badge: 'Сегодня', keywords: 'проекты dashboard рабочий стол сегодня задачи', run: props.onOpenDashboard });
-    add({ id: 'nav-crm', group: 'Навигация', title: 'Открыть CRM клиентов', subtitle: 'Клиенты, контакты, документы, деньги, история', badge: 'CRM', keywords: 'клиент клиенты crm контакт звонок whatsapp деньги документы', run: props.onOpenCrm });
+    add({ id: 'nav-dashboard', group: 'Навигация', title: 'Открыть список проектов', subtitle: 'Поиск, фильтры и новые расчёты', badge: 'Проекты', keywords: 'проекты список поиск dashboard главная', run: props.onOpenDashboard });
     add({ id: 'nav-quick', group: 'Навигация', title: 'Быстрый расчёт', subtitle: 'Предварительная оценка кухни', keywords: 'быстрый расчет оценка калькулятор', run: props.onOpenQuick });
     add({ id: 'nav-factory', group: 'Навигация', title: 'Бланк на фабрику', subtitle: current ? `Открыть для проекта «${current.name}»` : 'Выбрать проект и заполнить официальный бланк', badge: 'Excel', keywords: 'фабрика бланк производство висма excel верх низ', run: () => props.onOpenFactory(current?.id) });
     add({ id: 'nav-kb', group: 'Навигация', title: 'База знаний', subtitle: 'Инструкции, материалы, подсказки', keywords: 'база знания инструкция помощь', run: props.onOpenKb });
@@ -89,7 +87,7 @@ export default function CommandPalette(props: {
       const next = projectNextStep(current, pb, client);
       add({ id: 'current-next', group: 'Текущий проект', title: next.title, subtitle: next.detail, badge: next.actionLabel, tone: next.tone, keywords: `следующий шаг ${next.target}`, run: () => {
         if (next.target === 'factory') props.onOpenFactory(current.id);
-        else if (next.target === 'crm' || next.target === 'payment') props.onOpenCrm();
+        else if (next.target === 'payment') props.onOpenProject(current.id, 'client');
         else if (next.target === 'client') props.onOpenProject(current.id, 'client');
         else if (next.target === 'check') props.onOpenProject(current.id, 'check');
         else if (next.target === 'modules') props.onOpenProject(current.id, 'modules');
@@ -140,7 +138,7 @@ export default function CommandPalette(props: {
         badge: 'клиент',
         tone: client.phones?.length ? 'info' : 'warn',
         keywords: `${client.phones?.join(' ')} ${client.emails?.join(' ')} ${client.managerComment ?? ''}`,
-        run: () => latest ? props.onOpenProject(latest.id) : props.onOpenCrm(),
+        run: () => { if (latest) props.onOpenProject(latest.id); },
       });
     });
 

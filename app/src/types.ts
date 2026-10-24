@@ -238,107 +238,6 @@ export interface OrderWorkflow {
   lostReason?: string;
 }
 
-/** Плановые даты по заказу: замер, готовность, доставка и монтаж. */
-export type ScheduleStatus = 'planned' | 'confirmed' | 'done' | 'problem';
-
-export interface ProjectSchedule {
-  measureAt?: string;
-  readyAt?: string;
-  deliveryAt?: string;
-  installAt?: string;
-  /** Сколько дней занимает монтаж, по умолчанию 1. */
-  installDays?: number;
-  /** Бригада или монтажник. */
-  team?: string;
-  address?: string;
-  note?: string;
-  status?: ScheduleStatus;
-  /** За сколько минут напомнить про монтаж. Пусто — берутся общие настройки. */
-  reminders?: number[];
-  /** Телефон на объекте — попадает в подписку календаря и в наряд. */
-  phone?: string;
-  /** Файлы к монтажу: эскизы, схемы, фото объекта. */
-  attachments?: CalendarAttachment[];
-}
-
-/** Своё дело в календаре: замер, выезд, встреча, монтаж — без привязки к проекту. */
-export type CalendarEventKind = 'measure' | 'delivery' | 'install' | 'meeting' | 'call' | 'service' | 'other';
-
-/** Файл, прикреплённый к делу: фото, PDF, схема. Хранится на хостинге. */
-export interface CalendarAttachment {
-  fileId: string;
-  name: string;
-  size?: number;
-  mime?: string;
-}
-
-export interface CalendarEvent {
-  id: string;
-  title: string;
-  kind: CalendarEventKind;
-  /** Дата начала, YYYY-MM-DD. */
-  date: string;
-  /** Сколько дней занимает дело, по умолчанию 1. */
-  days?: number;
-  timeStart?: string;
-  timeEnd?: string;
-  /** Кому поручено: логины или имена сотрудников. Пусто — общее дело. */
-  assignees: string[];
-  clientName?: string;
-  /** Телефон клиента: уезжает в подписку календаря, чтобы звонить одним касанием. */
-  clientPhone?: string;
-  address?: string;
-  note?: string;
-  attachments?: CalendarAttachment[];
-  projectId?: string;
-  status: ScheduleStatus;
-  done?: boolean;
-  /** За сколько минут до начала напомнить. Пусто — берутся настройки по умолчанию. */
-  reminders?: number[];
-  createdAt: string;
-  createdBy?: string;
-  updatedAt: string;
-}
-
-/** Настройки уведомлений — свои на каждом устройстве. */
-export interface NotifySettings {
-  /** За сколько минут напоминать по умолчанию. Значения любые, количество не ограничено. */
-  defaults: number[];
-  /** Свои интервалы для отдельных типов дел: замер, монтаж, звонок и т. д. */
-  byKind?: Partial<Record<CalendarEventKind, number[]>>;
-  /** Повторять напоминание каждые N минут, пока дело не отмечено (0 — не повторять). */
-  repeatEveryMin?: number;
-  /** Сколько повторов максимум. */
-  repeatCount?: number;
-  /** Во сколько напоминать о делах без времени (час суток). */
-  allDayHour: number;
-  /** Не беспокоить раньше этого часа. */
-  quietFrom: number;
-  /** Не беспокоить позже этого часа. */
-  quietUntil: number;
-  /** Напоминать о датах заказов (монтаж, доставка, замер из проекта). */
-  includeProjects: boolean;
-}
-
-/** Тип задачи в CRM: от него зависит значок и подсказка. */
-export type CrmTaskKind = 'call' | 'meet' | 'measure' | 'docs' | 'payment' | 'delivery' | 'other';
-
-export interface CrmTask {
-  id: string;
-  /** Кто поставил задачу: 'auto:<правило>' — автоматика, пусто — человек. */
-  origin?: string;
-  title: string;
-  kind: CrmTaskKind;
-  /** Срок в формате YYYY-MM-DD. Без срока задача считается «когда-нибудь». */
-  dueAt?: string;
-  done?: boolean;
-  doneAt?: string;
-  assignee?: string;
-  comment?: string;
-  createdAt: string;
-  createdBy?: string;
-}
-
 export type ClientTag = 'hot' | 'discount' | 'repeat' | 'install' | 'problem' | 'designer' | string;
 
 export type ClientHistoryKind = 'note' | 'status' | 'contact' | 'document' | 'payment' | 'project';
@@ -679,7 +578,7 @@ export interface Project {
   id: string;
   name: string;
   client: string;
-  /** Связь с единой CRM-базой клиентов. Старые проекты связываются автоматически по телефону/имени. */
+  /** Связь с базой клиентов (КП и документы). Старые проекты связываются автоматически по телефону/имени. */
   clientId?: string;
   date: string;       // ISO date
   comment: string;
@@ -696,10 +595,6 @@ export interface Project {
   sketch?: KitchenSketchSettings;
   /** Связь с внешним инструментом Эскиз PRO: https://silovr709-dotcom.github.io/ESCIZ/ */
   eskizPro?: EskizProIntegration;
-  /** Задачи CRM по сделке: звонки, замеры, документы, оплаты. */
-  tasks?: CrmTask[];
-  /** Плановые даты: замер, готовность, доставка, монтаж и бригада. */
-  schedule?: ProjectSchedule;
   /** Режим открытия проекта: мастер или привычные вкладки. */
   wizardMode?: 'wizard' | 'advanced';
   wizardStep?: WizardStepId;

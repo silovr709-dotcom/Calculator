@@ -1,5 +1,9 @@
 import type { ClientHistoryEntry, ClientProfile, ClientProjectDocuments, ClientProjectPayment, ClientTag, Project } from '../types';
-import { normalizeClientName } from './crm';
+
+/** Ключ имени клиента для сравнения: без регистра и лишних пробелов. */
+export function normalizeClientName(value: string | undefined): string {
+  return value?.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru-RU') || 'без клиента';
+}
 
 const DEFAULT_TAGS: Array<{ id: ClientTag; label: string }> = [
   { id: 'hot', label: 'горячий' },
