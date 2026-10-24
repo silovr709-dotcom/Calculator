@@ -9,6 +9,7 @@ import { clientLineName, makeClientNameResolver } from '../lib/clientNaming';
 import EditableText from './EditableText';
 import EditableDate from './EditableDate';
 import EditableNumber from './EditableNumber';
+import QRCode from 'qrcode';
 import { fmtMoney, fmtDate, fmtDateLong, fmtNum } from '../lib/format';
 import { exportClientXlsx } from '../lib/exporters';
 import { snapshotProject } from '../lib/eskizPro';
@@ -162,49 +163,6 @@ function uniqueHighlights(details: ClientOfferDetail[], kinds: ClientOfferDetail
   return out;
 }
 
-const COMPOSITION_SECTIONS: { id: string; title: string; kinds: ClientOfferDetailKind[] }[] = [
-  { id: 'body', title: 'Корпуса и каркас', kinds: ['body', 'bodySurcharge', 'shelf'] },
-  { id: 'facades', title: 'Фасады и рамки', kinds: ['facade', 'frame'] },
-  { id: 'hardware', title: 'Фурнитура и механизмы', kinds: ['hinge', 'drawerSys', 'lift', 'handle', 'legs'] },
-  { id: 'tops', title: 'Столешницы и панели', kinds: ['worktop', 'wallPanel'] },
-  { id: 'extra', title: 'Дополнительно', kinds: ['sink', 'electric', 'other'] },
-];
-
-function summarizeCompositionQty(details: ClientOfferDetail[]): string {
-  const area = details.reduce((sum, detail) => {
-    const unit = detail.unit.toLocaleLowerCase('ru-RU');
-    return detail.priceBasis === 'm2' || unit.includes('м²') || unit.includes('м2') ? sum + detail.qtyEffective : sum;
-  }, 0);
-  const length = details.reduce((sum, detail) => {
-    const unit = detail.unit.toLocaleLowerCase('ru-RU');
-    return detail.priceBasis === 'lm' || unit.includes('п.м') || unit.includes('пог') ? sum + detail.qtyEffective : sum;
-  }, 0);
-  const pieces = details.reduce((sum, detail) => sum + detail.qty, 0);
-  const parts = [
-    `${details.length} поз.`,
-    area > 0 ? `${fmtNum(area, 2)} м²` : '',
-    length > 0 ? `${fmtNum(length, 2)} п.м` : '',
-    pieces > 0 ? `${fmtNum(pieces, 3)} шт/компл.` : '',
-  ].filter(Boolean);
-  return parts.slice(0, 3).join(' · ');
-}
-
-function buildCompositionSections(details: ClientOfferDetail[]) {
-  return COMPOSITION_SECTIONS.map((section) => {
-    const allowed = new Set(section.kinds);
-    const items = details.filter((detail) => allowed.has(detail.kind));
-    const total = items.reduce((sum, detail) => sum + (detail.clientSum ?? 0), 0);
-    const hasPrice = items.some((detail) => detail.clientSum != null);
-    return {
-      ...section,
-      items,
-      total: hasPrice ? total : null,
-      qtyText: summarizeCompositionQty(items),
-      preview: items.slice(0, 3).map((detail) => `${detail.kindLabel}: ${detail.name}`),
-    };
-  }).filter((section) => section.items.length > 0);
-}
-
 function DetailRow({ detail, showPrice, technical, onRename, onQty, onSum }: {
   detail: ClientOfferDetail;
   showPrice: boolean;
@@ -297,6 +255,17 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const [packageExporting, setPackageExporting] = useState(false);
   // Ссылка клиенту: публикация КП на своём сервере и отметка о согласовании.
   const [offerLink, setOfferLink] = useState<{ id: string; url: string } | null>(null);
+  const [offerQrState, setOfferQrState] = useState<{ url: string; dataUrl: string } | null>(null);
+  useEffect(() => {
+    const url = offerLink?.url;
+    if (!url) return;
+    let alive = true;
+    QRCode.toDataURL(url, { margin: 1, width: 180 })
+      .then((dataUrl) => { if (alive) setOfferQrState({ url, dataUrl }); })
+      .catch(() => { if (alive) setOfferQrState(null); });
+    return () => { alive = false; };
+  }, [offerLink?.url]);
+  const offerQr = offerLink?.url && offerQrState?.url === offerLink.url ? offerQrState.dataUrl : '';
   const [offerStatus, setOfferStatus] = useState<PublishedOffer | null>(null);
   const [offerBusy, setOfferBusy] = useState(false);
   const [offerCopied, setOfferCopied] = useState(false);
@@ -322,7 +291,6 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const isTechnical = presentationMode === 'technical';
   const extractHardwareFromModules = aggregateHardware && moduleDetailMode !== 'full';
   // Что показываем на каждом уровне.
-  const showCompositionSections = detailLevel !== 'rollup';
   const showModuleList = detailLevel !== 'rollup';
   const showProjectHardware = detailLevel === 'modules' || detailLevel === 'sections';
   const showExtraDetails = detailLevel !== 'rollup';
@@ -420,6 +388,9 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   // Итог КП = расчёт плюс/минус ручные правки менеджера.
   const editsDelta = clientOfferEditsDelta(allDetails);
   const offerTotal = totals.client + editsDelta;
+  const advancePercent = project.clientOffer?.advancePercent ?? 50;
+  const advanceSum = Math.round(offerTotal * advancePercent / 100);
+  const remainderSum = offerTotal - advanceSum;
   const rollupRows = buildClientOfferRollup(allDetails);
   const projectHardwareDetails = extractHardwareFromModules ? allDetails.filter(isAggregatedHardware) : [];
   const visibleExtraDetails = extractHardwareFromModules ? extraDetails.filter((detail) => !isAggregatedHardware(detail)) : extraDetails;
@@ -427,7 +398,6 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const projectSummary = buildClientProjectSummary(allDetails, moduleQty);
   const sketchSummaryLines = clientSketchSummaryLines(projectSummary);
   const sketchSummaryMode = packageSettings.sketchSummaryMode;
-  const facadeQty = sumKind(allDetails, ['facade', 'frame']);
   const hingeQty = sumKind(allDetails, ['hinge']);
   const drawerQty = sumKind(allDetails, ['drawerSys']);
   const liftQty = sumKind(allDetails, ['lift']);
@@ -441,7 +411,6 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
     clientSketchVisible ? 'Эскиз PRO' : '',
   ].filter(Boolean);
   const materialHighlights = uniqueHighlights(allDetails, ['body', 'facade', 'frame', 'worktop', 'wallPanel'], isTechnical ? 10 : 6);
-  const compositionSections = buildCompositionSections(allDetails);
   const editableTerms: { label: string; value: string; field: keyof ClientOfferSettings; placeholder: string }[] = [
     { label: 'Действительно до', value: project.clientOffer?.validUntil ? fmtDateLong(project.clientOffer.validUntil) : '', field: 'validUntil', placeholder: 'дата' },
     { label: 'Оплата', value: project.clientOffer?.paymentTerms ?? '', field: 'paymentTerms', placeholder: 'например, 50% аванс' },
@@ -888,20 +857,48 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           </div>
         )}
 
+        {offerTotal > 0 && (
+          <section className="cd-payment">
+            <div className="cd-payment-step">
+              <span>Аванс</span>
+              <b>{canEditInline
+                ? <EditableNumber value={advancePercent} format={(value) => `${value ?? 50}%`} label="Аванс, %" onChange={(value) => updateOffer({ advancePercent: value ?? undefined })} />
+                : `${advancePercent}%`}</b>
+              <strong>{fmtMoney(advanceSum)}</strong>
+              <em>при подписании</em>
+            </div>
+            <div className="cd-payment-step">
+              <span>Остаток</span>
+              <b>{100 - advancePercent}%</b>
+              <strong>{fmtMoney(remainderSum)}</strong>
+              <em>при готовности заказа</em>
+            </div>
+          </section>
+        )}
+
+        {clientSketchVisible && (
+          <section className="cd-sketch-pro">
+            <div className="cd-section-head"><h3>Эскиз PRO</h3></div>
+            {linkedEskizProjects.map((eskiz, index) => <div key={eskiz.id} className="cd-sketch-wrap">
+              <EskizProjectPreview project={eskiz} compact={!isTechnical} moduleMarkerMode={project.eskizPro?.moduleMarkerMode ?? 'full'} communicationMarkers={(project.eskizPro?.communications ?? []).filter((marker) => marker.showInClient !== false)} showCommunicationSizeBadges={showCommunicationSizeBadges} viewSettings={eskizViewSettings} />
+              {(sketchSummaryMode === 'all' || (sketchSummaryMode === 'first' && index === 0)) && sketchSummaryLines.length > 0
+                && <div className="cd-sketch-summary"><b>Сводка проекта</b>{sketchSummaryLines.slice(0, isTechnical ? 6 : 4).map((line) => <span key={line}>{line}</span>)}</div>}
+            </div>)}
+            {eskizModules.length > 0 && (
+              <div className="cd-eskiz-modules">
+                <b>Модули, добавленные с эскиза</b>
+                <div>{eskizModules.map((module) => <span key={module.id}>{module.name}{module.widthMm ? ` · ${module.widthMm}×${module.heightMm ?? '—'}${module.depthMm ? `×${module.depthMm}` : ''} мм` : ''}</span>)}</div>
+              </div>
+            )}
+          </section>
+        )}
+
         <section className="cd-summary cd-summary-modern">
           <div className="cd-summary-copy">
             <h3>Кратко по проекту</h3>
             {(canEditInline || project.clientOffer?.summaryNote) && <p>{canEditInline
               ? <EditableText as="span" multiline value={project.clientOffer?.summaryNote ?? ''} label="Описание в КП" onChange={(value) => updateOffer({ summaryNote: value || undefined })} />
               : project.clientOffer?.summaryNote}</p>}
-          </div>
-          <div className="cd-summary-facts">
-            {moduleQty > 0 && <div><b>{fmtNum(moduleQty, 3)}</b><span>модулей</span></div>}
-            <div><b>{projectSummary.facadeAreaM2 > 0 ? fmtNum(projectSummary.facadeAreaM2, 2) : fmtNum(facadeQty, 3)}</b><span>{projectSummary.facadeAreaM2 > 0 ? 'м² фасадов' : 'фасадов / рамок'}</span></div>
-            {hingeQty > 0 && <div><b>{fmtNum(hingeQty, 3)}</b><span>петель</span></div>}
-            {drawerQty > 0 && <div><b>{fmtNum(drawerQty, 3)}</b><span>систем ящиков</span></div>}
-            {liftQty > 0 && <div><b>{fmtNum(liftQty, 3)}</b><span>подъёмников</span></div>}
-            {projectSummary.bodyTotal > 0 && <div><b>{fmtMoney(projectSummary.bodyTotal)}</b><span>корпуса</span></div>}
           </div>
           {includedChips.length > 0 && <div className="cd-included"><b>В предложение входит</b><div>{includedChips.map((chip) => <span key={chip}>{chip}</span>)}</div></div>}
           {materialHighlights.length > 0 && <div className="cd-materials"><b>Ключевые материалы</b><ul>{materialHighlights.map((item) => <li key={item}>{item}</li>)}</ul></div>}
@@ -973,36 +970,8 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           </section>
         )}
 
-        {showCompositionSections && compositionSections.length > 0 && (
-          <section className="cd-composition">
-            <div className="cd-section-head"><h3>Смета по разделам</h3></div>
-            <div className="cd-composition-grid">
-              {compositionSections.map((section) => <article className="cd-composition-card" key={section.id}>
-                <div className="cd-composition-card-head"><div><b>{section.title}</b><span>{section.qtyText}</span></div><strong>{fmtMoney(section.total)}</strong></div>
-                {section.preview.length > 0 && <ul>{section.preview.map((item) => <li key={item}>{item}</li>)}</ul>}
-              </article>)}
-            </div>
-          </section>
-        )}
 
         {(project.photos ?? []).some((photo) => photo.showToClient) && <div className="cd-photos">{(project.photos ?? []).filter((photo) => photo.showToClient).map((photo) => <figure key={photo.id}><img src={photo.dataUrl} alt={photo.name} /><figcaption>{photo.name}</figcaption></figure>)}</div>}
-
-        {clientSketchVisible && (
-          <section className="cd-sketch-pro">
-            <div className="cd-section-head"><h3>Эскиз PRO</h3></div>
-            {linkedEskizProjects.map((eskiz, index) => <div key={eskiz.id} className="cd-sketch-wrap">
-              <EskizProjectPreview project={eskiz} compact={!isTechnical} moduleMarkerMode={project.eskizPro?.moduleMarkerMode ?? 'full'} communicationMarkers={(project.eskizPro?.communications ?? []).filter((marker) => marker.showInClient !== false)} showCommunicationSizeBadges={showCommunicationSizeBadges} viewSettings={eskizViewSettings} />
-              {(sketchSummaryMode === 'all' || (sketchSummaryMode === 'first' && index === 0)) && sketchSummaryLines.length > 0
-                && <div className="cd-sketch-summary"><b>Сводка проекта</b>{sketchSummaryLines.slice(0, isTechnical ? 6 : 4).map((line) => <span key={line}>{line}</span>)}</div>}
-            </div>)}
-            {eskizModules.length > 0 && (
-              <div className="cd-eskiz-modules">
-                <b>Модули, добавленные с эскиза</b>
-                <div>{eskizModules.map((module) => <span key={module.id}>{module.name}{module.widthMm ? ` · ${module.widthMm}×${module.heightMm ?? '—'}${module.depthMm ? `×${module.depthMm}` : ''} мм` : ''}</span>)}</div>
-              </div>
-            )}
-          </section>
-        )}
 
         {variantSummaries.length > 1 && <section className="cd-variants"><h3>Варианты комплектации</h3>{variantSummaries.map(({ variant, totals: variantTotals }) => <div className={`cd-variant-row ${variant.id === project.selectedVariantId ? 'active' : ''}`} key={variant.id}><div><b>{variant.name}</b><span>{variant.description}</span></div><strong>{variantTotals ? fmtMoney(variantTotals.client) : '—'}</strong></div>)}</section>}
 
@@ -1085,9 +1054,22 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           </section>
         )}
 
-        <div className="cd-total">Итоговая стоимость: <b>{fmtMoney(offerTotal)}</b></div>
+        {(canEditInline || project.clientOffer?.notIncluded) && (
+          <section className="cd-excluded">
+            <div className="cd-section-head"><h3>Не входит в стоимость</h3></div>
+            <p>{canEditInline
+              ? <EditableText as="span" multiline value={project.clientOffer?.notIncluded ?? ''} label="Что не входит в стоимость" onChange={(value) => updateOffer({ notIncluded: value || undefined })} />
+              : project.clientOffer?.notIncluded}</p>
+          </section>
+        )}
         {project.clientOffer?.notes && <div className="cd-comment"><b>Примечания:</b><br />{project.clientOffer.notes}</div>}
         {project.comment && <div className="cd-comment">{project.comment}</div>}
+
+        <section className="cd-signoff">
+          <div className="cd-sign-box"><span>Заказчик</span><i /><small>подпись, дата</small></div>
+          <div className="cd-sign-box"><span>{project.clientOffer?.sellerName || 'Исполнитель'}</span><i /><small>подпись, дата</small></div>
+          {offerQr && <figure className="cd-qr"><img src={offerQr} alt="QR-код онлайн-версии КП" /><figcaption>Онлайн-версия КП</figcaption></figure>}
+        </section>
 
         {packageDocumentNames.length > 0 && (
           <section className="cd-package-docs cd-package-note no-print">

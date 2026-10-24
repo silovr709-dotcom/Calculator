@@ -9779,3 +9779,57 @@ body.work-focus .project-section-head { display: none; }
   .client-doc :is(.cd-module-card, .cd-module-table-row, .cd-rollup-row, .cd-composition-card, .cd-section-head) { break-inside: avoid; page-break-inside: avoid; }
   .client-doc .cd-section-head { break-after: avoid; page-break-after: avoid; }
 }
+
+/* ——— КП: график оплаты, «Не входит», подписи, QR ——— */
+.client-doc .cd-payment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+.client-doc .cd-payment-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "label pct" "sum sum" "note note";
+  align-items: baseline;
+  gap: 2px 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--kp-line);
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
+}
+.client-doc .cd-payment-step > span { grid-area: label; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--kp-silver-lo); }
+.client-doc .cd-payment-step > b { grid-area: pct; justify-self: end; font-size: 12px; color: var(--kp-silver-mid); font-weight: 700; }
+.client-doc .cd-payment-step > strong {
+  grid-area: sum;
+  font-family: var(--kp-serif);
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--kp-silver-hi);
+  text-shadow: 0 2px 14px rgba(170, 196, 235, .25);
+}
+.client-doc .cd-payment-step > em { grid-area: note; font-style: normal; font-size: 11px; color: var(--kp-silver-lo); }
+
+.client-doc .cd-excluded { margin: 12px 0; }
+.client-doc .cd-excluded p { margin: 0; padding: 10px 14px; border: 1px dashed var(--kp-line); border-radius: 10px; color: var(--kp-silver-mid); font-size: 12px; line-height: 1.5; }
+
+.client-doc .cd-signoff {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 18px;
+  align-items: end;
+  margin: 22px 0 6px;
+  break-inside: avoid;
+}
+.client-doc .cd-sign-box { display: grid; gap: 4px; }
+.client-doc .cd-sign-box > span { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--kp-silver-mid); }
+.client-doc .cd-sign-box > i { display: block; height: 34px; border-bottom: 1px solid var(--kp-line-strong); }
+.client-doc .cd-sign-box > small { font-size: 10px; color: var(--kp-silver-lo); }
+.client-doc .cd-qr { display: grid; justify-items: center; gap: 4px; margin: 0; }
+.client-doc .cd-qr img { width: 92px; height: 92px; padding: 6px; border-radius: 10px; background: #fff; border: 0; }
+.client-doc .cd-qr figcaption { font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--kp-silver-lo); }
+
+@media print {
+  .client-doc .cd-payment-step { break-inside: avoid; }
+  .client-doc .cd-signoff { break-inside: avoid; }
+}

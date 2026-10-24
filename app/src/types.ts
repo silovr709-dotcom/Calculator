@@ -178,6 +178,10 @@ export interface ClientOfferSettings {
   clientEmail?: string;
   productionTerms?: string;
   warranty?: string;
+  /** Процент аванса для графика оплаты в КП (по умолчанию 50). */
+  advancePercent?: number;
+  /** Что не входит в стоимость — выводится отдельным блоком в КП. */
+  notIncluded?: string;
   documentPackage?: ClientDocumentPackageSettings;
   /** Режим детализации клиентского КП: короткое письмо, рабочая детализация или техническое приложение. */
   presentationMode?: ClientOfferPresentationMode;
