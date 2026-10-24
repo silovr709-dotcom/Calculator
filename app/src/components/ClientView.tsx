@@ -70,7 +70,6 @@ const CLIENT_ESKIZ_LAYERS: { key: EskizLayerKey; label: string }[] = [
   { key: 'links', label: 'Ссылки' },
 ];
 
-const DEFAULT_SUMMARY_NOTE = 'Основные цифры без себестоимости и внутренних закупочных данных. Подробный состав ниже сгруппирован так, чтобы не повторять фурнитуру внутри каждого модуля.';
 
 const AGGREGATED_HARDWARE_KINDS: ClientOfferDetailKind[] = ['hinge', 'drawerSys', 'lift', 'handle', 'legs'];
 const AGGREGATED_HARDWARE_SET = new Set<ClientOfferDetailKind>(AGGREGATED_HARDWARE_KINDS);
@@ -855,7 +854,6 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         <header className="cd-hero">
           <div className="cd-hero-main">
             <div className="cd-brand">РЕцепт</div>
-            <div className="cd-sub">мебельное ателье · индивидуальная кухня</div>
             <h2>Коммерческое предложение</h2>
             <h1>{onProjectMetaChange
               ? <EditableText value={project.name} label="Название проекта" placeholder="Название проекта" onChange={(value) => onProjectMetaChange({ name: value })} />
@@ -874,7 +872,6 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           <div className="cd-hero-price">
             <span>Итоговая стоимость</span>
             <b>{fmtMoney(offerTotal)}</b>
-            <em>итого по всему предложению</em>
           </div>
         </header>
 
@@ -894,9 +891,9 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         <section className="cd-summary cd-summary-modern">
           <div className="cd-summary-copy">
             <h3>Кратко по проекту</h3>
-            <p>{canEditInline
-              ? <EditableText as="span" multiline value={project.clientOffer?.summaryNote ?? DEFAULT_SUMMARY_NOTE} label="Описание в КП" onChange={(value) => updateOffer({ summaryNote: value || undefined })} />
-              : (project.clientOffer?.summaryNote ?? DEFAULT_SUMMARY_NOTE)}</p>
+            {(canEditInline || project.clientOffer?.summaryNote) && <p>{canEditInline
+              ? <EditableText as="span" multiline value={project.clientOffer?.summaryNote ?? ''} label="Описание в КП" onChange={(value) => updateOffer({ summaryNote: value || undefined })} />
+              : project.clientOffer?.summaryNote}</p>}
           </div>
           <div className="cd-summary-facts">
             {moduleQty > 0 && <div><b>{fmtNum(moduleQty, 3)}</b><span>модулей</span></div>}
@@ -910,18 +907,11 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           {materialHighlights.length > 0 && <div className="cd-materials"><b>Ключевые материалы</b><ul>{materialHighlights.map((item) => <li key={item}>{item}</li>)}</ul></div>}
         </section>
 
-        <section className="cd-next-steps">
-          <div><b>1</b><span>Согласование КП и эскиза</span></div>
-          <div><b>2</b><span>Финальная проверка размеров</span></div>
-          <div><b>3</b><span>Производство комплекта</span></div>
-          <div><b>4</b><span>Доставка и монтаж</span></div>
-        </section>
-
         {rollupRows.length > 0 && (
           <section className="cd-rollup">
             <div className="cd-section-head">
               <h3>Сводная ведомость</h3>
-              <span>состав и стоимость по типам{canEditInline && <em className="no-print"> · количество и суммы правятся прямо здесь</em>}</span>
+              {canEditInline && <span className="no-print"><em> количество и суммы правятся прямо здесь</em></span>}
             </div>
             <div className="cd-rollup-table" role="table" aria-label="Сводная ведомость по типам">
               <div className="cd-rollup-head" role="row"><span>Раздел / позиция</span><span>Количество</span><span>Сумма</span></div>
@@ -985,7 +975,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
 
         {showCompositionSections && compositionSections.length > 0 && (
           <section className="cd-composition">
-            <div className="cd-section-head"><h3>Смета по разделам</h3><span>по категориям</span></div>
+            <div className="cd-section-head"><h3>Смета по разделам</h3></div>
             <div className="cd-composition-grid">
               {compositionSections.map((section) => <article className="cd-composition-card" key={section.id}>
                 <div className="cd-composition-card-head"><div><b>{section.title}</b><span>{section.qtyText}</span></div><strong>{fmtMoney(section.total)}</strong></div>
@@ -999,7 +989,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
 
         {clientSketchVisible && (
           <section className="cd-sketch-pro">
-            <div className="cd-section-head"><h3>Эскиз PRO</h3><span>{isTechnical ? 'внешний эскиз со скрином проекта и размерными аннотациями' : 'схема из внешнего Эскиз PRO'}</span></div>
+            <div className="cd-section-head"><h3>Эскиз PRO</h3></div>
             {linkedEskizProjects.map((eskiz, index) => <div key={eskiz.id} className="cd-sketch-wrap">
               <EskizProjectPreview project={eskiz} compact={!isTechnical} moduleMarkerMode={project.eskizPro?.moduleMarkerMode ?? 'full'} communicationMarkers={(project.eskizPro?.communications ?? []).filter((marker) => marker.showInClient !== false)} showCommunicationSizeBadges={showCommunicationSizeBadges} viewSettings={eskizViewSettings} />
               {(sketchSummaryMode === 'all' || (sketchSummaryMode === 'first' && index === 0)) && sketchSummaryLines.length > 0
@@ -1020,8 +1010,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
           <section className="cd-modules">
             <div className="cd-section-head">
               <h3>Состав мебели</h3>
-              <span>{moduleDetailMode === 'full' ? MODULE_DETAIL_MODE_LABELS[moduleDetailMode] : 'компактная ведомость модулей, без растягивания КП'}</span>
-            </div>
+                          </div>
             {moduleDetailMode !== 'full' ? (
               <>
                 <div className="cd-module-table" role="table" aria-label="Компактная ведомость модулей">
@@ -1032,7 +1021,6 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
                     const lines = activeCalculation.lines.filter((line) => idSet.has(line.id));
                     const details = buildClientOfferDetails(lines, lineCalcs, resolveClientName);
                     const visibleDetails = extractHardwareFromModules ? details.filter((detail) => !isAggregatedHardware(detail)) : details;
-                    const extractedCount = details.length - visibleDetails.length;
                     const total = groupSum(group);
                     const compactSummary = moduleDetailMode === 'compact' ? moduleCompactSummary(visibleDetails) : [];
                     return (
@@ -1042,15 +1030,13 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
                         <div className="cd-module-table-materials">
                           {compactSummary.length > 0
                             ? compactSummary.map((item) => <span key={item}>{item}</span>)
-                            : <span>{moduleDetailMode === 'summary' ? 'без повторения деталей; состав сгруппирован ниже' : 'состав в общей смете ниже'}</span>}
-                          {extractHardwareFromModules && extractedCount > 0 && <em>фурнитура вынесена в общую строку</em>}
-                        </div>
+                            : null}
+                                                  </div>
                         <strong>{total != null ? fmtMoney(total) : '—'}</strong>
                       </div>
                     );
                   })}
                 </div>
-                <div className="cd-compact-explain">Подробная комплектация не повторяется внутри каждого модуля: корпуса, фасады, фурнитура, столешницы и дополнительные позиции сведены по категориям ниже. Полную техдетализацию можно включить режимом «Техническое приложение».</div>
               </>
             ) : groups.map((group, index) => {
               const ids = groupLineIds(group);
@@ -1083,7 +1069,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
 
         {showProjectHardware && projectHardwareDetails.length > 0 && (
           <section className="cd-project-hardware">
-            <div className="cd-section-head"><h3>Фурнитура по проекту</h3><span>общими строками, без повторения в каждом модуле</span></div>
+            <div className="cd-section-head"><h3>Фурнитура по проекту</h3></div>
             <div className="cd-component-list cd-component-list-extra cd-hardware-list">
               {projectHardwareDetails.map((detail) => <DetailRow key={detail.id} detail={{ ...detail, details: detail.details.map((note) => stripModuleNote(note)) }} showPrice={showDetailPrices} technical={isTechnical} onRename={canEditInline ? renameDetail : undefined} onQty={canEditInline ? setDetailQty : undefined} onSum={canEditInline ? setDetailSum : undefined} />)}
             </div>
@@ -1092,7 +1078,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
 
         {showExtraDetails && visibleExtraDetails.length > 0 && (
           <section className="cd-extra">
-            <div className="cd-section-head"><h3>Дополнительно</h3><span>столешницы, цоколь, мойки, работы и прочие позиции</span></div>
+            <div className="cd-section-head"><h3>Дополнительно</h3></div>
             <div className="cd-component-list cd-component-list-extra">
               {visibleExtraDetails.map((detail) => <DetailRow key={detail.id} detail={{ ...detail, details: detail.details.map((note) => stripModuleNote(note)) }} showPrice={showDetailPrices && !isBrief} technical={isTechnical} onRename={canEditInline ? renameDetail : undefined} onQty={canEditInline ? setDetailQty : undefined} onSum={canEditInline ? setDetailSum : undefined} />)}
             </div>
@@ -1104,7 +1090,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         {project.comment && <div className="cd-comment">{project.comment}</div>}
 
         {packageDocumentNames.length > 0 && (
-          <section className="cd-package-docs cd-package-note">
+          <section className="cd-package-docs cd-package-note no-print">
             <div className="cd-section-head"><h3>Файлы клиентского пакета</h3><span>выгружаются отдельно, не раздувают печатное КП</span></div>
             <div className="cd-package-file-list">{packageDocumentNames.map((name) => <span key={name}>{name}</span>)}</div>
           </section>

@@ -9737,3 +9737,45 @@ body.work-focus .project-section-head { display: none; }
 .client-doc .cd-terms select,
 .client-doc .cd-terms textarea { color: var(--kp-silver-hi); background: rgba(255, 255, 255, .06); border-color: var(--kp-line); }
 
+
+/* ——— КП: компактная версия (меньше страниц) ———
+   Шапка в одну строку, плотнее таблицы и карточки, печать без лишних разрывов. */
+.client-doc { padding: 22px 26px 20px; }
+.client-doc .cd-hero {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 24px;
+  margin: 0 0 12px;
+}
+.client-doc .cd-hero h2 { margin: 0 0 4px; font-size: 10px; letter-spacing: .26em; }
+.client-doc .cd-hero h1 { font-size: 34px; line-height: 1.05; }
+.client-doc .cd-hero-meta { margin-top: 6px; font-size: 11px; }
+.client-doc .cd-hero-tags { margin-top: 8px; }
+.client-doc .cd-hero .cd-brand { font-size: 20px; letter-spacing: .04em; }
+.client-doc .cd-hero-price { padding: 12px 18px; min-width: 210px; }
+.client-doc .cd-hero-price b { font-size: 34px; }
+.client-doc .cd-terms { margin: 0 0 12px; padding: 8px 0; }
+.client-doc .cd-terms > div { padding: 7px 10px; }
+.client-doc .cd-summary { margin: 0 0 12px; padding: 12px 14px; }
+.client-doc .cd-summary-facts > div { padding: 6px 2px 2px; }
+.client-doc .cd-summary-facts b { font-size: 22px; }
+.client-doc :is(.cd-rollup, .cd-composition, .cd-modules, .cd-extra, .cd-project-hardware, .cd-sketch-pro, .cd-variants) { margin: 12px 0; }
+.client-doc .cd-section-head { margin: 0 0 6px; padding-bottom: 5px; }
+.client-doc .cd-rollup-row { padding: 4px 10px; }
+.client-doc .cd-rollup-total { padding-top: 6px; padding-bottom: 6px; }
+.client-doc .cd-module-table-row { padding: 5px 10px; }
+.client-doc .cd-composition-card { padding: 8px 10px; }
+.client-doc .cd-composition-grid { gap: 8px; }
+.client-doc .cd-total { margin-top: 10px; }
+
+@media print {
+  @page { margin: 9mm; }
+  .client-doc { font-size: 11px; padding: 0; }
+  .client-doc .cd-hero { padding: 14px 18px; }
+  .client-doc .cd-hero h1 { font-size: 28px; }
+  .client-doc .cd-hero-price b { font-size: 28px; }
+  .client-doc :is(.cd-rollup, .cd-composition, .cd-modules, .cd-extra, .cd-project-hardware, .cd-sketch-pro) { margin: 8px 0; }
+  .client-doc :is(.cd-module-card, .cd-module-table-row, .cd-rollup-row, .cd-composition-card, .cd-section-head) { break-inside: avoid; page-break-inside: avoid; }
+  .client-doc .cd-section-head { break-after: avoid; page-break-after: avoid; }
+}
