@@ -1210,15 +1210,58 @@ input.dim { width: 54px; font-size: 11px; padding: 3px 4px; text-align: center; 
 .chip:hover { background: rgba(124, 58, 237, 0.12); }
 
 /* ---- Меню добавления позиции с фильтром ---- */
-.add-menu { min-width: 260px; }
+.add-menu {
+  min-width: min(320px, calc(100vw - 32px));
+  max-height: min(72vh, 620px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .add-filter {
+  position: sticky;
+  top: -6px;
+  z-index: 2;
   width: 100%;
   box-sizing: border-box;
   margin-bottom: 6px;
   padding: 7px 9px;
   border: 1px solid rgba(124, 58, 237, 0.3);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.85);
+  background: #fff;
+}
+.add-menu-footer {
+  position: sticky;
+  bottom: -6px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px -6px -6px;
+  padding: 8px;
+  border-top: 1px solid var(--line);
+  background: #fff;
+}
+.add-menu-count { flex: 1 1 100%; color: #64748b; font-size: 11px; }
+.add-menu-count b { color: #0b3a75; font-size: 12px; }
+.add-menu-footer button {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  width: auto !important;
+  padding: 7px 9px !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 8px !important;
+  font-size: 11px !important;
+  font-weight: 700;
+}
+.add-menu-footer button:hover { background: #f1f5f9 !important; color: #0b3a75 !important; }
+.add-menu-footer .add-menu-done { border-color: #0b3a75 !important; background: #0b3a75 !important; color: #fff !important; }
+.add-menu-footer .add-menu-done:hover { background: #0d4687 !important; color: #fff !important; }
+.module-list-item.just-added { border-color: #16a34a !important; animation: module-just-added 1.8s ease-out; }
+@keyframes module-just-added {
+  0% { box-shadow: 0 0 0 4px rgba(34, 197, 94, .38); }
+  100% { box-shadow: var(--shadow-sm); }
 }
 
 /* ---- Расходы: расчётная сумма процента ---- */

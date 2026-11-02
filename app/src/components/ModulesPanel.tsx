@@ -50,8 +50,12 @@ export default function ModulesPanel(props: {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [addQ, setAddQ] = useState('');
+  // Пока меню открыто, добавляем пачкой и не открываем редактор на каждую позицию.
+  const [addedIds, setAddedIds] = useState<string[]>([]);
+  const [flashId, setFlashId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; undo: (() => void) | null } | null>(null);
   const tableRef = useRef<HTMLTableElement | null>(null);
+  const moduleListRef = useRef<HTMLDivElement | null>(null);
   const modsRef = useRef(mods);
   useEffect(() => { modsRef.current = mods; }, [mods]);
 
@@ -153,15 +157,19 @@ export default function ModulesPanel(props: {
     return Boolean(body && inference && (module.hingeSpecStatus === 'outdated' || module.hinges !== inference.hinges));
   }).length, [mods, defaults, pricebook]);
 
+  const registerAdded = (ids: string[]) => {
+    if (ids.length === 0) return;
+    setAddedIds((prev) => [...prev, ...ids]);
+  };
   const addModule = (type: string) => {
     const m = newModule(type);
     setMods([...mods, m]);
-    setSelId(m.id);
+    registerAdded([m.id]);
   };
   const addPreset = (preset: (typeof MODULE_PRESETS)[number]) => {
     const m = moduleFromPreset(preset);
     setMods([...mods, m]);
-    setSelId(m.id);
+    registerAdded([m.id]);
   };
 
   /** Вставка модулей из шаблона: новые id, слоты и надбавки копируются как есть */
@@ -169,7 +177,7 @@ export default function ModulesPanel(props: {
     const copies: KitchenModule[] = (t.modules ?? []).map((x) => ({ ...JSON.parse(JSON.stringify(x)), id: newModule(x.type).id }));
     if (!copies.length) return;
     setMods([...mods, ...copies]);
-    setSelId(copies[0].id);
+    registerAdded(copies.map((module) => module.id));
   };
   const moduleTemplates = (props.templates ?? []).filter((t) => (t.modules?.length ?? 0) > 0);
 
@@ -197,11 +205,49 @@ export default function ModulesPanel(props: {
       modules: [...mods, ...copies],
       sketch: { ...(project.sketch ?? {}), shape: set.shape },
     });
-    setSelId(copies[0].id);
-    setAddOpen(false);
-    setAddQ('');
+    finishAdd(copies[copies.length - 1].id);
     showToast(`Комплект «${set.name}»: добавлено позиций — ${copies.length}. Корпуса и материалы задайте слотами или «✨ Применить все рекомендации».`);
   };
+
+  /** Закрыть меню и показать последнюю добавленную карточку в списке. */
+  const finishAdd = (revealId?: string) => {
+    const target = revealId ?? addedIds[addedIds.length - 1] ?? null;
+    setAddOpen(false);
+    setAddQ('');
+    setAddedIds([]);
+    if (target) setFlashId(target);
+  };
+  const openAddMenu = () => {
+    setAddOpen(true);
+    setAddQ('');
+    setAddedIds([]);
+  };
+  const openLastAdded = () => {
+    const last = addedIds[addedIds.length - 1];
+    if (!last) return;
+    setAddOpen(false);
+    setAddQ('');
+    setAddedIds([]);
+    setSelId(last);
+  };
+  const undoLastAdded = () => {
+    const last = addedIds[addedIds.length - 1];
+    if (!last) return;
+    setMods(mods.filter((module) => module.id !== last));
+    setAddedIds((ids) => ids.slice(0, -1));
+  };
+
+  // После закрытия меню подсвечиваем добавленное и прокручиваем к нему список.
+  useEffect(() => {
+    if (!flashId) return;
+    const card = moduleListRef.current?.querySelector<HTMLElement>(`[data-module-id="${flashId}"]`);
+    if (card) {
+      card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      card.focus({ preventScroll: true });
+    }
+    const timer = window.setTimeout(() => setFlashId(null), 1800);
+    return () => window.clearTimeout(timer);
+  }, [flashId]);
 
   /** Ctrl+D: скопировать высоту/глубину/опоры/материалы с позиции НАД первой выбранной. */
   const applyFillFromAbove = () => {
@@ -315,7 +361,7 @@ export default function ModulesPanel(props: {
       {/* Добавление позиции */}
       <div className="lines-toolbar">
         <div className="dropdown open-on-click">
-          <button className="btn primary" onClick={() => setAddOpen((v) => !v)}>+ Добавить позицию ▾</button>
+          <button className="btn primary" onClick={() => { if (addOpen) finishAdd(); else openAddMenu(); }}>+ Добавить позицию ▾</button>
           {addOpen && (
             <div className="dropdown-menu static add-menu">
               <input
@@ -326,24 +372,35 @@ export default function ModulesPanel(props: {
                 onChange={(e) => setAddQ(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') { e.preventDefault(); addFirstMatch(); }
-                  if (e.key === 'Escape') { e.preventDefault(); setAddOpen(false); setAddQ(''); }
+                  if (e.key === 'Escape') { e.preventDefault(); finishAdd(); }
                 }}
               />
               {filteredTypes.length > 0 && <div className="menu-sep">Тип позиции:</div>}
-              {filteredTypes.map((tp) => <button key={tp} onClick={() => addModule(tp)}>{tp}</button>)}
-              {(addTerms.length === 0 || matchAdd('Свой тип')) && <button onClick={() => { const custom = prompt('Название собственного типа позиции:'); if (custom?.trim()) addModule(custom.trim()); }}>Свой тип…</button>}
+              {filteredTypes.map((tp) => <button type="button" key={tp} onClick={() => addModule(tp)}>{tp}</button>)}
+              {(addTerms.length === 0 || matchAdd('Свой тип')) && <button type="button" onClick={() => { const custom = prompt('Название собственного типа позиции:'); if (custom?.trim()) addModule(custom.trim()); }}>Свой тип…</button>}
               {filteredPresets.length > 0 && <div className="menu-sep">Быстрая конструкция:</div>}
-              {filteredPresets.map((preset) => <button key={preset.id} onClick={() => addPreset(preset)}>⚡ {preset.label}</button>)}
+              {filteredPresets.map((preset) => <button type="button" key={preset.id} onClick={() => addPreset(preset)}>⚡ {preset.label}</button>)}
               {filteredSets.length > 0 && <div className="menu-sep">Готовые комплекты:</div>}
               {filteredSets.map((set) => (
-                <button key={set.id} title={set.description} onClick={() => applyKitchenSet(set)}>🏠 {set.name} ({set.modules.length} поз.)</button>
+                <button type="button" key={set.id} title={set.description} onClick={() => applyKitchenSet(set)}>🏠 {set.name} ({set.modules.length} поз.)</button>
               ))}
               {filteredTemplates.length > 0 && <div className="menu-sep">Из шаблона:</div>}
               {filteredTemplates.map((tpl) => (
-                <button key={tpl.id} onClick={() => insertFromTemplate(tpl)}>⧉ {tpl.name} ({tpl.modules!.length} мод.)</button>
+                <button type="button" key={tpl.id} onClick={() => insertFromTemplate(tpl)}>⧉ {tpl.name} ({tpl.modules!.length} мод.)</button>
               ))}
               {filteredTypes.length + filteredPresets.length + filteredTemplates.length + filteredSets.length === 0 && <div className="menu-sep">Ничего не найдено по «{addQ}»</div>}
-              <div className="menu-sep muted">Меню остаётся открытым — добавляйте позиции серией.</div>
+              <div className="add-menu-footer">
+                <span className="add-menu-count" role="status" aria-live="polite">
+                  {addedIds.length > 0 ? <>Добавлено: <b>{addedIds.length}</b></> : 'Можно добавить несколько подряд'}
+                </span>
+                {addedIds.length > 0 && (
+                  <>
+                    <button type="button" onClick={undoLastAdded}>↶ Убрать</button>
+                    <button type="button" onClick={openLastAdded}>Открыть последнюю</button>
+                  </>
+                )}
+                <button type="button" className="add-menu-done" onClick={() => finishAdd()}>Готово</button>
+              </div>
             </div>
           )}
         </div>
@@ -418,7 +475,7 @@ export default function ModulesPanel(props: {
               </div>
               <span className="module-list-count">{mods.length} поз.</span>
             </div>
-            <div className="module-card-list module-card-list-comfort" aria-label="Список модулей для редактирования">
+            <div className="module-card-list module-card-list-comfort" aria-label="Список модулей для редактирования" ref={moduleListRef}>
               {mods.map((m, idx) => {
                 const c = checks.get(m.id)!;
                 const body = resolveSlot(m, 'body', defaults, pricebook).item;
@@ -427,7 +484,8 @@ export default function ModulesPanel(props: {
                 return (
                   <article
                     key={m.id}
-                    className={`module-mini-card module-list-item ${selId === m.id ? 'active' : ''} ${c.level !== 'ok' ? c.level : ''}`}
+                    className={`module-mini-card module-list-item ${selId === m.id ? 'active' : ''} ${c.level !== 'ok' ? c.level : ''} ${flashId === m.id ? 'just-added' : ''}`}
+                    data-module-id={m.id}
                     tabIndex={0}
                     role="button"
                     aria-label={`Открыть редактирование ${m.name}`}
