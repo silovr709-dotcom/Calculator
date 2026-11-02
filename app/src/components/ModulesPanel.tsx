@@ -649,7 +649,51 @@ export default function ModulesPanel(props: {
               <span className="muted small">Планировка: {shapeName}{walls.length < 2 ? ' — доступна только задняя стена' : ''}</span>
             </label>
           </div>
-          <h4>1. Размеры модуля, мм</h4>
+          <h4>1. Корпус, фасады и фурнитура</h4>
+          <div className="slot-list">
+            {ALL_SLOTS.map((k) => {
+              const need = slotNeed(sel, k);
+              if (need <= 0 && k !== 'body') return null;
+              const { item, source } = resolveSlot(sel, k, defaults, pricebook);
+              return (
+                <div className="slot-row tappable" key={k}
+                  role="button"
+                  tabIndex={0}
+                  title={`Выбрать: ${SLOT_LABELS[k]}`}
+                  onClick={(event) => {
+                    // Нажатие по строке открывает выбор — на телефоне не надо целиться в кнопку.
+                    if ((event.target as HTMLElement).closest('button')) return;
+                    setPick({ slot: k, moduleId: sel.id });
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setPick({ slot: k, moduleId: sel.id });
+                    }
+                  }}>
+                  <div className="slot-label">{SLOT_LABELS[k]}{k !== 'body' && <span className="muted small"> × {need * sel.qty}</span>}</div>
+                  <div className={item ? 'slot-value' : 'slot-value none'}>
+                    {item ? <>
+                      {item.name.slice(0, 60)}{item.attrs?.['толщина'] && !item.name.includes(item.attrs['толщина']) ? ` · ${item.attrs['толщина']}` : ''} — {fmtMoney(item.price)}{item.unit ? `/${item.unit}` : ''}
+                      {source === 'default' && <span className="badge def">из настроек проекта</span>}
+                      {source === 'manual' && <span className="badge man">изменено вручную</span>}
+                    </> : 'Не выбрано'}
+                  </div>
+                  <div className="slot-actions">
+                    {sel.slots[k]?.mode === 'manual' && k !== 'body' && (
+                      <button className="btn tiny ghost" title="Вернуть к настройке проекта"
+                        onClick={() => updMod(sel.id, { slots: { ...sel.slots, [k]: { mode: 'default', itemId: null } } })}>↺ к настройкам</button>
+                    )}
+                    {sel.slots[k]?.mode === 'manual' && sel.slots[k].itemId && (
+                      <button className="btn tiny ghost" onClick={() => updMod(sel.id, { slots: { ...sel.slots, [k]: { mode: 'manual', itemId: null } } })}>✕</button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <h4>2. Размеры модуля, мм</h4>
           <div className="grid3">
             <label>Ширина<input type="number" value={sel.widthMm ?? ''} placeholder="напр. 800" onChange={(e) => updMod(sel.id, { widthMm: Number(e.target.value) || null, facadeSpecStatus: sel.facadeSpecStatus === 'applied' ? 'outdated' : sel.facadeSpecStatus, hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })} /></label>
             <label>Высота<input type="number" value={sel.heightMm ?? ''} placeholder="напр. 720" onChange={(e) => updMod(sel.id, { heightMm: Number(e.target.value) || null, facadeSpecStatus: sel.facadeSpecStatus === 'applied' ? 'outdated' : sel.facadeSpecStatus, hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })} /></label>
@@ -727,7 +771,7 @@ export default function ModulesPanel(props: {
               </div>
             </details>
           )}
-          <h4>2. Конструкция (на один модуль)</h4>
+          <h4>3. Конструкция (на один модуль)</h4>
           <div className="grid4">
             <label>Фасадов, шт<input type="number" min={0} value={sel.facades} onChange={(e) => updMod(sel.id, { facades: Number(e.target.value) || 0, facadeParts: undefined, facadeSpecStatus: 'manual', hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })} /></label>
             <label>Ящиков, шт<input type="number" min={0} value={sel.drawers} onChange={(e) => updMod(sel.id, { drawers: Number(e.target.value) || 0, facadeSpecStatus: sel.facadeSpecStatus === 'applied' ? 'outdated' : sel.facadeSpecStatus, hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })} /></label>
@@ -836,50 +880,6 @@ export default function ModulesPanel(props: {
               {sel.facadeWmm && sel.facadeHmm ? <div className="muted small">Площадь: {sel.facades} × {sel.facadeWmm}×{sel.facadeHmm} = {fmtNum((sel.facadeWmm / 1000) * (sel.facadeHmm / 1000) * sel.facades)} м² на модуль</div> : null}
             </>
           )}
-          <h4>3. Материалы и фурнитура</h4>
-          <div className="slot-list">
-            {ALL_SLOTS.map((k) => {
-              const need = slotNeed(sel, k);
-              if (need <= 0 && k !== 'body') return null;
-              const { item, source } = resolveSlot(sel, k, defaults, pricebook);
-              return (
-                <div className="slot-row tappable" key={k}
-                  role="button"
-                  tabIndex={0}
-                  title={`Выбрать: ${SLOT_LABELS[k]}`}
-                  onClick={(event) => {
-                    // Нажатие по строке открывает выбор — на телефоне не надо целиться в кнопку.
-                    if ((event.target as HTMLElement).closest('button')) return;
-                    setPick({ slot: k, moduleId: sel.id });
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.target !== event.currentTarget) return;
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      setPick({ slot: k, moduleId: sel.id });
-                    }
-                  }}>
-                  <div className="slot-label">{SLOT_LABELS[k]}{k !== 'body' && <span className="muted small"> × {need * sel.qty}</span>}</div>
-                  <div className={item ? 'slot-value' : 'slot-value none'}>
-                    {item ? <>
-                      {item.name.slice(0, 60)}{item.attrs?.['толщина'] && !item.name.includes(item.attrs['толщина']) ? ` · ${item.attrs['толщина']}` : ''} — {fmtMoney(item.price)}{item.unit ? `/${item.unit}` : ''}
-                      {source === 'default' && <span className="badge def">из настроек проекта</span>}
-                      {source === 'manual' && <span className="badge man">изменено вручную</span>}
-                    </> : 'Не выбрано'}
-                  </div>
-                  <div className="slot-actions">
-                    {sel.slots[k]?.mode === 'manual' && k !== 'body' && (
-                      <button className="btn tiny ghost" title="Вернуть к настройке проекта"
-                        onClick={() => updMod(sel.id, { slots: { ...sel.slots, [k]: { mode: 'default', itemId: null } } })}>↺ к настройкам</button>
-                    )}
-                    {sel.slots[k]?.mode === 'manual' && sel.slots[k].itemId && (
-                      <button className="btn tiny ghost" onClick={() => updMod(sel.id, { slots: { ...sel.slots, [k]: { mode: 'manual', itemId: null } } })}>✕</button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
           {props.onSaveModuleTemplate && (
             <div className="mod-tpl-row">
               <button className="btn tiny ghost" onClick={() => { const n = prompt('Название шаблона модуля:', sel.name); if (n?.trim()) props.onSaveModuleTemplate!(n.trim(), sel); }}>
