@@ -25,6 +25,7 @@ on:
       - main
       - arena/01a0ee6f-calculator
       - arena/78834e40-calculator
+      - arena/c22d2a92-calculator
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
