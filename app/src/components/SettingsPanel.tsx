@@ -26,6 +26,8 @@ export default function SettingsPanel(props: {
   extraDetails?: ExtraExpenseDetail[];
   /** Дополнительные карточки внизу страницы (например, резервные копии). */
   footer?: ReactNode;
+  /** Блок над настройками: ссылки на синхронизацию, сервер и данные. */
+  top?: ReactNode;
 }) {
   const s = props.settings;
   const set = (patch: Partial<ProjectSettings>) => props.onChange({ ...s, ...patch });
@@ -38,6 +40,7 @@ export default function SettingsPanel(props: {
   return (
     <div className={props.standalone ? 'page' : ''}>
       {props.standalone && <header className="page-head"><h1>Настройки</h1></header>}
+      {props.top}
       <div className="settings">
         <section className="card">
           <h3>{props.title}</h3>

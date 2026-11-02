@@ -232,31 +232,23 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
     [server.user?.role, server.mode],
   );
 
-  // Пункты нижнего меню: один список и для шторки, и для проверки прав.
+  // Нижняя шторка «Ещё»: второстепенные разделы. Рабочие точки входа — в доке.
+  const currentProjectId = view.kind === 'project' ? view.id : lastWork?.id;
   const dockMenuItems = useMemo(() => {
-    const go = (next: View) => () => {
+    const go = (next: View, label: string) => () => {
       setView(next);
       setMoreOpen(false);
-      toast.info(`Открываю: ${next.kind === 'analytics' ? 'Аналитика'
-        : next.kind === 'audit' ? 'Проверка цен'
-        : next.kind === 'kb' ? 'База знаний'
-        : next.kind === 'pricebook' ? 'Прайс и версии'
-        : next.kind === 'sync' ? 'Синхронизация'
-        : next.kind === 'server' ? 'Сервер'
-        : 'Настройки'}`);
+      toast.info(`Открываю: ${label}`);
     };
-    const items: Array<{ key: View['kind']; label: string; hint: string; open: () => void }> = [];
-    if (can.viewCost) {
-      items.push({ key: 'analytics', label: 'Аналитика', hint: 'деньги', open: go({ kind: 'analytics' }) });
-      items.push({ key: 'audit', label: 'Проверка цен', hint: 'опт/розн.', open: go({ kind: 'audit' }) });
-    }
-    items.push({ key: 'kb', label: 'База знаний', hint: String(kbArticles.length), open: go({ kind: 'kb' }) });
-    if (can.viewPricebook) items.push({ key: 'pricebook', label: 'Прайс и версии', hint: 'версии', open: go({ kind: 'pricebook' }) });
-    items.push({ key: 'sync', label: 'Синхронизация', hint: 'устройства', open: go({ kind: 'sync' }) });
-    if (server.mode === 'server') items.push({ key: 'server', label: 'Сервер', hint: 'база', open: go({ kind: 'server' }) });
-    items.push({ key: 'settings', label: 'Настройки', hint: 'по умолч.', open: go({ kind: 'settings' }) });
+    const items: Array<{ key: View['kind']; label: string; hint: string; open: () => void }> = [
+      { key: 'quick', label: 'Быстрый расчёт', hint: 'оценка', open: go({ kind: 'quick' }, 'Быстрый расчёт') },
+    ];
+    if (currentProjectId) items.push({ key: 'factory', label: 'Бланк на фабрику', hint: 'Excel', open: go({ kind: 'factory', id: currentProjectId }, 'Бланк на фабрику') });
+    items.push({ key: 'settings', label: 'Настройки', hint: 'по умолчанию', open: go({ kind: 'settings' }, 'Настройки') });
+    items.push({ key: 'sync', label: 'Синхронизация', hint: 'устройства', open: go({ kind: 'sync' }, 'Синхронизация') });
+    if (server.mode === 'server') items.push({ key: 'server', label: 'Сервер', hint: 'база', open: go({ kind: 'server' }, 'Сервер') });
     return items;
-  }, [can.viewCost, can.viewPricebook, kbArticles.length, server.mode]);
+  }, [server.mode, currentProjectId]);
 
   // Значок у пункта «Синхронизация»: на своём сервере показываем состояние сервера,
   // иначе — старое облако.
@@ -651,60 +643,24 @@ const persistTemplates = useCallback((next: Template[]) => {
         </button>
         <nav className="sidebar-nav" aria-label="Главная навигация">
           <div className="sidebar-nav-group">
-            <div className="sidebar-nav-title">Работа</div>
-            <button className={view.kind === 'dashboard' ? 'active' : ''} onClick={() => setView({ kind: 'dashboard' })}>
+            <button className={view.kind === 'dashboard' || view.kind === 'project' ? 'active' : ''} onClick={() => setView({ kind: 'dashboard' })}>
               <span className="nav-icon nav-projects" aria-hidden="true" />Проекты<span className="nav-count">{projects.length}</span>
             </button>
-            {can.viewClientPrices && (
-              <button className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>
-                <span className="nav-icon nav-quick" aria-hidden="true" />Быстрый расчёт
+            {(can.editProjects || can.viewPricebook) && (
+              <button className={view.kind === 'kb' || view.kind === 'pricebook' ? 'active' : ''} onClick={() => setView({ kind: 'kb' })}>
+                <span className="nav-icon nav-kb" aria-hidden="true" />Справочник
               </button>
             )}
-            {can.editProjects && (
-              <button className={view.kind === 'factory' ? 'active' : ''} onClick={() => setView({ kind: 'factory' })}>
-                <span className="nav-icon nav-factory" aria-hidden="true" />Бланк на фабрику
-              </button>
-            )}
-          </div>
-          {(can.editProjects || can.viewPricebook) && (
-            <div className="sidebar-nav-group">
-              <div className="sidebar-nav-title">Справочники</div>
-              <button className={view.kind === 'kb' ? 'active' : ''} onClick={() => setView({ kind: 'kb' })}>
-                <span className="nav-icon nav-kb" aria-hidden="true" />База знаний<span className="nav-count">{kbArticles.length}</span>
-              </button>
-              {can.viewPricebook && (
-                <button className={view.kind === 'pricebook' ? 'active' : ''} onClick={() => setView({ kind: 'pricebook' })}>
-                  <span className="nav-icon nav-price" aria-hidden="true" />Прайс и версии
-                </button>
-              )}
-            </div>
-          )}
-          <div className="sidebar-nav-group">
-            <div className="sidebar-nav-title">Система</div>
             {can.viewCost && (
-              <button className={view.kind === 'analytics' ? 'active' : ''} onClick={() => setView({ kind: 'analytics' })}>
+              <button className={view.kind === 'analytics' || view.kind === 'audit' ? 'active' : ''} onClick={() => setView({ kind: 'analytics' })}>
                 <span className="nav-icon nav-analytics" aria-hidden="true" />Аналитика
               </button>
             )}
-            {can.viewCost && (
-              <button className={view.kind === 'audit' ? 'active' : ''} onClick={() => setView({ kind: 'audit', id: current?.id })}>
-                <span className="nav-icon nav-price" aria-hidden="true" />Проверка цен
-              </button>
-            )}
-            <button className={view.kind === 'sync' ? 'active' : ''} onClick={() => setView({ kind: 'sync' })}>
-              <span className="nav-icon nav-sync" aria-hidden="true" />Синхронизация
+            <button className={view.kind === 'settings' || view.kind === 'sync' || view.kind === 'server' ? 'active' : ''} onClick={() => setView({ kind: 'settings' })}>
+              <span className="nav-icon nav-settings" aria-hidden="true" />Настройки
               {showSyncBadge && (
                 <span className={`nav-sync-badge ${syncBadgeState}`} title={`Синхронизация: ${syncBadgeState === 'synced' ? 'в сети' : syncBadgeState === 'syncing' ? 'обновление...' : 'офлайн'}`} />
               )}
-            </button>
-            {server.mode === 'server' && (
-              <button className={view.kind === 'server' ? 'active' : ''} onClick={() => setView({ kind: 'server' })}>
-                <span className="nav-icon nav-sync" aria-hidden="true" />Сервер
-                <span className={`nav-sync-badge ${server.status === 'synced' ? 'synced' : server.status === 'saving' || server.status === 'loading' ? 'syncing' : 'offline'}`} title={`Сервер: ${server.status}`} />
-              </button>
-            )}
-            <button className={view.kind === 'settings' ? 'active' : ''} onClick={() => setView({ kind: 'settings' })}>
-              <span className="nav-icon nav-settings" aria-hidden="true" />Настройки
             </button>
           </div>
         </nav>
@@ -738,7 +694,7 @@ const persistTemplates = useCallback((next: Template[]) => {
           />
         )}
         {view.kind === 'analytics' && (can.viewCost
-          ? <AnalyticsView projects={projectsForUi} pricebooks={pricebooks} />
+          ? <AnalyticsView projects={projectsForUi} pricebooks={pricebooks} onOpenPriceAudit={() => setView({ kind: 'audit' })} />
           : <div className="app-no-access">Аналитика доступна владельцу: в ней видны закупочные цены и маржа.</div>)}
         {view.kind === 'audit' && !can.viewCost && (
           <div className="app-no-access">Проверка цен доступна владельцу: в ней видна закупка и маржа.</div>
@@ -819,18 +775,33 @@ const persistTemplates = useCallback((next: Template[]) => {
           />
         )}
         {view.kind === 'kb' && (
-          <KnowledgeView articles={kbArticles} pricebooks={pricebooks} onChange={persistKb} />
+          <KnowledgeView articles={kbArticles} pricebooks={pricebooks} onChange={persistKb} onOpenPricebook={() => setView({ kind: 'pricebook' })} />
         )}
         {view.kind === 'settings' && (
-          <>
-            <SettingsPanel
-              title="Настройки по умолчанию (для новых проектов)"
-              settings={globalSettings}
-              onChange={persistSettings}
-              standalone
-              footer={<DataToolsCard />}
-            />
-          </>
+          <SettingsPanel
+            title="Настройки по умолчанию (для новых проектов)"
+            settings={globalSettings}
+            onChange={persistSettings}
+            standalone
+            top={
+              <section className="card settings-destinations">
+                <div className="section-head"><div><h3>Данные и доступ</h3><p className="muted small">Синхронизация и сервер — отдельно от настроек расчёта.</p></div></div>
+                <div className="settings-destination-grid">
+                  <button type="button" onClick={() => setView({ kind: 'sync' })}>
+                    <b>Синхронизация и телефон</b>
+                    <span>QR, облако и обмен проектами между устройствами</span>
+                  </button>
+                  {server.mode === 'server' && (
+                    <button type="button" onClick={() => setView({ kind: 'server' })}>
+                      <b>Сервер</b>
+                      <span>Пользователи, общая база и состояние подключения</span>
+                    </button>
+                  )}
+                </div>
+              </section>
+            }
+            footer={<DataToolsCard />}
+          />
         )}
         {view.kind === 'pricebook' && (
           <PricebookView
@@ -880,27 +851,31 @@ const persistTemplates = useCallback((next: Template[]) => {
           <b>Проекты</b>
           <small>{projects.length}</small>
         </button>
-        <button type="button" className={view.kind === 'quick' ? 'active' : ''} onClick={() => setView({ kind: 'quick' })}>
-          <span className="nav-icon nav-quick" aria-hidden="true" />
-          <b>Быстрый</b>
-          <small>оценка</small>
-        </button>
-        <button type="button" className={view.kind === 'factory' ? 'active' : ''} onClick={() => setView({ kind: 'factory', id: current?.id })}>
-          <span className="nav-icon nav-factory" aria-hidden="true" />
-          <b>Фабрика</b>
-          <small>бланк</small>
-        </button>
+        {(can.editProjects || can.viewPricebook) && (
+          <button type="button" className={view.kind === 'kb' || view.kind === 'pricebook' ? 'active' : ''} onClick={() => setView({ kind: 'kb' })}>
+            <span className="nav-icon nav-kb" aria-hidden="true" />
+            <b>Справочник</b>
+            <small>прайс и статьи</small>
+          </button>
+        )}
+        {can.viewCost && (
+          <button type="button" className={view.kind === 'analytics' || view.kind === 'audit' ? 'active' : ''} onClick={() => setView({ kind: 'analytics' })}>
+            <span className="nav-icon nav-analytics" aria-hidden="true" />
+            <b>Аналитика</b>
+            <small>деньги</small>
+          </button>
+        )}
         <div className="mobile-dock-more">
           <button
             type="button"
             aria-expanded={moreOpen}
             aria-haspopup="menu"
-            className={(['kb', 'pricebook', 'sync', 'settings', 'analytics', 'audit', 'server'] as string[]).includes(view.kind) ? 'active' : ''}
+            className={(['settings', 'sync', 'server'] as string[]).includes(view.kind) ? 'active' : ''}
             onClick={() => setMoreOpen((open) => !open)}
           >
             <span className="nav-icon nav-settings" aria-hidden="true" />
             <b>Ещё</b>
-            <small>{moreOpen ? 'закрыть' : 'меню'}</small>
+            <small>{moreOpen ? 'закрыть' : 'настройки'}</small>
           </button>
         </div>
       </nav>

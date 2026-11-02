@@ -10361,3 +10361,27 @@ body.work-focus .project-section-head { display: none; }
   .eskiz-pro-workspace:not(.fullscreen) .eskiz-pro-intro .system-action-strip { width: 100%; }
   .eskiz-pro-workspace:not(.fullscreen) .eskiz-pro-intro .btn { flex: 1 1 0; }
 }
+
+
+/* Настройки: системные разделы собраны в одну карточку, а не в пункты меню. */
+.settings-destinations { margin-bottom: 12px; }
+.settings-destination-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.settings-destination-grid button {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 12px;
+  border: 1px solid #d7e4ef;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f2f57;
+  text-align: left;
+  cursor: pointer;
+}
+.settings-destination-grid button:hover,
+.settings-destination-grid button:focus-visible { border-color: #1f6feb; background: #f4f9ff; outline: none; }
+.settings-destination-grid b { font-size: 13px; }
+.settings-destination-grid span { color: #64748b; font-size: 11px; font-weight: 650; line-height: 1.35; }
+@media (max-width: 640px) {
+  .settings-destination-grid { grid-template-columns: 1fr; }
+}

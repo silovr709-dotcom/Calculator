@@ -10,7 +10,7 @@ import {
 } from '../lib/analytics';
 import { fmtMoney, fmtNum } from '../lib/format';
 
-export default function AnalyticsView(props: { projects: Project[]; pricebooks: Pricebook[] }) {
+export default function AnalyticsView(props: { projects: Project[]; pricebooks: Pricebook[]; onOpenPriceAudit?: () => void }) {
   const rows = useMemo<ProjectMoney[]>(() => props.projects.map((project) => {
     const { totals } = calcTotals(project.lines, project.settings);
     return {
@@ -39,6 +39,11 @@ export default function AnalyticsView(props: { projects: Project[]; pricebooks: 
           <h1>Аналитика</h1>
           <p className="view-sub">Деньги, конверсия и средний чек по всей базе. Считается из ваших проектов, ничего заполнять не нужно.</p>
         </div>
+        {props.onOpenPriceAudit && (
+          <div className="actions">
+            <button type="button" className="btn ghost" onClick={props.onOpenPriceAudit}>Проверка цен →</button>
+          </div>
+        )}
       </header>
 
       <section className="analytics-cards">

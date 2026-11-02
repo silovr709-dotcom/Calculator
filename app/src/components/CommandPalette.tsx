@@ -76,8 +76,8 @@ export default function CommandPalette(props: {
     add({ id: 'nav-dashboard', group: 'Навигация', title: 'Открыть список проектов', subtitle: 'Поиск, фильтры и новые расчёты', badge: 'Проекты', keywords: 'проекты список поиск dashboard главная', run: props.onOpenDashboard });
     add({ id: 'nav-quick', group: 'Навигация', title: 'Быстрый расчёт', subtitle: 'Предварительная оценка кухни', keywords: 'быстрый расчет оценка калькулятор', run: props.onOpenQuick });
     add({ id: 'nav-factory', group: 'Навигация', title: 'Бланк на фабрику', subtitle: current ? `Открыть для проекта «${current.name}»` : 'Выбрать проект и заполнить официальный бланк', badge: 'Excel', keywords: 'фабрика бланк производство висма excel верх низ', run: () => props.onOpenFactory(current?.id) });
-    add({ id: 'nav-kb', group: 'Навигация', title: 'База знаний', subtitle: 'Инструкции, материалы, подсказки', keywords: 'база знания инструкция помощь', run: props.onOpenKb });
-    add({ id: 'nav-pricebook', group: 'Навигация', title: 'Прайс и версии', subtitle: `${props.activePricebook.meta.name} · ${props.activePricebook.meta.itemCount} позиций`, keywords: 'прайс каталог позиции цены', run: props.onOpenPricebook });
+    add({ id: 'nav-kb', group: 'Навигация', title: 'Справочник: база знаний', subtitle: 'Инструкции, материалы, подсказки', keywords: 'база знания инструкция помощь', run: props.onOpenKb });
+    add({ id: 'nav-pricebook', group: 'Навигация', title: 'Справочник: прайс и версии', subtitle: `${props.activePricebook.meta.name} · ${props.activePricebook.meta.itemCount} позиций`, keywords: 'прайс каталог позиции цены', run: props.onOpenPricebook });
     add({ id: 'nav-sync', group: 'Навигация', title: 'Синхронизация и телефон', subtitle: 'QR, облако, обмен между устройствами', keywords: 'синхронизация телефон qr облако обмен', run: props.onOpenSync });
     add({ id: 'nav-settings', group: 'Навигация', title: 'Настройки интерфейса и расчёта', subtitle: 'Наценка, расходы, поведение новых проектов', keywords: 'настройки интерфейс наценка расходы', run: props.onOpenSettings });
 

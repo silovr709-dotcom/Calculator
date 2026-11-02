@@ -112,6 +112,7 @@ export default function KnowledgeView(props: {
   articles: KbArticle[];
   pricebooks: Pricebook[];
   onChange: (articles: KbArticle[]) => void;
+  onOpenPricebook?: () => void;
 }) {
   const [tab, setTab] = useState<Tab>('overview');
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
@@ -132,9 +133,14 @@ export default function KnowledgeView(props: {
     <div className="page">
       <header className="page-head">
         <div>
-          <h1>База знаний PRO</h1>
-          <div className="muted">Единый центр: документы, инструкции, прайс, разбивки, фрезеровки, фурнитура и рабочие шпаргалки.</div>
+          <h1>Справочник</h1>
+          <div className="muted">Документы, инструкции, прайс, разбивки, фрезеровки, фурнитура и рабочие шпаргалки.</div>
         </div>
+        {props.onOpenPricebook && (
+          <div className="actions">
+            <button type="button" className="btn ghost" onClick={props.onOpenPricebook}>Прайс и версии →</button>
+          </div>
+        )}
       </header>
 
       <div className="kb-tabs" role="tablist">
