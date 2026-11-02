@@ -633,15 +633,15 @@ export default function ModulesPanel(props: {
               <span className="muted small">Планировка: {shapeName}{walls.length < 2 ? ' — доступна только задняя стена' : ''}</span>
             </label>
           </div>
-          <h4>Размеры модуля, мм</h4>
+          <h4>1. Размеры модуля, мм</h4>
           <div className="grid3">
             <label>Ширина<input type="number" value={sel.widthMm ?? ''} placeholder="напр. 800" onChange={(e) => updMod(sel.id, { widthMm: Number(e.target.value) || null, facadeSpecStatus: sel.facadeSpecStatus === 'applied' ? 'outdated' : sel.facadeSpecStatus, hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })} /></label>
             <label>Высота<input type="number" value={sel.heightMm ?? ''} placeholder="напр. 720" onChange={(e) => updMod(sel.id, { heightMm: Number(e.target.value) || null, facadeSpecStatus: sel.facadeSpecStatus === 'applied' ? 'outdated' : sel.facadeSpecStatus, hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })} /></label>
             <label>Глубина<input type="number" value={sel.depthMm ?? ''} placeholder="напр. 560" onChange={(e) => updMod(sel.id, { depthMm: Number(e.target.value) || null })} /></label>
           </div>
           {selectedModuleCalculation && selectedModuleLines.length > 0 && (
-            <section className="module-formula-card">
-              <div className="facade-tech-head"><h4>Расшифровка расчёта модуля</h4><b>{fmtMoney(selectedModuleCalculation.cost)}</b></div>
+            <details className="module-formula-card tech-disclosure">
+              <summary className="facade-tech-head"><h4>Расшифровка расчёта модуля</h4><b>{fmtMoney(selectedModuleCalculation.cost)}</b></summary>
               <div className="muted small">Каждая строка считается отдельно; процентные надбавки привязаны только к строке корпуса. Сборка, доставка и доп. расходы проекта в расчёт модуля не входят — они считаются один раз в итогах проекта.</div>
               <div className="module-formula-list">
                 {selectedModuleLines.map((line) => {
@@ -656,9 +656,9 @@ export default function ModulesPanel(props: {
                   </div>;
                 })}
               </div>
-            </section>
+            </details>
           )}
-          <h4>Конструкция (на один модуль)</h4>
+          <h4>2. Конструкция (на один модуль)</h4>
           <div className="grid4">
             <label>Фасадов, шт<input type="number" min={0} value={sel.facades} onChange={(e) => updMod(sel.id, { facades: Number(e.target.value) || 0, facadeParts: undefined, facadeSpecStatus: 'manual', hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })} /></label>
             <label>Ящиков, шт<input type="number" min={0} value={sel.drawers} onChange={(e) => updMod(sel.id, { drawers: Number(e.target.value) || 0, facadeSpecStatus: sel.facadeSpecStatus === 'applied' ? 'outdated' : sel.facadeSpecStatus, hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })} /></label>
@@ -669,11 +669,11 @@ export default function ModulesPanel(props: {
             <label title="Опоры модуля: у стоящих модулей по умолчанию 4">Опор, шт<input type="number" min={0} value={sel.legs ?? 0} onChange={(e) => updMod(sel.id, { legs: Number(e.target.value) || 0 })} /></label>
           </div>
           {facadeInference && (
-            <section className="facade-tech-card">
-              <div className="facade-tech-head">
+            <details className="facade-tech-card tech-disclosure" open={facadeNeedsUpdate || !sel.facadeParts}>
+              <summary className="facade-tech-head">
                 <div><h4>Фасады по техничке фабрики</h4><div className="muted small">{facadeInference.source} · корпус: {facadeInference.bodyWidthMm} мм · фасадов: {facadeInference.facades}</div></div>
                 <span className={`badge ${facadeInference.confidence === 'exact' ? 'tech-exact' : 'tech-suggest'}`}>{sel.facadeSpecStatus === 'manual' ? 'изменено вручную' : !facadeNeedsUpdate && sel.facadeSpecStatus === 'applied' ? 'применено' : facadeNeedsUpdate ? 'нужно обновить' : facadeInference.confidence === 'exact' ? 'точное правило' : 'нужно проверить'}</span>
-              </div>
+              </summary>
               <div className="facade-tech-note">{facadeInference.note}</div>
               <div className="facade-parts-list">
                 {(sel.facadeParts ?? facadeInference.parts).map((part, index) => (
@@ -692,28 +692,28 @@ export default function ModulesPanel(props: {
                 </button>
               )}
               {sel.facadeParts && <div className="muted small">Размеры участвуют в расчёте площади фасадов отдельно для каждой детали.</div>}
-            </section>
+            </details>
           )}
           {hingeInference && (
-            <section className="hinge-tech-card">
-              <div className="facade-tech-head">
+            <details className="hinge-tech-card tech-disclosure" open={hingeNeedsUpdate || sel.hinges !== hingeInference.hinges}>
+              <summary className="facade-tech-head">
                 <div><h4>Петли по техничке</h4><div className="muted small">{hingeInference.source} · дверей: {hingeInference.doorCount} · рекомендуется: {hingeInference.hinges} шт.</div></div>
                 <span className={`badge ${hingeInference.confidence === 'exact' ? 'tech-exact' : 'tech-suggest'}`}>{sel.hingeSpecStatus === 'manual' ? 'изменено вручную' : !hingeNeedsUpdate && sel.hingeSpecStatus === 'applied' ? 'применено' : hingeNeedsUpdate ? 'нужно обновить' : 'предложение'}</span>
-              </div>
+              </summary>
               <div className="facade-tech-note">{hingeInference.note}</div>
               {(hingeNeedsUpdate || sel.hinges !== hingeInference.hinges) && <div className="muted small">Сейчас указано: {sel.hinges} шт. Применение изменит только количество петель, не модель петли.</div>}
               {sel.hingeSpecStatus !== 'manual' && (hingeNeedsUpdate || sel.hinges !== hingeInference.hinges) && <button className="btn tiny add" onClick={() => updMod(sel.id, { hinges: hingeInference.hinges, hingeSpecStatus: 'applied' })}>Подставить количество петель</button>}
               {sel.hingeSpecStatus === 'manual' && <button className="btn tiny ghost" onClick={() => updMod(sel.id, { hinges: hingeInference.hinges, hingeSpecStatus: 'applied' })}>Заменить ручное количество рекомендацией</button>}
-            </section>
+            </details>
           )}
-          <section className="extra-facade-card">
-            <div className="facade-tech-head">
+          <details className="extra-facade-card tech-disclosure" open={(sel.extraFacadeParts ?? []).length > 0}>
+            <summary className="facade-tech-head">
               <div>
                 <h4>Отдельные фасадные детали</h4>
                 <div className="muted small">Боковины, накладки, фасады холодильника и другие детали со своими размерами. Каждая попадает в расчёт отдельной строкой по своей площади.</div>
               </div>
               <span className="badge man">вручную</span>
-            </div>
+            </summary>
             {(sel.extraFacadeParts ?? []).length > 0 && (
               <div className="extra-facade-list">
                 {(sel.extraFacadeParts ?? []).map((part, index) => {
@@ -751,7 +751,7 @@ export default function ModulesPanel(props: {
             {(sel.extraFacadeParts ?? []).length > 0 && (
               <div className="muted small">Материал берётся из слота «Фасад»; алюминиевая рамка на отдельные детали не начисляется. Площадь считается на один модуль и умножается на его количество.</div>
             )}
-          </section>
+          </details>
           {sel.facades > 0 && !sel.facadeParts && (
             <>
               <h4>Размер одного фасада, мм (для старого или ручного расчёта)</h4>
@@ -767,7 +767,7 @@ export default function ModulesPanel(props: {
               {sel.facadeWmm && sel.facadeHmm ? <div className="muted small">Площадь: {sel.facades} × {sel.facadeWmm}×{sel.facadeHmm} = {fmtNum((sel.facadeWmm / 1000) * (sel.facadeHmm / 1000) * sel.facades)} м² на модуль</div> : null}
             </>
           )}
-          <h4>Материалы и фурнитура</h4>
+          <h4>3. Материалы и фурнитура</h4>
           <div className="slot-list">
             {ALL_SLOTS.map((k) => {
               const need = slotNeed(sel, k);
@@ -819,14 +819,14 @@ export default function ModulesPanel(props: {
             </div>
           )}
           {selectedBody && (dimensionSurchargeRecommendations.length > 0 || (sel.automaticSurcharges?.length ?? 0) > 0) && (
-            <section className="surcharge-tech-card">
-              <div className="facade-tech-head">
+            <details className="surcharge-tech-card tech-disclosure" open={pendingDimensionSurcharges.length > 0}>
+              <summary className="facade-tech-head">
                 <div>
                   <h4>Нестандартные габариты корпуса</h4>
                   <div className="muted small">Надбавка считается только от строки корпуса. Петли, ящики, фасады и прочая комплектация в базу процента не входят.</div>
                 </div>
                 {pendingDimensionSurcharges.length > 0 && <span className="badge tech-suggest">есть рекомендация</span>}
-              </div>
+              </summary>
               <div className="surcharge-tech-list">
                 {dimensionSurchargeRecommendations.map((item) => {
                   const applied = (sel.surcharges ?? []).includes(item.itemId);
@@ -851,7 +851,7 @@ export default function ModulesPanel(props: {
                   updMod(sel.id, { surcharges: nextIds, automaticSurcharges: nextAuto });
                 }}>✓ Применить рекомендации к корпусу</button>
               )}
-            </section>
+            </details>
           )}
           <h4>Нестандарт / процентные надбавки (от суммы корпуса — правило прайса)</h4>
           <div className="slot-list">
