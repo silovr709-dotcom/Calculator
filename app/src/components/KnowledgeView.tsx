@@ -10,28 +10,22 @@ import { fmtMoney } from '../lib/format';
 import { Overlay } from './Portal';
 
 /**
- * База знаний РЕцепта: рабочий центр знаний.
- *  🏠 Обзор — состояние базы, быстрые переходы и критичные правила.
- *  🔎 Всё сразу — единый поиск по статьям, PDF-документам, разбивкам, фрезеровкам, фурнитуре и прайсу.
- *  📄 Документы — свои статьи + полные тексты инструкций и техничек фабрики.
- *  🎨 Разбивки  — ЛДСП, толщины, кромки, плёнки ПВХ, пластики, компакт Slotex, с фильтрами.
- *  🪚 Фрезеровки — каталог 2026 с картинками, размерами и ценой м² из прайса.
- *  🔩 Фурнитура — справочник из актуального прайса по группам.
- *  💰 Прайс — быстрый каталог всех позиций Висма с фильтрами.
- *  ⚡ Шпаргалки — короткие рабочие инструкции без поиска по PDF.
+ * Справочник РЕцепта: четыре раздела вместо восьми вкладок.
+ *  🔎 Поиск — единый поиск по статьям, PDF, разбивкам, фрезеровкам, фурнитуре и прайсу.
+ *  🎨 Материалы — разбивки, фрезеровки и фурнитура в раскрывающихся темах.
+ *  💰 Прайс — каталог позиций Висмы с фильтрами.
+ *  📄 Инструкции — документы фабрики, свои статьи и рабочие шпаргалки.
  */
 
-type Tab = 'overview' | 'search' | 'docs' | 'colors' | 'millings' | 'hardware' | 'pricebook' | 'cheatsheets';
+type Tab = 'search' | 'materials' | 'pricebook' | 'instructions';
+/** Внутренние темы: нужны поиску, чтобы открыть нужный раздел одним нажатием. */
+type KbTopic = 'docs' | 'colors' | 'millings' | 'hardware' | 'pricebook' | 'cheatsheets';
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'overview', label: '🏠 Обзор' },
-  { id: 'search', label: '🔎 Всё сразу' },
-  { id: 'docs', label: '📄 Документы' },
-  { id: 'colors', label: '🎨 Разбивки' },
-  { id: 'millings', label: '🪚 Фрезеровки' },
-  { id: 'hardware', label: '🔩 Фурнитура' },
+  { id: 'search', label: '🔎 Поиск' },
+  { id: 'materials', label: '🎨 Материалы' },
   { id: 'pricebook', label: '💰 Прайс' },
-  { id: 'cheatsheets', label: '⚡ Шпаргалки' },
+  { id: 'instructions', label: '📄 Инструкции' },
 ];
 
 const QUICK_SEARCHES = ['бланк кухни', 'столешница', 'эмаль 1 м2', 'петля 110', 'фрезеровка мыло', 'кромка ЛДСП', 'GOLA', 'Эскиз PRO'];
@@ -114,8 +108,7 @@ export default function KnowledgeView(props: {
   onChange: (articles: KbArticle[]) => void;
   onOpenPricebook?: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>('overview');
-  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const [tab, setTab] = useState<Tab>('search');
   const [docs, setDocs] = useState<KnowledgeDocs | null>(null);
   const [dicts, setDicts] = useState<FactoryDicts | null>(null);
 
@@ -124,9 +117,22 @@ export default function KnowledgeView(props: {
     loadFactoryDicts(import.meta.env.BASE_URL).then(setDicts);
   }, []);
 
-  const openGlobalSearch = (query = '') => {
-    setGlobalSearchQuery(query);
-    setTab('search');
+  /** Поиск открывает нужную тему внутри раздела и разворачивает её. */
+  const openTopic = (topic: KbTopic) => {
+    const nextTab: Tab = topic === 'colors' || topic === 'millings' || topic === 'hardware'
+      ? 'materials'
+      : topic === 'docs' || topic === 'cheatsheets'
+        ? 'instructions'
+        : 'pricebook';
+    setTab(nextTab);
+    if (nextTab === 'materials' || nextTab === 'instructions') {
+      window.setTimeout(() => {
+        const target = document.getElementById(`kb-topic-${topic}`) as HTMLDetailsElement | null;
+        if (!target) return;
+        target.open = true;
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 0);
+    }
   };
 
   return (
@@ -164,95 +170,53 @@ export default function KnowledgeView(props: {
         </label>
       </div>
 
-      {tab === 'overview' && <OverviewTab articles={props.articles} docs={docs} dicts={dicts} pricebooks={props.pricebooks} onOpenTab={setTab} onQuickSearch={openGlobalSearch} onSeed={() => props.onChange(seedKbArticles())} />}
-      {tab === 'search' && <AllSearchTab key={globalSearchQuery} articles={props.articles} docs={docs} dicts={dicts} pricebooks={props.pricebooks} initialQuery={globalSearchQuery} onOpenTab={setTab} />}
-      {tab === 'docs' && <DocsTab articles={props.articles} onChange={props.onChange} docs={docs} />}
-      {tab === 'colors' && <ColorsTab dicts={dicts} />}
-      {tab === 'millings' && <MillingsTab dicts={dicts} pricebooks={props.pricebooks} />}
-      {tab === 'hardware' && <HardwareTab pricebooks={props.pricebooks} />}
+      {tab === 'search' && (
+        <>
+          <AllSearchTab articles={props.articles} docs={docs} dicts={dicts} pricebooks={props.pricebooks} initialQuery="" onOpenTab={openTopic} />
+          <details className="card kb-rules">
+            <summary>Критичные правила — коротко</summary>
+            <div className="kb-rule-list">
+              {CRITICAL_RULES.map((rule) => <div key={rule.title}><b>{rule.title}</b><span>{rule.text}</span></div>)}
+            </div>
+          </details>
+        </>
+      )}
+      {tab === 'materials' && (
+        <>
+          <p className="kb-tab-intro muted small">Три справочника в одном разделе. Откройте нужный — поиск и фильтры остаются внутри.</p>
+          <details className="kb-topic" id="kb-topic-colors" open>
+            <summary><b>Разбивки материалов</b><span>ЛДСП, кромки, ПВХ, пластики и компакт</span></summary>
+            <div className="kb-topic-body"><ColorsTab dicts={dicts} /></div>
+          </details>
+          <details className="kb-topic" id="kb-topic-millings">
+            <summary><b>Фрезеровки</b><span>каталог 2026: картинки, размеры и цена м²</span></summary>
+            <div className="kb-topic-body"><MillingsTab dicts={dicts} pricebooks={props.pricebooks} /></div>
+          </details>
+          <details className="kb-topic" id="kb-topic-hardware">
+            <summary><b>Фурнитура</b><span>петли, ручки, ящики, подъёмники и GOLA из прайса</span></summary>
+            <div className="kb-topic-body"><HardwareTab pricebooks={props.pricebooks} /></div>
+          </details>
+        </>
+      )}
       {tab === 'pricebook' && <PricebookTab pricebooks={props.pricebooks} />}
-      {tab === 'cheatsheets' && <CheatsheetsTab />}
+      {tab === 'instructions' && (
+        <>
+          <p className="kb-tab-intro muted small">Документы фабрики и короткие рабочие шпаргалки — в одном разделе.</p>
+          <details className="kb-topic" id="kb-topic-docs" open>
+            <summary><b>Документы и статьи</b><span>PDF-инструкции, технички и свои заметки</span></summary>
+            <div className="kb-topic-body"><DocsTab articles={props.articles} onChange={props.onChange} docs={docs} /></div>
+          </details>
+          <details className="kb-topic" id="kb-topic-cheatsheets">
+            <summary><b>Шпаргалки</b><span>короткие чек-листы без поиска по PDF</span></summary>
+            <div className="kb-topic-body"><CheatsheetsTab /></div>
+          </details>
+        </>
+      )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------- Обзор и единый поиск
-
-function OverviewTab(props: {
-  articles: KbArticle[];
-  docs: KnowledgeDocs | null;
-  dicts: FactoryDicts | null;
-  pricebooks: Pricebook[];
-  onOpenTab: (tab: Tab) => void;
-  onQuickSearch: (query?: string) => void;
-  onSeed: () => void;
-}) {
-  const pricebook = props.pricebooks[0];
-  const docsCount = props.docs?.docs.length ?? 0;
-  const sectionsCount = props.docs?.docs.reduce((sum, doc) => sum + doc.sections.length, 0) ?? 0;
-  const colorsCount = props.dicts ? COLOR_GROUP_ORDER.reduce((sum, key) => sum + colorGroup(props.dicts!, key).items.length, 0) : 0;
-  const millingsCount = millingsOf(props.dicts).length;
-  const hardwareCount = hardwareEntries(pricebook).length;
-  const priceCount = pricebook?.items.length ?? 0;
-  return (
-    <>
-      <section className="kb-hero card">
-        <div>
-          <span className="eyebrow">MAX база знаний</span>
-          <h2>Ищем не по памяти, а по единому источнику: PDF, прайс, справочники и свои статьи</h2>
-          <p>Начинайте с «Всё сразу», если не знаете, где лежит ответ. Для точной работы используйте отдельные разделы: прайс, фрезеровки, разбивки, фурнитуру и документы.</p>
-        </div>
-        <div className="kb-hero-actions system-action-strip">
-          <button className="btn primary" onClick={() => props.onQuickSearch()}>🔎 Искать везде</button>
-          <div className="dropdown action-dropdown wide">
-            <button className="btn ghost" type="button">Разделы и база ▾</button>
-            <div className="dropdown-menu">
-              <button type="button" onClick={() => props.onOpenTab('cheatsheets')}>⚡ Шпаргалки</button>
-              <button type="button" onClick={() => props.onOpenTab('docs')}>Документы и статьи</button>
-              <button type="button" onClick={() => props.onOpenTab('pricebook')}>Прайс</button>
-              {props.articles.length === 0 && <button type="button" onClick={props.onSeed}>Загрузить стартовые статьи</button>}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="kb-metrics">
-        <button onClick={() => props.onOpenTab('docs')}><b>{docsCount}</b><span>PDF-документов</span><em>{sectionsCount} разделов</em></button>
-        <button onClick={() => props.onOpenTab('docs')}><b>{props.articles.length}</b><span>своих статей</span><em>редактируются вручную</em></button>
-        <button onClick={() => props.onOpenTab('colors')}><b>{colorsCount}</b><span>разбивок материалов</span><em>ЛДСП, ПВХ, HPL, компакт, кромки</em></button>
-        <button onClick={() => props.onOpenTab('millings')}><b>{millingsCount}</b><span>фрезеровок</span><em>каталог 2026</em></button>
-        <button onClick={() => props.onOpenTab('hardware')}><b>{hardwareCount}</b><span>позиций фурнитуры</span><em>из прайса</em></button>
-        <button onClick={() => props.onOpenTab('pricebook')}><b>{priceCount}</b><span>строк прайса</span><em>{pricebook?.meta.name ?? 'прайс не загружен'}</em></button>
-      </section>
-
-      <section className="card kb-section">
-        <h3>Быстрый поиск</h3>
-        <div className="kb-quick-searches">
-          {QUICK_SEARCHES.map((q) => <button key={q} className="chip" onClick={() => props.onQuickSearch(q)}>{q}</button>)}
-        </div>
-      </section>
-
-      <section className="kb-overview-grid">
-        <div className="card kb-section">
-          <h3>Критичные правила</h3>
-          <div className="kb-rule-list">
-            {CRITICAL_RULES.map((rule) => <div key={rule.title}><b>{rule.title}</b><span>{rule.text}</span></div>)}
-          </div>
-        </div>
-        <div className="card kb-section">
-          <h3>Куда идти за ответом</h3>
-          <div className="kb-route-list">
-            <button onClick={() => props.onOpenTab('docs')}><b>Инструкции / техничка</b><span>формулировки из PDF, страницы и разделы</span></button>
-            <button onClick={() => props.onOpenTab('pricebook')}><b>Цена / артикул</b><span>любая строка прайса, категория, единица, источник</span></button>
-            <button onClick={() => props.onOpenTab('colors')}><b>Цвет / разбивка</b><span>ЛДСП, толщины, кромки, плёнки, пластики, компакт Slotex, текстуры «!»</span></button>
-            <button onClick={() => props.onOpenTab('millings')}><b>Фрезеровка</b><span>картинка, категория, размеры, цена м²</span></button>
-            <button onClick={() => props.onOpenTab('hardware')}><b>Фурнитура</b><span>петли, ручки, ящики, подъёмники, GOLA</span></button>
-          </div>
-        </div>
-      </section>
-    </>
-  );
-}
 
 interface GlobalHit {
   id: string;
@@ -261,10 +225,10 @@ interface GlobalHit {
   meta: string;
   text: string;
   score: number;
-  tab: Tab;
+  tab: KbTopic;
 }
 
-function AllSearchTab(props: { articles: KbArticle[]; docs: KnowledgeDocs | null; dicts: FactoryDicts | null; pricebooks: Pricebook[]; initialQuery: string; onOpenTab: (tab: Tab) => void }) {
+function AllSearchTab(props: { articles: KbArticle[]; docs: KnowledgeDocs | null; dicts: FactoryDicts | null; pricebooks: Pricebook[]; initialQuery: string; onOpenTab: (tab: KbTopic) => void }) {
   const [query, setQuery] = useState(props.initialQuery);
   const [kind, setKind] = useState<string>('all');
   const pricebook = props.pricebooks[0];
@@ -1121,7 +1085,7 @@ function CheatsheetsTab() {
     <>
       <div className="card blank-controls">
         <label className="dashboard-search">Поиск по шпаргалкам
-          <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Например: фасады, бланк, замер, эскиз…" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Например: фасады, бланк, замер, эскиз…" />
         </label>
         <label>Раздел<select value={group} onChange={(e) => setGroup(e.target.value)}><option value="">Все</option>{groups.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         {(query || group) && <button className="btn tiny ghost" onClick={() => { setQuery(''); setGroup(''); }}>Сбросить</button>}
