@@ -10289,14 +10289,19 @@ body.work-focus .project-section-head { display: none; }
 .eskiz-pro-workspace:not(.fullscreen) .eskiz-pro-frame-card > .section-head p { display: none; }
 .eskiz-pro-workspace:not(.fullscreen) .eskiz-pro-frame-card > .section-head .btn { min-height: 30px; }
 
+.eskiz-to-strip { display: none; }
 @media (min-width: 981px) {
-  /* Полотно занимает почти весь первый экран: сверху остаются только
-     тонкая полоса действий, лента миниатюр и заголовок карточки. */
+  /* Полотно занимает весь остаток экрана под липкой шапкой проекта.
+     Важно: JS больше не пишет inline-height и не сжимает редактор до 420 px. */
+  .eskiz-pro-workspace:not(.fullscreen) .eskiz-pro-frame-card {
+    scroll-margin-top: calc(var(--project-topbar-h, 0px) + 10px);
+  }
   .eskiz-pro-workspace:not(.fullscreen) .eskiz-pro-frame-card > .embedded-eskiz-editor {
-    height: clamp(560px, calc(100dvh - 248px), 1500px);
-    min-height: 560px;
+    height: clamp(680px, calc(100dvh - var(--project-topbar-h, 120px) - 16px), 1500px);
+    min-height: 680px;
   }
   .eskiz-pro-workspace:not(.fullscreen) .embedded-eskiz-viewport { padding: 10px; }
+  .eskiz-to-strip { display: inline-flex; }
 }
 
 @media (max-width: 760px) {

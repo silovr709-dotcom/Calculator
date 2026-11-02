@@ -560,6 +560,24 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
       window.removeEventListener('keydown', onKeyDown);
     };
   }, [fullScreenSketch]);
+
+  // На компьютере сразу показываем полотно, а не верх страницы: лента эскизов
+  // остаётся выше и доступна кнопкой «↑ Эскизы». Без этого даже большой
+  // редактор начинался ниже сгиба и казался маленьким.
+  const hasActivePreview = Boolean(activePreviewProject);
+  useEffect(() => {
+    if (!hasActivePreview || fullScreenSketch || window.innerWidth <= 980) return;
+    const card = editorCardRef.current;
+    if (!card) return;
+    const timer = window.setTimeout(() => {
+      const headerHeight = document.querySelector('.project-topbar')?.getBoundingClientRect().height ?? 0;
+      if (card.getBoundingClientRect().top > headerHeight + 48) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 260);
+    return () => window.clearTimeout(timer);
+  }, [hasActivePreview, fullScreenSketch]);
+
   const moduleStatuses = useMemo(() => Object.fromEntries(moduleMarkers.map((marker) => {
     const moduleId = moduleBindings[marker.key];
     const linkedModule = moduleId ? project.modules?.find((module) => module.id === moduleId) ?? null : null;
@@ -1037,7 +1055,14 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
         <div ref={editorCardRef} className="card eskiz-pro-frame-card no-print">
           <div className="section-head eskiz-pro-editor-head">
             <div><h3>Основной эскиз</h3><p className="muted small">Это рабочее полотно Эскиз PRO внутри расчёта. Коммуникации, их свободные линии расстояний, размеры и модули ставятся из верхней панели самого Эскиз PRO.</p></div>
-            <div className="actions"><button className="btn ghost" onClick={() => setFullScreenSketch((value) => !value)}>{fullScreenSketch ? 'Выйти из полного экрана' : 'На весь экран'}</button></div>
+            <div className="actions">
+              <button
+                className="btn ghost eskiz-to-strip"
+                type="button"
+                onClick={() => document.querySelector('.eskiz-sketch-strip-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              >↑ Эскизы</button>
+              <button className="btn ghost" onClick={() => setFullScreenSketch((value) => !value)}>{fullScreenSketch ? 'Выйти из полного экрана' : 'На весь экран'}</button>
+            </div>
           </div>
           <EmbeddedEskizEditor
             key={activePreviewProject ? `${activePreviewProject.id}:${activePreviewProject.image.name}:${activePreviewProject.image.width}x${activePreviewProject.image.height}:${activePreviewProject.image.dataUrl.length}` : 'empty-eskiz'}

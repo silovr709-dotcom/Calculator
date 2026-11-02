@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import type { EskizCommunicationAnchorKind, EskizCommunicationDistance, EskizCommunicationKind, EskizCommunicationMarker, EskizExportViewSettings, EskizLayerKey, EskizLayerVisibility } from '../types';
 import { calloutAnchor, calloutLeaderPoints, calloutTargets, dimensionDefaultValue, nearestCalloutEdge, shiftCallout } from '../lib/eskizPro';
 import { Overlay } from './Portal';
@@ -1325,29 +1325,12 @@ export default function EmbeddedEskizEditor(props: Props) {
     return () => window.clearTimeout(timer);
   }, [fit, project?.id, props.fullScreen]);
 
-  // Редактор занимает всё свободное место до низа экрана: раньше полотно теряло
-  // половину высоты, потому что формула «100vh − 230px» не учитывала шапку проекта.
-  useLayoutEffect(() => {
+  // Высота редактора задаётся только CSS. Раньше здесь стоял расчёт
+  // «окно минус позиция карточки»: он записывал inline-height и на ноутбуке
+  // сжимал полотно до 420 px, перекрывая любые крупные значения из CSS.
+  useEffect(() => {
     const editor = editorRef.current;
-    if (!editor) return;
-    const applyHeight = () => {
-      // Полный экран и узкие экраны (планшет/телефон): высоту задаёт CSS, страница прокручивается.
-      if (props.fullScreen || window.innerWidth <= 980) {
-        editor.style.height = '';
-        return;
-      }
-      const top = editor.getBoundingClientRect().top;
-      const available = window.innerHeight - top - 6;
-      editor.style.height = `${Math.max(420, available)}px`;
-    };
-    applyHeight();
-    // Повторяем после раскладки шрифтов/картинок и при ресайзе окна.
-    const timers = [window.setTimeout(applyHeight, 120), window.setTimeout(applyHeight, 400)];
-    window.addEventListener('resize', applyHeight);
-    return () => {
-      timers.forEach((timer) => window.clearTimeout(timer));
-      window.removeEventListener('resize', applyHeight);
-    };
+    if (editor) editor.style.height = '';
   }, [props.fullScreen, project?.id]);
 
   // Область меняет размер: вход/выход из полного экрана, скрытие панели свойств,
