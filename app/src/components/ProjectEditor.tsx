@@ -69,11 +69,27 @@ export default function ProjectEditor(props: {
   onOpenFactoryBlank?: () => void;
   clientProfile?: ClientProfile | null;
   initialTab?: ProjectTab;
+  /** Сообщает наверх о переключении вкладки: она попадает в адрес и историю браузера. */
+  onTabChange?: (tab: ProjectTab) => void;
 }) {
   const { project, pricebook } = props;
   const [tab, setTab] = useState<ProjectTab>(
     () => props.initialTab ?? ((project.modules?.length ?? 0) > 0 || project.lines.length === 0 ? 'modules' : 'lines'),
   );
+  // Внешняя навигация (ссылка, история браузера) может сменить вкладку без перемонтирования.
+  const lastInitialTabRef = useRef(props.initialTab);
+  useEffect(() => {
+    if (!props.initialTab || props.initialTab === lastInitialTabRef.current) return;
+    lastInitialTabRef.current = props.initialTab;
+    setTab(props.initialTab);
+  }, [props.initialTab]);
+  // Первый рендер не считаем переключением: иначе адрес проекта сразу обрастает вкладкой.
+  const tabReportedRef = useRef(false);
+  const onTabChange = props.onTabChange;
+  useEffect(() => {
+    if (!tabReportedRef.current) { tabReportedRef.current = true; return; }
+    onTabChange?.(tab);
+  }, [tab, onTabChange]);
   // Рабочий режим всегда «продвинутый»: мастер — это добровольный быстрый старт из меню,
   // а не обязательная анкета при каждом открытии проекта.
   const [editorMode, setEditorMode] = useState<'wizard' | 'advanced'>('advanced');

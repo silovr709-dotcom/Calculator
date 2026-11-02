@@ -9206,6 +9206,7 @@ body.work-focus .project-section-head { display: none; }
 /* Главное меню (23.10): на компьютере боковое меню скрыто по умолчанию,
    одна кнопка ☰ открывает и закрывает его. На телефоне меню остаётся как было. */
 .nav-toggle { display: none; }
+.app-back { display: none; }
 @media (min-width: 861px) {
   .nav-toggle {
     display: inline-flex; align-items: center; justify-content: center;
@@ -9216,6 +9217,15 @@ body.work-focus .project-section-head { display: none; }
   }
   .nav-toggle:hover { border-color: var(--accent); color: var(--accent); }
   .app.nav-open .nav-toggle { left: 244px; }
+  .app-back {
+    display: inline-flex; align-items: center; justify-content: center;
+    position: fixed; top: 56px; left: 12px; z-index: var(--z-sidebar);
+    width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line-strong);
+    background: #fff; color: var(--text); font-size: 18px; line-height: 1; cursor: pointer;
+    box-shadow: var(--shadow-sm);
+  }
+  .app-back:hover { border-color: var(--accent); color: var(--accent); }
+  .app.nav-open .app-back { display: none; }
   .app.nav-closed > .sidebar { display: none; }
   .app.nav-closed .page { padding-left: 64px; }
 }

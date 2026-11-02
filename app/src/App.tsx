@@ -32,21 +32,7 @@ import { WORK_MODE_LABELS, type WorkMode } from './lib/workflow';
 import ServerLogin from './components/ServerLogin';
 import { useServerSync } from './lib/useServerSync';
 import type { Workspace } from './lib/serverWorkspace';
-
-type View =
-  | { kind: 'dashboard' }
-  | { kind: 'project'; id: string; tab?: ProjectTab }
-  | { kind: 'quick' }
-  | { kind: 'factory'; id?: string }
-  | { kind: 'kb' }
-  | { kind: 'settings' }
-  | { kind: 'pricebook' }
-  | { kind: 'server' }
-  | { kind: 'analytics' }
-  | { kind: 'audit'; id?: string }
-  | { kind: 'sync' };
-
-
+import { isSpecialHash, sameView, viewFromHash, viewToHash, type View } from './lib/routes';
 
 // Тяжёлые разделы подгружаются по мере открытия: первый экран появляется быстрее.
 const AnalyticsView = lazy(() => import('./components/AnalyticsView'));
@@ -95,7 +81,15 @@ export default function App() {
   const [templates, setTemplates] = useState<Template[]>(() => loadTemplates());
   const [globalSettings, setGlobalSettings] = useState<ProjectSettings>(() => loadGlobalSettings());
   const [activePricebookId, setActivePricebookId] = useState<string>(() => localStorage.getItem('recept.activePb') ?? 'visma-2026');
-  const [view, setView] = useState<View>(() => restoreView());
+  const [view, setView] = useState<View>(() => {
+    if (isSpecialHash(window.location.hash) || /\/kp\//.test(window.location.pathname)) return restoreView();
+    return viewFromHash(window.location.hash) ?? restoreView();
+  });
+  const specialHashRef = useRef(isSpecialHash(window.location.hash));
+  const routeInitializedRef = useRef(false);
+  const lastHashRef = useRef(window.location.hash);
+  const [routeDepth, setRouteDepth] = useState(0);
+  const routeDepthRef = useRef(0);
   // Куда вернуться: последний открытый проект и вкладка внутри него.
   const [lastWork, setLastWork] = useState<{ id: string; tab?: ProjectTab } | null>(() => loadLastWork());
   const [savedFlash, setSavedFlash] = useState(false);
@@ -188,7 +182,12 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
   }, []);
   const server = useServerSync(applyWorkspace);
   const appVersion = useAppVersion();
+  // Вкладка внутри проекта тоже участвует в адресе и истории браузера.
+  const syncProjectTab = useCallback((tab: ProjectTab) => {
+    setView((current) => (current.kind === 'project' && current.tab !== tab ? { ...current, tab } : current));
+  }, []);
   // Экран и открытый проект запоминаются: после настроек возвращаемся туда же.
+  // Параллельно экран отражается в адресе — ссылку на проект или раздел можно отправить коллеге.
   useEffect(() => {
     try {
       localStorage.setItem(VIEW_STORE, JSON.stringify(view));
@@ -201,7 +200,48 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
     } catch {
       /* память браузера переполнена — просто не запомним */
     }
+    if (specialHashRef.current || /\/kp\//.test(window.location.pathname)) return;
+    const hash = viewToHash(view);
+    if (window.location.hash !== hash) {
+      // В состоянии истории храним глубину: она не сбивается при «вперёд».
+      const depth = routeInitializedRef.current ? routeDepthRef.current + 1 : 0;
+      const state = { appRoute: true, depth };
+      if (routeInitializedRef.current) window.history.pushState(state, '', hash);
+      else window.history.replaceState(state, '', hash);
+      routeDepthRef.current = depth;
+      setRouteDepth(depth);
+      lastHashRef.current = hash;
+    }
+    routeInitializedRef.current = true;
   }, [view]);
+
+  // Кнопка «Назад» браузера и стрелка в интерфейсе возвращают предыдущий экран.
+  useEffect(() => {
+    if (specialHashRef.current) return undefined;
+    const apply = (event: Event) => {
+      const hash = window.location.hash;
+      if (hash === lastHashRef.current) return;
+      lastHashRef.current = hash;
+      const next = viewFromHash(hash);
+      if (!next) return;
+      setView((current) => {
+        // Назад к адресу без вкладки не должен сбрасывать открытую вкладку проекта.
+        if (next.kind === 'project' && current.kind === 'project' && current.id === next.id && !next.tab) return current;
+        return sameView(current, next) ? current : next;
+      });
+      const state = (event as PopStateEvent).state ?? window.history.state;
+      const storedDepth = (state as { depth?: unknown } | null)?.depth;
+      const depth = typeof storedDepth === 'number' ? storedDepth : Math.max(0, routeDepthRef.current - 1);
+      routeDepthRef.current = depth;
+      setRouteDepth(depth);
+    };
+    window.addEventListener('popstate', apply);
+    window.addEventListener('hashchange', apply);
+    return () => {
+      window.removeEventListener('popstate', apply);
+      window.removeEventListener('hashchange', apply);
+    };
+  }, []);
   // Клиентская ссылка вида …/#offer=abc123 — определяем её до любой загрузки базы.
   // Меню «Ещё» в нижней панели: на телефоне нет наведения, поэтому открываем по нажатию.
   const [moreOpen, setMoreOpen] = useState(false);
@@ -613,6 +653,9 @@ const persistTemplates = useCallback((next: Template[]) => {
   return (
     <div className={`app work-mode-${workMode} ${navOpen ? 'nav-open' : 'nav-closed'}`}>
       <button type="button" className="nav-toggle" aria-expanded={navOpen} aria-label="Главное меню" title="Главное меню" onClick={() => setNavOpen((value) => !value)}>☰</button>
+      {routeDepth > 0 && !publicOfferId && (
+        <button type="button" className="app-back no-print" aria-label="Назад" title="Назад" onClick={() => window.history.back()}>←</button>
+      )}
       <ToastHost />
       {lastWork && view.kind !== 'project' && projects.some((item) => item.id === lastWork.id) && (
         <button type="button" className="resume-work no-print"
@@ -734,7 +777,7 @@ const persistTemplates = useCallback((next: Template[]) => {
         )}
         {view.kind === 'project' && current && (
           <ProjectEditor
-            key={`${current.id}:${view.tab ?? 'auto'}`}
+            key={current.id}
             project={current}
             pricebook={pricebooks.find((pb) => pb.meta.id === current.pricebookId) ?? activePricebook}
             onChange={updateProject}
@@ -743,6 +786,7 @@ const persistTemplates = useCallback((next: Template[]) => {
             onBack={() => setView({ kind: 'dashboard' })}
             onDuplicate={() => duplicateProject(current.id)}
             initialTab={view.tab}
+            onTabChange={syncProjectTab}
             clientProfile={findClientForProject(currentRaw ?? current, clients) ?? null}
             onDelete={() => deleteProject(current.id)}
             templates={templates}
