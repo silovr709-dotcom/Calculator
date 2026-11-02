@@ -24,7 +24,7 @@ import ServerSaveChip from './components/ServerSaveChip';
 import InstallAppCard from './components/InstallAppCard';
 import ToastHost from './components/ToastHost';
 import { toast } from './lib/toast';
-import { capabilitiesFor } from './lib/permissions';
+import { ROLE_LABELS, capabilitiesFor, normalizeRole } from './lib/permissions';
 import { dehydrateKnown } from './lib/photoStore';
 import NumberFieldCalculator from './components/NumberFieldCalculator';
 import CommandPalette from './components/CommandPalette';
@@ -708,6 +708,23 @@ const persistTemplates = useCallback((next: Template[]) => {
           </div>
         </nav>
         <div className="sidebar-foot">
+          {server.mode === 'server' && server.user && (
+            <button
+              type="button"
+              className="sidebar-account"
+              title="Аккаунт, сотрудники и выход"
+              onClick={() => setView({ kind: 'server' })}
+            >
+              <span className="sidebar-account-avatar" aria-hidden="true">
+                {(server.user.name || server.user.login).trim().slice(0, 1).toLocaleUpperCase('ru')}
+              </span>
+              <span className="sidebar-account-text">
+                <b>{server.user.name || server.user.login}</b>
+                <small>{ROLE_LABELS[normalizeRole(server.user.role)]}</small>
+              </span>
+              <span className="sidebar-account-arrow" aria-hidden="true">→</span>
+            </button>
+          )}
           <div className="pb-badge" title={activePricebook.meta.sourceFile}>
             Прайс: <b>{activePricebook.meta.name}</b>
             <span>{activePricebook.meta.itemCount} позиций</span>
@@ -837,8 +854,8 @@ const persistTemplates = useCallback((next: Template[]) => {
                   </button>
                   {server.mode === 'server' && (
                     <button type="button" onClick={() => setView({ kind: 'server' })}>
-                      <b>Сервер</b>
-                      <span>Пользователи, общая база и состояние подключения</span>
+                      <b>Аккаунт и сотрудники</b>
+                      <span>Вход, роли, смена пароля и состояние общей базы</span>
                     </button>
                   )}
                 </div>

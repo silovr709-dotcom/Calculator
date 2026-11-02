@@ -119,6 +119,23 @@ button:focus-visible, .chip:focus-visible, .wall-plan:focus-visible, summary:foc
 .nav-count { margin-left: auto; background: rgba(255, 255, 255, .14); border-radius: 999px; font-size: 11px; font-weight: 600; padding: 1px 8px; }
 .sidebar nav button.active .nav-count { background: rgba(255, 255, 255, .22); }
 .sidebar-foot { margin-top: auto; font-size: 12px; }
+/* Кто вошёл: имя и роль всегда под рукой, клик открывает аккаунт и сотрудников. */
+.sidebar-account {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  margin-bottom: 8px; padding: 8px; border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .06);
+  color: #e8edf8; text-align: left; cursor: pointer;
+  transition: background-color .15s, border-color .15s;
+}
+.sidebar-account:hover { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .26); }
+.sidebar-account-avatar {
+  display: grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px;
+  border-radius: 50%; background: #f5b833; color: #16213f; font-size: 12px; font-weight: 900;
+}
+.sidebar-account-text { display: grid; min-width: 0; line-height: 1.25; }
+.sidebar-account-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.sidebar-account-text small { color: rgba(232, 237, 248, .62); font-size: 10px; }
+.sidebar-account-arrow { margin-left: auto; color: rgba(232, 237, 248, .55); font-size: 14px; }
 .pb-badge { background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .06); padding: 10px; border-radius: 10px; line-height: 1.5; }
 .pb-badge span { display: block; opacity: .7; }
 .saved-flash { margin-top: 8px; color: #c4b5fd; }
