@@ -80,11 +80,11 @@ function isAggregatedHardware(detail: ClientOfferDetail): boolean {
 }
 
 /** Градация детализации КП — одна ручка для менеджера. */
-const DETAIL_LEVELS: { value: ClientOfferDetailLevel; title: string; hint: string }[] = [
-  { value: 'rollup', title: '1 — Сводка', hint: 'сколько модулей, петель, направляющих, м² фасадов и какие — и итог' },
-  { value: 'sections', title: '2 — По разделам', hint: 'сводка + смета по разделам + перечень модулей' },
-  { value: 'modules', title: '3 — По модулям', hint: 'состав каждого модуля, фурнитура общими строками по проекту' },
-  { value: 'full', title: '4 — Полное', hint: 'все позиции внутри каждого модуля, техническое приложение' },
+const DETAIL_LEVELS: { value: ClientOfferDetailLevel; title: string; short: string; hint: string }[] = [
+  { value: 'rollup', title: '1 — Сводка', short: 'Сводка', hint: 'итог, условия и суммы по разделам — без позиций и модулей' },
+  { value: 'sections', title: '2 — По разделам', short: 'Разделы', hint: 'разделы сметы и дополнительные работы, без перечня модулей' },
+  { value: 'modules', title: '3 — По модулям', short: 'Модули', hint: 'таблица модулей с материалами и фурнитура общими строками' },
+  { value: 'full', title: '4 — Полное', short: 'Полное', hint: 'все позиции внутри модулей — для правок и технической проверки' },
 ];
 const DETAIL_LEVEL_LABELS: Record<ClientOfferDetailLevel, string> = {
   rollup: 'Сводка',
@@ -119,12 +119,6 @@ function detailMeasuredText(detail: ClientOfferDetail): string {
   if (detail.priceBasis !== 'm2' && detail.priceBasis !== 'lm') return '';
   return `${fmtNum(detail.qtyEffective, 4)} ${detail.unit || (detail.priceBasis === 'm2' ? 'м²' : 'п.м')}`;
 }
-
-const MODULE_DETAIL_MODE_LABELS: Record<ClientOfferModuleDetailMode, string> = {
-  summary: 'только список модулей',
-  compact: 'компактно: материалы в модуле, фурнитура общими строками',
-  full: 'полная детализация внутри каждого модуля',
-};
 
 function detailQtyText(detail: ClientOfferDetail): string {
   const unit = detail.unit || 'шт';
@@ -290,13 +284,14 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const isBrief = presentationMode === 'brief';
   const isTechnical = presentationMode === 'technical';
   const extractHardwareFromModules = aggregateHardware && moduleDetailMode !== 'full';
-  // Что показываем на каждом уровне.
-  const showModuleList = detailLevel !== 'rollup';
-  const showProjectHardware = detailLevel === 'modules' || detailLevel === 'sections';
+  // Что показываем на каждом уровне. Уровни должны заметно отличаться: иначе
+  // «Сводка» и «Полное» выглядят одинаково раздутыми.
+  const showModuleList = detailLevel === 'modules' || detailLevel === 'full';
+  const showProjectHardware = detailLevel === 'modules' || detailLevel === 'full';
   const showExtraDetails = detailLevel !== 'rollup';
-  // Позиции внутри ведомости видны на всех уровнях: это единственное место,
-  // где количество и сумма правятся вручную, поэтому доступ к ним не прячем.
-  const showRollupItems = true;
+  // Позиции внутри ведомости — только на полном уровне: на остальных остаются
+  // суммы разделов, а количество и суммы правятся в модулях или на уровне «Полное».
+  const showRollupItems = detailLevel === 'full';
   const linkedEskizIds = project.eskizPro?.linkedProjectIds ?? [];
   const eskizSnapshots = project.eskizPro?.snapshots ?? [];
   const eskizById = new Map(eskizSnapshots.map((snapshot) => [snapshot.id, snapshotProject(snapshot)]));
@@ -714,30 +709,12 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         </div>
         <div className="client-control-stack">
           <details className="client-control-section" open>
-            <summary><span>1. Вид, условия и детализация</span><small>{DETAIL_LEVEL_LABELS[detailLevel]} · {MODULE_DETAIL_MODE_LABELS[moduleDetailMode]}</small></summary>
+            <summary><span>1. Вид, условия и детализация</span><small>{DETAIL_LEVEL_LABELS[detailLevel]}</small></summary>
             <div className="client-control-body client-control-grid">
               <label>Предложение действительно до<input type="date" value={project.clientOffer?.validUntil ?? ''} onChange={(event) => updateOffer({ validUntil: event.target.value || undefined })} /></label>
               <label>Условия оплаты<input value={project.clientOffer?.paymentTerms ?? ''} placeholder="например, 50% аванс" onChange={(event) => updateOffer({ paymentTerms: event.target.value })} /></label>
               <label>Монтаж<input value={project.clientOffer?.installation ?? ''} placeholder="например, включён" onChange={(event) => updateOffer({ installation: event.target.value })} /></label>
               <label>Доставка<input value={project.clientOffer?.delivery ?? ''} placeholder="например, по адресу клиента" onChange={(event) => updateOffer({ delivery: event.target.value })} /></label>
-              <div className="span-2 client-detail-levels">
-                <b>Уровень детализации КП</b>
-                <div className="client-detail-level-list" role="radiogroup" aria-label="Уровень детализации КП">
-                  {DETAIL_LEVELS.map((level) => (
-                    <button
-                      type="button"
-                      key={level.value}
-                      role="radio"
-                      aria-checked={detailLevel === level.value}
-                      className={detailLevel === level.value ? 'active' : ''}
-                      onClick={() => updateOffer({ detailLevel: level.value, ...DETAIL_LEVEL_PRESETS[level.value] })}
-                    >
-                      <span>{level.title}</span>
-                      <small>{level.hint}</small>
-                    </button>
-                  ))}
-                </div>
-              </div>
               <label className="client-detail-price-toggle"><input type="checkbox" checked={showDetailPrices} onChange={(event) => updateOffer({ showDetailPrices: event.target.checked })} /> Показывать суммы в детализации</label>
               <label className="client-detail-price-toggle"><input type="checkbox" checked={aggregateHardware} onChange={(event) => updateOffer({ aggregateHardware: event.target.checked })} /> Фурнитуру общими строками по проекту</label>
               <div className="span-2 client-offer-edits-state">
@@ -818,6 +795,31 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         </aside>
         )}
         <main className="client-offer-preview">
+
+      {!publicMode && (
+        <div className="client-offer-viewbar no-print">
+          <div className="client-offer-viewbar-head">
+            <span className="eyebrow">Вид КП</span>
+            <small>{DETAIL_LEVELS.find((level) => level.value === detailLevel)?.hint}</small>
+          </div>
+          <div className="client-offer-view-switch" role="radiogroup" aria-label="Уровень детализации КП">
+            {DETAIL_LEVELS.map((level) => (
+              <button
+                type="button"
+                key={level.value}
+                role="radio"
+                aria-checked={detailLevel === level.value}
+                title={level.hint}
+                className={detailLevel === level.value ? 'active' : ''}
+                onClick={() => updateOffer({ detailLevel: level.value, ...DETAIL_LEVEL_PRESETS[level.value] })}
+              >
+                {level.short}
+              </button>
+            ))}
+          </div>
+          <span className="client-offer-viewbar-note">{showDetailPrices ? 'суммы в позициях' : 'без сумм в позициях'}</span>
+        </div>
+      )}
 
       <div className={`client-doc client-doc-${presentationMode}`} id="client-doc">
         <header className="cd-hero">
@@ -901,14 +903,14 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
               : project.clientOffer?.summaryNote}</p>}
           </div>
           {includedChips.length > 0 && <div className="cd-included"><b>В предложение входит</b><div>{includedChips.map((chip) => <span key={chip}>{chip}</span>)}</div></div>}
-          {materialHighlights.length > 0 && <div className="cd-materials"><b>Ключевые материалы</b><ul>{materialHighlights.map((item) => <li key={item}>{item}</li>)}</ul></div>}
+          {!isBrief && materialHighlights.length > 0 && <div className="cd-materials"><b>Ключевые материалы</b><ul>{materialHighlights.map((item) => <li key={item}>{item}</li>)}</ul></div>}
         </section>
 
         {rollupRows.length > 0 && (
           <section className="cd-rollup">
             <div className="cd-section-head">
               <h3>Сводная ведомость</h3>
-              {canEditInline && <span className="no-print"><em> количество и суммы правятся прямо здесь</em></span>}
+              {canEditInline && showRollupItems && <span className="no-print"><em> количество и суммы правятся прямо здесь</em></span>}
             </div>
             <div className="cd-rollup-table" role="table" aria-label="Сводная ведомость по типам">
               <div className="cd-rollup-head" role="row"><span>Раздел / позиция</span><span>Количество</span><span>Сумма</span></div>

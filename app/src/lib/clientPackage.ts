@@ -441,19 +441,14 @@ function rollupRows(details: ClientOfferDetail[]): string[][] {
 
 function offerBlocks(args: ClientDocumentArgs): DocxBlock[] {
   const { project, offer, details, modules, total, summary } = args;
+  // Уровень детализации — тот же, что выбран на экране КП: Word не должен
+  // печатать больше, чем менеджер видит перед отправкой.
+  const level = offer.detailLevel ?? (offer.moduleDetailMode === 'full' ? 'full' : offer.presentationMode === 'brief' ? 'rollup' : 'sections');
   const blocks: DocxBlock[] = [
-    p('Коммерческое предложение', { bold: true, size: 22, color: '0F2F57' }),
-    p(`${project.name}\nКлиент: ${project.client || '—'} · Дата: ${fmtDate(project.date)} · № договора: ${contractNumber(project, offer)}`, { size: 11, color: '52667A' }),
-    p(`Итоговая стоимость: ${fmtMoney(total)}`, { bold: true, size: 16, color: '1F6FEB' }),
-    table(['Показатель', 'Значение'], [
-      ['Модулей', `${fmtNum(summary.moduleCount, 3)} шт`],
-      ['Фасады, площадь/шт', summary.facadeAreaM2 > 0 ? `${fmtNum(summary.facadeAreaM2, 2)} м² / ${fmtNum(summary.facadeQty, 3)} шт` : `${fmtNum(summary.facadeQty, 3)} шт`],
-      ['Петли', `${fmtNum(summary.hingeQty, 3)} шт${summary.hingeTypes.length ? `: ${summary.hingeTypes.map((item) => `${item.name} — ${fmtNum(item.qty, 3)} шт`).join('; ')}` : ''}`],
-      ['Корпуса, сумма', fmtMoney(summary.bodyTotal)],
-      ['Фасады, сумма', fmtMoney(summary.facadeTotal)],
-      ['Фурнитура, сумма', fmtMoney(summary.hardwareTotal)],
-    ]),
-    p('Условия', { bold: true, size: 14, color: '0F2F57' }),
+    p('Коммерческое предложение', { bold: true, size: 22, color: '1B382D' }),
+    p(`${project.name}\nКлиент: ${project.client || '—'} · Дата: ${fmtDate(project.date)} · № договора: ${contractNumber(project, offer)}`, { size: 11, color: '7D7264' }),
+    p(`Итоговая стоимость: ${fmtMoney(total)}`, { bold: true, size: 16, color: '9A7645' }),
+    p('Условия', { bold: true, size: 14, color: '1B382D' }),
     table(['Пункт', 'Значение'], [
       ['Действительно до', offer.validUntil ? fmtDate(offer.validUntil) : 'не указано'],
       ['Оплата', offer.paymentTerms || 'по согласованию'],
@@ -461,23 +456,22 @@ function offerBlocks(args: ClientDocumentArgs): DocxBlock[] {
       ['Доставка', offer.delivery || 'по согласованию'],
     ]),
   ];
-  if (modules.length) {
-    blocks.push(p('Модули', { bold: true, size: 14, color: '0F2F57' }));
+  if (modules.length && (level === 'modules' || level === 'full')) {
+    blocks.push(p('Модули', { bold: true, size: 14, color: '1B382D' }));
     blocks.push(table(['№', 'Модуль', 'Описание', 'Кол-во', 'Сумма'], modules.map((module, index) => [String(index + 1), module.title, module.sub || '', fmtNum(module.qty, 3), fmtMoney(module.total)])));
   }
-  const level = offer.detailLevel ?? (offer.moduleDetailMode === 'full' ? 'full' : offer.presentationMode === 'brief' ? 'rollup' : 'sections');
   if (level === 'rollup') {
-    // Самое короткое КП: сколько и какие — одной ведомостью, без перечня позиций.
-    blocks.push(p('Сводная ведомость', { bold: true, size: 14, color: '0F2F57' }));
+    // Самое короткое КП: итоги по разделам, без перечня позиций и модулей.
+    blocks.push(p('Сводная ведомость', { bold: true, size: 14, color: '1B382D' }));
     blocks.push(table(['Раздел', 'Количество', 'Состав', 'Сумма'], rollupRows(details)));
   } else if (level === 'full' || offer.moduleDetailMode === 'full') {
-    blocks.push(p('Состав по категориям', { bold: true, size: 14, color: '0F2F57' }));
+    blocks.push(p('Состав по категориям', { bold: true, size: 14, color: '1B382D' }));
     blocks.push(table(['№', 'Категория', 'Позиция', 'Кол-во', 'Сумма'], detailRows(details)));
   } else {
-    blocks.push(p('Сводная ведомость', { bold: true, size: 14, color: '0F2F57' }));
+    blocks.push(p('Сводная ведомость', { bold: true, size: 14, color: '1B382D' }));
     blocks.push(table(['Раздел', 'Количество', 'Состав', 'Сумма'], rollupRows(details)));
-    blocks.push(p('Состав по категориям', { bold: true, size: 14, color: '0F2F57' }));
-    blocks.push(p('Компактная сводка: повторяющаяся фурнитура и однотипные позиции собраны по проекту, чтобы КП без эскизов оставалось в 2–3 страницы.', { size: 10, color: '52667A' }));
+    blocks.push(p('Состав по категориям', { bold: true, size: 14, color: '1B382D' }));
+    blocks.push(p(`Компактная сводка: повторяющаяся фурнитура и однотипные позиции собраны по проекту. Модулей: ${fmtNum(summary.moduleCount, 3)} · фасадов: ${fmtNum(summary.facadeQty, 3)} шт · петель: ${fmtNum(summary.hingeQty, 3)} шт.`, { size: 10, color: '7D7264' }));
     blocks.push(table(['№', 'Категория', 'Основной состав', 'Строк', 'Сумма'], compactCategoryRows(details)));
   }
   if (offer.notes) blocks.push(p(`Примечания:\n${offer.notes}`, { size: 11 }));
@@ -497,17 +491,17 @@ function specificationBlocks(args: ClientDocumentArgs): DocxBlock[] {
     ['Итого по КП', fmtMoney(total)],
   ];
   const blocks: DocxBlock[] = [
-    p('Спецификация клиентского КП', { bold: true, size: 20, color: '0F2F57' }),
-    p(`${project.name}\nКлиент: ${project.client || '—'} · Дата: ${fmtDate(project.date)}`, { size: 11, color: '52667A' }),
+    p('Спецификация клиентского КП', { bold: true, size: 20, color: '1B382D' }),
+    p(`${project.name}\nКлиент: ${project.client || '—'} · Дата: ${fmtDate(project.date)}`, { size: 11, color: '7D7264' }),
     p('Компактный перечень состава без внутренних закупочных цен. Фурнитура сгруппирована общими строками, чтобы не повторять её в каждом модуле.', { size: 11 }),
     table(['Показатель', 'Значение'], summaryRows),
   ];
   if (modules.length) {
-    blocks.push(p('Модули', { bold: true, size: 14, color: '0F2F57' }));
+    blocks.push(p('Модули', { bold: true, size: 14, color: '1B382D' }));
     blocks.push(table(['№', 'Модуль', 'Описание', 'Кол-во', 'Сумма'], modules.map((module, index) => [String(index + 1), module.title, module.sub || '', fmtNum(module.qty, 3), fmtMoney(module.total)])));
   }
   if (categoryRows.length) {
-    blocks.push(p('Состав по категориям', { bold: true, size: 14, color: '0F2F57' }));
+    blocks.push(p('Состав по категориям', { bold: true, size: 14, color: '1B382D' }));
     blocks.push(table(['№', 'Категория', 'Позиция', 'Кол-во', 'Сумма'], categoryRows));
   }
   return blocks;
@@ -516,20 +510,20 @@ function specificationBlocks(args: ClientDocumentArgs): DocxBlock[] {
 function contractBlocks(args: ClientDocumentArgs): DocxBlock[] {
   const { project, offer, total } = args;
   return [
-    p('Договор на изготовление мебели', { bold: true, size: 20, color: '0F2F57' }),
-    p(`№ ${contractNumber(project, offer)} · ${offer.contractCity?.trim() || '__________'} · ${fmtDate(project.date)}`, { size: 11, color: '52667A' }),
+    p('Договор на изготовление мебели', { bold: true, size: 20, color: '1B382D' }),
+    p(`№ ${contractNumber(project, offer)} · ${offer.contractCity?.trim() || '__________'} · ${fmtDate(project.date)}`, { size: 11, color: '7D7264' }),
     p(`Исполнитель: ${sellerName(offer)}\n${offer.sellerDetails || ''}\nЗаказчик: ${project.client || '—'}\n${offer.clientContacts || ''}`),
-    p('1. Предмет договора', { bold: true, size: 14, color: '0F2F57' }),
+    p('1. Предмет договора', { bold: true, size: 14, color: '1B382D' }),
     p('Исполнитель обязуется изготовить и/или укомплектовать мебельное изделие по согласованному эскизу, спецификации и коммерческому предложению, а Заказчик обязуется принять изделие и оплатить его.'),
-    p('2. Стоимость и порядок оплаты', { bold: true, size: 14, color: '0F2F57' }),
+    p('2. Стоимость и порядок оплаты', { bold: true, size: 14, color: '1B382D' }),
     p(`Предварительная стоимость комплекта составляет ${fmtMoney(total)}. Условия оплаты: ${offer.paymentTerms || 'по согласованию'}. Изменение размеров, материалов, фурнитуры или состава оформляется пересчётом либо дополнительным соглашением.`),
-    p('3. Сроки, доставка и монтаж', { bold: true, size: 14, color: '0F2F57' }),
+    p('3. Сроки, доставка и монтаж', { bold: true, size: 14, color: '1B382D' }),
     p(`Срок изготовления: ${offer.productionTerms || 'согласуется после утверждения размеров и материалов'}. Доставка: ${offer.delivery || 'по согласованию'}. Монтаж: ${offer.installation || 'по согласованию'}.`),
-    p('4. Приёмка и гарантия', { bold: true, size: 14, color: '0F2F57' }),
+    p('4. Приёмка и гарантия', { bold: true, size: 14, color: '1B382D' }),
     p(`Заказчик проверяет комплектность и внешний вид при передаче. Гарантия: ${offer.warranty || '12 месяцев, если иное не указано в приложениях'}.`),
-    p('Подписи сторон', { bold: true, size: 14, color: '0F2F57' }),
+    p('Подписи сторон', { bold: true, size: 14, color: '1B382D' }),
     table(['Исполнитель', 'Заказчик'], [['__________________________', '__________________________']]),
-    p('Форма подготовлена по данным проекта. Для рабочей выгрузки в браузере используется фирменный шаблон договора из templates/client.', { size: 10, color: '64748B' }),
+    p('Форма подготовлена по данным проекта. Для рабочей выгрузки в браузере используется фирменный шаблон договора из templates/client.', { size: 10, color: '8A8072' }),
   ];
 }
 
@@ -643,10 +637,10 @@ function receiptBlocks(args: ClientDocumentArgs): DocxBlock[] {
     fmtMoney(row.sum),
   ]);
   return [
-    p(`Товарный чек № ${contractNumber(project, offer)}`, { bold: true, size: 20, color: '0F2F57' }),
-    p(`от ${formatContractDate(project)}`, { size: 11, color: '52667A' }),
+    p(`Товарный чек № ${contractNumber(project, offer)}`, { bold: true, size: 20, color: '1B382D' }),
+    p(`от ${formatContractDate(project)}`, { size: 11, color: '7D7264' }),
     p(`Продавец: ${sellerName(offer)}\n${sellerDetails(offer)}\nПокупатель: ${project.client || '_________________________________'}\nАдрес доставки: ${offer.clientAddress || offer.clientContacts || '_________________________________'}`),
-    p(`Комплект мебели по проекту «${project.name}»${summary.moduleCount > 0 ? ` · ${fmtNum(summary.moduleCount, 3)} модулей` : ''}${summary.facadeAreaM2 > 0 ? ` · фасады ${fmtNum(summary.facadeAreaM2, 2)} м²` : ''}`, { size: 10, color: '52667A' }),
+    p(`Комплект мебели по проекту «${project.name}»${summary.moduleCount > 0 ? ` · ${fmtNum(summary.moduleCount, 3)} модулей` : ''}${summary.facadeAreaM2 > 0 ? ` · фасады ${fmtNum(summary.facadeAreaM2, 2)} м²` : ''}`, { size: 10, color: '7D7264' }),
     table(['№', 'Наименование товара', 'Цена', 'Кол-во', 'Сумма'], [...productRows, ['', 'Итого', '', '', fmtMoney(total)]], {
       compact: true,
       widths: [420, 6000, 1300, 900, 1500],
