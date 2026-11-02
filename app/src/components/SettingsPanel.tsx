@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { ExtraExpenseDetail, ProjectSettings, SummaryGroup } from '../types';
 import { SUMMARY_GROUPS } from '../types';
 import { uid } from '../lib/storage';
@@ -23,6 +24,8 @@ export default function SettingsPanel(props: {
   standalone?: boolean;
   /** Рассчитанные суммы расходов из текущих итогов проекта (для показа «10% = 12 400 ₽»). */
   extraDetails?: ExtraExpenseDetail[];
+  /** Дополнительные карточки внизу страницы (например, резервные копии). */
+  footer?: ReactNode;
 }) {
   const s = props.settings;
   const set = (patch: Partial<ProjectSettings>) => props.onChange({ ...s, ...patch });
@@ -121,6 +124,7 @@ export default function SettingsPanel(props: {
           </div>
         </section>
       </div>
+      {props.footer}
     </div>
   );
 }

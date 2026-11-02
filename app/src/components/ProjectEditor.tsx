@@ -76,7 +76,15 @@ export default function ProjectEditor(props: {
   const [tab, setTab] = useState<ProjectTab>(
     () => props.initialTab ?? ((project.modules?.length ?? 0) > 0 || project.lines.length === 0 ? 'modules' : 'lines'),
   );
-  const [editorMode, setEditorMode] = useState<'wizard' | 'advanced'>(() => props.initialTab ? 'advanced' : project.wizardMode ?? 'advanced');
+  // Рабочий режим всегда «продвинутый»: мастер — это добровольный быстрый старт из меню,
+  // а не обязательная анкета при каждом открытии проекта.
+  const [editorMode, setEditorMode] = useState<'wizard' | 'advanced'>('advanced');
+  const [contextOpen, setContextOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem('recept.project.context') !== '0'; } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('recept.project.context', contextOpen ? '1' : '0'); } catch { /* не страшно */ }
+  }, [contextOpen]);
   const [focusModuleId, setFocusModuleId] = useState<string | null>(null);
   // Рабочие вкладки (модули, эскиз, КП): пульс-полоса скрыта, класс work-focus на body снимается при уходе.
   const focusWork = tab === 'modules' || tab === 'sketch' || tab === 'client';
@@ -256,13 +264,6 @@ export default function ProjectEditor(props: {
   const activeStageIndex = PROJECT_STAGE_ORDER.indexOf(activeStage);
   const previousStage = activeStageIndex > 0 ? PROJECT_STAGE_ORDER[activeStageIndex - 1] : null;
   const nextStage = activeStageIndex < PROJECT_STAGE_ORDER.length - 1 ? PROJECT_STAGE_ORDER[activeStageIndex + 1] : null;
-  const projectPulseItems = [
-    { label: 'Клиент', value: project.client || 'не указан' },
-    { label: 'Состав', value: moduleCount ? `${moduleCount} мод.` : project.lines.length ? `${project.lines.length} доп.` : 'пусто' },
-    { label: 'КП', value: fmtMoney(totals.client) },
-    { label: 'Проверка', value: unresolvedCriticals ? `${unresolvedCriticals} ошибок` : unresolvedWarnings ? `${unresolvedWarnings} пред.` : 'OK' },
-  ];
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); props.onChange({ ...project }); }
@@ -361,6 +362,14 @@ export default function ProjectEditor(props: {
               <option value="archived">Архив</option>
             </select>
             <button className="btn ghost icon-btn" disabled={!props.canUndo} title="Отменить последнее изменение (Ctrl+Z)" onClick={props.onUndo}>↶</button>
+            <button
+              type="button"
+              className="btn ghost context-toggle"
+              aria-expanded={contextOpen}
+              aria-controls="project-context"
+              title={contextOpen ? 'Скрыть сводку проекта' : 'Показать сводку проекта'}
+              onClick={() => setContextOpen((value) => !value)}
+            >▤ <span>Сводка</span></button>
             <div className="dropdown action-dropdown">
               <button type="button" className="btn ghost">Ещё ▾</button>
               <div className="dropdown-menu align-right">
@@ -375,7 +384,7 @@ export default function ProjectEditor(props: {
                 <button onClick={() => setEditMeta(true)}>Изменить данные проекта</button>
                 <button onClick={props.onDuplicate}>Дублировать проект</button>
                 <button onClick={() => { const n = prompt('Название шаблона:', project.name); if (n) props.onSaveTemplate(n); }}>Сохранить как шаблон</button>
-                <button onClick={() => { const next = editorMode === 'wizard' ? 'advanced' : 'wizard'; setEditorMode(next); props.onChange({ ...project, wizardMode: next }); }}>{editorMode === 'wizard' ? 'Перейти к маршруту' : 'Открыть мастер сборки'}</button>
+                <button onClick={() => { const next = editorMode === 'wizard' ? 'advanced' : 'wizard'; setEditorMode(next); props.onChange({ ...project, wizardMode: next }); }}>{editorMode === 'wizard' ? 'Перейти к расчёту' : 'Быстрый старт (мастер)'}</button>
                 <button className="danger-menu-item" onClick={props.onDelete}>Удалить проект</button>
               </div>
             </div>
@@ -416,13 +425,10 @@ export default function ProjectEditor(props: {
         />
       ) : (
       <Suspense fallback={<div className="section-loading">Загружаем раздел проекта…</div>}>
-      <div className={`project-workspace-frame ${tab === 'modules' ? 'modules-workspace-frame' : ''} ${tab === 'sketch' ? 'sketch-workspace-frame' : ''}`}>
+      <div className={`project-workspace-frame ${tab === 'modules' ? 'modules-workspace-frame' : ''} ${tab === 'sketch' ? 'sketch-workspace-frame' : ''} ${contextOpen ? '' : 'context-collapsed'}`}>
         <section className="project-work-area">
           <div className="project-section-head no-print">
             <p>{activeSubTab?.hint ?? activeStageMeta.hint}</p>
-            <div className="project-pulse-strip">
-              {projectPulseItems.map((item) => <span key={item.label}><b>{item.value}</b><small>{item.label}</small></span>)}
-            </div>
           </div>
 
       {tab === 'photos' && <PhotosPanel project={project} onChange={props.onChange} />}
@@ -554,13 +560,15 @@ export default function ProjectEditor(props: {
             {nextStage && <button type="button" className="btn" onClick={() => openStage(nextStage)}>{PROJECT_STAGE_LABELS[nextStage].label} →</button>}
           </nav>
         </section>
-        <ProjectContextPanel
-          project={project}
-          pricebook={pricebook}
-          client={props.clientProfile}
-          onOpenTab={openProjectTab}
-          onOpenFactory={props.onOpenFactoryBlank}
-        />
+        {contextOpen && (
+          <ProjectContextPanel
+            project={project}
+            pricebook={pricebook}
+            client={props.clientProfile}
+            onOpenTab={openProjectTab}
+            onOpenFactory={props.onOpenFactoryBlank}
+          />
+        )}
       </div>
       </Suspense>)}
 

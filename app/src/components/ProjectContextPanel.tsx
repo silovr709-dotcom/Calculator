@@ -1,16 +1,8 @@
 import type { ClientProfile, Pricebook, Project } from '../types';
 import { fmtMoney, fmtNum } from '../lib/format';
-import { buildProjectActionAlerts, calcProjectWorkflowTotal, projectDocuments, projectNextStep, projectPayment, type ProjectNextStep, type WorkflowTone } from '../lib/workflow';
+import { buildProjectActionAlerts, calcProjectWorkflowTotal, projectDocuments, projectPayment, type WorkflowTone } from '../lib/workflow';
 
 type ContextTab = 'modules' | 'sketch' | 'order' | 'lines' | 'photos' | 'settings' | 'client' | 'check' | 'variants' | 'measurement';
-
-function toneText(tone: WorkflowTone): string {
-  if (tone === 'danger') return 'критично';
-  if (tone === 'warn') return 'важно';
-  if (tone === 'good') return 'готово';
-  if (tone === 'muted') return 'закрыто';
-  return 'в работе';
-}
 
 function docLabel(value?: string): string {
   if (!value || value === 'none') return 'нет';
@@ -28,15 +20,6 @@ function paymentSummary(project: Project, client: ClientProfile | null | undefin
   return { label: remainder <= 0 ? `оплачено ${fmtMoney(paid)}` : `оплачено ${fmtMoney(paid)}, остаток ${fmtMoney(remainder)}`, tone: remainder <= 0 ? 'good' : 'info' };
 }
 
-function goForStep(step: ProjectNextStep, handlers: { onOpenTab: (tab: ContextTab) => void; onOpenFactory?: () => void }) {
-  if (step.target === 'factory') handlers.onOpenFactory?.();
-  else if (step.target === 'client' || step.target === 'payment') handlers.onOpenTab('client');
-  else if (step.target === 'check') handlers.onOpenTab('check');
-  else if (step.target === 'modules') handlers.onOpenTab('modules');
-  else if (step.target === 'sketch') handlers.onOpenTab('sketch');
-  else handlers.onOpenTab('order');
-}
-
 export default function ProjectContextPanel(props: {
   project: Project;
   pricebook: Pricebook;
@@ -46,20 +29,12 @@ export default function ProjectContextPanel(props: {
 }) {
   const { project, pricebook, client } = props;
   const total = calcProjectWorkflowTotal(project, pricebook);
-  const next = projectNextStep(project, pricebook, client);
   const alerts = buildProjectActionAlerts(project, pricebook, client).slice(0, 6);
   const docs = projectDocuments(project, client);
   const pay = paymentSummary(project, client, total.client);
 
   return (
-    <aside className="project-context-panel no-print" aria-label="Контекст проекта">
-      <div className={`project-context-next tone-${next.tone}`}>
-        <span>{toneText(next.tone)}</span>
-        <h3>{next.title}</h3>
-        <p>{next.detail}</p>
-        <button type="button" className="linkish" onClick={() => goForStep(next, props)}>{next.actionLabel} →</button>
-      </div>
-
+    <aside className="project-context-panel no-print" id="project-context" aria-label="Сводка проекта">
       <div className="project-context-card">
         <div className="context-card-head"><b>Проект</b><button type="button" className="linkish" onClick={() => props.onOpenTab('order')}>заказ</button></div>
         <div className="context-fact"><span>Клиент</span><b>{client?.name || project.client || 'не указан'}</b></div>

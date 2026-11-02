@@ -9925,3 +9925,11 @@ body.work-focus .project-section-head { display: none; }
   .client-doc .cd-qr { grid-column: 1 / -1; justify-self: start; }
   .client-doc .cd-footer { flex-wrap: wrap; font-size: 9px; }
 }
+
+/* Сводка проекта: пользователь может свернуть правую колонку, чтобы работать шире. */
+.project-workspace-frame.context-collapsed { grid-template-columns: minmax(0, 1fr); }
+.project-workspace-frame.context-collapsed .project-work-area { grid-column: 1 / -1; }
+.context-toggle { white-space: nowrap; }
+@media (max-width: 720px) {
+  .context-toggle span { display: none; }
+}

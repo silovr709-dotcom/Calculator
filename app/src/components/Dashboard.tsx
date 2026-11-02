@@ -1,10 +1,8 @@
-import { toast } from '../lib/toast';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ClientProfile, Pricebook, Project } from '../types';
 import { calcTotals } from '../lib/engine';
 import { moduleToLines } from '../lib/modules';
 import { fmtMoney, fmtDate, todayISO } from '../lib/format';
-import { downloadFile, makeBackup, restoreBackup } from '../lib/storage';
 import { projectFinance } from '../lib/finance';
 import { filterDashboardProjects, projectReadiness, sortDashboardProjects, type DashboardReadinessFilter, type DashboardSort, type DashboardStatusFilter } from '../lib/dashboard';
 import { Overlay } from './Portal';
@@ -28,7 +26,6 @@ export default function Dashboard(props: {
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ name: '', client: '', date: todayISO(), comment: '' });
   const fileRef = useRef<HTMLInputElement>(null);
-  const backupRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<DashboardStatusFilter>('all');
@@ -82,21 +79,6 @@ export default function Dashboard(props: {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const doBackup = () => {
-    const b = makeBackup();
-    downloadFile(`recept-backup-${b.exportedAt.slice(0, 10)}.json`, JSON.stringify(b), 'application/json');
-  };
-  const doRestore = async (f: File) => {
-    if (!confirm('Восстановление ЗАМЕНИТ все текущие проекты, шаблоны, настройки и загруженные версии прайса данными из копии. Продолжить?')) return;
-    try {
-      const msg = restoreBackup(await f.text());
-      toast.ok(msg);
-      location.reload();
-    } catch (e) {
-      toast.error(`Ошибка восстановления: ${(e as Error).message}`);
-    }
-  };
-
   return (
     <div className="page">
       <header className="page-head">
@@ -104,35 +86,19 @@ export default function Dashboard(props: {
           <h1>Проекты</h1>
           <div className="muted">Активный прайс: {props.pricebookLabel}</div>
         </div>
-      </header>
-
-      <section className="dashboard-command-center card no-print" aria-label="Единый центр действий">
-        <div className="dashboard-command-copy">
-          <span className="eyebrow">Действия</span>
-          <h2>Проекты и обмен — рядом</h2>
-          <p>Основные операции вынесены в одну панель: создать расчёт, сделать быстрый расчёт, импортировать или сохранить данные.</p>
-        </div>
-        <div className="dashboard-command-actions system-action-strip">
+        <div className="actions system-action-strip">
           <button className="btn primary" onClick={() => setShowNew(true)}>+ Новый расчёт</button>
           <div className="dropdown action-dropdown wide">
-            <button className="btn ghost" type="button">Перейти ▾</button>
-            <div className="dropdown-menu">
+            <button className="btn ghost" type="button">Ещё ▾</button>
+            <div className="dropdown-menu align-right">
               <button type="button" onClick={props.onQuick}>Быстрый расчёт</button>
               {props.onOpenSync && <button type="button" title="Синхронизация с телефоном и другими устройствами" onClick={props.onOpenSync}>Синхронизация и телефон</button>}
-            </div>
-          </div>
-          <div className="dropdown action-dropdown wide">
-            <button className="btn ghost" type="button">Данные ▾</button>
-            <div className="dropdown-menu">
-              <button type="button" onClick={doBackup}>⭳ Резервная копия всего (файл .json)</button>
-              <button type="button" onClick={() => backupRef.current?.click()}>⭱ Восстановить из копии…</button>
-              <button type="button" onClick={() => fileRef.current?.click()}>Импорт одного проекта…</button>
+              <button type="button" onClick={() => fileRef.current?.click()}>Импорт проекта из файла…</button>
             </div>
           </div>
         </div>
-        <input ref={backupRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) doRestore(f); e.target.value = ''; }} />
         <input ref={fileRef} type="file" accept=".json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) props.onImport(f); e.target.value = ''; }} />
-      </section>
+      </header>
 
       {showNew && (
         <Overlay className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowNew(false); }}>

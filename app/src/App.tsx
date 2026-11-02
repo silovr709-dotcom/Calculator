@@ -17,6 +17,7 @@ import { applyClientProfileToProject, applyClientProfilesToProjects, createClien
 import Dashboard from './components/Dashboard';
 import ProjectEditor, { type ProjectTab } from './components/ProjectEditor';
 import SettingsPanel from './components/SettingsPanel';
+import DataToolsCard from './components/DataToolsCard';
 import QuickCalc from './components/QuickCalc';
 import { useAppVersion } from './lib/useAppVersion';
 import ServerSaveChip from './components/ServerSaveChip';
@@ -126,10 +127,10 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
     // В браузер кладём лёгкую копию (фото — ссылками). На своём сервере браузерное
     // хранилище — лишь кэш, поэтому его переполнение ничего не значит и не тревожит.
     if (dirty.projects && !saveProjects(dehydrateKnown(projectsRef.current)) && !isStorageServerBacked()) {
-      alert('Не удалось сохранить: закончилось место локального хранилища. Экспортируйте старые проекты в файл и удалите их.');
+      toast.error('Не удалось сохранить: закончилось место локального хранилища. Экспортируйте старые проекты в файл и удалите их.');
     }
     if (dirty.clients && !saveClientProfiles(dehydrateKnown(clientsRef.current)) && !isStorageServerBacked()) {
-      alert('Не удалось сохранить базу клиентов: закончилось место локального хранилища.');
+      toast.error('Не удалось сохранить базу клиентов: закончилось место локального хранилища.');
     }
     if (isStorageServerBacked()) return;   // на сервер данные уходят отдельно
     const cfg = loadSyncConfig();
@@ -316,7 +317,7 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
           setClients(res.merged.clients ?? []);
           setTemplates(res.merged.templates);
           setGlobalSettings(res.merged.settings);
-          alert('📱 Устройство успешно подключено к синхронизации! Проекты загружены.');
+          toast.ok('📱 Устройство подключено к синхронизации, проекты загружены.');
         }
       });
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -328,7 +329,7 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
       saveProjects(dehydrateKnown(next));
       window.setTimeout(() => { setProjects(next); setView({ kind: 'project', id: p.id }); }, 0);
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
-      alert(`📱 Проект «${p.name}» успешно импортирован на это устройство!`);
+      toast.ok(`📱 Проект «${p.name}» импортирован на это устройство.`);
     } else if (parsed.type === 'importz') {
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
       loadCompressedProjectShare(parsed.data).then((project) => {
@@ -337,9 +338,9 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
         saveProjects(dehydrateKnown(next));
         setProjects(next);
         setView({ kind: 'project', id: p.id });
-        alert(`📱 Проект «${p.name}» загружен по QR-коду!`);
+        toast.ok(`📱 Проект «${p.name}» загружен по QR-коду.`);
       }).catch((error) => {
-        alert(`Не удалось открыть сжатый QR проекта: ${(error as Error).message}`);
+        toast.error(`Не удалось открыть сжатый QR проекта: ${(error as Error).message}`);
       });
     } else if (parsed.type === 'share') {
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -349,9 +350,9 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
         saveProjects(dehydrateKnown(next));
         setProjects(next);
         setView({ kind: 'project', id: p.id });
-        alert(`📱 Проект «${p.name}» загружен по QR-коду!`);
+        toast.ok(`📱 Проект «${p.name}» загружен по QR-коду.`);
       }).catch((error) => {
-        alert(`Не удалось открыть проект по QR-коду: ${(error as Error).message}`);
+        toast.error(`Не удалось открыть проект по QR-коду: ${(error as Error).message}`);
       });
     } else if (parsed.type === 'servershare') {
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -361,9 +362,9 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
         saveProjects(dehydrateKnown(next));
         setProjects(next);
         setView({ kind: 'project', id: p.id });
-        alert(`📱 Проект «${p.name}» загружен по QR-коду!`);
+        toast.ok(`📱 Проект «${p.name}» загружен по QR-коду.`);
       }).catch((error) => {
-        alert(`Не удалось открыть проект по QR-коду: ${(error as Error).message}`);
+        toast.error(`Не удалось открыть проект по QR-коду: ${(error as Error).message}`);
       });
     } else if (parsed.type === 'shareurl') {
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -373,9 +374,9 @@ const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
         saveProjects(dehydrateKnown(next));
         setProjects(next);
         setView({ kind: 'project', id: p.id });
-        alert(`📱 Проект «${p.name}» загружен по QR-коду!`);
+        toast.ok(`📱 Проект «${p.name}» загружен по QR-коду.`);
       }).catch((error) => {
-        alert(`Не удалось открыть проект по QR-коду: ${(error as Error).message}`);
+        toast.error(`Не удалось открыть проект по QR-коду: ${(error as Error).message}`);
       });
     }
   }, []);
@@ -475,7 +476,7 @@ const persistTemplates = useCallback((next: Template[]) => {
   const persistStoredPricebooks = useCallback((next: Pricebook[]) => {
     setStored(next);
     if (!saveStoredPricebooks(next) && !isStorageServerBacked()) {
-      alert('Прайс слишком большой для локального хранилища браузера. Он будет доступен до перезагрузки страницы; для постоянного использования положите JSON в app/public/data и пересоберите приложение.');
+      toast.error('Прайс слишком большой для локального хранилища браузера. Он будет доступен до перезагрузки страницы; для постоянного использования положите JSON в app/public/data и пересоберите приложение.');
     }
   }, []);
 
@@ -507,7 +508,7 @@ const persistTemplates = useCallback((next: Template[]) => {
       lines,
       modules: modules ?? [],
       moduleDefaults: moduleDefaults ?? {},
-      wizardMode: 'wizard',
+      wizardMode: 'advanced',
       wizardStep: 'data',
       settings: JSON.parse(JSON.stringify(globalSettings)),
       createdAt: new Date().toISOString(),
@@ -579,7 +580,7 @@ const persistTemplates = useCallback((next: Template[]) => {
         if (!p.id || !Array.isArray(p.lines)) throw new Error('не похоже на файл проекта');
         p.id = uid('prj');
         persistProjects([p, ...projects]);
-      } catch (e) { alert(`Не удалось импортировать проект: ${e}`); }
+      } catch (e) { toast.error(`Не удалось импортировать проект: ${e}`); }
     });
   }, [projects, persistProjects]);
 
@@ -827,6 +828,7 @@ const persistTemplates = useCallback((next: Template[]) => {
               settings={globalSettings}
               onChange={persistSettings}
               standalone
+              footer={<DataToolsCard />}
             />
           </>
         )}
