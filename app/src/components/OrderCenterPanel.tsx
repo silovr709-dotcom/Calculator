@@ -72,10 +72,6 @@ export default function OrderCenterPanel(props: {
   project: Project;
   pricebook: Pricebook;
   onChange: (project: Project) => void;
-  onOpenClient: () => void;
-  onOpenSketch?: () => void;
-  onOpenCheck?: () => void;
-  onOpenFactoryBlank?: () => void;
   onSelectModule: (id: string) => void;
   onSelectLine: (id: string) => void;
 }) {
@@ -230,15 +226,6 @@ export default function OrderCenterPanel(props: {
         <div className="order-package-actions">
           <button className="btn" onClick={createSnapshot}>＋ Сохранить версию КП</button>
           <button className="btn ghost" onClick={() => void copyPackage()}>{copied ? '✓ Скопировано' : 'Скопировать пакет'}</button>
-          <div className="dropdown">
-            <button className="btn ghost">Открыть раздел ▾</button>
-            <div className="dropdown-menu">
-              <button onClick={props.onOpenClient}>КП и документы</button>
-              {props.onOpenSketch && <button onClick={props.onOpenSketch}>Эскиз</button>}
-              {props.onOpenCheck && <button onClick={props.onOpenCheck}>Проверка</button>}
-              {props.onOpenFactoryBlank && <button onClick={props.onOpenFactoryBlank}>Бланк на фабрику</button>}
-            </div>
-          </div>
         </div>
       </section>
 

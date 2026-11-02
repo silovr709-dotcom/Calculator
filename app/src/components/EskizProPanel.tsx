@@ -971,13 +971,6 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
 
   return (
     <section className={`eskiz-pro-workspace ${fullScreenSketch ? 'fullscreen' : ''}`}>
-      <div className="card eskiz-pro-intro no-print eskiz-pro-toolrow">
-        <div className="actions eskiz-primary-actions system-action-strip">
-          <button className="btn primary" disabled={!activePreviewProject} onClick={syncModulesToCalculation}>Модули → просчёт</button>
-          <button className="btn ghost" onClick={() => setFullScreenSketch(true)}>На весь экран</button>
-        </div>
-      </div>
-
       <section
         className={`card no-print eskiz-sketch-strip-card ${photoDragOver ? 'drop-active' : ''}`}
         onDragOver={(event) => { if (!Array.from(event.dataTransfer?.types ?? []).includes('Files')) return; event.preventDefault(); setPhotoDragOver(true); }}
@@ -995,14 +988,21 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
           <div>
             <h3 title="Клик по карточке открывает эскиз в редакторе. «Заменить фото» меняет только подложку — размеры, сноски, модули и коммуникации остаются на местах.">Эскизы проекта</h3>
                       </div>
-          <div className="actions">
-            <button className="btn" type="button" onClick={() => openPhotoPicker({ kind: 'add' })}>+ Эскиз из фото</button>
-          </div>
+          {linkedProjects.length === 0 && (
+            <div className="actions">
+              <button className="btn" type="button" onClick={() => openPhotoPicker({ kind: 'add' })}>+ Эскиз из фото</button>
+            </div>
+          )}
         </div>
         {linkedProjects.length === 0 ? (
           <div className="empty small">Пока нет ни одного эскиза. Нажмите «+ Эскиз из фото», перетащите картинку сюда или вставьте снимок по Ctrl+V прямо в редакторе.</div>
         ) : (
           <div className="eskiz-sketch-strip">
+            <button type="button" className="eskiz-sketch-add" onClick={() => openPhotoPicker({ kind: 'add' })}>
+              <b>+</b>
+              <span>Добавить эскиз из фото</span>
+              <small>или перетащите картинку сюда</small>
+            </button>
             {linkedProjects.map((item) => {
               const dimensionCount = item.objects.filter((object) => object.type === 'dimension').length;
               const moduleCount = item.objects.filter((object) => object.type === 'module').length;
@@ -1035,11 +1035,6 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
                 </div>
               </article>;
             })}
-            <button type="button" className="eskiz-sketch-add" onClick={() => openPhotoPicker({ kind: 'add' })}>
-              <b>+</b>
-              <span>Добавить эскиз из фото</span>
-              <small>или перетащите картинку сюда</small>
-            </button>
           </div>
         )}
         <input
@@ -1061,6 +1056,7 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
                 type="button"
                 onClick={() => document.querySelector('.eskiz-sketch-strip-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
               >↑ Эскизы</button>
+              <button className="btn ghost" type="button" disabled={!activePreviewProject} title="Создать или обновить модули кухни по маркерам эскиза" onClick={syncModulesToCalculation}>Модули → просчёт</button>
               <button className="btn ghost" onClick={() => setFullScreenSketch((value) => !value)}>{fullScreenSketch ? 'Выйти из полного экрана' : 'На весь экран'}</button>
             </div>
           </div>
@@ -1185,9 +1181,8 @@ export default function EskizProPanel(props: { project: Project; pricebook: Pric
           </section>
 
           <section className="card no-print eskiz-pro-module-sync">
-            <div className="section-head"><div><h3>Модули с эскиза → просчёт</h3><p className="muted small">Поставьте объект «Модуль» на эскизе и кликните его в превью/списке: удобный редактор откроется отдельной широкой карточкой сразу под Эскиз PRO.</p></div></div>
+            <div className="section-head"><div><h3>Модули с эскиза → просчёт</h3><p className="muted small">Поставьте объект «Модуль» на эскизе и кликните его в превью/списке: удобный редактор откроется отдельной широкой карточкой сразу под Эскиз PRO. Создание и обновление модулей — кнопка «Модули → просчёт» над полотном.</p></div></div>
             <div className="eskiz-pro-module-stats"><div><b>{moduleMarkers.length}</b><span>маркеров</span></div><div><b>{linkedModuleCount}</b><span>уже связаны</span></div><div><b>{Math.max(0, moduleMarkers.length - linkedModuleCount)}</b><span>новые</span></div></div>
-            <button className="btn block" disabled={moduleMarkers.length === 0} onClick={syncModulesToCalculation}>Создать / обновить модули в расчёте</button>
             {moduleMarkers.length > 0 && <div className="eskiz-pro-marker-bulk-actions"><button className="btn tiny ghost" onClick={() => setBulkMarkerKeys(moduleMarkers.map((marker) => marker.key))}>Выбрать все</button><button className="btn tiny ghost" onClick={() => setBulkMarkerKeys([])}>Снять</button><button className="btn tiny" disabled={!activeModule || bulkMarkerKeys.length === 0} onClick={applyActiveModuleKitToSelected}>Применить комплектовку активного к выбранным ({bulkMarkerKeys.length})</button></div>}
             {moduleMarkers.length === 0 ? <div className="empty small">В привязанных эскизах пока нет объектов «Модуль».</div> : (
               <div className="eskiz-pro-marker-list">

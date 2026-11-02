@@ -752,11 +752,23 @@ details summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 @media (max-width: 760px) { .eskiz-pro-intro { flex-direction: column; } .eskiz-pro-side { display: flex; flex-direction: column; } .embedded-eskiz-workarea { grid-template-columns: 1fr; } .embedded-eskiz-inspector { max-height: none; border-left: 0; border-top: 1px solid #dce8e3; } .embedded-eskiz-header, .embedded-eskiz-status { flex-direction: column; align-items: stretch; } .eskiz-preview-meta { grid-template-columns: 1fr 1fr; } .eskiz-pro-list article { grid-template-columns: 48px minmax(0, 1fr); } .eskiz-pro-list article .btn { grid-column: 1 / -1; justify-self: start; } }
 
 /* ---- Позиции кухни (модули) ---- */
-.defaults-card { border-left: 3px solid var(--accent); }
-.defaults-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 8px; }
-.def-slot { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: #fbfdfc; }
+.defaults-card { border-left: 3px solid var(--accent); padding: 0; overflow: hidden; }
+.defaults-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; cursor: pointer; list-style: none; }
+.defaults-summary::-webkit-details-marker { display: none; }
+.defaults-summary::after { content: '▾'; flex: 0 0 auto; color: #64748b; font-size: 13px; transition: transform .15s ease; }
+.defaults-card[open] .defaults-summary::after { transform: rotate(180deg); }
+.defaults-summary h3 { margin: 0 0 2px; }
+.defaults-summary small { color: #64748b; font-size: 11px; font-weight: 750; }
+.defaults-body { padding: 0 16px 16px; border-top: 1px solid var(--line); }
+.defaults-body .muted { padding-top: 12px; }
+.defaults-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+.def-slot { position: relative; display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 4px; background: #fbfdfc; }
+.def-slot-pick { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 6px; border: 0; border-radius: 7px; background: transparent; text-align: left; cursor: pointer; }
+.def-slot-pick:hover, .def-slot-pick:focus-visible { background: #eef6ff; outline: none; }
+.def-clear { flex: 0 0 auto; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: #b42318; font-size: 12px; font-weight: 900; cursor: pointer; }
+.def-clear:hover, .def-clear:focus-visible { background: #fff0ee; outline: none; }
 .def-label { font-size: 11px; font-weight: 700; color: #55685d; margin-bottom: 3px; }
-.def-value { font-size: 12px; font-weight: 600; }
+.def-value { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .def-value.none { color: #b3552e; font-weight: 700; }
 .def-actions { margin-top: 6px; display: flex; gap: 6px; }
 table.modules tr { cursor: pointer; position: relative; }
@@ -2812,7 +2824,7 @@ select option { background: #fff !important; color: #102037 !important; }
 
 .project-stage-nav {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   margin: 0 0 10px;
   padding: 8px;
@@ -2904,6 +2916,21 @@ select option { background: #fff !important; color: #102037 !important; }
 .client-document-hub-main p { margin: 0; color: #52667a; font-size: 12px; line-height: 1.45; }
 .client-document-actions.big { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
 .client-document-actions.big .btn { min-height: 42px; padding: 8px 9px; white-space: normal; line-height: 1.15; }
+.client-package-summary {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #f6f9fc;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+}
+.client-package-summary b { color: #0f2f57; }
+.client-package-summary small { color: #64748b; font-size: 11px; font-weight: 650; }
 .client-document-includes { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
 .client-document-includes span,
 .client-document-includes button { padding: 5px 9px; border: 0; border-radius: 999px; background: #f1f5f9; color: #64748b; font-size: 11px; font-weight: 900; font-family: inherit; }
@@ -5724,7 +5751,9 @@ select option { background: #fff !important; color: #102037 !important; }
 .context-fact.tone-overdue b { color: #b42318; }
 .context-fact.tone-today b { color: #9a6300; }
 .context-doc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
-.context-doc-grid button { display: flex; flex-direction: column; gap: 2px; padding: 8px; border: 1px solid #dce7f2; border-radius: 10px; background: #fff; color: #0f2f57; text-align: left; cursor: pointer; }
+.context-doc-grid button,
+.context-doc-grid > div { display: flex; flex-direction: column; gap: 2px; padding: 8px; border: 1px solid #dce7f2; border-radius: 10px; background: #fff; color: #0f2f57; text-align: left; }
+.context-doc-grid button { cursor: pointer; }
 .context-doc-grid button:hover { border-color: #1f6feb; background: #edf5ff; }
 .context-doc-grid span { color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; }
 .context-doc-grid b { font-size: 12px; }
@@ -5738,6 +5767,7 @@ select option { background: #fff !important; color: #102037 !important; }
 .context-alert span { color: #64748b; font-size: 11px; line-height: 1.25; }
 .context-alert.tone-danger { border-color: #fecdd3; background: #fff7f7; }
 .context-alert.tone-warn { border-color: #f8dfa8; background: #fffaf0; }
+.context-more { margin-top: 8px; color: #64748b; font-size: 11px; font-weight: 750; }
 .context-empty { padding: 10px; border: 1px dashed #d7e4ef; border-radius: 10px; color: #64748b; font-size: 12px; }
 .project-context-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .work-mode-manager .nav-quick,
@@ -6460,7 +6490,7 @@ select option { background: #fff !important; color: #102037 !important; }
 /* Этапы 1–5 — единственное место, где переключается этап */
 .project-topbar .project-stage-nav {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   margin: 0;
   padding: 0;
@@ -6469,6 +6499,24 @@ select option { background: #fff !important; color: #102037 !important; }
   box-shadow: none;
 }
 .project-topbar .project-stage-nav button { min-height: 44px; padding: 6px 9px; }
+
+/* Проверка — статус в шапке, а не отдельный этап: одна кнопка вместо вкладки */
+.project-check-chip {
+  align-self: center;
+  gap: 5px;
+  white-space: nowrap;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d7e4ef;
+  background: #fff;
+  font-size: 12px;
+}
+.project-check-chip b { font-variant-numeric: tabular-nums; }
+.project-check-chip.ready { color: #0f6b3c; border-color: #b9e0c8; background: #f2fbf5; }
+.project-check-chip.warning { color: #96540a; border-color: #f0cf98; background: #fff9ee; }
+.project-check-chip.error { color: #b42318; border-color: #f3b5ad; background: #fff5f4; }
+.project-check-chip.active { box-shadow: inset 0 0 0 1px currentColor; }
+.project-check-chip:hover, .project-check-chip:focus-visible { filter: brightness(.97); outline: none; }
 
 /* Разделы этапа — компактные чипсы, ровно одна строка навигации */
 .project-subtab-row { flex-wrap: wrap; gap: 6px; padding-top: 6px; border-top: 1px solid #e6eef7; }
@@ -6518,8 +6566,9 @@ select option { background: #fff !important; color: #102037 !important; }
 
 @media (max-width: 900px) {
   .project-topbar { padding: 9px 10px 7px; border-radius: 14px; }
-  .project-topbar .project-stage-nav { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .project-topbar .project-stage-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .project-topbar .project-stage-nav button span small { display: none; }
+  .project-check-chip span { display: none; }
   .project-topbar-actions { width: 100%; }
   .project-topbar-actions .btn.primary { flex: 1 1 auto; }
 }
@@ -8276,6 +8325,7 @@ a.crm-item-phone:hover { text-decoration: underline; }
 /* Выбор позиции на телефоне: окно на весь экран, крупные строки. */
 .slot-row.tappable { cursor: pointer; }
 .slot-row.tappable:hover { background: #f7f9ff; }
+.slot-row.tappable:focus-visible { outline: 2px solid #1f6feb; outline-offset: 2px; }
 @media (max-width: 760px) {
   .modal-back { padding: 0; }
   .modal.wide { width: 100vw; height: 100dvh; max-height: none; border-radius: 0; }

@@ -587,6 +587,14 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
     }
   };
 
+  const packageSummary = [
+    packageSettings.includeOffer ? 'КП' : '',
+    packageSettings.includeSketch && clientSketchVisible ? 'эскиз' : '',
+    packageSettings.includeSpecification ? 'спецификация' : '',
+    packageSettings.includeContract ? 'договор' : '',
+    packageSettings.includeReceipt ? 'товарный чек' : '',
+  ].filter(Boolean).join(' · ') || 'пока ничего не выбрано';
+
   const exportClientPackage = () => runClientDownload(async () => {
     const sketches = await renderSketchFilesForPackage();
     await downloadClientDocumentZip(clientDocumentArgs, sketches);
@@ -629,18 +637,16 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
                 <li key={doc.id} className={`doc-status-${doc.status}`}>
                   <a href={serverFileUrl(doc.fileId)} target="_blank" rel="noreferrer" download={doc.name}>{doc.name}</a>
                   <small>{DOCUMENT_KIND_LABELS[doc.kind] ?? 'документ'} · {new Date(doc.createdAt).toLocaleString('ru-RU')} · {Math.max(1, Math.round(doc.size / 1024))} КБ</small>
-                  <span className="doc-status-pill">{DOCUMENT_STATUS_LABELS[doc.status]}</span>
                   <span className="doc-status-actions">
-                    {(['sent', 'signed', 'paid'] as ProjectDocumentStatus[]).map((status) => (
-                      <button
-                        key={status}
-                        type="button"
-                        className={doc.status === status ? 'active' : ''}
-                        onClick={() => void changeDocumentStatus(doc.id, doc.status === status ? 'created' : status)}
-                      >
-                        {DOCUMENT_STATUS_LABELS[status]}
-                      </button>
-                    ))}
+                    <select
+                      aria-label={`Статус документа «${doc.name}»`}
+                      value={doc.status}
+                      onChange={(event) => void changeDocumentStatus(doc.id, event.target.value as ProjectDocumentStatus)}
+                    >
+                      {(['created', 'sent', 'signed', 'paid'] as ProjectDocumentStatus[]).map((status) => (
+                        <option key={status} value={status}>{DOCUMENT_STATUS_LABELS[status]}</option>
+                      ))}
+                    </select>
                     <button type="button" className="danger" onClick={() => void removeDocument(doc.id)} aria-label="Убрать документ">✕</button>
                   </span>
                 </li>
@@ -674,23 +680,9 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
             </div>
           )}
         </div>
-        <div className="client-document-includes" aria-label="Что входит в пакет — нажмите, чтобы включить или выключить">
-          <button type="button" className={packageSettings.includeSketch && clientSketchVisible ? 'ready' : ''} onClick={() => updatePackageSettings({ includeSketch: !packageSettings.includeSketch })}>Эскиз</button>
-          <button type="button" className={packageSettings.includeOffer ? 'ready' : ''} onClick={() => updatePackageSettings({ includeOffer: !packageSettings.includeOffer })}>КП</button>
-          <button type="button" className={packageSettings.includeSpecification ? 'ready' : ''} onClick={() => updatePackageSettings({ includeSpecification: !packageSettings.includeSpecification })}>Спецификация</button>
-          <button type="button" className={packageSettings.includeContract ? 'ready' : ''} onClick={() => updatePackageSettings({ includeContract: !packageSettings.includeContract })}>Договор</button>
-          <button type="button" className={packageSettings.includeReceipt ? 'ready' : ''} onClick={() => updatePackageSettings({ includeReceipt: !packageSettings.includeReceipt })}>Товарный чек</button>
-          <button
-            type="button"
-            className={sketchSummaryMode !== 'off' ? 'ready' : ''}
-            title="Плашка «Сводка проекта» поверх эскиза: выключить · только на первом · на всех"
-            onClick={() => updatePackageSettings({
-              sketchSummaryMode: sketchSummaryMode === 'all' ? 'first' : sketchSummaryMode === 'first' ? 'off' : 'all',
-              sketchSummaryOverlay: sketchSummaryMode === 'all' ? true : sketchSummaryMode !== 'first',
-            })}
-          >
-            Сводка на эскизе{sketchSummaryMode === 'first' ? ': 1-й' : sketchSummaryMode === 'off' ? ': нет' : ''}
-          </button>
+        <div className="client-package-summary">
+          <b>В пакете:</b> {packageSummary}
+          <small>Состав меняется ниже — в настройках КП, раздел «2. Состав ZIP и документов».</small>
         </div>
       </section>
 

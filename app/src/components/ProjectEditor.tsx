@@ -28,22 +28,21 @@ const KitchenChecklistPanel = lazy(() => import('./KitchenChecklistPanel'));
 const ProjectHistoryPanel = lazy(() => import('./ProjectHistoryPanel'));
 
 export type ProjectTab = 'modules' | 'sketch' | 'order' | 'lines' | 'photos' | 'settings' | 'client' | 'check' | 'variants' | 'measurement';
-type ProjectStage = 'composition' | 'eskiz' | 'check' | 'client' | 'order';
+type ProjectStage = 'composition' | 'eskiz' | 'client' | 'order';
 type ReadinessStatus = 'ready' | 'warning' | 'error' | 'idle';
 
+// Четыре этапа вместо пяти: проверка — это статус, а не отдельный этап.
 const PROJECT_STAGE_LABELS: Record<ProjectStage, { label: string; hint: string; step: string }> = {
-  composition: { label: 'Состав', hint: 'модули, доп. позиции, варианты и цена', step: '1' },
-  eskiz: { label: 'Эскиз / замер', hint: 'Эскиз PRO, замер и фото', step: '2' },
-  check: { label: 'Проверка', hint: 'ошибки, предупреждения и рекомендации', step: '3' },
-  client: { label: 'Клиент', hint: 'КП, эскиз, договор и чек', step: '4' },
-  order: { label: 'Заказ', hint: 'статус, закупка и фабрика', step: '5' },
+  composition: { label: 'Расчёт', hint: 'модули, доп. позиции, варианты и цена', step: '1' },
+  eskiz: { label: 'Эскиз и замер', hint: 'Эскиз PRO, замер и фото', step: '2' },
+  client: { label: 'Клиенту', hint: 'проверка, КП, эскиз, договор и чек', step: '3' },
+  order: { label: 'Производство', hint: 'статус, закупка и фабрика', step: '4' },
 };
 
-const PROJECT_STAGE_ORDER: ProjectStage[] = ['composition', 'eskiz', 'check', 'client', 'order'];
+const PROJECT_STAGE_ORDER: ProjectStage[] = ['composition', 'eskiz', 'client', 'order'];
 const PROJECT_STAGE_DEFAULT_TAB: Record<ProjectStage, ProjectTab> = {
   composition: 'modules',
   eskiz: 'sketch',
-  check: 'check',
   client: 'client',
   order: 'order',
 };
@@ -51,9 +50,8 @@ const PROJECT_STAGE_DEFAULT_TAB: Record<ProjectStage, ProjectTab> = {
 function stageForTab(tab: ProjectTab): ProjectStage {
   if (tab === 'modules' || tab === 'lines' || tab === 'variants' || tab === 'settings') return 'composition';
   if (tab === 'sketch' || tab === 'measurement' || tab === 'photos') return 'eskiz';
-  if (tab === 'client') return 'client';
   if (tab === 'order') return 'order';
-  return 'check';
+  return 'client';
 }
 
 export default function ProjectEditor(props: {
@@ -220,22 +218,15 @@ export default function ProjectEditor(props: {
       tab: 'sketch',
     },
     {
-      key: 'check',
-      label: 'Проверка',
-      value: unresolvedCriticals > 0 ? `${unresolvedCriticals} критично` : unresolvedWarnings > 0 ? `${unresolvedWarnings} предупрежд.` : 'готово',
-      status: unresolvedCriticals > 0 ? 'error' : unresolvedWarnings > 0 ? 'warning' : 'ready',
-      tab: 'check',
-    },
-    {
       key: 'client',
-      label: 'Клиент',
+      label: 'Клиенту',
       value: project.clientOffer ? 'КП настроено' : 'документы готовы к сборке',
       status: unresolvedCriticals > 0 ? 'idle' : 'ready',
       tab: 'client',
     },
     {
       key: 'order',
-      label: 'Заказ',
+      label: 'Производство',
       value: orderStatusLabels[project.status],
       status: project.status === 'approved' || project.status === 'sent' ? 'ready' : project.status === 'archived' ? 'idle' : 'warning',
       tab: 'order',
@@ -254,16 +245,16 @@ export default function ProjectEditor(props: {
         { tab: 'measurement', label: 'Замер', hint: 'данные помещения' },
         { tab: 'photos', label: 'Фото', badge: photoCount || undefined, hint: 'замеры и объект' },
       ]
-      : activeStage === 'check'
-        ? [{ tab: 'check', label: 'Центр проверки', badge: unresolvedCriticals || unresolvedWarnings || undefined, hint: 'ошибки и рекомендации' }]
-        : activeStage === 'client'
-          ? [{ tab: 'client', label: 'КП и документы', hint: 'эскиз, КП, договор, чек, ZIP' }]
-          : [{ tab: 'order', label: 'Центр заказа', hint: 'статус, закупка, фабрика' }];
-  const activeStageMeta = PROJECT_STAGE_LABELS[activeStage];
+      : [];
+  const activeStageMeta = tab === 'check'
+    ? { label: 'Проверка', hint: 'ошибки, предупреждения и рекомендации', step: '' }
+    : PROJECT_STAGE_LABELS[activeStage];
   const activeSubTab = subTabs.find((item) => item.tab === tab) ?? subTabs[0];
-  const activeStageIndex = PROJECT_STAGE_ORDER.indexOf(activeStage);
-  const previousStage = activeStageIndex > 0 ? PROJECT_STAGE_ORDER[activeStageIndex - 1] : null;
-  const nextStage = activeStageIndex < PROJECT_STAGE_ORDER.length - 1 ? PROJECT_STAGE_ORDER[activeStageIndex + 1] : null;
+  const checkTone = unresolvedCriticals > 0 ? 'error' : unresolvedWarnings > 0 ? 'warning' : 'ready';
+  const checkCount = unresolvedCriticals || unresolvedWarnings;
+  const checkLabel = checkCount > 0 ? (unresolvedCriticals > 0 ? 'критично' : 'предупрежд.') : 'Проверка';
+  const checkSummary = checkCount > 0 ? `${checkCount} ${checkLabel}` : 'ошибок нет';
+  const showNextAction = nextAction.tab !== tab;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); props.onChange({ ...project }); }
@@ -349,7 +340,15 @@ export default function ProjectEditor(props: {
             </div>
           </div>
           <div className="project-topbar-actions">
-            <button type="button" className="btn primary" title={nextAction.hint} onClick={() => openProjectTab(nextAction.tab)}>{nextAction.label}</button>
+            {showNextAction && <button type="button" className="btn primary" title={nextAction.hint} onClick={() => openProjectTab(nextAction.tab)}>{nextAction.label}</button>}
+            <button
+              type="button"
+              className={`btn ghost project-check-chip ${checkTone} ${tab === 'check' ? 'active' : ''}`}
+              title={`Проверка проекта: ${checkSummary}. Ошибки, предупреждения и рекомендации.`}
+              onClick={() => openProjectTab('check')}
+            >
+              {checkTone === 'error' ? '⛔' : checkTone === 'warning' ? '⚠' : '✓'}{checkCount > 0 && <b>{checkCount}</b>} <span>{checkLabel}</span>
+            </button>
             <select
               aria-label="Статус проекта"
               value={project.status}
@@ -401,7 +400,7 @@ export default function ProjectEditor(props: {
                 </button>;
               })}
             </nav>
-            <div className="project-topbar-row project-subtab-row" role="tablist" aria-label="Разделы этапа">
+            {subTabs.length > 1 && <div className="project-topbar-row project-subtab-row" role="tablist" aria-label="Разделы этапа">
               {subTabs.map((item) => <button
                 key={item.tab}
                 type="button"
@@ -411,7 +410,7 @@ export default function ProjectEditor(props: {
                 title={item.hint}
                 onClick={() => openProjectTab(item.tab)}
               >{item.label}{item.badge ? <b>{item.badge}</b> : null}</button>)}
-            </div>
+            </div>}
           </>
         )}
       </header>
@@ -462,10 +461,6 @@ export default function ProjectEditor(props: {
           project={project}
           pricebook={pricebook}
           onChange={props.onChange}
-          onOpenClient={() => setTab('client')}
-          onOpenSketch={() => setTab('sketch')}
-          onOpenCheck={() => setTab('check')}
-          onOpenFactoryBlank={props.onOpenFactoryBlank}
           onSelectModule={(id) => { setFocusModuleId(id); setTab('modules'); }}
           onSelectLine={(id) => { setFocusLineId(id); setTab('lines'); window.setTimeout(() => document.getElementById(`project-line-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0); }}
         />
@@ -553,12 +548,6 @@ export default function ProjectEditor(props: {
         </div>
       )}
 
-          <nav className="project-step-nav no-print" aria-label="Переход между этапами">
-            {previousStage
-              ? <button type="button" className="btn ghost" onClick={() => openStage(previousStage)}>← {PROJECT_STAGE_LABELS[previousStage].label}</button>
-              : <span />}
-            {nextStage && <button type="button" className="btn" onClick={() => openStage(nextStage)}>{PROJECT_STAGE_LABELS[nextStage].label} →</button>}
-          </nav>
         </section>
         {contextOpen && (
           <ProjectContextPanel

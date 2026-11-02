@@ -29,32 +29,33 @@ export default function ProjectContextPanel(props: {
 }) {
   const { project, pricebook, client } = props;
   const total = calcProjectWorkflowTotal(project, pricebook);
-  const alerts = buildProjectActionAlerts(project, pricebook, client).slice(0, 6);
+  const allAlerts = buildProjectActionAlerts(project, pricebook, client);
+  const alerts = allAlerts.slice(0, 3);
   const docs = projectDocuments(project, client);
   const pay = paymentSummary(project, client, total.client);
 
   return (
     <aside className="project-context-panel no-print" id="project-context" aria-label="Сводка проекта">
       <div className="project-context-card">
-        <div className="context-card-head"><b>Проект</b><button type="button" className="linkish" onClick={() => props.onOpenTab('order')}>заказ</button></div>
+        <div className="context-card-head"><b>Проект</b></div>
         <div className="context-fact"><span>Клиент</span><b>{client?.name || project.client || 'не указан'}</b></div>
         <div className="context-fact"><span>Сумма КП</span><b>{fmtMoney(total.client)}</b></div>
         <div className="context-fact"><span>Маржа</span><b>{total.marginPct == null ? '—' : `${fmtNum(total.marginPct, 1)} %`}</b></div>
       </div>
 
       <div className="project-context-card">
-        <div className="context-card-head"><b>Документы и деньги</b><button type="button" className="linkish" onClick={() => props.onOpenTab('client')}>КП</button></div>
+        <div className="context-card-head"><b>Документы и деньги</b></div>
         <div className="context-doc-grid">
-          <button type="button" onClick={() => props.onOpenTab('client')}><span>КП</span><b>{docLabel(docs.offer)}</b></button>
-          <button type="button" onClick={() => props.onOpenTab('client')}><span>Договор</span><b>{docLabel(docs.contract)}</b></button>
-          <button type="button" onClick={() => props.onOpenTab('client')}><span>Чек</span><b>{docLabel(docs.receipt)}</b></button>
+          <div><span>КП</span><b>{docLabel(docs.offer)}</b></div>
+          <div><span>Договор</span><b>{docLabel(docs.contract)}</b></div>
+          <div><span>Чек</span><b>{docLabel(docs.receipt)}</b></div>
           <button type="button" onClick={props.onOpenFactory}><span>Фабрика</span><b>{docLabel(docs.factoryBlank)}</b></button>
         </div>
         <div className={`context-payment tone-${pay.tone}`}>{pay.label}</div>
       </div>
 
       <div className="project-context-card">
-        <div className="context-card-head"><b>Подсказки и проверки</b><button type="button" className="linkish" onClick={() => props.onOpenTab('check')}>все</button></div>
+        <div className="context-card-head"><b>Подсказки и проверки</b></div>
         <div className="context-alert-list">
           {alerts.length === 0 ? <div className="context-empty">Критичных подсказок нет. Можно двигаться дальше по маршруту.</div> : alerts.map((alert) => (
             <button type="button" key={`${alert.id}-${alert.projectId}`} className={`context-alert tone-${alert.tone}`} onClick={() => {
@@ -67,6 +68,9 @@ export default function ProjectContextPanel(props: {
               <span>{alert.detail}</span>
             </button>
           ))}
+          {allAlerts.length > alerts.length && (
+            <div className="context-more">Ещё {allAlerts.length - alerts.length} подсказок — в проверке проекта.</div>
+          )}
         </div>
       </div>
     </aside>

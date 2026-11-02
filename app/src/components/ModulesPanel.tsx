@@ -273,25 +273,44 @@ export default function ModulesPanel(props: {
 
   return (
     <>
-      {/* Параметры проекта по умолчанию */}
-      <section className="card defaults-card">
-        <h3>Параметры проекта по умолчанию</h3>
-        <div className="muted small">Применяются ко всем позициям, где не задано вручную. Ручной выбор в конкретной позиции всегда сильнее и сохраняется при смене этих настроек.</div>
-        <div className="defaults-grid">
-          {DEFAULT_SLOTS.map((k) => (
-            <div className="def-slot" key={k}>
-              <div className="def-label">{SLOT_LABELS[k]}</div>
-              <div className={defaults[k] ? 'def-value' : 'def-value none'}>
-                {itemName(defaults[k]) ?? 'Не выбрано'}
+      {/* Параметры проекта по умолчанию: свёрнуты, чтобы не занимать первый экран */}
+      <details className="card defaults-card">
+        <summary className="defaults-summary">
+          <div>
+            <h3>Параметры проекта по умолчанию</h3>
+            <small>{DEFAULT_SLOTS.filter((k) => defaults[k]).length} из {DEFAULT_SLOTS.length} выбрано</small>
+          </div>
+        </summary>
+        <div className="defaults-body">
+          <div className="muted small">Применяются ко всем позициям, где не задано вручную. Ручной выбор в конкретной позиции всегда сильнее и сохраняется при смене этих настроек.</div>
+          <div className="defaults-grid">
+            {DEFAULT_SLOTS.map((k) => (
+              <div className={`def-slot ${defaults[k] ? 'is-set' : ''}`} key={k}>
+                <button
+                  type="button"
+                  className="def-slot-pick"
+                  title={`Выбрать: ${SLOT_LABELS[k]}`}
+                  onClick={() => setPick({ slot: k, moduleId: null })}
+                >
+                  <span className="def-label">{SLOT_LABELS[k]}</span>
+                  <span className={defaults[k] ? 'def-value' : 'def-value none'}>
+                    {itemName(defaults[k]) ?? 'Не выбрано'}
+                  </span>
+                </button>
+                {defaults[k] && (
+                  <button
+                    type="button"
+                    className="def-clear"
+                    title={`Убрать: ${SLOT_LABELS[k]}`}
+                    aria-label={`Убрать ${SLOT_LABELS[k]}`}
+                    onClick={() => props.onChange({ ...project, moduleDefaults: { ...defaults, [k]: null } })}
+                  >✕</button>
+                )}
               </div>
-              <div className="def-actions">
-                <button className="btn tiny" onClick={() => setPick({ slot: k, moduleId: null })}>Выбрать…</button>
-                {defaults[k] && <button className="btn tiny ghost" onClick={() => props.onChange({ ...project, moduleDefaults: { ...defaults, [k]: null } })}>✕</button>}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </section>
+      </details>
 
       {/* Добавление позиции */}
       <div className="lines-toolbar">
@@ -426,7 +445,6 @@ export default function ModulesPanel(props: {
                     <span className="module-mini-line"><small>{body ? body.name.slice(0, 44) : 'корпус не выбран'}</small><small>{chosen.length}/{filled.length} слотов {statusDot(c.level)}</small></span>
                     <span className="module-mini-hint">Кликните карточку, чтобы открыть все параметры модуля</span>
                     <span className="module-mini-actions" onClick={(event) => event.stopPropagation()}>
-                      <button type="button" className="btn tiny primary" onClick={() => setSelId(m.id)}>Редактировать</button>
                       <button type="button" className="btn tiny ghost" title="Дублировать" onClick={() => { const cp = { ...JSON.parse(JSON.stringify(m)), id: newModule(m.type).id, name: `${m.name} (копия)` }; setMods([...mods, cp]); setSelId(cp.id); }}>⧉</button>
                       <button type="button" className="btn tiny danger" title="Удалить" onClick={() => deleteModuleWithUndo(m, idx)}>✕</button>
                     </span>
@@ -699,10 +717,20 @@ export default function ModulesPanel(props: {
               const { item, source } = resolveSlot(sel, k, defaults, pricebook);
               return (
                 <div className="slot-row tappable" key={k}
+                  role="button"
+                  tabIndex={0}
+                  title={`Выбрать: ${SLOT_LABELS[k]}`}
                   onClick={(event) => {
                     // Нажатие по строке открывает выбор — на телефоне не надо целиться в кнопку.
                     if ((event.target as HTMLElement).closest('button')) return;
                     setPick({ slot: k, moduleId: sel.id });
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setPick({ slot: k, moduleId: sel.id });
+                    }
                   }}>
                   <div className="slot-label">{SLOT_LABELS[k]}{k !== 'body' && <span className="muted small"> × {need * sel.qty}</span>}</div>
                   <div className={item ? 'slot-value' : 'slot-value none'}>
@@ -713,7 +741,6 @@ export default function ModulesPanel(props: {
                     </> : 'Не выбрано'}
                   </div>
                   <div className="slot-actions">
-                    <button className="btn tiny" onClick={() => setPick({ slot: k, moduleId: sel.id })}>Выбрать…</button>
                     {sel.slots[k]?.mode === 'manual' && k !== 'body' && (
                       <button className="btn tiny ghost" title="Вернуть к настройке проекта"
                         onClick={() => updMod(sel.id, { slots: { ...sel.slots, [k]: { mode: 'default', itemId: null } } })}>↺ к настройкам</button>
