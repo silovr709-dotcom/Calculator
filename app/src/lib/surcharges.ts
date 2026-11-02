@@ -40,6 +40,16 @@ function numberFrom(value: string | undefined): number | null {
   return match ? Number(match[1]) : null;
 }
 
+/** Габариты, записанные одной строкой: «600х308х300» или «600*400*300». */
+function bodyTripleDimensions(body: PriceItem): [number, number, number] | null {
+  const sources = [body.attrs?.['размер'] ?? '', body.name];
+  for (const source of sources) {
+    const match = source.match(/(\d{2,4})\s*[хx*×]\s*(\d{2,4})\s*[хx*×]\s*(\d{2,4})/iu);
+    if (match) return [Number(match[1]), Number(match[2]), Number(match[3])];
+  }
+  return null;
+}
+
 function bodyWidth(body: PriceItem): number | null {
   const attr = body.attrs?.['размер'];
   return numberFrom(attr) ?? numberFrom(body.name.match(/[—-]\s*(\d+)\s*мм/iu)?.[1]);
@@ -68,10 +78,11 @@ function isBodyWithDimensionRules(body: PriceItem): boolean {
 export function nominalBodyDimensions(body: PriceItem): BodyNominalDimensions {
   const lower = isLowerBody(body);
   const upper = /шкаф\s+настенный/iu.test(body.name);
+  const triple = bodyTripleDimensions(body);
   return {
-    widthMm: bodyWidth(body),
-    heightMm: bodyHeight(body),
-    depthMm: lower || /пенал/iu.test(body.name) ? 560 : upper ? 300 : null,
+    widthMm: triple?.[0] ?? bodyWidth(body),
+    heightMm: triple?.[1] ?? bodyHeight(body),
+    depthMm: triple?.[2] ?? (lower || /пенал/iu.test(body.name) ? 560 : upper ? 300 : null),
   };
 }
 

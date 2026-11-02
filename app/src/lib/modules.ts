@@ -1,7 +1,7 @@
 import type { KitchenModule, ModuleDefaults, Pricebook, PriceItem, ProjectLine, SlotChoice, SlotKey } from '../types';
 import { lineFromItem } from './engine';
 import { moduleLinePrefix } from './clientOffer';
-import { inferDimensionSurcharges } from './surcharges';
+import { inferDimensionSurcharges, nominalBodyDimensions } from './surcharges';
 import { uid } from './storage';
 
 /** Типовые виды позиций (пользователь может ввести и собственный тип) */
@@ -100,6 +100,37 @@ export function newModule(type: string): KitchenModule {
     legs: moduleStandsOnFloor(type) ? 4 : 0,
     facadeWmm: null, facadeHmm: null,
     slots: defaultSlots(),
+  };
+}
+
+/** Тип модуля по названию корпуса из прайса. */
+export function moduleTypeFromBodyName(name: string): string {
+  const text = name.toLowerCase();
+  if (/настенн/iu.test(text)) return 'Верхний шкаф';
+  if (/пенал/iu.test(text)) return 'Пенал';
+  if (/мойк/iu.test(text)) return 'Шкаф под мойку';
+  if (/духов/iu.test(text)) return 'Шкаф под духовой шкаф';
+  if (/холодиль/iu.test(text)) return 'Шкаф под холодильник';
+  return 'Нижний шкаф';
+}
+
+/**
+ * Новый модуль прямо из позиции прайса: корпус уже выбран, а ширина, высота
+ * и глубина подставлены из его номинальных габаритов. Дальше пользователь
+ * меняет размеры — и получает предложение наценки за нестандарт.
+ */
+export function moduleFromBody(body: PriceItem): KitchenModule {
+  const base = newModule(moduleTypeFromBodyName(body.name));
+  const nominal = nominalBodyDimensions(body);
+  return {
+    ...base,
+    name: body.name,
+    widthMm: nominal.widthMm,
+    heightMm: nominal.heightMm,
+    depthMm: nominal.depthMm,
+    facadeSpecStatus: 'recommended',
+    hingeSpecStatus: 'recommended',
+    slots: { ...base.slots, body: { mode: 'manual', itemId: body.id } },
   };
 }
 

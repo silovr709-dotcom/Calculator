@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ExtraFacadePart, KitchenModule, KitchenWall, ModuleDefaults, Pricebook, PriceItem, Project, SlotKey, Template } from '../types';
-import { MODULE_PRESETS, MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moduleFromPreset, moveModule, modulesSummary, moduleToLines, newModule, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
+import { MODULE_PRESETS, MODULE_TYPES, SLOT_LABELS, SLOT_POOLS, checkModule, moduleFromBody, moduleFromPreset, moveModule, modulesSummary, moduleToLines, newModule, resolveSlot, setWarningConfirmed, slotNeed } from '../lib/modules';
 import { calcLinesCost } from '../lib/engine';
 import { applyTechnicalFacadeSpec, inferFacadeSpec, inferHingeSpec, isTechnicalFacadeSpecOutdated, isTechnicalHingeSpecOutdated } from '../lib/facades';
-import { applyDimensionSurcharges, inferDimensionSurcharges } from '../lib/surcharges';
+import { applyDimensionSurcharges, inferDimensionSurcharges, nominalBodyDimensions } from '../lib/surcharges';
 import { fmtMoney, fmtNum } from '../lib/format';
 import { LAYOUT_SHAPES, WALL_LABELS, WALL_SHORT_LABELS, layoutWalls, moduleWall, normalizeLayoutShape } from '../lib/kitchenSketch';
 import CatalogPicker from './CatalogPicker';
@@ -44,6 +44,8 @@ export default function ModulesPanel(props: {
   // выбор в каталоге: для настроек проекта или для слота конкретного модуля
   const [pick, setPick] = useState<{ slot: SlotKey; moduleId: string | null } | null>(null);
   const [pickSurcharge, setPickSurcharge] = useState(false);
+  // Новый модуль начинается с корпуса из прайса: размеры подставятся сами.
+  const [pickNewBody, setPickNewBody] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; after: boolean } | null>(null);
   const [showPlanner, setShowPlanner] = useState(false);
@@ -92,6 +94,13 @@ export default function ModulesPanel(props: {
   };
   const sel = mods.find((m) => m.id === selId) ?? null;
   const selectedBody = sel ? resolveSlot(sel, 'body', defaults, pricebook).item : null;
+  const selectedNominal = selectedBody ? nominalBodyDimensions(selectedBody) : null;
+  const dimensionsDiffer = Boolean(sel && selectedNominal && (
+    (sel.widthMm != null && selectedNominal.widthMm != null && sel.widthMm !== selectedNominal.widthMm)
+    || (sel.heightMm != null && selectedNominal.heightMm != null && sel.heightMm !== selectedNominal.heightMm)
+    || (sel.depthMm != null && selectedNominal.depthMm != null && sel.depthMm !== selectedNominal.depthMm)
+  ));
+  const hasManualSurcharge = (sel?.surcharges?.length ?? 0) > 0;
   const facadeInference = sel && selectedBody ? inferFacadeSpec(sel, selectedBody) : null;
   const hingeInference = sel && selectedBody ? inferHingeSpec(sel, selectedBody) : null;
   const facadeNeedsUpdate = Boolean(sel && selectedBody && (
@@ -361,7 +370,7 @@ export default function ModulesPanel(props: {
       {/* Добавление позиции */}
       <div className="lines-toolbar">
         <div className="dropdown open-on-click">
-          <button className="btn primary" onClick={() => { if (addOpen) finishAdd(); else openAddMenu(); }}>+ Добавить позицию ▾</button>
+          <button className="btn primary" onClick={() => { if (addOpen) finishAdd(); else openAddMenu(); }}>+ Добавить модуль ▾</button>
           {addOpen && (
             <div className="dropdown-menu static add-menu">
               <input
@@ -375,7 +384,14 @@ export default function ModulesPanel(props: {
                   if (e.key === 'Escape') { e.preventDefault(); finishAdd(); }
                 }}
               />
-              {filteredTypes.length > 0 && <div className="menu-sep">Тип позиции:</div>}
+              <button
+                type="button"
+                className="add-menu-primary"
+                onClick={() => { setAddOpen(false); setAddQ(''); setAddedIds([]); setPickNewBody(true); }}
+              >
+                📦 Выбрать корпус из прайса — размеры подставятся
+              </button>
+              {(filteredTypes.length > 0 || addTerms.length === 0 || matchAdd('Свой тип')) && <div className="menu-sep">Или выберите тип позиции:</div>}
               {filteredTypes.map((tp) => <button type="button" key={tp} onClick={() => addModule(tp)}>{tp}</button>)}
               {(addTerms.length === 0 || matchAdd('Свой тип')) && <button type="button" onClick={() => { const custom = prompt('Название собственного типа позиции:'); if (custom?.trim()) addModule(custom.trim()); }}>Свой тип…</button>}
               {filteredPresets.length > 0 && <div className="menu-sep">Быстрая конструкция:</div>}
@@ -464,7 +480,7 @@ export default function ModulesPanel(props: {
 
       {/* Рабочая область: список модулей + всплывающий редактор выбранной позиции */}
       {mods.length === 0 ? (
-        <div className="empty">Позиций пока нет. Нажмите «+ Добавить позицию», выберите тип (нижний шкаф, пенал…), затем задайте размеры и комплектацию.</div>
+        <div className="empty">Позиций пока нет. Нажмите «+ Добавить модуль» → «Выбрать корпус из прайса»: размеры подставятся автоматически, останется проверить комплектацию.</div>
       ) : (
         <div className="module-master-detail">
           <section className="card module-list-card">
@@ -639,6 +655,59 @@ export default function ModulesPanel(props: {
             <label>Высота<input type="number" value={sel.heightMm ?? ''} placeholder="напр. 720" onChange={(e) => updMod(sel.id, { heightMm: Number(e.target.value) || null, facadeSpecStatus: sel.facadeSpecStatus === 'applied' ? 'outdated' : sel.facadeSpecStatus, hingeSpecStatus: sel.hingeSpecStatus === 'applied' ? 'outdated' : sel.hingeSpecStatus })} /></label>
             <label>Глубина<input type="number" value={sel.depthMm ?? ''} placeholder="напр. 560" onChange={(e) => updMod(sel.id, { depthMm: Number(e.target.value) || null })} /></label>
           </div>
+          {selectedNominal && (
+            <div className={`module-dimension-source ${dimensionsDiffer ? 'changed' : ''}`}>
+              <span>Из прайса: <b>{selectedNominal.widthMm ?? '—'}×{selectedNominal.heightMm ?? '—'}×{selectedNominal.depthMm ?? '—'} мм</b></span>
+              <span>{dimensionsDiffer ? 'размеры изменены — ниже предложена наценка' : 'подставлены автоматически'}</span>
+            </div>
+          )}
+          {selectedBody && (dimensionSurchargeRecommendations.length > 0 || (sel.automaticSurcharges?.length ?? 0) > 0 || (dimensionsDiffer && !hasManualSurcharge)) && (
+            <details className="surcharge-tech-card tech-disclosure" open={pendingDimensionSurcharges.length > 0 || (dimensionsDiffer && dimensionSurchargeRecommendations.length === 0 && !hasManualSurcharge)}>
+              <summary className="facade-tech-head">
+                <div>
+                  <h4>Наценка за нестандартные размеры</h4>
+                  <div className="muted small">Наценка считается только от строки корпуса — фасады, петли и ящики в базу процента не входят.</div>
+                </div>
+                {pendingDimensionSurcharges.length > 0
+                  ? <span className="badge tech-suggest">есть рекомендация</span>
+                  : (sel.automaticSurcharges?.length ?? 0) > 0 ? <span className="badge tech-exact">применено</span> : null}
+              </summary>
+              <div className="surcharge-tech-list">
+                {dimensionSurchargeRecommendations.map((item) => {
+                  const applied = (sel.surcharges ?? []).includes(item.itemId);
+                  return <div className="surcharge-tech-row" key={`${item.dimension}-${item.itemId}`}>
+                    <span><b>+{item.percent}% по {dimensionLabel(item.dimension)}</b><small>{item.rule} · к корпусу {selectedBody.price != null ? `≈ ${fmtMoney(selectedBody.price * item.percent / 100)} ₽/модуль` : 'без цены'}</small></span>
+                    <span className={applied ? 'badge tech-exact' : 'badge tech-suggest'}>{applied ? 'применено' : 'предложение'}</span>
+                  </div>;
+                })}
+                {(sel.automaticSurcharges ?? []).filter((id) => !dimensionSurchargeRecommendations.some((item) => item.itemId === id)).map((id) => {
+                  const item = pricebook.items.find((candidate) => candidate.id === id);
+                  return <div className="surcharge-tech-row stale" key={`stale-${id}`}><span><b>+{item?.price ?? '?'}% устаревшей надбавки</b><small>Размер модуля изменён — проверьте это правило.</small></span><span className="badge tech-suggest">нужно проверить</span></div>;
+                })}
+                {dimensionsDiffer && dimensionSurchargeRecommendations.length === 0 && (sel.automaticSurcharges?.length ?? 0) === 0 && (
+                  <div className="surcharge-tech-row">
+                    <span><b>Размеры изменены</b><small>Готового правила наценки для такого изменения нет — добавьте процент вручную.</small></span>
+                    <button className="btn tiny add" type="button" onClick={() => setPickSurcharge(true)}>＋ Добавить %</button>
+                  </div>
+                )}
+              </div>
+              {pendingDimensionSurcharges.length > 0 && (
+                <button className="btn tiny add" onClick={() => {
+                  const nextIds = [...(sel.surcharges ?? [])];
+                  const nextAuto = [...(sel.automaticSurcharges ?? [])];
+                  for (const item of pendingDimensionSurcharges) {
+                    if (!nextIds.includes(item.itemId)) nextIds.push(item.itemId);
+                    if (!nextAuto.includes(item.itemId)) nextAuto.push(item.itemId);
+                  }
+                  updMod(sel.id, { surcharges: nextIds, automaticSurcharges: nextAuto });
+                }}>
+                  {pendingDimensionSurcharges.length === 1
+                    ? `✓ Добавить наценку +${pendingDimensionSurcharges[0].percent}%`
+                    : `✓ Добавить наценки (${pendingDimensionSurcharges.length})`}
+                </button>
+              )}
+            </details>
+          )}
           {selectedModuleCalculation && selectedModuleLines.length > 0 && (
             <details className="module-formula-card tech-disclosure">
               <summary className="facade-tech-head"><h4>Расшифровка расчёта модуля</h4><b>{fmtMoney(selectedModuleCalculation.cost)}</b></summary>
@@ -818,41 +887,6 @@ export default function ModulesPanel(props: {
               </button>
             </div>
           )}
-          {selectedBody && (dimensionSurchargeRecommendations.length > 0 || (sel.automaticSurcharges?.length ?? 0) > 0) && (
-            <details className="surcharge-tech-card tech-disclosure" open={pendingDimensionSurcharges.length > 0}>
-              <summary className="facade-tech-head">
-                <div>
-                  <h4>Нестандартные габариты корпуса</h4>
-                  <div className="muted small">Надбавка считается только от строки корпуса. Петли, ящики, фасады и прочая комплектация в базу процента не входят.</div>
-                </div>
-                {pendingDimensionSurcharges.length > 0 && <span className="badge tech-suggest">есть рекомендация</span>}
-              </summary>
-              <div className="surcharge-tech-list">
-                {dimensionSurchargeRecommendations.map((item) => {
-                  const applied = (sel.surcharges ?? []).includes(item.itemId);
-                  return <div className="surcharge-tech-row" key={`${item.dimension}-${item.itemId}`}>
-                    <span><b>+{item.percent}% по {dimensionLabel(item.dimension)}</b><small>{item.rule} · к корпусу {selectedBody.price != null ? `≈ ${fmtMoney(selectedBody.price * item.percent / 100)} ₽/модуль` : 'без цены'}</small></span>
-                    <span className={applied ? 'badge tech-exact' : 'badge tech-suggest'}>{applied ? 'применено' : 'предложение'}</span>
-                  </div>;
-                })}
-                {(sel.automaticSurcharges ?? []).filter((id) => !dimensionSurchargeRecommendations.some((item) => item.itemId === id)).map((id) => {
-                  const item = pricebook.items.find((candidate) => candidate.id === id);
-                  return <div className="surcharge-tech-row stale" key={`stale-${id}`}><span><b>+{item?.price ?? '?'}% устаревшей надбавки</b><small>Размер модуля изменён — проверьте это правило.</small></span><span className="badge tech-suggest">нужно проверить</span></div>;
-                })}
-              </div>
-              {pendingDimensionSurcharges.length > 0 && (
-                <button className="btn tiny add" onClick={() => {
-                  const nextIds = [...(sel.surcharges ?? [])];
-                  const nextAuto = [...(sel.automaticSurcharges ?? [])];
-                  for (const item of pendingDimensionSurcharges) {
-                    if (!nextIds.includes(item.itemId)) nextIds.push(item.itemId);
-                    if (!nextAuto.includes(item.itemId)) nextAuto.push(item.itemId);
-                  }
-                  updMod(sel.id, { surcharges: nextIds, automaticSurcharges: nextAuto });
-                }}>✓ Применить рекомендации к корпусу</button>
-              )}
-            </details>
-          )}
           <h4>Нестандарт / процентные надбавки (от суммы корпуса — правило прайса)</h4>
           <div className="slot-list">
             {(sel.surcharges ?? []).map((sid) => {
@@ -978,6 +1012,22 @@ export default function ModulesPanel(props: {
         </div>
       )}
 
+      {pickNewBody && (
+        <CatalogPicker
+          pricebook={pricebook}
+          pickOnly
+          poolFilter={SLOT_POOLS.body}
+          title="Новый модуль из прайса — выберите корпус"
+          onAdd={(item) => {
+            const module = moduleFromBody(item);
+            setMods([...mods, module]);
+            setPickNewBody(false);
+            setSelId(module.id);
+          }}
+          onClose={() => setPickNewBody(false)}
+        />
+      )}
+
       {pick && (
         <CatalogPicker
           pricebook={pricebook}
@@ -991,9 +1041,17 @@ export default function ModulesPanel(props: {
               const m = mods.find((x) => x.id === pick.moduleId)!;
               const withBody = { ...m, slots: { ...m.slots, [pick.slot]: { mode: 'manual', itemId: item.id } } };
               if (pick.slot === 'body') {
-                // Выбор корпуса только обновляет слот. Техническая фасадная схема
-                // отображается рядом и применяется отдельной кнопкой.
-                updMod(m.id, { slots: withBody.slots, facadeSpecStatus: m.facadeParts?.length ? 'outdated' : 'recommended', hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus });
+                // Выбор корпуса обновляет слот и подставляет его габариты, если они ещё пустые.
+                // Техническая фасадная схема отображается рядом и применяется отдельной кнопкой.
+                const nominal = nominalBodyDimensions(item);
+                updMod(m.id, {
+                  slots: withBody.slots,
+                  widthMm: m.widthMm ?? nominal.widthMm,
+                  heightMm: m.heightMm ?? nominal.heightMm,
+                  depthMm: m.depthMm ?? nominal.depthMm,
+                  facadeSpecStatus: m.facadeParts?.length ? 'outdated' : 'recommended',
+                  hingeSpecStatus: m.hingeSpecStatus === 'applied' ? 'outdated' : m.hingeSpecStatus,
+                });
               } else {
                 updMod(m.id, { slots: withBody.slots });
               }

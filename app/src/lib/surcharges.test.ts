@@ -63,6 +63,7 @@ describe('надбавки за нестандартные габариты ко
     expect(nominalBodyDimensions(byArticle('224', 'каркас ст')).depthMm).toBe(560);
     expect(nominalBodyDimensions(byArticle('32', 'каркас шк')).depthMm).toBe(300);
     expect(nominalBodyDimensions(byName('Пенал с 2мя ящиками,2мя дверками')).depthMm).toBe(560);
+    expect(nominalBodyDimensions(byName('Виница 1'))).toMatchObject({ widthMm: 600, heightMm: 308, depthMm: 300 });
   });
 
   it('процентная строка надбавки имеет базой корпус, а не фасады или фурнитуру', () => {

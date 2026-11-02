@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { Pricebook, ModuleDefaults } from '../types';
-import { MODULE_PRESETS, newModule, moduleFromPreset, moduleToLines, checkModule, moveModule, resolveSlot, parseBodyDrawers, parseBodyDoors, setWarningConfirmed, isWarningConfirmed } from './modules';
+import { MODULE_PRESETS, moduleFromBody, moduleTypeFromBodyName, newModule, moduleFromPreset, moduleToLines, checkModule, moveModule, resolveSlot, parseBodyDrawers, parseBodyDoors, setWarningConfirmed, isWarningConfirmed } from './modules';
 import { calcLinesCost, calcTotals } from './engine';
 import { defaultSettings } from './storage';
 
@@ -495,5 +495,36 @@ describe('подтверждение предупреждений и поряд�
     expect(modules).toEqual(original);
     expect(moved[0].id).toBe(original[2].id);
     expect(moved[1]).toBe(original[0]);
+  });
+});
+
+describe('модуль из позиции прайса', () => {
+  const upper = pb.items.find((item) => item.name === 'Шкаф настенный 1-но дверный Н=600мм — 300мм')!;
+  const lower = pb.items.find((item) => item.name === 'Стол напольный 2-х дверный — 600мм')!;
+
+  it('подставляет габариты корпуса автоматически', () => {
+    const module = moduleFromBody(upper);
+    expect(module.widthMm).toBe(300);
+    expect(module.heightMm).toBe(600);
+    expect(module.depthMm).toBe(300);
+    expect(module.type).toBe('Верхний шкаф');
+    expect(module.slots.body).toEqual({ mode: 'manual', itemId: upper.id });
+    expect(module.facadeSpecStatus).toBe('recommended');
+  });
+
+  it('нижний корпус получает стандартную высоту, глубину и опоры', () => {
+    const module = moduleFromBody(lower);
+    expect(module.widthMm).toBe(600);
+    expect(module.heightMm).toBe(720);
+    expect(module.depthMm).toBe(560);
+    expect(module.legs).toBe(4);
+    expect(module.type).toBe('Нижний шкаф');
+  });
+
+  it('тип определяется по названию корпуса', () => {
+    expect(moduleTypeFromBodyName('Шкаф настенный 2-х дверный Н=720мм — 600мм')).toBe('Верхний шкаф');
+    expect(moduleTypeFromBodyName('Пенал 600')).toBe('Пенал');
+    expect(moduleTypeFromBodyName('Стол напольный под врезную мойку')).toBe('Шкаф под мойку');
+    expect(moduleTypeFromBodyName('Стол напольный 2-х дверный')).toBe('Нижний шкаф');
   });
 });

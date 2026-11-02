@@ -1272,7 +1272,29 @@ input.dim { width: 54px; font-size: 11px; padding: 3px 4px; text-align: center; 
 .add-menu-footer button:hover { background: #f1f5f9 !important; color: #0b3a75 !important; }
 .add-menu-footer .add-menu-done { border-color: #0b3a75 !important; background: #0b3a75 !important; color: #fff !important; }
 .add-menu-footer .add-menu-done:hover { background: #0d4687 !important; color: #fff !important; }
+.add-menu button.add-menu-primary {
+  margin: 2px 0 4px;
+  padding: 10px 12px !important;
+  border: 1px solid #0b3a75 !important;
+  border-radius: 10px !important;
+  background: #0b3a75 !important;
+  color: #fff !important;
+  font-size: 12px !important;
+  font-weight: 800;
+  line-height: 1.35;
+}
+.add-menu button.add-menu-primary:hover { background: #0d4687 !important; color: #fff !important; }
 .module-list-item.just-added { border-color: #16a34a !important; animation: module-just-added 1.8s ease-out; }
+/* Откуда взялись размеры: из прайса или изменены вручную. */
+.module-dimension-source {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+  margin: -4px 0 10px; padding: 7px 10px;
+  border: 1px solid #dbe7f3; border-radius: 10px;
+  background: #f8fbff; color: #52667a; font-size: 11px;
+}
+.module-dimension-source b { color: #0b3a75; }
+.module-dimension-source.changed { border-color: #f1d39b; background: #fffaf0; color: #8a5a10; }
+.module-dimension-source.changed span:last-child { font-weight: 800; }
 @keyframes module-just-added {
   0% { box-shadow: 0 0 0 4px rgba(34, 197, 94, .38); }
   100% { box-shadow: var(--shadow-sm); }
