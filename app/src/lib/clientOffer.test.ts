@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LineCalc, ProjectLine } from '../types';
 import { roundClientPrice } from './engine';
-import { applyClientOfferEdits, buildClientOfferDetails, buildClientOfferRollup, buildClientProjectSummary, clientDetailKey, clientOfferEditsDelta, clientSketchSummaryLines, moduleLinePrefix, moduleNoteMatches, stripModuleNote } from './clientOffer';
+import { applyClientOfferEdits, buildClientOfferDetails, buildClientOfferRollup, buildClientProjectSummary, clientDetailKey, clientOfferEditsDelta, clientUnitPrice, clientSketchSummaryLines, moduleLinePrefix, moduleNoteMatches, stripModuleNote } from './clientOffer';
 
 const line = (patch: Partial<ProjectLine>): ProjectLine => ({
   id: patch.id ?? 'ln',
@@ -161,6 +161,26 @@ describe('уровни детализации и ручные правки КП'
     expect(facade.clientSum).toBe(2800);
     expect(facade.qtyEdited).toBeUndefined();
     expect(clientOfferEditsDelta(edited)).toBe(-500);
+  });
+
+  it('правка цены за единицу пересчитывает сумму, в том числе после изменения количества', () => {
+    const details = baseDetails();
+    const hingeKey = clientDetailKey(details.find((detail) => detail.kind === 'hinge')!);
+    const priced = applyClientOfferEdits(details, { prices: { [hingeKey]: 600 } });
+    const hinge = priced.find((detail) => detail.kind === 'hinge')!;
+    expect(clientUnitPrice(hinge)).toBe(600);
+    expect(hinge.clientSum).toBe(6000);
+    expect(hinge.sumEdited).toBe(true);
+    const repriced = applyClientOfferEdits(details, { prices: { [hingeKey]: 600 }, qty: { [hingeKey]: 12 } });
+    expect(repriced.find((detail) => detail.kind === 'hinge')!.clientSum).toBe(7200);
+    expect(clientOfferEditsDelta(repriced)).toBe(2200);
+  });
+
+  it('прямая правка суммы важнее цены за единицу', () => {
+    const details = baseDetails();
+    const hingeKey = clientDetailKey(details.find((detail) => detail.kind === 'hinge')!);
+    const edited = applyClientOfferEdits(details, { prices: { [hingeKey]: 600 }, sums: { [hingeKey]: 4500 } });
+    expect(edited.find((detail) => detail.kind === 'hinge')!.clientSum).toBe(4500);
   });
 
   it('без правок возвращает исходный массив и нулевой сдвиг итога', () => {

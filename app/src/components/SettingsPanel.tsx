@@ -35,7 +35,7 @@ export default function SettingsPanel(props: {
     set({ extraExpenses: s.extraExpenses.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
   const detailFor = (id: string) => props.extraDetails?.find((d) => d.id === id);
   const addPreset = (name: string, patch: Partial<ProjectSettings['extraExpenses'][number]> = {}) =>
-    set({ extraExpenses: [...s.extraExpenses, { id: uid('exp'), name, amount: null, percent: null, toClient: true, ...patch }] });
+    set({ extraExpenses: [...s.extraExpenses, { id: uid('exp'), name, amount: null, percent: null, toClient: true, showInOffer: true, ...patch }] });
 
   return (
     <div className={props.standalone ? 'page' : ''}>
@@ -84,7 +84,8 @@ export default function SettingsPanel(props: {
           <p className="muted small">
             Каждый расход — фиксированная сумма в ₽ либо <b>% от суммы проекта по материалам</b> (например, «Сборка 10%» или «% дизайнеру»).
             Процент считается от клиентской суммы с учётом наценки, без самих расходов. Расходы попадают в себестоимость;
-            отмеченные «в цену клиента» дополнительно добавляются к цене для клиента.
+            отмеченные «в цену клиента» дополнительно добавляются к цене для клиента. «В КП» показывает расход
+            отдельной строкой в предложении. У старых расходов галочка снята — включите её, если строку нужно показать клиенту.
           </p>
           {s.extraExpenses.length === 0 && <p className="muted small">Нет дополнительных расходов. Быстро добавьте типовые кнопками ниже или свой расход.</p>}
           {s.extraExpenses.map((e) => {
@@ -107,7 +108,17 @@ export default function SettingsPanel(props: {
                   onChange={(v) => (isPercent ? updExpense(e.id, { percent: v }) : updExpense(e.id, { amount: v }))}
                   placeholder={isPercent ? '%' : '₽'}
                 />
-                <label className="chk"><input type="checkbox" checked={e.toClient} onChange={(ev) => updExpense(e.id, { toClient: ev.target.checked })} /> в цену клиента</label>
+                <div className="expense-flags">
+                  <label className="chk"><input type="checkbox" checked={e.toClient} onChange={(ev) => updExpense(e.id, { toClient: ev.target.checked })} /> в цену клиента</label>
+                  <label className={`chk${e.toClient ? '' : ' is-disabled'}`} title={e.toClient ? 'Показывать отдельной строкой в коммерческом предложении' : 'Сначала включите расход в цену клиента'}>
+                    <input
+                      type="checkbox"
+                      checked={e.toClient && e.showInOffer === true}
+                      disabled={!e.toClient}
+                      onChange={(ev) => updExpense(e.id, { showInOffer: ev.target.checked })}
+                    /> в КП
+                  </label>
+                </div>
                 {isPercent && <span className="expense-computed muted small">{detail ? `= ${fmtMoney(detail.amount)}` : 'сумма появится в итогах'}</span>}
                 <button className="btn tiny danger" onClick={() => set({ extraExpenses: s.extraExpenses.filter((x) => x.id !== e.id) })}>✕</button>
               </div>

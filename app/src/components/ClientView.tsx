@@ -4,7 +4,7 @@ import type { ClientDocumentPackageSettings, ClientOfferDetailLevel, ClientOffer
 import type { ClientOfferDetail, ClientOfferDetailKind } from '../lib/clientOffer';
 import { calcTotals } from '../lib/engine';
 import { calculateVariant } from '../lib/variants';
-import { applyClientOfferEdits, buildClientOfferDetails, buildClientOfferRollup, buildClientProjectSummary, clientBodyTotal, clientDetailKey, clientOfferEditsDelta, clientSketchSummaryLines, isModuleLine, moduleNoteMatches, stripModuleNote } from '../lib/clientOffer';
+import { applyClientOfferEdits, buildClientOfferDetails, buildClientOfferRollup, buildClientProjectSummary, clientBodyTotal, clientDetailKey, clientOfferEditsDelta, clientSketchSummaryLines, clientUnitPrice, isModuleLine, moduleNoteMatches, stripModuleNote } from '../lib/clientOffer';
 import { clientLineName, makeClientNameResolver } from '../lib/clientNaming';
 import EditableText from './EditableText';
 import EditableDate from './EditableDate';
@@ -114,6 +114,14 @@ function detailPieceUnit(detail: ClientOfferDetail): string {
   return detail.unit || 'шт';
 }
 
+/** В чём указана цена за единицу в строке КП. */
+function detailPriceUnit(detail: ClientOfferDetail): string {
+  if (detail.priceBasis === 'm2') return 'м²';
+  if (detail.priceBasis === 'lm') return 'п.м';
+  if (detail.priceBasis === 'sheet') return detail.unit || 'лист';
+  return detail.unit || 'шт';
+}
+
 /** Пересчитанное количество (м²/п.м/листы), которое идёт в цену. */
 function detailMeasuredText(detail: ClientOfferDetail): string {
   if (detail.priceBasis !== 'm2' && detail.priceBasis !== 'lm') return '';
@@ -215,6 +223,99 @@ function DetailRow({ detail, showPrice, technical, onRename, onQty, onSum }: {
   );
 }
 
+/**
+ * Правка строк КП: названия, количество, цена за единицу и сумма.
+ * Панель не зависит от выбранного вида КП — печатное предложение остаётся
+ * таким, каким его выбрал менеджер, а все правки сохраняются в проекте.
+ */
+function OfferLinesEditor({ details, editsCount, nameOverrides, priceOverrides, total, onRename, onQty, onPrice, onSum, onReset, onResetAll }: {
+  details: ClientOfferDetail[];
+  editsCount: number;
+  nameOverrides: Record<string, string>;
+  priceOverrides: Record<string, number>;
+  total: number;
+  onRename: (itemId: string, name: string) => void;
+  onQty: (detail: ClientOfferDetail, value: number | null) => void;
+  onPrice: (detail: ClientOfferDetail, value: number | null) => void;
+  onSum: (detail: ClientOfferDetail, value: number | null) => void;
+  onReset: (detail: ClientOfferDetail) => void;
+  onResetAll: () => void;
+}) {
+  if (details.length === 0) return null;
+  return (
+    <details className="card client-lines-editor no-print" open={editsCount > 0}>
+      <summary>
+        <span>✎ Правка строк КП</span>
+        <small>Строк: {details.length} · {editsCount > 0 ? `изменено: ${editsCount}` : 'названия, количество, цены'}</small>
+      </summary>
+      <div className="client-lines-table" role="table" aria-label="Строки коммерческого предложения">
+        <div className="client-lines-head" role="row">
+          <span role="columnheader">Раздел</span><span role="columnheader">Название в КП</span><span role="columnheader">Кол-во</span><span role="columnheader">Цена</span><span role="columnheader">Сумма</span><span role="columnheader" aria-label="Сброс" />
+        </div>
+        {details.map((detail) => {
+          const nameEdited = Boolean(detail.itemId && nameOverrides[detail.itemId]);
+          const unitPrice = clientUnitPrice(detail);
+          const priceEdited = Boolean(priceOverrides[clientDetailKey(detail)]);
+          return (
+            <div className={`client-lines-row${detail.qtyEdited || detail.sumEdited || priceEdited || nameEdited ? ' edited' : ''}`} role="row" key={detail.id}>
+              <span className="client-lines-kind" role="cell">{detail.kindLabel}</span>
+              <span className="client-lines-name" role="cell" data-label="Название">
+                {detail.itemId
+                  ? <EditableText value={detail.name} label={`Название в КП: ${detail.kindLabel}`} onChange={(value) => onRename(detail.itemId, value)} />
+                  : detail.name}
+              </span>
+              <span className="client-lines-qty" role="cell" data-label="Кол-во">
+                <EditableNumber
+                  value={detail.qty}
+                  edited={detail.qtyEdited}
+                  baseHint={`${fmtNum(detail.baseQty ?? detail.qty, 3)} ${detailPieceUnit(detail)}`}
+                  label={`Количество: ${detail.name}`}
+                  format={(value) => `${fmtNum(value ?? 0, 3)} ${detailPieceUnit(detail)}`}
+                  onChange={(value) => onQty(detail, value)}
+                />
+                {detailMeasuredText(detail) && <em className="client-lines-measured">{detailMeasuredText(detail)}</em>}
+              </span>
+              <span className="client-lines-price" role="cell" data-label={`Цена, ${detailPriceUnit(detail)}`}>
+                <EditableNumber
+                  value={unitPrice}
+                  edited={priceEdited}
+                  label={`Цена за ${detailPriceUnit(detail)}: ${detail.name}`}
+                  disabled={detail.qtyEffective <= 0}
+                  format={(value) => (value == null ? '—' : fmtMoney(value))}
+                  onChange={(value) => onPrice(detail, value)}
+                />
+              </span>
+              <span className="client-lines-sum" role="cell" data-label="Сумма">
+                <EditableNumber
+                  value={detail.clientSum}
+                  edited={detail.sumEdited}
+                  baseHint={detail.baseClientSum != null ? fmtMoney(detail.baseClientSum) : '—'}
+                  label={`Сумма: ${detail.name}`}
+                  format={(value) => (value == null ? '—' : fmtMoney(value))}
+                  onChange={(value) => onSum(detail, value)}
+                />
+              </span>
+              <button
+                type="button"
+                className="client-lines-reset"
+                title="Вернуть название, количество, цену и сумму к расчёту"
+                aria-label={`Вернуть к расчёту: ${detail.name}`}
+                disabled={!detail.qtyEdited && !detail.sumEdited && !nameEdited && !priceEdited}
+                onClick={() => onReset(detail)}
+              >↺</button>
+            </div>
+          );
+        })}
+      </div>
+      <footer className="client-lines-footer">
+        <span>Итого по КП: <b>{fmtMoney(total)}</b></span>
+        <span className="muted small">Пустое поле возвращает расчётное значение. Цена — за единицу (м², п.м, лист или шт.). Правки сохраняются в проекте и попадают в КП, Word, PDF и Excel.</span>
+        {editsCount > 0 && <button type="button" className="btn tiny ghost" onClick={onResetAll}>Вернуть все правки</button>}
+      </footer>
+    </details>
+  );
+}
+
 function moduleCompactSummary(details: ClientOfferDetail[]): string[] {
   const priority: ClientOfferDetailKind[] = ['body', 'bodySurcharge', 'facade', 'frame', 'worktop', 'wallPanel', 'shelf'];
   const out: string[] = [];
@@ -290,7 +391,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   const showProjectHardware = detailLevel === 'modules' || detailLevel === 'full';
   const showExtraDetails = detailLevel !== 'rollup';
   // Позиции внутри ведомости — только на полном уровне: на остальных остаются
-  // суммы разделов, а количество и суммы правятся в модулях или на уровне «Полное».
+  // суммы разделов, а строки правятся в блоке «Правка строк КП» над документом.
   const showRollupItems = detailLevel === 'full';
   const linkedEskizIds = project.eskizPro?.linkedProjectIds ?? [];
   const eskizSnapshots = project.eskizPro?.snapshots ?? [];
@@ -358,7 +459,8 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
   // Ручные правки прямо в КП: количество (петли, направляющие…) и суммы позиций.
   const qtyOverrides = project.clientOffer?.lineQty ?? {};
   const sumOverrides = project.clientOffer?.lineSums ?? {};
-  const offerEdits = { qty: qtyOverrides, sums: sumOverrides };
+  const priceOverrides = project.clientOffer?.linePrices ?? {};
+  const offerEdits = { qty: qtyOverrides, sums: sumOverrides, prices: priceOverrides };
   const setDetailQty = (detail: ClientOfferDetail, value: number | null) => {
     const key = clientDetailKey(detail);
     const base = detail.baseQty ?? detail.qty;
@@ -367,22 +469,50 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
     else next[key] = value;
     updateOffer({ lineQty: next });
   };
+  const setDetailPrice = (detail: ClientOfferDetail, value: number | null) => {
+    const key = clientDetailKey(detail);
+    const next = { ...priceOverrides };
+    const nextSums = { ...sumOverrides };
+    if (value == null) delete next[key];
+    else next[key] = value;
+    // Цена и прямая сумма взаимоисключающие: последняя правка задаёт результат.
+    delete nextSums[key];
+    updateOffer({ linePrices: next, lineSums: nextSums });
+  };
   const setDetailSum = (detail: ClientOfferDetail, value: number | null) => {
     const key = clientDetailKey(detail);
     const base = detail.baseClientSum ?? detail.clientSum;
     const next = { ...sumOverrides };
+    const nextPrices = { ...priceOverrides };
     if (value == null || (base != null && Math.abs(value - base) < 0.5)) delete next[key];
     else next[key] = value;
-    updateOffer({ lineSums: next });
+    delete nextPrices[key];
+    updateOffer({ lineSums: next, linePrices: nextPrices });
   };
-  const resetOfferEdits = () => updateOffer({ lineQty: {}, lineSums: {} });
-  const editsCount = Object.keys(qtyOverrides).length + Object.keys(sumOverrides).length;
+  const resetOfferEdits = () => updateOffer({ lineQty: {}, lineSums: {}, linePrices: {}, lineNames: {} });
+  const editsCount = new Set([...Object.keys(qtyOverrides), ...Object.keys(sumOverrides), ...Object.keys(priceOverrides)]).size;
+  const allEditsCount = editsCount + Object.keys(nameOverrides).length;
+  const resetDetailEdits = (detail: ClientOfferDetail) => {
+    const key = clientDetailKey(detail);
+    const nextQty = { ...qtyOverrides };
+    const nextSums = { ...sumOverrides };
+    const nextPrices = { ...priceOverrides };
+    const nextNames = { ...nameOverrides };
+    delete nextQty[key];
+    delete nextSums[key];
+    delete nextPrices[key];
+    if (detail.itemId) delete nextNames[detail.itemId];
+    updateOffer({ lineQty: nextQty, lineSums: nextSums, linePrices: nextPrices, lineNames: nextNames });
+  };
 
   const extraDetails = applyClientOfferEdits(buildClientOfferDetails(extraLines, lineCalcs, resolveClientName), offerEdits);
   const allDetails = applyClientOfferEdits(buildClientOfferDetails(activeCalculation.lines, lineCalcs, resolveClientName), offerEdits);
   // Итог КП = расчёт плюс/минус ручные правки менеджера.
   const editsDelta = clientOfferEditsDelta(allDetails);
   const offerTotal = totals.client + editsDelta;
+  // Расходы, которые менеджер отметил «в КП»: они уже входят в totals.client,
+  // здесь только расшифровка для клиента.
+  const offerExpenses = (totals.extraDetails ?? []).filter((expense) => expense.showInOffer);
   const advancePercent = project.clientOffer?.advancePercent ?? 50;
   const advanceSum = Math.round(offerTotal * advancePercent / 100);
   const remainderSum = offerTotal - advanceSum;
@@ -459,6 +589,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
     })),
     total: offerTotal,
     summary: projectSummary,
+    expenses: offerExpenses,
   };
   // Короткая подсказка в настройках: сколько строк уйдёт в товарный чек.
   const receiptRows = buildReceiptRows(clientDocumentArgs);
@@ -710,8 +841,7 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
               <label className="client-detail-price-toggle"><input type="checkbox" checked={showDetailPrices} onChange={(event) => updateOffer({ showDetailPrices: event.target.checked })} /> Показывать суммы в детализации</label>
               <label className="client-detail-price-toggle"><input type="checkbox" checked={aggregateHardware} onChange={(event) => updateOffer({ aggregateHardware: event.target.checked })} /> Фурнитуру общими строками по проекту</label>
               <div className="span-2 client-offer-edits-state">
-                <span>{editsCount > 0 ? `Ручных правок в КП: ${editsCount}${editsDelta !== 0 ? ` · итог сдвинут на ${fmtMoney(editsDelta)}` : ''}` : 'Количество и суммы можно править прямо в КП: нажмите на число.'}</span>
-                {editsCount > 0 && <button type="button" className="btn tiny ghost" onClick={resetOfferEdits}>Вернуть расчётные значения</button>}
+                <span>{allEditsCount > 0 ? `Ручных правок в КП: ${allEditsCount}${editsDelta !== 0 ? ` · итог сдвинут на ${fmtMoney(editsDelta)}` : ''}` : 'Названия, количество и цены правятся в блоке «Правка строк КП» над предложением.'}</span>
               </div>
               <label className="span-2">Примечания для клиента<textarea rows={2} value={project.clientOffer?.notes ?? ''} onChange={(event) => updateOffer({ notes: event.target.value })} /></label>
             </div>
@@ -787,6 +917,22 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
         </aside>
         )}
         <main className="client-offer-preview">
+
+      {canEditInline && !publicMode && (
+        <OfferLinesEditor
+          details={allDetails}
+          editsCount={allEditsCount}
+          nameOverrides={nameOverrides}
+          priceOverrides={priceOverrides}
+          total={offerTotal}
+          onRename={renameDetail}
+          onQty={setDetailQty}
+          onPrice={setDetailPrice}
+          onSum={setDetailSum}
+          onReset={resetDetailEdits}
+          onResetAll={resetOfferEdits}
+        />
+      )}
 
       {!publicMode && (
         <div className="client-offer-viewbar no-print">
@@ -1044,6 +1190,24 @@ export default function ClientView({ project, pricebook, moduleGroups, onOfferCh
             <div className="cd-section-head"><h3>Дополнительно</h3></div>
             <div className="cd-component-list cd-component-list-extra">
               {visibleExtraDetails.map((detail) => <DetailRow key={detail.id} detail={{ ...detail, details: detail.details.map((note) => stripModuleNote(note)) }} showPrice={showDetailPrices && !isBrief} technical={isTechnical} onRename={canEditInline ? renameDetail : undefined} onQty={canEditInline ? setDetailQty : undefined} onSum={canEditInline ? setDetailSum : undefined} />)}
+            </div>
+          </section>
+        )}
+
+        {offerExpenses.length > 0 && (
+          <section className="cd-extra cd-expenses">
+            <div className="cd-section-head"><h3>Дополнительные расходы</h3><span>включены в стоимость</span></div>
+            <div className="cd-component-list cd-component-list-extra">
+              {offerExpenses.map((expense, index) => (
+                <div className="cd-component no-price" key={expense.id ?? `expense-${index}`}>
+                  <div className="cd-component-main">
+                    <span className="cd-component-kind">Расход</span>
+                    <b>{expense.name || 'Дополнительный расход'}</b>
+                    {expense.percent != null && <div className="cd-component-notes"><span>{fmtNum(expense.percent, 1)}% от стоимости материалов</span></div>}
+                  </div>
+                  <div className="cd-component-sum">{fmtMoney(expense.amount)}</div>
+                </div>
+              ))}
             </div>
           </section>
         )}

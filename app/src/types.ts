@@ -102,6 +102,9 @@ export interface ExtraExpense {
    *  Если задан, фиксированная сумма amount игнорируется. Отсутствует в старых проектах = фиксированная сумма. */
   percent?: number | null;
   toClient: boolean;     // показывать в клиентской цене
+  /** Показывать отдельной строкой в КП. Отсутствует в старых проектах = нет:
+   *  готовые КП не меняются, пока менеджер сам не включит строку. */
+  showInOffer?: boolean;
 }
 
 /** Расшифровка одного доп. расхода в итогах (сборка/доставка/процентные). */
@@ -111,6 +114,8 @@ export interface ExtraExpenseDetail {
   amount: number;        // рассчитанная сумма, ₽
   percent: number | null;// если расход процентный — сам процент
   toClient: boolean;
+  /** Расход выводится отдельной строкой в клиентском КП. */
+  showInOffer: boolean;
 }
 
 export type ClientPriceRounding = 1 | 10 | 100 | 1000;
@@ -195,6 +200,8 @@ export interface ClientOfferSettings {
   lineQty?: Record<string, number>;
   /** Ручная правка суммы позиции прямо в КП: ключ позиции → сумма для клиента. */
   lineSums?: Record<string, number>;
+  /** Ручная правка цены за единицу прямо в КП: ключ позиции → цена; сумма считается по количеству. */
+  linePrices?: Record<string, number>;
   /** true/undefined — петли, опоры, ящики и другую фурнитуру показывать общими строками по проекту. */
   aggregateHardware?: boolean;
   /** Ручные названия позиций в КП: ключ — id позиции прайса, значение — текст для клиента. */

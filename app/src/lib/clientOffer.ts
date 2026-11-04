@@ -50,6 +50,8 @@ export interface ClientOfferDetail {
 export interface ClientOfferEdits {
   qty?: Record<string, number>;
   sums?: Record<string, number>;
+  /** Цена за единицу: сильнее количества, но слабее прямой суммы. */
+  prices?: Record<string, number>;
 }
 
 /** Строка сводной ведомости: «Петли — 24 шт — Blum 110° с доводчиком …». */
@@ -260,20 +262,29 @@ export function clientDetailKey(detail: Pick<ClientOfferDetail, 'kind' | 'itemId
   return detail.itemId ? `${detail.kind}|${detail.itemId}` : `${detail.kind}|name:${detail.name}`;
 }
 
+/** Цена за единицу для строки КП; null, если сумма не рассчитана. */
+export function clientUnitPrice(detail: Pick<ClientOfferDetail, 'clientSum' | 'qtyEffective'>): number | null {
+  if (detail.clientSum == null || detail.qtyEffective <= 0) return null;
+  return detail.clientSum / detail.qtyEffective;
+}
+
 /**
  * Накладывает ручные правки менеджера на рассчитанные строки КП.
- * Правка количества пересчитывает сумму по цене за единицу, правка суммы — побеждает.
+ * Правка количества пересчитывает сумму по цене за единицу, правка цены — задаёт
+ * цену и пересчитывает сумму, прямая правка суммы побеждает.
  */
 export function applyClientOfferEdits(details: ClientOfferDetail[], edits?: ClientOfferEdits): ClientOfferDetail[] {
   const qtyEdits = edits?.qty ?? {};
   const sumEdits = edits?.sums ?? {};
-  if (Object.keys(qtyEdits).length === 0 && Object.keys(sumEdits).length === 0) return details;
+  const priceEdits = edits?.prices ?? {};
+  if (Object.keys(qtyEdits).length === 0 && Object.keys(sumEdits).length === 0 && Object.keys(priceEdits).length === 0) return details;
 
   return details.map((detail) => {
     const key = clientDetailKey(detail);
     const nextQty = qtyEdits[key];
     const nextSum = sumEdits[key];
-    if (nextQty == null && nextSum == null) return detail;
+    const nextPrice = priceEdits[key];
+    if (nextQty == null && nextSum == null && nextPrice == null) return detail;
 
     const row: ClientOfferDetail = { ...detail, baseQty: detail.qty, baseClientSum: detail.clientSum };
     if (nextQty != null && Number.isFinite(nextQty) && nextQty >= 0 && nextQty !== detail.qty) {
@@ -282,6 +293,10 @@ export function applyClientOfferEdits(details: ClientOfferDetail[], edits?: Clie
       row.qtyEffective = detail.qty > 0 ? detail.qtyEffective * factor : nextQty;
       if (detail.clientSum != null && detail.qty > 0) row.clientSum = detail.clientSum * factor;
       row.qtyEdited = true;
+    }
+    if (nextPrice != null && Number.isFinite(nextPrice) && nextPrice >= 0) {
+      row.clientSum = Math.round(nextPrice * row.qtyEffective * 100) / 100;
+      row.sumEdited = true;
     }
     if (nextSum != null && Number.isFinite(nextSum) && nextSum >= 0) {
       row.clientSum = nextSum;
@@ -299,7 +314,7 @@ export function clientOfferEditsDelta(details: ClientOfferDetail[]): number {
   }, 0);
 }
 
-/** Есть ли в КП хотя бы одна ручная правка количества/суммы. */
+/** Есть ли в КП хотя бы одна ручная правка количества, цены или суммы. */
 export function hasClientOfferEdits(details: ClientOfferDetail[]): boolean {
   return details.some((detail) => detail.qtyEdited || detail.sumEdited);
 }

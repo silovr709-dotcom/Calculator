@@ -208,13 +208,16 @@ export function calcTotals(lines: ProjectLine[], settings: ProjectSettings): { l
   // проекта (clientLines, до самих расходов), чтобы не было рекурсии.
   let extraTotal = 0; let extraClient = 0;
   const extras: ExtraExpenseDetail[] = [];
-  if (settings.assemblyCost != null) extras.push({ name: 'Сборка', amount: round2(settings.assemblyCost), toClient: true, percent: null });
-  if (settings.deliveryCost != null) extras.push({ name: 'Доставка', amount: round2(settings.deliveryCost), toClient: true, percent: null });
+  // Сборка/доставка из отдельных полей всегда входят в цену, но не расшифровываются
+  // в КП как «свои расходы» — для них есть строки условий.
+  if (settings.assemblyCost != null) extras.push({ name: 'Сборка', amount: round2(settings.assemblyCost), toClient: true, percent: null, showInOffer: false });
+  if (settings.deliveryCost != null) extras.push({ name: 'Доставка', amount: round2(settings.deliveryCost), toClient: true, percent: null, showInOffer: false });
   for (const e of settings.extraExpenses) {
+    const showInOffer = e.toClient && e.showInOffer === true;
     if (e.percent != null) {
-      extras.push({ id: e.id, name: e.name, amount: round2(clientLines * e.percent / 100), toClient: e.toClient, percent: e.percent });
+      extras.push({ id: e.id, name: e.name, amount: round2(clientLines * e.percent / 100), toClient: e.toClient, percent: e.percent, showInOffer });
     } else if (e.amount != null) {
-      extras.push({ id: e.id, name: e.name, amount: round2(e.amount), toClient: e.toClient, percent: null });
+      extras.push({ id: e.id, name: e.name, amount: round2(e.amount), toClient: e.toClient, percent: null, showInOffer });
     }
   }
   for (const e of extras) { extraTotal = round2(extraTotal + e.amount); if (e.toClient) extraClient = round2(extraClient + e.amount); }

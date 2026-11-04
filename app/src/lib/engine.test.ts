@@ -193,6 +193,25 @@ describe('итоги, наценка, цена клиента, маржа', () =
     expect(totals.client).toBe(49200);
   });
 
+  it('расход можно оставить в цене клиента, но скрыть его расшифровку в КП', () => {
+    const it34 = find((i) => i.article === '34' && i.source.sheet === 'каркас шк'); // 2100
+    const settings = defaultSettings();
+    settings.markupBasePct = 100; // clientLines = 42000
+    settings.extraExpenses = [
+      { id: 'e1', name: 'Логистика', amount: 1000, percent: null, toClient: true, showInOffer: true },
+      { id: 'e2', name: 'Скрытая наценка', amount: 500, percent: null, toClient: true, showInOffer: false },
+      { id: 'e3', name: 'Сборка', amount: null, percent: 10, toClient: true, showInOffer: true },
+      { id: 'e4', name: 'Дизайнеру', amount: null, percent: 5, toClient: false, showInOffer: true },
+      { id: 'e5', name: 'Старый расход', amount: 100, percent: null, toClient: true }, // без поля — скрыт
+    ];
+    const { totals } = calcTotals([lineFromItem(it34, 'visma-2026', 10)], settings);
+    expect(totals.extraDetails).toHaveLength(5);
+    expect(totals.extraDetails!.filter((expense) => expense.showInOffer).map((expense) => expense.name)).toEqual(['Логистика', 'Сборка']);
+    // Скрытая строка и расход «не в цене клиента» всё равно участвуют в расчёте.
+    expect(totals.extraTotal).toBe(1000 + 500 + 4200 + 2100 + 100);
+    expect(totals.client).toBe(42000 + 1000 + 500 + 4200 + 100);
+  });
+
   it('расход с незаданной суммой и без процента не участвует в итогах', () => {
     const it34 = find((i) => i.article === '34' && i.source.sheet === 'каркас шк');
     const settings = defaultSettings();

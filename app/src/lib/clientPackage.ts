@@ -1,5 +1,5 @@
 import { inflateSync } from 'fflate';
-import type { ClientDocumentPackageSettings, ClientOfferSettings, Project } from '../types';
+import type { ClientDocumentPackageSettings, ClientOfferSettings, ExtraExpenseDetail, Project } from '../types';
 import type { ClientOfferDetail, ClientOfferDetailKind, ClientProjectSummary } from './clientOffer';
 import { buildClientOfferRollup, CLIENT_BODY_KINDS } from './clientOffer';
 import { fmtDate, fmtMoney, fmtNum } from './format';
@@ -28,6 +28,8 @@ export interface ClientDocumentArgs {
   modules: ClientPackageModuleRow[];
   total: number;
   summary: ClientProjectSummary;
+  /** Расшифровка доп. расходов, отмеченных «в КП»; сумма уже входит в total. */
+  expenses?: ExtraExpenseDetail[];
 }
 
 export type NormalizedClientDocumentPackageSettings = Required<ClientDocumentPackageSettings>;
@@ -439,6 +441,13 @@ function rollupRows(details: ClientOfferDetail[]): string[][] {
   ]);
 }
 
+function expenseRows(expenses: ExtraExpenseDetail[]): string[][] {
+  return expenses.map((expense) => [
+    `${expense.name || 'Дополнительный расход'}${expense.percent != null ? ` (${fmtNum(expense.percent, 1)}% от материалов)` : ''}`,
+    fmtMoney(expense.amount),
+  ]);
+}
+
 function offerBlocks(args: ClientDocumentArgs): DocxBlock[] {
   const { project, offer, details, modules, total, summary } = args;
   // Уровень детализации — тот же, что выбран на экране КП: Word не должен
@@ -474,6 +483,10 @@ function offerBlocks(args: ClientDocumentArgs): DocxBlock[] {
     blocks.push(p(`Компактная сводка: повторяющаяся фурнитура и однотипные позиции собраны по проекту. Модулей: ${fmtNum(summary.moduleCount, 3)} · фасадов: ${fmtNum(summary.facadeQty, 3)} шт · петель: ${fmtNum(summary.hingeQty, 3)} шт.`, { size: 10, color: '7D7264' }));
     blocks.push(table(['№', 'Категория', 'Основной состав', 'Строк', 'Сумма'], compactCategoryRows(details)));
   }
+  if (args.expenses?.length) {
+    blocks.push(p('Дополнительные расходы', { bold: true, size: 14, color: '1B382D' }));
+    blocks.push(table(['Расход', 'Сумма'], expenseRows(args.expenses)));
+  }
   if (offer.notes) blocks.push(p(`Примечания:\n${offer.notes}`, { size: 11 }));
   return blocks;
 }
@@ -503,6 +516,10 @@ function specificationBlocks(args: ClientDocumentArgs): DocxBlock[] {
   if (categoryRows.length) {
     blocks.push(p('Состав по категориям', { bold: true, size: 14, color: '1B382D' }));
     blocks.push(table(['№', 'Категория', 'Позиция', 'Кол-во', 'Сумма'], categoryRows));
+  }
+  if (args.expenses?.length) {
+    blocks.push(p('Дополнительные расходы', { bold: true, size: 14, color: '1B382D' }));
+    blocks.push(table(['Расход', 'Сумма'], expenseRows(args.expenses)));
   }
   return blocks;
 }

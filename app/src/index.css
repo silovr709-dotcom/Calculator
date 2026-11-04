@@ -310,7 +310,20 @@ label.chk input, label.chk-row input { width: auto; }
 .settings { display: flex; flex-direction: column; gap: 16px; max-width: 900px; }
 .card { background: var(--panel); border-radius: var(--radius); padding: 18px; border: 1px solid var(--line); box-shadow: var(--shadow-sm); margin-bottom: 16px; }
 .card h3 { margin: 0 0 10px; }
-.expense-row { display: grid; grid-template-columns: 1fr 140px auto auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+.expense-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px 96px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.expense-row > input:first-child,
+.expense-row > select,
+.expense-row > input[type="number"] { min-width: 0; }
+.expense-flags { display: flex; flex-wrap: wrap; gap: 2px 14px; min-width: 0; }
+.expense-flags .chk.is-disabled { opacity: .45; }
+.expense-row .expense-computed { grid-column: 2; text-align: right; }
+.expense-row > .btn.tiny.danger { grid-column: 3; justify-self: end; }
 .steps li { margin: 4px 0; }
 code { background: #eef2f0; padding: 2px 6px; border-radius: 8px; font-size: 12px; }
 
@@ -8530,7 +8543,9 @@ a.crm-item-phone:hover { text-decoration: underline; }
     align-items: center;
     white-space: normal;
   }
-  .expense-row .btn.tiny.danger { justify-self: start; }
+  .expense-flags { flex-direction: column; }
+  .expense-row .expense-computed { grid-column: auto; text-align: left; }
+  .expense-row > .btn.tiny.danger { grid-column: auto; justify-self: start; }
   .expense-computed { color: #7c89a8; }
 
   /* 5. Адрес в графике: поле на всю ширину, ссылка «На карте» снизу. */
@@ -10275,6 +10290,85 @@ body.work-focus .project-section-head { display: none; }
   .client-doc .cd-signoff { grid-template-columns: 1fr 1fr; }
   .client-doc .cd-qr { grid-column: 1 / -1; justify-self: start; }
   .client-doc .cd-footer { flex-wrap: wrap; font-size: 8px; }
+}
+
+/* ---------- Правка строк КП: названия, количество, цена, сумма ---------- */
+.client-lines-editor {
+  margin: 0 0 12px;
+  padding: 0;
+  overflow: hidden;
+  border-color: rgba(160, 125, 74, .34);
+}
+.client-lines-editor > summary {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 3px 12px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #0b2342, #163a5c);
+  color: #f4f7fb; cursor: pointer; list-style: none;
+}
+.client-lines-editor > summary::-webkit-details-marker { display: none; }
+.client-lines-editor > summary span { font-size: 13px; font-weight: 800; letter-spacing: .01em; }
+.client-lines-editor > summary small { color: rgba(226, 236, 245, .65); font-size: 10.5px; }
+.client-lines-editor > summary::after { content: '⌄'; margin-left: auto; color: #d6b77d; font-size: 17px; line-height: 1; }
+.client-lines-editor[open] > summary::after { transform: rotate(180deg); }
+.client-lines-table { max-height: min(52vh, 520px); overflow: auto; padding: 0 10px; }
+.client-lines-head,
+.client-lines-row {
+  display: grid;
+  grid-template-columns: 92px minmax(170px, 1fr) 96px 102px 112px 30px;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 4px;
+}
+.client-lines-head {
+  position: sticky; top: 0; z-index: 1;
+  padding-top: 9px; padding-bottom: 7px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b; font-size: 9.5px; font-weight: 850; letter-spacing: .07em; text-transform: uppercase;
+}
+.client-lines-row { position: relative; border-top: 1px solid #edf1f6; font-size: 12px; }
+.client-lines-row:first-of-type { border-top: 0; }
+.client-lines-row.edited { background: #fffaf0; }
+.client-lines-kind {
+  overflow: hidden; align-self: start;
+  padding-top: 3px; color: #64748b; font-size: 9.5px; font-weight: 800;
+  letter-spacing: .03em; text-overflow: ellipsis; white-space: nowrap;
+}
+.client-lines-name { min-width: 0; color: #16213f; font-weight: 700; }
+.client-lines-qty, .client-lines-price, .client-lines-sum { min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.client-lines-row .editable-field { width: 100%; min-height: 28px; }
+.client-lines-row .editable-text { border-bottom: 1px dashed rgba(11, 58, 117, .28); }
+.client-lines-measured { display: block; margin-top: 1px; color: #7c8ea4; font-size: 9px; font-style: normal; white-space: nowrap; }
+.client-lines-reset {
+  width: 26px; height: 26px; padding: 0;
+  border: 1px solid #d7e0ea; border-radius: 50%;
+  background: #fff; color: #64748b; font: inherit; font-size: 13px; line-height: 1;
+  cursor: pointer;
+}
+.client-lines-reset:hover:not(:disabled) { border-color: #0b3a75; color: #0b3a75; }
+.client-lines-reset:disabled { opacity: .25; cursor: default; }
+.client-lines-footer {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+  padding: 9px 14px; border-top: 1px solid #e2e8f0; background: #f8fafc;
+  color: #52667a; font-size: 11px;
+}
+.client-lines-footer b { color: #0b2342; font-size: 13px; }
+.client-lines-footer .muted { flex: 1 1 260px; line-height: 1.35; }
+@media (max-width: 760px) {
+  .client-lines-table { max-height: none; padding: 0 8px; }
+  .client-lines-head { display: none; }
+  .client-lines-row { grid-template-columns: minmax(0, 1fr) auto; gap: 5px 10px; padding: 10px 4px 9px; }
+  .client-lines-kind { grid-column: 1 / -1; padding-right: 32px; }
+  .client-lines-name { grid-column: 1 / -1; }
+  .client-lines-qty, .client-lines-price, .client-lines-sum {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+    grid-column: 1 / -1; text-align: left;
+  }
+  .client-lines-qty::before, .client-lines-price::before, .client-lines-sum::before {
+    content: attr(data-label); color: #64748b; font-size: 10px; font-weight: 800;
+  }
+  .client-lines-reset { position: absolute; top: 8px; right: 2px; }
+  .client-lines-footer .muted { flex-basis: 100%; }
 }
 
 /* ---------- Переключатель вида над документом ---------- */

@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import type { Project, LineCalc, ProjectLine } from '../types';
 import type { ClientOfferDetail } from './clientOffer';
 import { downloadFile } from './storage';
-import { buildClientOfferDetails, isModuleLine, moduleNoteMatches } from './clientOffer';
+import { applyClientOfferEdits, buildClientOfferDetails, clientOfferEditsDelta, isModuleLine, moduleNoteMatches } from './clientOffer';
 import { calcTotals } from './engine';
 import { fmtDate, fmtNum } from './format';
 
@@ -85,13 +85,14 @@ export function exportClientXlsx(p: Project, resolveName?: (line: ProjectLine) =
   const { lineCalcs, totals } = calcTotals(p.lines, p.settings);
   const rows: Record<string, string | number>[] = [];
   const groupedIds = new Set<string>();
+  const offerEdits = { qty: p.clientOffer?.lineQty, sums: p.clientOffer?.lineSums, prices: p.clientOffer?.linePrices };
 
   if ((p.modules?.length ?? 0) > 0) {
     p.modules!.forEach((module, moduleIndex) => {
       const moduleLines = p.lines.filter((line) => moduleNoteMatches(line.note, module.name, module.id));
       if (moduleLines.length === 0) return;
       moduleLines.forEach((line) => groupedIds.add(line.id));
-      const details = buildClientOfferDetails(moduleLines, lineCalcs, resolveName);
+      const details = applyClientOfferEdits(buildClientOfferDetails(moduleLines, lineCalcs, resolveName), offerEdits);
       const moduleTotal = details.reduce<number | null>((sum, detail) => {
         if (detail.clientSum == null) return sum;
         return (sum ?? 0) + detail.clientSum;
@@ -122,7 +123,7 @@ export function exportClientXlsx(p: Project, resolveName?: (line: ProjectLine) =
     : p.lines;
   if (extraLines.length > 0) {
     if (rows.length > 0) rows.push({ '№': '', 'Блок': 'Дополнительно', 'Наименование': '', 'Детализация': '', 'Кол-во': '', 'Стоимость': '' });
-    buildClientOfferDetails(extraLines, lineCalcs, resolveName).forEach((detail, index) => {
+    applyClientOfferEdits(buildClientOfferDetails(extraLines, lineCalcs, resolveName), offerEdits).forEach((detail, index) => {
       rows.push({
         '№': rows.length > 0 ? `Д${index + 1}` : index + 1,
         'Блок': detail.kindLabel,
@@ -134,11 +135,27 @@ export function exportClientXlsx(p: Project, resolveName?: (line: ProjectLine) =
     });
   }
 
+  const shownExpenses = (totals.extraDetails ?? []).filter((expense) => expense.showInOffer);
+  if (shownExpenses.length > 0) {
+    if (rows.length > 0) rows.push({ '№': '', 'Блок': 'Дополнительные расходы', 'Наименование': '', 'Детализация': '', 'Кол-во': '', 'Стоимость': '' });
+    shownExpenses.forEach((expense, index) => {
+      rows.push({
+        '№': `Р${index + 1}`,
+        'Блок': 'Расход',
+        'Наименование': expense.name || 'Дополнительный расход',
+        'Детализация': expense.percent != null ? `${fmtNum(expense.percent, 1)}% от стоимости материалов` : '',
+        'Кол-во': 1,
+        'Стоимость': expense.amount,
+      });
+    });
+  }
+
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(rows);
   XLSX.utils.book_append_sheet(wb, ws, 'Предложение');
+  const offerDelta = clientOfferEditsDelta(applyClientOfferEdits(buildClientOfferDetails(p.lines, lineCalcs, resolveName), offerEdits));
   const t = [
-    { 'Показатель': 'Итоговая стоимость', 'Значение': totals.client },
+    { 'Показатель': 'Итоговая стоимость', 'Значение': totals.client + offerDelta },
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(t), 'Итого');
   const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });

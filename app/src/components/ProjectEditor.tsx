@@ -671,7 +671,7 @@ function TotalsAside(props: { totals: ReturnType<typeof calcTotals>['totals']; p
             <div className="t-row"><span>Доп. расходы (сборка/доставка/прочее)</span><span>{fmtMoney(totals.extraTotal)}</span></div>
             {(totals.extraDetails ?? []).map((d, i) => (
               <div className="t-row sub" key={d.id ?? `${d.name}-${i}`}>
-                <span>↳ {d.name || 'Расход'}{d.percent != null ? ` (${fmtNum(d.percent, 1)}% от суммы)` : ''}{!d.toClient ? ' · не в цене клиента' : ''}</span>
+                <span>↳ {d.name || 'Расход'}{d.percent != null ? ` (${fmtNum(d.percent, 1)}% от суммы)` : ''}{!d.toClient ? ' · не в цене клиента' : !d.showInOffer ? ' · скрыт из КП' : ''}</span>
                 <span>{fmtMoney(d.amount)}</span>
               </div>
             ))}
