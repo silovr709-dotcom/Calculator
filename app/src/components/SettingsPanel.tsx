@@ -4,13 +4,14 @@ import { SUMMARY_GROUPS } from '../types';
 import { uid } from '../lib/storage';
 import { fmtMoney } from '../lib/format';
 
-function NumInput(props: { value: number | null; onChange: (v: number | null) => void; placeholder?: string; step?: number }) {
+function NumInput(props: { value: number | null; onChange: (v: number | null) => void; placeholder?: string; step?: number; label?: string }) {
   return (
     <input
       type="number"
       step={props.step ?? 1}
       value={props.value ?? ''}
       placeholder={props.placeholder ?? 'не задано'}
+      aria-label={props.label}
       onChange={(e) => props.onChange(e.target.value === '' ? null : Number(e.target.value))}
       onFocus={(e) => e.currentTarget.select()}
     />
@@ -34,6 +35,9 @@ export default function SettingsPanel(props: {
   const updExpense = (id: string, patch: Partial<ProjectSettings['extraExpenses'][number]>) =>
     set({ extraExpenses: s.extraExpenses.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
   const detailFor = (id: string) => props.extraDetails?.find((d) => d.id === id);
+  const customExpenseDetails = (props.extraDetails ?? []).filter((detail) => detail.id);
+  const expenseCostTotal = customExpenseDetails.reduce((sum, detail) => sum + detail.cost, 0);
+  const expenseClientTotal = customExpenseDetails.filter((detail) => detail.toClient).reduce((sum, detail) => sum + detail.amount, 0);
   const addPreset = (name: string, patch: Partial<ProjectSettings['extraExpenses'][number]> = {}) =>
     set({ extraExpenses: [...s.extraExpenses, { id: uid('exp'), name, amount: null, percent: null, toClient: true, showInOffer: true, ...patch }] });
 
@@ -46,7 +50,8 @@ export default function SettingsPanel(props: {
           <h3>{props.title}</h3>
           <p className="muted small">
             Значения по умолчанию пустые — калькулятор ничего не придумывает. Пока наценка не задана,
-            «цена для клиента» равна себестоимости. Настройки хранятся отдельно от прайса Висмы и не меняют его цены.
+            цена клиента по позициям равна себестоимости; у доп. расходов цена и себестоимость задаются отдельно.
+            Настройки хранятся отдельно от прайса Висмы и не меняют его цены.
           </p>
           <div className="grid2">
             <label>Базовая наценка, %<NumInput value={s.markupBasePct} onChange={(v) => set({ markupBasePct: v })} placeholder="напр. 100" /></label>
@@ -83,11 +88,17 @@ export default function SettingsPanel(props: {
           <h3>Дополнительные расходы</h3>
           <p className="muted small">
             Каждый расход — фиксированная сумма в ₽ либо <b>% от суммы проекта по материалам</b> (например, «Сборка 10%» или «% дизайнеру»).
-            Процент считается от клиентской суммы с учётом наценки, без самих расходов. Расходы попадают в себестоимость;
-            отмеченные «в цену клиента» дополнительно добавляются к цене для клиента. «В КП» показывает расход
-            отдельной строкой в предложении. У старых расходов галочка снята — включите её, если строку нужно показать клиенту.
+            Процент считается от клиентской суммы с учётом наценки, без самих расходов.
+            «Цена клиента» — сколько расход стоит в предложении, «Себестоимость» — ваши фактические затраты
+            (пусто = равна цене). Себестоимость учитывается всегда: если расхода у вас нет, поставьте 0.
+            «В цену клиента» добавляет цену к итогу, «в КП» показывает строку клиенту. У старых расходов галочка «в КП» снята.
           </p>
           {s.extraExpenses.length === 0 && <p className="muted small">Нет дополнительных расходов. Быстро добавьте типовые кнопками ниже или свой расход.</p>}
+          {s.extraExpenses.length > 0 && (
+            <div className="expense-head" aria-hidden="true">
+              <span>Название</span><span>Тип</span><span>Цена клиента</span><span>Себестоимость, ₽</span>
+            </div>
+          )}
           {s.extraExpenses.map((e) => {
             const isPercent = e.percent != null;
             const detail = detailFor(e.id);
@@ -107,6 +118,14 @@ export default function SettingsPanel(props: {
                   step={isPercent ? 0.5 : 1}
                   onChange={(v) => (isPercent ? updExpense(e.id, { percent: v }) : updExpense(e.id, { amount: v }))}
                   placeholder={isPercent ? '%' : '₽'}
+                  label="Цена клиента"
+                />
+                <NumInput
+                  value={e.cost ?? null}
+                  step={1}
+                  onChange={(v) => updExpense(e.id, { cost: v })}
+                  placeholder="как цена"
+                  label="Себестоимость, ₽"
                 />
                 <div className="expense-flags">
                   <label className="chk"><input type="checkbox" checked={e.toClient} onChange={(ev) => updExpense(e.id, { toClient: ev.target.checked })} /> в цену клиента</label>
@@ -119,11 +138,21 @@ export default function SettingsPanel(props: {
                     /> в КП
                   </label>
                 </div>
-                {isPercent && <span className="expense-computed muted small">{detail ? `= ${fmtMoney(detail.amount)}` : 'сумма появится в итогах'}</span>}
+                {detail && (
+                  <span className="expense-computed muted small">
+                    цена {fmtMoney(detail.amount)} · себест. {fmtMoney(detail.cost)}{!e.toClient ? ' · не в цене' : ''}
+                  </span>
+                )}
                 <button className="btn tiny danger" onClick={() => set({ extraExpenses: s.extraExpenses.filter((x) => x.id !== e.id) })}>✕</button>
               </div>
             );
           })}
+          {customExpenseDetails.length > 0 && (
+            <div className="expense-summary">
+              <span>Себестоимость расходов: <b>{fmtMoney(expenseCostTotal)}</b></span>
+              <span>В цене клиента: <b>{fmtMoney(expenseClientTotal)}</b></span>
+            </div>
+          )}
           <div className="expense-presets system-action-strip">
             <button className="btn primary" onClick={() => addPreset('')}>+ Свой расход</button>
             <div className="dropdown action-dropdown wide">

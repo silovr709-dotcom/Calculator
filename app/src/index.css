@@ -310,20 +310,40 @@ label.chk input, label.chk-row input { width: auto; }
 .settings { display: flex; flex-direction: column; gap: 16px; max-width: 900px; }
 .card { background: var(--panel); border-radius: var(--radius); padding: 18px; border: 1px solid var(--line); box-shadow: var(--shadow-sm); margin-bottom: 16px; }
 .card h3 { margin: 0 0 10px; }
+.expense-head,
 .expense-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 112px 96px;
+  grid-template-columns: minmax(0, 1fr) 112px 104px 112px;
   gap: 8px;
   align-items: center;
-  margin-bottom: 8px;
 }
+.expense-head {
+  padding: 0 2px 5px;
+  color: #7c89a8;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.expense-row { margin-bottom: 8px; }
 .expense-row > input:first-child,
 .expense-row > select,
 .expense-row > input[type="number"] { min-width: 0; }
-.expense-flags { display: flex; flex-wrap: wrap; gap: 2px 14px; min-width: 0; }
+.expense-row .expense-flags { grid-column: 1; grid-row: 2; display: flex; flex-wrap: wrap; gap: 2px 14px; min-width: 0; }
 .expense-flags .chk.is-disabled { opacity: .45; }
-.expense-row .expense-computed { grid-column: 2; text-align: right; }
-.expense-row > .btn.tiny.danger { grid-column: 3; justify-self: end; }
+.expense-row .expense-computed { grid-column: 2 / 4; grid-row: 2; min-width: 0; }
+.expense-row > .btn.tiny.danger { grid-column: 4; grid-row: 2; justify-self: end; }
+.expense-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 2px 0 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.expense-summary b { color: var(--ink); }
 .steps li { margin: 4px 0; }
 code { background: #eef2f0; padding: 2px 6px; border-radius: 8px; font-size: 12px; }
 
@@ -8529,6 +8549,7 @@ a.crm-item-phone:hover { text-decoration: underline; }
   }
 
   /* 4. Дополнительные расходы: строка в столбик, поля во всю ширину. */
+  .expense-head { display: none; }
   .expense-row {
     grid-template-columns: 1fr;
     gap: 6px;
@@ -8537,15 +8558,17 @@ a.crm-item-phone:hover { text-decoration: underline; }
     border-radius: 14px;
     background: #fff;
   }
+  .expense-row .expense-flags,
+  .expense-row .expense-computed,
+  .expense-row > .btn.tiny.danger { grid-column: auto; grid-row: auto; }
   .expense-row .chk {
     display: flex;
     gap: 8px;
     align-items: center;
     white-space: normal;
   }
-  .expense-flags { flex-direction: column; }
-  .expense-row .expense-computed { grid-column: auto; text-align: left; }
-  .expense-row > .btn.tiny.danger { grid-column: auto; justify-self: start; }
+  .expense-row .expense-flags { flex-direction: column; }
+  .expense-row > .btn.tiny.danger { justify-self: start; }
   .expense-computed { color: #7c89a8; }
 
   /* 5. Адрес в графике: поле на всю ширину, ссылка «На карте» снизу. */

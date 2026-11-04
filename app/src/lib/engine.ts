@@ -203,24 +203,41 @@ export function calcTotals(lines: ProjectLine[], settings: ProjectSettings): { l
   let costLines = 0; let clientLines = 0;
   for (const g of SUMMARY_GROUPS) { costLines = round2(costLines + byGroup[g].cost); clientLines = round2(clientLines + byGroup[g].client); }
 
-  // доп. расходы (сборка/доставка/прочее) — без наценки, к клиенту добавляются если toClient.
-  // Процентные расходы («% дизайнеру», «сборка 10%») считаются от клиентской суммы материалов
-  // проекта (clientLines, до самих расходов), чтобы не было рекурсии.
+  // доп. расходы (сборка/доставка/прочее): cost идёт в себестоимость, amount — цена клиента
+  // (добавляется к итогу, если toClient). Процентные расходы («% дизайнеру», «сборка 10%»)
+  // считаются от клиентской суммы материалов проекта (clientLines, до самих расходов),
+  // чтобы не было рекурсии.
   let extraTotal = 0; let extraClient = 0;
   const extras: ExtraExpenseDetail[] = [];
   // Сборка/доставка из отдельных полей всегда входят в цену, но не расшифровываются
   // в КП как «свои расходы» — для них есть строки условий.
-  if (settings.assemblyCost != null) extras.push({ name: 'Сборка', amount: round2(settings.assemblyCost), toClient: true, percent: null, showInOffer: false });
-  if (settings.deliveryCost != null) extras.push({ name: 'Доставка', amount: round2(settings.deliveryCost), toClient: true, percent: null, showInOffer: false });
-  for (const e of settings.extraExpenses) {
-    const showInOffer = e.toClient && e.showInOffer === true;
-    if (e.percent != null) {
-      extras.push({ id: e.id, name: e.name, amount: round2(clientLines * e.percent / 100), toClient: e.toClient, percent: e.percent, showInOffer });
-    } else if (e.amount != null) {
-      extras.push({ id: e.id, name: e.name, amount: round2(e.amount), toClient: e.toClient, percent: null, showInOffer });
-    }
+  if (settings.assemblyCost != null) {
+    const amount = round2(settings.assemblyCost);
+    extras.push({ name: 'Сборка', amount, cost: amount, toClient: true, percent: null, showInOffer: false });
   }
-  for (const e of extras) { extraTotal = round2(extraTotal + e.amount); if (e.toClient) extraClient = round2(extraClient + e.amount); }
+  if (settings.deliveryCost != null) {
+    const amount = round2(settings.deliveryCost);
+    extras.push({ name: 'Доставка', amount, cost: amount, toClient: true, percent: null, showInOffer: false });
+  }
+  for (const e of settings.extraExpenses) {
+    const price = e.percent != null
+      ? round2(clientLines * e.percent / 100)
+      : e.amount != null ? round2(e.amount) : null;
+    // Пустая себестоимость = цена: старые проекты и типовой расход считаются как раньше.
+    const cost = e.cost != null ? round2(e.cost) : price;
+    if ((price == null || price === 0) && (cost == null || cost === 0)) continue;
+    const showInOffer = e.toClient && e.showInOffer === true && price != null && price !== 0;
+    extras.push({
+      id: e.id,
+      name: e.name,
+      amount: price ?? 0,
+      cost: cost ?? 0,
+      percent: e.percent ?? null,
+      toClient: e.toClient,
+      showInOffer,
+    });
+  }
+  for (const e of extras) { extraTotal = round2(extraTotal + e.cost); if (e.toClient) extraClient = round2(extraClient + e.amount); }
 
   const cost = round2(costLines + extraTotal);
   const client = roundClientPrice(round2(clientLines + extraClient), settings.clientRounding);

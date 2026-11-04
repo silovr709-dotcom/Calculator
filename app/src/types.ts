@@ -97,11 +97,14 @@ export interface ProjectLine {
 export interface ExtraExpense {
   id: string;
   name: string;
-  amount: number | null; // null = не задано (не придумываем)
+  amount: number | null; // цена клиента, null = не задано (не придумываем)
   /** Процент от клиентской суммы проекта по материалам (до расходов и правила эмали — от costLines→client).
    *  Если задан, фиксированная сумма amount игнорируется. Отсутствует в старых проектах = фиксированная сумма. */
   percent?: number | null;
-  toClient: boolean;     // показывать в клиентской цене
+  /** Себестоимость расхода, ₽. null/undefined = равна цене клиента (как было раньше).
+   *  Позволяет показать клиенту цену, отличную от фактических затрат, или учесть расход только в себестоимости. */
+  cost?: number | null;
+  toClient: boolean;     // добавлять цену расхода в клиентскую цену
   /** Показывать отдельной строкой в КП. Отсутствует в старых проектах = нет:
    *  готовые КП не меняются, пока менеджер сам не включит строку. */
   showInOffer?: boolean;
@@ -111,7 +114,8 @@ export interface ExtraExpense {
 export interface ExtraExpenseDetail {
   id?: string;           // id расхода из настроек (для связи с редактором)
   name: string;
-  amount: number;        // рассчитанная сумма, ₽
+  amount: number;        // цена клиента, ₽
+  cost: number;          // себестоимость, ₽
   percent: number | null;// если расход процентный — сам процент
   toClient: boolean;
   /** Расход выводится отдельной строкой в клиентском КП. */

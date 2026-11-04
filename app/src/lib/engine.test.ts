@@ -212,6 +212,25 @@ describe('итоги, наценка, цена клиента, маржа', () =
     expect(totals.client).toBe(42000 + 1000 + 500 + 4200 + 100);
   });
 
+  it('цена расхода и себестоимость считаются отдельно', () => {
+    const it34 = find((i) => i.article === '34' && i.source.sheet === 'каркас шк'); // 2100
+    const settings = defaultSettings();
+    settings.markupBasePct = 100; // clientLines = 42000
+    settings.extraExpenses = [
+      { id: 'e1', name: 'Доставка', amount: 5000, percent: null, cost: 3000, toClient: true },
+      { id: 'e2', name: 'Упаковка', amount: 1000, percent: null, cost: 0, toClient: true },
+      { id: 'e3', name: 'Дизайнеру', amount: 2000, percent: null, toClient: false },
+    ];
+    const { totals } = calcTotals([lineFromItem(it34, 'visma-2026', 10)], settings);
+    expect(totals.extraDetails).toHaveLength(3);
+    expect(totals.extraDetails!.map((expense) => [expense.amount, expense.cost])).toEqual([[5000, 3000], [1000, 0], [2000, 2000]]);
+    // В себестоимость идут фактические затраты, в цену клиента — только отмеченные расходы.
+    expect(totals.extraTotal).toBe(3000 + 0 + 2000);
+    expect(totals.cost).toBe(21000 + 5000);
+    expect(totals.client).toBe(42000 + 5000 + 1000);
+    expect(totals.markupRub).toBe(48000 - 26000);
+  });
+
   it('расход с незаданной суммой и без процента не участвует в итогах', () => {
     const it34 = find((i) => i.article === '34' && i.source.sheet === 'каркас шк');
     const settings = defaultSettings();

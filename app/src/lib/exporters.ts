@@ -43,7 +43,7 @@ export function exportInternalXlsx(p: Project) {
   if (totals.emalAdjustment?.applied) {
     totalRows.push({ 'Показатель': 'Правило прайса: эмаль < 1 кв.м (+30%)', 'Значение': totals.emalAdjustment.amount });
   }
-  totalRows.push({ 'Показатель': 'Доп. расходы (сборка/доставка/прочее)', 'Значение': totals.extraTotal });
+  totalRows.push({ 'Показатель': 'Доп. расходы — себестоимость', 'Значение': totals.extraTotal });
   totalRows.push({ 'Показатель': 'ИТОГО СЕБЕСТОИМОСТЬ', 'Значение': totals.cost });
   totalRows.push({ 'Показатель': 'Наценка, ₽', 'Значение': totals.markupRub });
   totalRows.push({ 'Показатель': 'Наценка, %', 'Значение': totals.markupPct ?? '' });

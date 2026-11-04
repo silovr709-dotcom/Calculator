@@ -668,10 +668,10 @@ function TotalsAside(props: { totals: ReturnType<typeof calcTotals>['totals']; p
         )}
         {totals.extraTotal !== 0 && (
           <>
-            <div className="t-row"><span>Доп. расходы (сборка/доставка/прочее)</span><span>{fmtMoney(totals.extraTotal)}</span></div>
+            <div className="t-row"><span>Доп. расходы — себестоимость</span><span>{fmtMoney(totals.extraTotal)}</span></div>
             {(totals.extraDetails ?? []).map((d, i) => (
               <div className="t-row sub" key={d.id ?? `${d.name}-${i}`}>
-                <span>↳ {d.name || 'Расход'}{d.percent != null ? ` (${fmtNum(d.percent, 1)}% от суммы)` : ''}{!d.toClient ? ' · не в цене клиента' : !d.showInOffer ? ' · скрыт из КП' : ''}</span>
+                <span>↳ {d.name || 'Расход'}{d.percent != null ? ` (${fmtNum(d.percent, 1)}% от суммы)` : ''}{Math.abs(d.cost - d.amount) > 0.5 ? ` · цена ${fmtMoney(d.amount)} / себест. ${fmtMoney(d.cost)}` : ''}{!d.toClient ? ' · не в цене клиента' : !d.showInOffer ? ' · скрыт из КП' : ''}</span>
                 <span>{fmtMoney(d.amount)}</span>
               </div>
             ))}
